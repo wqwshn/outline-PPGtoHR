@@ -20,11 +20,17 @@ load(para.FileName, 'data', 'ref_data');
 
 raw_data = table2array(data);
 
-% 全局固定参数
+% % 全局固定参数
+% Fs_Origin = 125;      % 原始采样率
+% Col_PPG  = 6;           
+% Col_HF1  = 4; Col_HF2 = 5;        
+% Col_Acc  = [8, 9, 10];        
+
+% Spo2的数据格式
 Fs_Origin = 125;      % 原始采样率
 Col_PPG  = 6;           
-Col_HF1  = 4; Col_HF2 = 5;        
-Col_Acc  = [8, 9, 10];        
+Col_HF1  = 2; Col_HF2 = 3;        
+Col_Acc  = [8, 9, 10]; 
 
 % 重采样处理
 Fs = para.Fs_Target; 
@@ -75,11 +81,6 @@ time_1 = para.Time_Start;
 
 % LMS 固定参数
 Num_Cascade_HF = 2; Num_Cascade_Acc = 3; LMS_Mu_Base = 0.01;
-
-% [新增] 初始化滤波后PPG数据存储容器（使用cell数组存储不同长度的信号）
-PPG_LMS_HF_All = {};   % 存储HF路径滤波后的PPG信号
-PPG_LMS_ACC_All = {};  % 存储ACC路径滤波后的PPG信号
-Time_Windows = {};      % 存储每个时间窗的起始和结束时间
 
 %% 4. 核心处理循环
 while stop_flag
@@ -168,11 +169,6 @@ while stop_flag
                                      true, para.HR_Range_Rest, para.Slew_Limit_Rest, para.Slew_Step_Rest);
     HR(times, 5) = Freq_FFT;
 
-    % [新增] 保存滤波后的PPG数据
-    PPG_LMS_HF_All{times, 1} = Sig_LMS_HF;
-    PPG_LMS_ACC_All{times, 1} = Sig_LMS_ACC;
-    Time_Windows{times, 1} = [time_1, time_2];
-
     % 循环推进
     time_1 = time_1 + Win_Step;
     times = times + 1;
@@ -234,12 +230,8 @@ Result.Err_Fus_HF = err_stats(4, 1);
 Result.HR = HR;
 Result.err_stats = err_stats;
 Result.T_Pred = T_Pred;
-Result.Motion_Threshold = [Motion_Threshold_ACC, Motion_Threshold_ACC];
+Result.Motion_Threshold = [Motion_Threshold_ACC, Motion_Threshold_ACC]; 
 Result.HR_Ref_Interp = HR_Ref_Interp;
-% [新增] 添加滤波后的PPG数据
-Result.PPG_LMS_HF = PPG_LMS_HF_All;      % cell数组，每个元素是一个时间窗的HF滤波后信号
-Result.PPG_LMS_ACC = PPG_LMS_ACC_All;    % cell数组，每个元素是一个时间窗的ACC滤波后信号
-Result.Time_Windows = Time_Windows;       % cell数组，每个元素是[起始时间, 结束时间]
 
 end
 
@@ -266,59 +258,6 @@ function est_freq = Helper_Process_Spectrum(sig_in, sig_penalty_ref, Fs, para, t
     Fre = Find_maxpeak(S_rls, S_rls, S_rls_amp);
     if isempty(Fre), Fre = 0; end
     curr_raw = Fre(1);
-
-%     % 1. 预设最终要喂给 AMPD 的信号为原始输入
-%     sig_notched = sig_in;
-%     
-%     % 2. 动态时域运动惩罚 (动态陷波器)
-%     % 沿用您原有的使能开关变量名
-%     if para.Spec_Penalty_Enable && enable_penalty
-%         % 计算参考信号(ACC)的频谱，找出运动主频
-%         [S_ref, S_ref_amp] = FFT_Peaks(sig_penalty_ref, Fs, 0.3);
-%         
-%         if ~isempty(S_ref)
-%             [~, midx] = max(S_ref_amp); 
-%             Motion_Freq = S_ref(midx); % 获取当前窗口的 ACC 运动主频
-%             
-%             % 为了防止滤波器不稳定，限定一个合理的运动频率范围 (例如 0.5Hz ~ 4Hz)
-%             if Motion_Freq > 0.5 && Motion_Freq < 4.0
-%                 
-%                 % [核心] 设计二阶 IIR 陷波滤波器
-%                 % 接入贝叶斯优化参数：Notch_Q_Factor 替代原有的硬编码 30
-%                 Q = para.Notch_Q_Factor; 
-%                 
-%                 % 归一化频率 (0 ~ 1，1对应奈奎斯特频率 Fs/2)
-%                 Wo = Motion_Freq / (Fs/2); 
-%                 BW = Wo / Q;
-%                 
-%                 % 生成陷波器系数
-%                 [num, den] = iirnotch(Wo, BW);
-%                 
-%                 % 使用 filtfilt 进行零相位滤波，确保波形峰值的物理时间点不发生偏移！
-%                 sig_notched = filtfilt(num, den, sig_notched);
-%                 
-%                 % (可选) 惩罚二次谐波：受贝叶斯优化参数 Harmonic_Penalty_Enable 控制
-%                 if para.Harmonic_Penalty_Enable
-%                     Wo2 = (2 * Motion_Freq) / (Fs/2);
-%                     if Wo2 < 1 % 确保谐波没有超过奈奎斯特频率
-%                         [num2, den2] = iirnotch(Wo2, BW / 2); % 谐波的带宽通常可以设窄一点
-%                         sig_notched = filtfilt(num2, den2, sig_notched);
-%                     end
-%                 end
-%             end
-%         end
-%     end       
-
-
-    % 替换为新的时域 AMPD 寻峰，直接传入时域波形 sig_in 和采样率
-    Fre = Find_maxpeak_AMPD(sig_in, Fs); 
-    % ========================================================
-
-    if isempty(Fre) || Fre(1) == 0
-        curr_raw = 0; % 容错处理
-    else
-        curr_raw = Fre(1);
-    end
     
     % 3. 历史追踪
     if times == 1
