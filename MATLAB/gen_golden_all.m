@@ -120,6 +120,17 @@ function gen_golden_all()
          'exp_mh', 'exp_ma', 'exp_td_h', 'exp_td_a');
     fprintf('  saved choose_delay.mat\n');
 
+    %% ---------- data_loader (整段 processed table 保存为 struct) ----------
+    % 把 multi_tiaosheng1_processed.mat 中的 data table + ref_data 转为
+    % Python scipy.io.loadmat 友好的 struct 格式。
+    data_struct = table2struct(S.data, 'ToScalar', true);
+    ref_data_dl = S.ref_data;
+    sensor_csv_rel = fullfile('20260418test_python', 'multi_tiaosheng1.csv');
+    gt_csv_rel     = fullfile('20260418test_python', 'multi_tiaosheng1_ref.csv');
+    save(fullfile(out_dir, 'data_loader.mat'), ...
+         'data_struct', 'ref_data_dl', 'sensor_csv_rel', 'gt_csv_rel');
+    fprintf('  saved data_loader.mat\n');
+
     %% ---------- heart_rate_solver (端到端 3 个场景) ----------
     scenarios = {'multi_tiaosheng1', 'multi_kaihe1', 'multi_fuwo1'};
     para = default_solver_params();
