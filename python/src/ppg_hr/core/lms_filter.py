@@ -33,9 +33,14 @@ def lms_filter(
     u_arr = _zscore(np.atleast_1d(np.asarray(u, dtype=float)).ravel())
     d_arr = _zscore(np.atleast_1d(np.asarray(d, dtype=float)).ravel())
 
+    # MATLAB lmsFunc_h uses N = length(u) and only needs d up to index N-K.
+    # In the cascade case the previous-stage output e shrinks by K each round,
+    # so d may legitimately be shorter than u.
     n_samples = u_arr.size
-    if d_arr.size != n_samples:
-        raise ValueError("u and d must have the same length")
+    if d_arr.size < n_samples - K:
+        raise ValueError(
+            f"d must have at least N-K={n_samples - K} samples, got {d_arr.size}"
+        )
 
     w = np.zeros(M + K, dtype=float)
     e = np.zeros(max(n_samples - K, 0), dtype=float)
