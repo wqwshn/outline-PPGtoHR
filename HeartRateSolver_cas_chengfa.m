@@ -43,7 +43,7 @@ Fs = para.Fs_Target;
 ppg_ori   = resample(filloutliers(raw_data(:, Col_PPG),'previous','mean'), Fs, Fs_Origin);
 hotf1_ori = resample(raw_data(:, Col_HF1), Fs, Fs_Origin);
 hotf2_ori = resample(raw_data(:, Col_HF2), Fs, Fs_Origin);
-hotf3_ori = zeros(size(hotf1_ori)); % 假设第三路HF为0或预留
+% HF 信号仅两路, 无第三路占位
 accx_ori  = resample(raw_data(:, Col_Acc(1)), Fs, Fs_Origin);
 accy_ori  = resample(raw_data(:, Col_Acc(2)), Fs, Fs_Origin);
 accz_ori  = resample(raw_data(:, Col_Acc(3)), Fs, Fs_Origin);
@@ -57,7 +57,6 @@ BP_Low = 0.5; BP_High = 5; BP_Order = 4;
 ppg   = filtfilt(b_but, a_but, ppg_ori);
 hotf1 = filtfilt(b_but, a_but, hotf1_ori);
 hotf2 = filtfilt(b_but, a_but, hotf2_ori);
-hotf3 = filtfilt(b_but, a_but, hotf3_ori);
 accx  = filtfilt(b_but, a_but, accx_ori);
 accy  = filtfilt(b_but, a_but, accy_ori);
 accz  = filtfilt(b_but, a_but, accz_ori);
@@ -97,7 +96,7 @@ while stop_flag
     
     % 截取信号
     Sig_p = ppg(idx_s:idx_e);
-    Sig_h = {hotf1(idx_s:idx_e), hotf2(idx_s:idx_e), hotf3(idx_s:idx_e)};
+    Sig_h = {hotf1(idx_s:idx_e), hotf2(idx_s:idx_e)};
     Sig_a = {accx(idx_s:idx_e), accy(idx_s:idx_e), accz(idx_s:idx_e)};
     
     Sig_acc_mag = acc_mag(idx_s:idx_e);
@@ -115,27 +114,26 @@ while stop_flag
     HR(times, 9) = is_motion; % 原 HF 运动标记 (现已强制同步为 ACC 结果)
 
     % 计算相关性与时延
-    [mh1,mh2,mh3,ma1,ma2,ma3,time_delay_h,time_delay_a] = ...
-        ChooseDelay1218(Fs, time_1, ppg, accx, accy, accz, hotf1, hotf2, hotf3);
+    [mh_arr, ma_arr, time_delay_h, time_delay_a] = ...
+        ChooseDelay1218(Fs, time_1, ppg, {accx,accy,accz}, {hotf1,hotf2});
 
     % =====================================================================
     % 路径 A: Pure LMS (HF Reference) - 纯 HF 生态
     % =====================================================================
     Sig_LMS_HF = Sig_p;
-    if time_delay_h(1) < 0, ord_h = floor(abs(time_delay_h(1))*1); else, ord_h = 1; end
+    if time_delay_h < 0, ord_h = floor(abs(time_delay_h)*1); else, ord_h = 1; end
     ord_h = min(max(ord_h, 1), para.Max_Order);
-    
-    mh_mat = sort([mh1,mh2,mh3], 'descend');
-    % 找出相关性最好的那个HF通道
-    best_hf_idx = find([mh1,mh2,mh3] == mh_mat(1), 1); 
-    
-    for i = 1:Num_Cascade_HF
+
+    mh_mat = sort(mh_arr, 'descend');
+    [~, best_hf_idx] = max(mh_arr);
+
+    for i = 1:min(Num_Cascade_HF, length(mh_arr))
         curr_corr = mh_mat(i);
-        real_idx = find([mh1,mh2,mh3] == curr_corr, 1);
+        real_idx = find(mh_arr == curr_corr, 1);
         [Sig_LMS_HF,~,~] = lmsFunc_h(LMS_Mu_Base - curr_corr/100, ord_h, 0, Sig_h{real_idx}, Sig_LMS_HF);
     end
-    
-    % [保持] HF 路径使用 HF 信号进行频谱惩罚
+
+    % HF 路径频谱惩罚
     Freq_HF = Helper_Process_Spectrum(Sig_LMS_HF, Sig_h{best_hf_idx}, Fs, para, times, HR(:,3), ...
                                     true, para.HR_Range_Hz, para.Slew_Limit_BPM, para.Slew_Step_BPM);
     HR(times, 3) = Freq_HF;
@@ -146,17 +144,18 @@ while stop_flag
     Sig_LMS_ACC = Sig_p;
     if time_delay_a < 0, ord_a = floor(abs(time_delay_a)*1.5); else, ord_a = 1; end
     ord_a = min(max(ord_a, 1), para.Max_Order);
-    
-    ma_mat = sort([ma1,ma2,ma3], 'descend');
-    for i = 1:Num_Cascade_Acc
+
+    ma_mat = sort(ma_arr, 'descend');
+    [~, best_acc_idx] = max(ma_arr);
+    for i = 1:min(Num_Cascade_Acc, length(ma_arr))
         curr_corr = ma_mat(i);
-        real_idx = find([ma1,ma2,ma3] == curr_corr, 1); 
+        real_idx = find(ma_arr == curr_corr, 1);
         Ref_Sig = Sig_a{real_idx};
         [Sig_LMS_ACC,~,~] = lmsFunc_h(LMS_Mu_Base - curr_corr/100, ord_a, 1, Ref_Sig, Sig_LMS_ACC);
     end
-    
-    % [保持] ACC 路径使用 ACC 信号进行频谱惩罚
-    Freq_ACC = Helper_Process_Spectrum(Sig_LMS_ACC, Sig_a{3}, Fs, para, times, HR(:,4), ...
+
+    % ACC 路径频谱惩罚
+    Freq_ACC = Helper_Process_Spectrum(Sig_LMS_ACC, Sig_a{best_acc_idx}, Fs, para, times, HR(:,4), ...
                                      true, para.HR_Range_Hz, para.Slew_Limit_BPM, para.Slew_Step_BPM);
     HR(times, 4) = Freq_ACC;
 

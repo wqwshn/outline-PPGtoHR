@@ -32,7 +32,7 @@
 ```matlab
 % 设置参数并运行心率解算
 para.FileName = 'data/xxx_processed.mat';
-para.Fs_Target = 125;
+para.Fs_Target = 100;
 para.Max_Order = 16;
 Result = HeartRateSolver_cas_chengfa(para);
 

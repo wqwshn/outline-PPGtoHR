@@ -29,7 +29,7 @@ PPG 心率估计算法 (MATLAB): LMS 自适应滤波 + FFT 频谱分析融合，
 
 ## 数据格式
 
-输入 .mat: data (表格, Col4-5=HF, Col6=PPG, Col8-10=ACC), ref_data ([Time, BPM])
+输入 .mat: data (表格, Col4-5=HF, Col6=PPG, Col9-11=ACC), ref_data ([Time, BPM])
 HR输出矩阵: Col1=时间, Col2=真值, Col3-5=三路径, Col6-7=融合, Col8-9=运动标记
 
 ## 开发要求

@@ -1,100 +1,64 @@
-function [mh1,mh2,mh3,ma1,ma2,ma3,time_delay_h,time_delay_a] = ChooseDelay1218(Fs,time_1,ppg,accx,accy,accz,hotf1,hotf2,hotf3)
-% -5:5相当于算了这个时间窗前后移动5个采样点，
-% 然后取这十次最大相关度作为这个时间窗的相关度结果，
-% 并且同时得到时延这个参数    
-    DelayHow_a = zeros(11, 4);  % 预分配内存 (11行: -5到5, 4列: lag, x, y, z)
-    DelayHow_h = zeros(11, 4);
+function [mh_arr,ma_arr,time_delay_h,time_delay_a] = ChooseDelay1218(Fs,time_1,ppg,acc_signals,hf_signals)
+% 计算 PPG 与参考信号(ACC/HF)之间的时延和各通道最大相关系数
+% 输入:
+%   acc_signals - ACC信号cell数组, 如 {accx, accy, accz}
+%   hf_signals  - HF信号cell数组,  如 {hotf1, hotf2}
+% 输出:
+%   mh_arr - HF各通道最大相关系数(向量)
+%   ma_arr - ACC各通道最大相关系数(向量)
+%   time_delay_h - HF最优时延(采样点偏移)
+%   time_delay_a - ACC最优时延(采样点偏移)
+
+    num_acc = length(acc_signals);
+    num_hf  = length(hf_signals);
+
+    DelayHow_a = zeros(11, num_acc + 1);  % Col1=lag, Col2..N=各通道相关系数
+    DelayHow_h = zeros(11, num_hf + 1);
 
     p1 = floor(time_1*Fs);
-    p2 = p1 + 8*Fs -1;
-    
-    % 边界检查：防止索引超出数据长度
-    if p2 > length(ppg)
-        p2 = length(ppg);
-    end
-    
-    ssss = ppg(p1:p2);
+    p2 = p1 + 8*Fs - 1;
+    if p2 > length(ppg), p2 = length(ppg); end
+    ppg_seg = ppg(p1:p2);
 
-    times = 1;
+    for ii = -5:5
+        row = ii + 6;  % -5->1, 0->6, 5->11
+        DelayHow_a(row, 1) = ii;
+        DelayHow_h(row, 1) = ii;
 
-    for ii = -5:1:5
-        times_1 = time_1 + ii/Fs;
-        DelayHow_a(times,1) = ii;
-        DelayHow_h(times,1) = ii;
-        
-        p1 = floor(times_1*Fs);
-        p2 = p1 + 8*Fs -1;
-        
-        % 边界保护
-        if p1 < 1 || p2 > length(accx)
-            % 如果移位后越界，相关系数设为0
-            DelayHow_a(times,2:4) = 0;
-            DelayHow_h(times,2:4) = 0;
+        p1 = floor((time_1 + ii/Fs)*Fs);
+        p2 = p1 + 8*Fs - 1;
+
+        if p1 < 1 || p2 > length(ppg)
+            DelayHow_a(row, 2:end) = 0;
+            DelayHow_h(row, 2:end) = 0;
         else
-            Signal_a_x = accx(p1:p2);
-            Signal_a_y = accy(p1:p2);
-            Signal_a_z = accz(p1:p2);
-            Signal_h_1 = hotf1(p1:p2);
-            Signal_h_2 = hotf2(p1:p2);
-            Signal_h_3 = hotf3(p1:p2); 
-
-            % 计算相关系数 (注意：corr 输入列向量)
-            DelayHow_a(times,2) = corr(ssss,Signal_a_x);
-            DelayHow_a(times,3) = corr(ssss,Signal_a_y);
-            DelayHow_a(times,4) = corr(ssss,Signal_a_z);
-
-            DelayHow_h(times,2) = corr(ssss,Signal_h_1);
-            DelayHow_h(times,3) = corr(ssss,Signal_h_2);
-            DelayHow_h(times,4) = corr(ssss,Signal_h_3);
+            for ch = 1:num_acc
+                DelayHow_a(row, ch+1) = corr(ppg_seg, acc_signals{ch}(p1:p2));
+            end
+            for ch = 1:num_hf
+                DelayHow_h(row, ch+1) = corr(ppg_seg, hf_signals{ch}(p1:p2));
+            end
         end
-        
-        times = times + 1;
     end
-    
-    % --- 【修正点1】处理 NaN (因为hotf3是0，corr结果会是NaN) ---
+
+    % 处理 NaN (如通道全零导致 corr 为 NaN)
     DelayHow_h(isnan(DelayHow_h)) = 0;
     DelayHow_a(isnan(DelayHow_a)) = 0;
-   
-    % --- 计算加速度最大相关 ---
-    ma1 = max(abs(DelayHow_a(:,2)));
-    ma2 = max(abs(DelayHow_a(:,3)));
-    ma3 = max(abs(DelayHow_a(:,4)));
-    
-    % --- 计算热膜最大相关 ---
-    mh1 = max(abs(DelayHow_h(:,2)));
-    mh2 = max(abs(DelayHow_h(:,3)));
-    mh3 = max(abs(DelayHow_h(:,4)));
-    
-    % --- 【修正点2】热膜延时计算 (强制标量) ---
-    mh_mat = sort([mh1,mh2,mh3],'descend');
-    % find 可能会返回多个索引，比如 [1, 2]，这里强制取第1个
-    tmp_idx = find([mh1,mh2,mh3] == mh_mat(1));
-    indexxh = tmp_idx(1); 
-    
-    % 找到该通道中相关系数绝对值最大的行索引
-    target_col = abs(DelayHow_h(:, indexxh+1)); % +1 是因为第1列是lag
-    max_val = max(target_col);
-    time_delay_h_r = find(target_col == max_val);
-    
-    if ~isempty(time_delay_h_r)
-        time_delay_h = DelayHow_h(time_delay_h_r(1), 1); % 强制取第1个
-    else
-        time_delay_h = 0; % 默认值，防止空数组报错
-    end
 
-    % --- 【修正点3】加速度延时计算 (强制标量) ---
-    ma_mat = sort([ma1,ma2,ma3],'descend');
-    tmp_idx_a = find([ma1,ma2,ma3] == ma_mat(1));
-    indexxa = tmp_idx_a(1);
-    
-    target_col_a = abs(DelayHow_a(:, indexxa+1));
-    max_val_a = max(target_col_a);
-    time_delay_a_r = find(target_col_a == max_val_a);
-    
-    if ~isempty(time_delay_a_r)
-        time_delay_a = DelayHow_a(time_delay_a_r(1), 1);
-    else
-        time_delay_a = 0;
-    end
-    
+    % 各通道最大相关系数
+    mh_arr = max(abs(DelayHow_h(:, 2:end)), [], 1);  % 1×num_hf 向量
+    ma_arr = max(abs(DelayHow_a(:, 2:end)), [], 1);  % 1×num_acc 向量
+
+    % --- HF 最优时延: 取相关系数最大的通道, 再取该通道中最大相关对应的时延 ---
+    [~, best_hf_ch] = max(mh_arr);
+    target_col = abs(DelayHow_h(:, best_hf_ch + 1));
+    [~, max_row] = max(target_col);
+    time_delay_h = DelayHow_h(max_row, 1);
+
+    % --- ACC 最优时延 ---
+    [~, best_acc_ch] = max(ma_arr);
+    target_col_a = abs(DelayHow_a(:, best_acc_ch + 1));
+    [~, max_row_a] = max(target_col_a);
+    time_delay_a = DelayHow_a(max_row_a, 1);
+
 end

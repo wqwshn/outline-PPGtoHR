@@ -253,7 +253,7 @@ function Error_Val = Wrapper_CostFunction(Idx_Table, SearchSpace, para_base, Tar
             % =========================================================
             % [核心修复]: 之前使用 Res.Err_Fus_HF 会错误提取到全局融合 AAE。
             % 现修改为直接从统计矩阵中提取 Motion AAE，对齐 ACC 的提取逻辑。
-            % (假设：err_stats 中第4行为 Fusion(HF)，第3列为运动段误差)
+            % (假设：err_stats 中第4行为 Fusion(HF)，第3列为运动段误差，第1段为fusion误差)
             % =========================================================
             Error_Val = Res.err_stats(4, 1);      
         elseif strcmp(Target_Mode, 'ACC')
