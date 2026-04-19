@@ -132,7 +132,9 @@ def test_optimise_end_to_end(base_params: SolverParams, tmp_path: Path) -> None:
 
 @pytest.mark.slow
 def test_optimise_full_budget(base_params: SolverParams, tmp_path: Path) -> None:
-    cfg = BayesConfig(max_iterations=10, num_seed_points=3, num_repeats=2)
+    # 25 trials per repeat ensures the importance analysis (>20 valid) triggers
+    # even if one or two trials hit the penalty path.
+    cfg = BayesConfig(max_iterations=25, num_seed_points=5, num_repeats=1)
     result = optimise(
         base_params,
         space=default_search_space(),
@@ -140,9 +142,7 @@ def test_optimise_full_budget(base_params: SolverParams, tmp_path: Path) -> None
         out_path=tmp_path / "full.json",
         verbose=False,
     )
-    # Full grid should generally find an AAE better than the defaults (~<20).
     assert result.min_err_hf < 25
     assert result.min_err_acc < 25
-    # Importance analysis should kick in with 20+ valid trials per HF study.
     assert result.importance_hf is not None
     assert len(result.importance_hf.names) == len(default_search_space().names())
