@@ -30,7 +30,6 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-import pandas as pd
 from scipy.interpolate import interp1d
 from scipy.io import loadmat
 from scipy.signal import butter, filtfilt, resample_poly

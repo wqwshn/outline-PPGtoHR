@@ -25,7 +25,6 @@ from ppg_hr.optimization import (
 )
 from ppg_hr.params import SolverParams
 
-
 SCENARIO = "multi_tiaosheng1"
 
 

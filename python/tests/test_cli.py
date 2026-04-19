@@ -9,7 +9,6 @@ import pytest
 
 from ppg_hr import cli
 
-
 SCENARIO = "multi_tiaosheng1"
 
 

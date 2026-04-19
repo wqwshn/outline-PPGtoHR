@@ -54,7 +54,7 @@ class SolverParams:
 
     extras: dict[str, Any] = field(default_factory=dict)
 
-    def replace(self, **changes) -> "SolverParams":
+    def replace(self, **changes) -> SolverParams:
         """Return a copy with the given fields overridden."""
         return replace(self, **changes)
 

@@ -11,7 +11,6 @@ import pytest
 from ppg_hr.params import SolverParams
 from ppg_hr.visualization import load_report, render
 
-
 SCENARIO = "multi_tiaosheng1"
 
 

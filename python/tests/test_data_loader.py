@@ -10,7 +10,6 @@ import pytest
 from ppg_hr.io.golden import load_golden
 from ppg_hr.preprocess import SENSOR_COLUMNS, ProcessedDataset, load_dataset
 
-
 SCENARIO = "multi_tiaosheng1"
 
 

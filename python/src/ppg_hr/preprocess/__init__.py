@@ -1,6 +1,6 @@
 """Sensor data ingestion and preprocessing."""
 
-from .data_loader import ProcessedDataset, SENSOR_COLUMNS, load_dataset
+from .data_loader import SENSOR_COLUMNS, ProcessedDataset, load_dataset
 from .utils import (
     fillmissing_linear,
     fillmissing_nearest,

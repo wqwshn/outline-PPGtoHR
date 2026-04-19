@@ -15,7 +15,6 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import sys
 from dataclasses import asdict
 from pathlib import Path
 
@@ -23,7 +22,6 @@ from .core.heart_rate_solver import solve
 from .optimization import BayesConfig, default_search_space, optimise
 from .params import SolverParams
 from .visualization import render
-
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -11,7 +11,6 @@ from ppg_hr.core.heart_rate_solver import SolverResult, solve
 from ppg_hr.io.golden import assert_array_close, load_golden
 from ppg_hr.params import SolverParams
 
-
 SCENARIO = "multi_tiaosheng1"
 
 
