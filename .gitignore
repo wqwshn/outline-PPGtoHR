@@ -6,3 +6,34 @@ data*/
 *.m~
 html/
 *.fig
+
+# 编辑器/IDE 与 Claude/Cursor 工作区缓存
+.claude/
+.cursor/
+.vscode/
+.idea/
+
+# Git worktree 目录（项目内多分支并行开发用）
+.worktrees/
+
+# Python 缓存与构建产物
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Conda / venv 本地环境目录
+.venv/
+venv/
+env/
+.conda/
