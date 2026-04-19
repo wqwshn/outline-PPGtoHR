@@ -9,15 +9,15 @@
 clc; clear; close all;
 
 %% 1. 加载寻优结果
-ResultFile = 'Best_Params_20260119dualtiaosheng1_processed.mat';
+ResultFile = 'data20260418\Best_Params_Result_multi_kaihe2_processed.mat';
 if ~isfile(ResultFile)
     error('未找到结果文件 %s，请先运行 AutoOptimize_Bayes_Search.m', ResultFile);
 end
 load(ResultFile); % 加载 Best_Para_HF, Best_Para_ACC, SearchSpace 等
 
 fprintf('成功加载寻优结果。\n');
-fprintf('Fusion(HF)  记录最低误差: %.4f\n', Min_Err_HF);
-fprintf('Fusion(ACC) 记录最低误差: %.4f\n', Min_Err_ACC);
+fprintf('Fusion(HF)  记录最低误差(运动段): %.4f\n', Min_Err_HF);
+fprintf('Fusion(ACC) 记录最低误差(运动段): %.4f\n', Min_Err_ACC);
 
 %% 2. 重新计算最优结果
 fprintf('正在复现最优结果...\n');
@@ -29,10 +29,11 @@ T_Pred_HF = Final_Res_HF.T_Pred;
 Th_HF_Case = Final_Res_HF.Motion_Threshold; 
 Stats_HF = Final_Res_HF.err_stats; 
 
-% 提取指标用于图例
-E_FFT_1    = Stats_HF(3, 1);
-E_FusHF_1  = Stats_HF(4, 1);
-E_FusACC_1 = Stats_HF(5, 1);
+% [修改点]: 提取指标用于图例和标题，补充提取运动段(Motion)误差(第3列)
+E_FFT_1    = Stats_HF(3, 1); % 纯FFT 全局AAE
+E_FusHF_1  = Stats_HF(4, 1); % Fusion(HF) 全局AAE
+E_FusACC_1 = Stats_HF(5, 1); % Fusion(ACC) 全局AAE
+M_FusHF_1  = Stats_HF(4, 3); % Fusion(HF) 运动段AAE (优化目标)
 
 % --- 计算 ACC 最优数据 ---
 Final_Res_ACC = HeartRateSolver_cas_chengfa(Best_Para_ACC);
@@ -41,32 +42,11 @@ T_Pred_ACC = Final_Res_ACC.T_Pred;
 Th_ACC_Case = Final_Res_ACC.Motion_Threshold;
 Stats_ACC = Final_Res_ACC.err_stats;
 
-% 提取指标用于图例
-E_FFT_2    = Stats_ACC(3, 1);
-E_FusHF_2  = Stats_ACC(4, 1);
-E_FusACC_2 = Stats_ACC(5, 1);
-
-% [新增] 保存滤波后的PPG数据为CSV格式
-fprintf('\n正在保存滤波后的PPG数据...\n');
-
-% 获取数据文件名（不含路径和扩展名），用于生成输出文件名
-% 从已加载的变量中获取 Data_FileName（如果存在）
-if exist('Data_FileName', 'var')
-    [~, data_basename, ~] = fileparts(Data_FileName);
-else
-    % 向后兼容：如果参数文件中没有Data_FileName字段，使用默认名称
-    data_basename = 'result';
-end
-
-% 保存HF路径滤波后的PPG数据
-csv_hf_filename = sprintf('PPG_LMS_HF_%s.csv', data_basename);
-Save_PPG_To_CSV(Final_Res_HF.PPG_LMS_HF, Final_Res_HF.Time_Windows, HR_HF, csv_hf_filename, Best_Para_HF.Fs_Target);
-fprintf('  HF滤波数据已保存至: %s\n', csv_hf_filename);
-
-% 保存ACC路径滤波后的PPG数据
-csv_acc_filename = sprintf('PPG_LMS_ACC_%s.csv', data_basename);
-Save_PPG_To_CSV(Final_Res_ACC.PPG_LMS_ACC, Final_Res_ACC.Time_Windows, HR_ACC, csv_acc_filename, Best_Para_ACC.Fs_Target);
-fprintf('  ACC滤波数据已保存至: %s\n', csv_acc_filename);
+% [修改点]: 提取指标用于图例和标题，补充提取运动段(Motion)误差(第3列)
+E_FFT_2    = Stats_ACC(3, 1); % 纯FFT 全局AAE
+E_FusHF_2  = Stats_ACC(4, 1); % Fusion(HF) 全局AAE
+E_FusACC_2 = Stats_ACC(5, 1); % Fusion(ACC) 全局AAE
+M_FusACC_2 = Stats_ACC(5, 3); % Fusion(ACC) 运动段AAE (优化目标)
 
 %% 3. 组合绘图 (Combined Subplots)
 figure('Name', 'Bayes Optimization Comparison: HF vs ACC Best Cases', 'Color', 'w', 'Position', [50, 50, 1200, 900]);
@@ -78,19 +58,22 @@ motion_area_1 = HR_HF(:, 8) * 220;
 a1 = area(T_Pred_HF, motion_area_1, 'FaceColor', [0.94 0.94 0.96], 'EdgeColor', 'none', 'BaseValue', 0);
 hold on;
 % 2. 曲线
-h_fft1 = plot(T_Pred_HF, HR_HF(:,5)*60, '-', 'Color', [0.6 0.6 0.6], 'LineWidth', 1.2, 'DisplayName', sprintf('纯FFT (AAE=%.1f)', E_FFT_1));
-h_lms_h1 = plot(T_Pred_HF, HR_HF(:,3)*60, 'b:', 'LineWidth', 1.5, 'DisplayName', '纯LMS-热膜');
-h_lms_a1 = plot(T_Pred_HF, HR_HF(:,4)*60, 'm:', 'LineWidth', 1.5, 'DisplayName', '纯LMS-Acc');
-% 重点: 这里的 Target 是 Fusion-HF
-h_fus_h1 = plot(T_Pred_HF, HR_HF(:,6)*60, 'b.-', 'LineWidth', 1.5, 'MarkerSize', 8, 'DisplayName', sprintf('融合-热膜 (AAE=%.1f) [TARGET]', E_FusHF_1));
-h_fus_a1 = plot(T_Pred_HF, HR_HF(:,7)*60, 'm.-', 'LineWidth', 1.5, 'MarkerSize', 8, 'DisplayName', sprintf('融合-Acc (AAE=%.1f)', E_FusACC_1));
+h_fft1 = plot(T_Pred_HF, HR_HF(:,5)*60, '-', 'Color', [0.6 0.6 0.6], 'LineWidth', 1.2, 'DisplayName', sprintf('纯FFT (总AAE=%.1f)', E_FFT_1));
+h_lms_a1 = plot(T_Pred_HF, HR_HF(:,4)*60, 'b:', 'LineWidth', 1.5, 'DisplayName', '纯LMS-Acc');
+h_lms_h1 = plot(T_Pred_HF, HR_HF(:,3)*60, 'm:', 'LineWidth', 1.5, 'DisplayName', '纯LMS-热膜');
+
+% [修改点]: 图例中细分"总AAE"与"运动AAE"，将 [TARGET] 标记与实际优化的运动段误差匹配
 h_ref1 = plot(HR_HF(:,1), HR_HF(:,2)*60, 'k-', 'LineWidth', 2.5, 'DisplayName', '真值 (Ref)');
+h_fus_a1 = plot(T_Pred_HF, HR_HF(:,7)*60, 'b.-', 'LineWidth', 1.5, 'MarkerSize', 8, 'DisplayName', sprintf('融合-Acc (总AAE=%.1f)', E_FusACC_1));
+h_fus_h1 = plot(T_Pred_HF, HR_HF(:,6)*60, 'm.-', 'LineWidth', 1.5, 'MarkerSize', 8, 'DisplayName', sprintf('融合-热膜 (总AAE=%.1f, 运动=%.1f) [TARGET]', E_FusHF_1, M_FusHF_1));
+
 % 3. 美化
 uistack(a1, 'bottom'); 
-title(sprintf('(1) Fusion(HF) 最优参数结果 | Min Error: %.4f | Motion Th (ACC Unified): %.3f', ...
-    Min_Err_HF, Th_HF_Case(1)), 'FontSize', 12, 'FontWeight', 'bold');
+% [修改点]: 标题移除 Motion Th，仅打印目标运动段误差与Fusion全局误差
+title(sprintf('(1) Fusion(HF) 最优参数结果 | 运动段误差: %.4f | Fusion全局误差: %.4f', ...
+    Min_Err_HF, E_FusHF_1), 'FontSize', 12, 'FontWeight', 'bold');
 ylabel('Heart Rate (BPM)'); 
-ylim([50 90]); xlim([min(T_Pred_HF) max(T_Pred_HF)]);
+ylim([50 200]); xlim([min(T_Pred_HF) max(T_Pred_HF)]);
 grid on; set(gca, 'GridAlpha', 0.3);
 legend([h_ref1, h_fft1, h_fus_h1, h_fus_a1, h_lms_h1, h_lms_a1, a1], 'Location', 'bestoutside', 'NumColumns', 1);
 
@@ -101,19 +84,22 @@ motion_area_2 = HR_ACC(:, 8) * 220;
 a2 = area(T_Pred_ACC, motion_area_2, 'FaceColor', [0.94 0.94 0.96], 'EdgeColor', 'none', 'BaseValue', 0);
 hold on;
 % 2. 曲线
-h_fft2 = plot(T_Pred_ACC, HR_ACC(:,5)*60, '-', 'Color', [0.6 0.6 0.6], 'LineWidth', 1.2, 'DisplayName', sprintf('纯FFT (AAE=%.1f)', E_FFT_2));
-h_lms_h2 = plot(T_Pred_ACC, HR_ACC(:,3)*60, 'b:', 'LineWidth', 1.5, 'DisplayName', '纯LMS-热膜');
-h_lms_a2 = plot(T_Pred_ACC, HR_ACC(:,4)*60, 'm:', 'LineWidth', 1.5, 'DisplayName', '纯LMS-Acc');
-% 重点: 这里的 Target 是 Fusion-Acc
-h_fus_h2 = plot(T_Pred_ACC, HR_ACC(:,6)*60, 'b.-', 'LineWidth', 1.5, 'MarkerSize', 8, 'DisplayName', sprintf('融合-热膜 (AAE=%.1f)', E_FusHF_2));
-h_fus_a2 = plot(T_Pred_ACC, HR_ACC(:,7)*60, 'm.-', 'LineWidth', 1.5, 'MarkerSize', 8, 'DisplayName', sprintf('融合-Acc (AAE=%.1f) [TARGET]', E_FusACC_2));
+h_fft2 = plot(T_Pred_ACC, HR_ACC(:,5)*60, '-', 'Color', [0.6 0.6 0.6], 'LineWidth', 1.2, 'DisplayName', sprintf('纯FFT (总AAE=%.1f)', E_FFT_2));
+h_lms_a2 = plot(T_Pred_ACC, HR_ACC(:,4)*60, 'b:', 'LineWidth', 1.5, 'DisplayName', '纯LMS-Acc');
+h_lms_h2 = plot(T_Pred_ACC, HR_ACC(:,3)*60, 'm:', 'LineWidth', 1.5, 'DisplayName', '纯LMS-热膜');
+
+% [修改点]: 同样细分图例，明确标识ACC支路的优化目标
 h_ref2 = plot(HR_ACC(:,1), HR_ACC(:,2)*60, 'k-', 'LineWidth', 2.5, 'DisplayName', '真值 (Ref)');
+h_fus_a2 = plot(T_Pred_ACC, HR_ACC(:,7)*60, 'b.-', 'LineWidth', 1.5, 'MarkerSize', 8, 'DisplayName', sprintf('融合-Acc (总AAE=%.1f, 运动=%.1f) [TARGET]', E_FusACC_2, M_FusACC_2));
+h_fus_h2 = plot(T_Pred_ACC, HR_ACC(:,6)*60, 'm.-', 'LineWidth', 1.5, 'MarkerSize', 8, 'DisplayName', sprintf('融合-热膜 (总AAE=%.1f)', E_FusHF_2));
+
 % 3. 美化
 uistack(a2, 'bottom'); 
-title(sprintf('(2) Fusion(ACC) 最优参数结果 | Min Error: %.4f | Motion Th (ACC Unified): %.3f', ...
-    Min_Err_ACC, Th_ACC_Case(1)), 'FontSize', 12, 'FontWeight', 'bold');
+% [修改点]: 标题移除 Motion Th，仅打印目标运动段误差与Fusion全局误差
+title(sprintf('(2) Fusion(ACC) 最优参数结果 | 运动段误差: %.4f | Fusion全局误差: %.4f', ...
+    Min_Err_ACC, E_FusACC_2), 'FontSize', 12, 'FontWeight', 'bold');
 ylabel('Heart Rate (BPM)'); xlabel('Time (s)');
-ylim([50 90]); xlim([min(T_Pred_ACC) max(T_Pred_ACC)]);
+ylim([50 200]); xlim([min(T_Pred_ACC) max(T_Pred_ACC)]);
 grid on; set(gca, 'GridAlpha', 0.3);
 legend([h_ref2, h_fft2, h_fus_h2, h_fus_a2, h_lms_h2, h_lms_a2, a2], 'Location', 'bestoutside', 'NumColumns', 1);
 
@@ -175,55 +161,4 @@ function PrintDetailedStats(HR, HR_Ref_Interp)
         val_motion = mean(abs_err(mask_motion));
         fprintf('%-12s | %6.2f      | %6.2f      | %6.2f\n', col_names{k}, val_total, val_rest, val_motion);
     end
-end
-
-%% 辅助函数: 保存PPG数据到CSV文件
-function Save_PPG_To_CSV(PPG_Cell, Time_Windows, HR, csv_filename, Fs)
-    % PPG_Cell: cell数组，每个元素是一个时间窗的PPG信号
-    % Time_Windows: cell数组，每个元素是[起始时间, 结束时间]
-    % HR: 心率矩阵，HR(:,1)是时间，HR(:,2)是参考真值（Hz）
-    % csv_filename: 输出CSV文件名
-    % Fs: 采样率（Hz），用于计算时间戳
-
-    num_windows = length(PPG_Cell);
-    dt = 1 / Fs;  % 采样间隔
-
-    % 打开文件进行写入
-    fid = fopen(csv_filename, 'w');
-    if fid == -1
-        error('无法创建文件: %s', csv_filename);
-    end
-
-    % 写入CSV表头
-    fprintf(fid, 'Time(s),PPG_Value,HR_Time(s),HR_True(BPM)\n');
-
-    % 遍历每个时间窗
-    for win_idx = 1:num_windows
-        ppg_data = PPG_Cell{win_idx};
-        time_win = Time_Windows{win_idx};
-        start_time = time_win(1);
-
-        % 获取该时间窗对应的心率时间和真值
-        if win_idx <= size(HR, 1)
-            hr_time = HR(win_idx, 1);
-            hr_true_bpm = HR(win_idx, 2) * 60;  % 转换为BPM
-            hr_time_str = sprintf('%.6f', hr_time);
-            hr_true_str = sprintf('%.4f', hr_true_bpm);
-        else
-            hr_time_str = '';
-            hr_true_str = '';
-        end
-
-        % 计算该时间窗内每个样本的全局时间并写入
-        for sample_idx = 1:length(ppg_data)
-            ppg_time = start_time + (sample_idx - 1) * dt;
-            ppg_value = ppg_data(sample_idx);
-
-            fprintf(fid, '%.6f,%.6f', ppg_time, ppg_value);
-            fprintf(fid, ',%s', hr_time_str);
-            fprintf(fid, ',%s\n', hr_true_str);
-        end
-    end
-
-    fclose(fid);
 end

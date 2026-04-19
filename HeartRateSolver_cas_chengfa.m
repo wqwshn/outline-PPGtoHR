@@ -20,17 +20,23 @@ load(para.FileName, 'data', 'ref_data');
 
 raw_data = table2array(data);
 
-% % 全局固定参数
+% % 全局固定参数(老数据包格式)
 % Fs_Origin = 125;      % 原始采样率
 % Col_PPG  = 6;           
 % Col_HF1  = 4; Col_HF2 = 5;        
-% Col_Acc  = [8, 9, 10];        
+% Col_Acc  = [8, 9, 10];
 
-% Spo2的数据格式
-Fs_Origin = 125;      % 原始采样率
+% 全局固定参数(适配新数据包格式（多光谱）)
+Fs_Origin = 100;      % 原始采样率
 Col_PPG  = 6;           
-Col_HF1  = 2; Col_HF2 = 3;        
-Col_Acc  = [8, 9, 10]; 
+Col_HF1  = 4; Col_HF2 = 5;        
+Col_Acc  = [9, 10, 11];        
+
+% % Spo2的数据格式
+% Fs_Origin = 125;      % 原始采样率
+% Col_PPG  = 6;           
+% Col_HF1  = 2; Col_HF2 = 3;        
+% Col_Acc  = [8, 9, 10]; 
 
 % 重采样处理
 Fs = para.Fs_Target; 
