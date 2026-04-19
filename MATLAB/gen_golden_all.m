@@ -131,8 +131,10 @@ function gen_golden_all()
          'data_struct', 'ref_data_dl', 'sensor_csv_rel', 'gt_csv_rel');
     fprintf('  saved data_loader.mat\n');
 
-    %% ---------- heart_rate_solver (端到端 3 个场景) ----------
-    scenarios = {'multi_tiaosheng1', 'multi_kaihe1', 'multi_fuwo1'};
+    %% ---------- heart_rate_solver (端到端单一典型场景) ----------
+    % 只跑 multi_tiaosheng1 —— 与用户约定：所有原始数据文件结构相同，
+    % 一个场景即可充分验证重构等价性。
+    scenarios = {'multi_tiaosheng1'};
     para = default_solver_params();
     for k = 1:numel(scenarios)
         sc = scenarios{k};

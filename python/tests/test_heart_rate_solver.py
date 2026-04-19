@@ -68,8 +68,8 @@ def test_ref_csv_must_exist(tmp_path: Path) -> None:
         solve(SolverParams(file_name=fake_csv))
 
 
-@pytest.mark.parametrize("scenario", ["multi_tiaosheng1", "multi_kaihe1", "multi_fuwo1"])
-def test_matches_golden_e2e(scenario: str, dataset_dir: Path, golden_dir: Path) -> None:
+def test_matches_golden_e2e(dataset_dir: Path, golden_dir: Path) -> None:
+    scenario = SCENARIO  # 单一典型场景足以验证重构等价性
     mat_path = golden_dir / f"e2e_{scenario}.mat"
     if not mat_path.is_file():
         pytest.skip(f"Run MATLAB/gen_golden_all.m to produce e2e_{scenario}.mat")
