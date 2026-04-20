@@ -114,8 +114,10 @@ class OptimiseWorker(QObject):
     finished = Signal(object)            # BayesResult
     failed = Signal(str)
     log = Signal(str)
-    # progress: (mode str, run_idx_1based, run_total, best_err)
-    progress = Signal(str, int, int, float)
+    # progress payload keys:
+    #   mode, repeat_idx, repeat_total, trial_idx, trial_total,
+    #   global_trial, global_total, value, best_in_repeat, best_overall
+    progress = Signal(dict)
     saved = Signal(str)                  # path
 
     def __init__(self, params: SolverParams, cfg: BayesConfig, out_path: Path | None):
@@ -127,17 +129,33 @@ class OptimiseWorker(QObject):
     def run(self) -> None:
         try:
             space = default_search_space()
+            total_trials = int(self._cfg.num_repeats) * int(self._cfg.max_iterations)
 
             self.log.emit("=" * 50)
-            self.log.emit("ROUND 1/2  Fusion(HF) 最小化")
+            self.log.emit(
+                f"ROUND 1/2  Fusion(HF) 最小化   "
+                f"({self._cfg.num_repeats} 重启 × {self._cfg.max_iterations} 试次 = {total_trials} trials)"
+            )
             self.log.emit("=" * 50)
 
-            def _on_hf(run_idx: int, total: int, val: float) -> None:
-                self.progress.emit("HF", run_idx, total, float(val))
-                self.log.emit(f"  HF run {run_idx}/{total}  best_err = {val:.4f}")
+            def _step_hf(info: dict) -> None:
+                self.progress.emit({**info, "phase": "HF"})
+                # Lightweight log cadence: first trial of each repeat + every 10th trial.
+                t_idx = info["trial_idx"]
+                t_total = info["trial_total"]
+                if t_idx == 1 or t_idx % 10 == 0 or t_idx == t_total:
+                    self.log.emit(
+                        f"  HF repeat {info['repeat_idx']}/{info['repeat_total']}  "
+                        f"trial {t_idx:>3}/{t_total}  "
+                        f"val={info['value']:.3f}  best={info['best_overall']:.3f}"
+                    )
+
+            def _on_hf_repeat(run_idx: int, total: int, val: float) -> None:
+                self.log.emit(f">> HF repeat {run_idx}/{total} 结束，本轮最优 = {val:.4f}")
 
             min_err_hf, best_hf, study_hf = optimise_mode(
-                self._params, space, "HF", self._cfg, on_trial=_on_hf
+                self._params, space, "HF", self._cfg,
+                on_trial=_on_hf_repeat, on_trial_step=_step_hf,
             )
             self.log.emit(f">> Round 1 最终最优 HF err = {min_err_hf:.4f}")
 
@@ -145,12 +163,23 @@ class OptimiseWorker(QObject):
             self.log.emit("ROUND 2/2  Fusion(ACC) 最小化")
             self.log.emit("=" * 50)
 
-            def _on_acc(run_idx: int, total: int, val: float) -> None:
-                self.progress.emit("ACC", run_idx, total, float(val))
-                self.log.emit(f"  ACC run {run_idx}/{total}  best_err = {val:.4f}")
+            def _step_acc(info: dict) -> None:
+                self.progress.emit({**info, "phase": "ACC"})
+                t_idx = info["trial_idx"]
+                t_total = info["trial_total"]
+                if t_idx == 1 or t_idx % 10 == 0 or t_idx == t_total:
+                    self.log.emit(
+                        f"  ACC repeat {info['repeat_idx']}/{info['repeat_total']}  "
+                        f"trial {t_idx:>3}/{t_total}  "
+                        f"val={info['value']:.3f}  best={info['best_overall']:.3f}"
+                    )
+
+            def _on_acc_repeat(run_idx: int, total: int, val: float) -> None:
+                self.log.emit(f">> ACC repeat {run_idx}/{total} 结束，本轮最优 = {val:.4f}")
 
             min_err_acc, best_acc, _study_acc = optimise_mode(
-                self._params, space, "ACC", self._cfg, on_trial=_on_acc
+                self._params, space, "ACC", self._cfg,
+                on_trial=_on_acc_repeat, on_trial_step=_step_acc,
             )
             self.log.emit(f">> Round 2 最终最优 ACC err = {min_err_acc:.4f}")
 

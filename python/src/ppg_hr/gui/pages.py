@@ -473,10 +473,17 @@ class OptimisePage(_PageBase):
         self._acc_series.clear()
         self._canvas.clear_axes()
         self._canvas.redraw()
+        total_trials = int(cfg.num_repeats) * int(cfg.max_iterations)
         self._progress.setValue(0)
-        self._progress.setFormat("HF 0/? ")
+        self._progress.setFormat(
+            f"启动中…  HF 0/{total_trials} · ACC 0/{total_trials}"
+        )
         self._btn.setEnabled(False)
         self._log.info("—" * 40)
+        self._log.info(
+            f"任务规模：2 模式 × {cfg.num_repeats} 重启 × {cfg.max_iterations} 试次 "
+            f"= {2 * total_trials} 次 solve（请耐心等待，进度条逐 trial 更新）"
+        )
 
         worker = OptimiseWorker(params, cfg, out_path)
         worker.log.connect(self._log.info)
@@ -489,31 +496,47 @@ class OptimisePage(_PageBase):
         self._worker_holder = holder
         holder.start()
 
-    # progress: mode, run_idx, run_total, best_err
-    def _on_progress(self, mode: str, run_idx: int, run_total: int, best_err: float) -> None:
+    def _on_progress(self, info: dict) -> None:
+        """Per-trial progress update (payload see OptimiseWorker)."""
+        mode = info["mode"]
+        g_idx = int(info["global_trial"])
+        g_total = int(info["global_total"])
+        best_overall = float(info["best_overall"])
+
+        # HF occupies the first 50%, ACC the last 50%.
         if mode == "HF":
-            self._hf_series.append(best_err)
-            pct = int(50 * run_idx / max(1, run_total))
+            self._hf_series.append(best_overall)
+            pct = 50.0 * g_idx / max(1, g_total)
         else:
-            self._acc_series.append(best_err)
-            pct = 50 + int(50 * run_idx / max(1, run_total))
-        self._progress.setValue(pct)
-        self._progress.setFormat(f"{mode} {run_idx}/{run_total}  best={best_err:.3f} ({pct}%)")
-        self._redraw_trace()
+            self._acc_series.append(best_overall)
+            pct = 50.0 + 50.0 * g_idx / max(1, g_total)
+        pct_i = max(0, min(100, int(round(pct))))
+
+        self._progress.setValue(pct_i)
+        self._progress.setFormat(
+            f"{mode}  repeat {info['repeat_idx']}/{info['repeat_total']}  "
+            f"trial {info['trial_idx']}/{info['trial_total']}  "
+            f"best={best_overall:.3f} ({pct_i}%)"
+        )
+        # Throttle redraws: update trace every 5th trial (+ last trial) to keep the
+        # UI snappy when trials run fast.
+        if info["trial_idx"] % 5 == 0 or info["trial_idx"] == info["trial_total"]:
+            self._redraw_trace()
 
     def _redraw_trace(self) -> None:
         ax = self._canvas.axes
         self._canvas.clear_axes()
         if self._hf_series:
             ax.plot(range(1, len(self._hf_series) + 1), self._hf_series,
-                    "o-", color=Palette.primary, label="HF best err")
+                    "-", color=Palette.primary, linewidth=1.6, label="HF best so far")
         if self._acc_series:
             ax.plot(range(1, len(self._acc_series) + 1), self._acc_series,
-                    "s--", color=Palette.success, label="ACC best err")
-        ax.set_title("Best Err 轨迹（逐重启）")
-        ax.set_xlabel("Run index")
+                    "--", color=Palette.success, linewidth=1.6, label="ACC best so far")
+        ax.set_title("Best Err 轨迹（逐 trial）")
+        ax.set_xlabel("Trial index（全量：num_repeats × max_iterations）")
         ax.set_ylabel("AAE (BPM)")
-        ax.legend(loc="best")
+        if self._hf_series or self._acc_series:
+            ax.legend(loc="best")
         self._canvas.redraw()
 
     def _on_done(self, result: BayesResult) -> None:

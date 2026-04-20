@@ -175,12 +175,25 @@ def optimise_mode(
     cfg: BayesConfig,
     *,
     on_trial: Callable[[int, int, float], None] | None = None,
+    on_trial_step: Callable[[dict[str, Any]], None] | None = None,
 ) -> tuple[float, dict[str, Any], optuna.study.Study]:
     """Run multi-restart Bayesian search for a single fusion mode.
 
     Returns ``(best_err, best_params_dict, last_study)``. The ``last_study`` is
     the study object from the *final* repeat (used for parameter-importance
     analysis, mirroring MATLAB's ``results_hf`` variable).
+
+    Parameters
+    ----------
+    on_trial:
+        Per-*repeat* summary callback ``(repeat_idx_1b, repeat_total, best_err)``.
+        Useful for CLI-style coarse logging (default behaviour).
+    on_trial_step:
+        Per-*trial* callback receiving a dict with keys ``mode``, ``repeat_idx``,
+        ``repeat_total``, ``trial_idx``, ``trial_total``, ``global_trial``,
+        ``global_total``, ``value``, ``best_in_repeat``, ``best_overall``.
+        Used by the GUI to drive live progress bars and traces without changing
+        the MATLAB-parity numerics.
     """
     if mode not in _MODE_ROW:
         raise ValueError(f"Unsupported mode {mode!r}; expected one of {list(_MODE_ROW)}")
@@ -190,13 +203,52 @@ def optimise_mode(
     best_params: dict[str, Any] = {}
     last_study: optuna.study.Study | None = None
 
+    trials_per_repeat = int(cfg.max_iterations)
+    global_total = trials_per_repeat * int(cfg.num_repeats)
+
     for run_idx in range(cfg.num_repeats):
         sampler = TPESampler(
             seed=cfg.random_state + run_idx,
             n_startup_trials=cfg.num_seed_points,
         )
         study = optuna.create_study(direction="minimize", sampler=sampler)
-        study.optimize(cost_fn, n_trials=cfg.max_iterations, show_progress_bar=False)
+
+        callbacks: list[Callable[[optuna.study.Study, optuna.trial.FrozenTrial], None]] = []
+        if on_trial_step is not None:
+            def _step_cb(
+                st: optuna.study.Study,
+                tr: optuna.trial.FrozenTrial,
+                _run_idx: int = run_idx,
+                _trials_per_repeat: int = trials_per_repeat,
+                _global_total: int = global_total,
+            ) -> None:
+                value = tr.value if tr.value is not None else float("inf")
+                try:
+                    best_in_repeat = float(st.best_value)
+                except ValueError:
+                    best_in_repeat = float(value)
+                best_overall_now = min(float(best_err), best_in_repeat)
+                on_trial_step({
+                    "mode": mode,
+                    "repeat_idx": _run_idx + 1,
+                    "repeat_total": int(cfg.num_repeats),
+                    "trial_idx": tr.number + 1,
+                    "trial_total": _trials_per_repeat,
+                    "global_trial": _run_idx * _trials_per_repeat + tr.number + 1,
+                    "global_total": _global_total,
+                    "value": float(value),
+                    "best_in_repeat": best_in_repeat,
+                    "best_overall": best_overall_now,
+                })
+
+            callbacks.append(_step_cb)
+
+        study.optimize(
+            cost_fn,
+            n_trials=cfg.max_iterations,
+            show_progress_bar=False,
+            callbacks=callbacks or None,
+        )
         last_study = study
 
         current = study.best_value
