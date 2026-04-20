@@ -1,0 +1,17 @@
+name: ppg-hr
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy>=1.26
+  - scipy>=1.11
+  - pandas>=2.1
+  - matplotlib>=3.8
+  - scikit-learn>=1.4
+  - optuna>=3.5
+  - pytest>=8
+  - pytest-cov
+  - jupyterlab
+  - pip
+  - pip:
+      - ruff>=0.4

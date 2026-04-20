@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ppg_hr"
+version = "0.1.0"
+description = "PPG heart-rate estimation algorithm — Python port of the MATLAB outline-PPGtoHR project"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
+authors = [{ name = "outline-PPGtoHR contributors" }]
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "pandas>=2.1",
+    "matplotlib>=3.8",
+    "scikit-learn>=1.4",
+    "optuna>=3.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-cov",
+    "ruff>=0.4",
+]
+gui = [
+    "PySide6>=6.6",
+]
+
+[project.scripts]
+ppg-hr = "ppg_hr.cli:main"
+ppg-hr-gui = "ppg_hr.gui:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+ppg_hr = ["py.typed", "gui/assets/*.svg"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # bugbear
+    "UP", # pyupgrade
+    "N",  # pep8-naming
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "N803",  # argument name should be lowercase (we sometimes mirror MATLAB names)
+    "N806",  # variable in function should be lowercase (same reason)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["N802"]  # MATLAB-style test names allowed
