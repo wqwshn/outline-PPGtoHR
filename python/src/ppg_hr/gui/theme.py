@@ -337,19 +337,19 @@ QProgressBar::chunk {{
 }}
 
 /* ------ Console log ------ */
-/* Pure-white foreground at weight 500 keeps every line legible even on
-   high-gamut displays / under strong ambient light, where the previous
-   slate-200 text looked washed out against the slate-900 background. */
+/* Light background + deep-blue foreground matches the app's minimalist theme
+   and reads well next to light cards. Keep selection as white text on a
+   blue highlight for high contrast. */
 QPlainTextEdit#log {{
-    background-color: #0F172A;
-    color: #FFFFFF;
+    background-color: {Palette.surface};
+    color: {Palette.primary_pressed};
     border: 1px solid {Palette.border};
     border-radius: 8px;
     padding: 10px 12px;
     font-family: 'JetBrains Mono', 'Cascadia Code', 'Consolas', 'Menlo', monospace;
     font-size: 13.5px;
     font-weight: 500;
-    selection-background-color: #1E3A8A;
+    selection-background-color: {Palette.primary};
     selection-color: #FFFFFF;
 }}
 

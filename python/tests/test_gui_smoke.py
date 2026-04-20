@@ -45,21 +45,23 @@ def test_theme_stylesheet_nonempty():
     assert "#sidebar" in STYLESHEET
 
 
-def test_theme_log_panel_uses_high_contrast_foreground():
-    """LogPanel's foreground must stay pure white on dark background.
+def test_theme_log_panel_uses_deep_blue_foreground_on_light_background():
+    """LogPanel must stay readable under the light theme.
 
-    The pane uses a slate-900 background (``#0F172A``); anything dimmer than
-    pure white starts to look washed out on high-gamut displays. This test
-    pins both the colour and the boldened weight to catch accidental
-    regressions into the old slate-200 / weight-400 combo.
+    We render the log on a light card background and use a deep-blue
+    foreground so progress lines are easy to scan. Selection stays
+    white-on-blue for maximum contrast.
     """
     from ppg_hr.gui.theme import STYLESHEET
 
     # Extract the #log block and assert the foreground rules.
     block_start = STYLESHEET.index("QPlainTextEdit#log")
     block = STYLESHEET[block_start : block_start + 400]
-    assert "color: #FFFFFF" in block
+    # Palette.surface == #FFFFFF; Palette.primary_pressed == #1E40AF
+    assert "background-color: #FFFFFF" in block
+    assert "color: #1E40AF" in block
     assert "font-weight: 500" in block
+    assert "selection-color: #FFFFFF" in block
 
 
 def test_theme_declares_spinbox_arrow_icons():
