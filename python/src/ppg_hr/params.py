@@ -52,6 +52,17 @@ class SolverParams:
     bp_high_hz: float = 5.0
     bp_order: int = 4
 
+    # Adaptive filter selection (new in 2026-04)
+    adaptive_filter: str = "lms"  # one of: "lms", "klms", "volterra"
+
+    # KLMS-specific parameters (only used when adaptive_filter == "klms")
+    klms_step_size: float = 0.1
+    klms_sigma: float = 1.0
+    klms_epsilon: float = 0.1
+
+    # Volterra-specific parameters (only used when adaptive_filter == "volterra")
+    volterra_max_order_vol: int = 3
+
     extras: dict[str, Any] = field(default_factory=dict)
 
     def replace(self, **changes) -> SolverParams:
