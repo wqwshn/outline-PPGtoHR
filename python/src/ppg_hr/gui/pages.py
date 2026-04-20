@@ -511,6 +511,14 @@ class OptimisePage(_PageBase):
         cfg_card.add(cfg_form)
         self.body().addWidget(cfg_card)
 
+        param_card = SectionCard(
+            "求解器参数",
+            "选择自适应滤波算法（lms/klms/volterra）并设置参数；同一套参数会同时作用于 HF 与 ACC 两条级联路径。",
+        )
+        self._form = ParamForm()
+        param_card.add(self._form)
+        self.body().addWidget(param_card)
+
         action_row = QHBoxLayout()
         action_row.setSpacing(12)
         action_row.addStretch(1)
@@ -555,6 +563,7 @@ class OptimisePage(_PageBase):
             return
 
         params = SolverParams(file_name=in_path, ref_file=self._ref_pick.path())
+        params = self._form.apply_to(params)
         cfg = BayesConfig(
             max_iterations=int(self._max_iter.value()),
             num_seed_points=int(self._seed_pts.value()),
