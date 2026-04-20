@@ -184,3 +184,43 @@ def test_optimise_full_budget(base_params: SolverParams, tmp_path: Path) -> None
     assert result.min_err_acc < 25
     assert result.importance_hf is not None
     assert len(result.importance_hf.names) == len(default_search_space().names())
+
+
+# ---------------------------------------------------------------------------
+# Per-strategy search-space tests
+# ---------------------------------------------------------------------------
+
+
+def test_default_search_space_lms_unchanged() -> None:
+    space = default_search_space("lms")
+    names = space.names()
+    assert "klms_sigma" not in names
+    assert "volterra_max_order_vol" not in names
+    assert "fs_target" in names
+    assert "max_order" in names
+
+
+def test_default_search_space_no_arg_equals_lms() -> None:
+    """Backwards compat: default_search_space() with no args still returns LMS grid."""
+    assert default_search_space().names() == default_search_space("lms").names()
+
+
+def test_default_search_space_klms_has_klms_fields() -> None:
+    space = default_search_space("klms")
+    names = space.names()
+    assert "klms_step_size" in names
+    assert "klms_sigma" in names
+    assert "klms_epsilon" in names
+    assert "volterra_max_order_vol" not in names
+
+
+def test_default_search_space_volterra_has_vol_field() -> None:
+    space = default_search_space("volterra")
+    names = space.names()
+    assert "volterra_max_order_vol" in names
+    assert "klms_sigma" not in names
+
+
+def test_default_search_space_unknown_raises() -> None:
+    with pytest.raises(ValueError):
+        default_search_space("bogus")
