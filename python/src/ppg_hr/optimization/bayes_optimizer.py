@@ -121,11 +121,13 @@ class BayesResult:
     best_para_acc: dict[str, Any]
     importance_hf: ParameterImportance | None
     search_space: dict[str, list[Any]] = field(default_factory=dict)
+    adaptive_filter: str = "lms"
 
     def save(self, path: str | Path) -> Path:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
+            "adaptive_filter": self.adaptive_filter,
             "min_err_hf": float(self.min_err_hf),
             "best_para_hf": _jsonify(self.best_para_hf),
             "min_err_acc": float(self.min_err_acc),
@@ -633,7 +635,7 @@ def optimise(
     verbose:
         Print per-round summary lines (mirrors MATLAB console output).
     """
-    space = space or default_search_space()
+    space = space or default_search_space(base.adaptive_filter)
     config = config or BayesConfig()
 
     def _print(round_idx: int, total: int, val: float) -> None:
@@ -673,6 +675,7 @@ def optimise(
         best_para_acc=best_para_acc,
         importance_hf=importance,
         search_space={n: space.options(n) for n in space.names()},
+        adaptive_filter=base.adaptive_filter,
     )
 
     if out_path is None and base.file_name:

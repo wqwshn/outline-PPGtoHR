@@ -17,15 +17,17 @@
 
 ## 2. 参考算法差异速览
 
-| 项 | LMS（当前） | KLMS（QKLMS） | Volterra LMS |
-|---|---|---|---|
-| MATLAB 文件 | `MATLAB/lmsFunc_h.m` | `ref/.../KLMS/lmsFunc_h.m` | `ref/.../Volterra/lmsFunc_h.m` |
-| 签名 | `(mu, M, K, u, d)` | `(mu, M, K, u, d, sigma, epsilon)` | `(mu, M1, M2, K, u, d)` |
-| 返回 | `(e, w, ee)` | `(e, A, C)` | `(e, w, ee)` |
-| `e` 长度 | `N-K`（Python 端） | `N`（zeros(N,1)） | `N`（zeros(N,1)） |
-| 调用侧步长 | `mu_base − corr/100` | **固定** `klms_step_size`（不减 corr/100） | `mu_base − corr/100` |
-| 非线性建模 | 线性 FIR | 高斯核 + 字典量化 | 线性 + 所有二阶交叉项 |
-| 退化条件 | — | — | `M2 = 0` 时**数值等同** LMS |
+
+| 项         | LMS（当前）              | KLMS（QKLMS）                          | Volterra LMS                   |
+| --------- | -------------------- | ------------------------------------ | ------------------------------ |
+| MATLAB 文件 | `MATLAB/lmsFunc_h.m` | `ref/.../KLMS/lmsFunc_h.m`           | `ref/.../Volterra/lmsFunc_h.m` |
+| 签名        | `(mu, M, K, u, d)`   | `(mu, M, K, u, d, sigma, epsilon)`   | `(mu, M1, M2, K, u, d)`        |
+| 返回        | `(e, w, ee)`         | `(e, A, C)`                          | `(e, w, ee)`                   |
+| `e` 长度    | `N-K`（Python 端）      | `N`（zeros(N,1)）                      | `N`（zeros(N,1)）                |
+| 调用侧步长     | `mu_base − corr/100` | **固定** `klms_step_size`（不减 corr/100） | `mu_base − corr/100`           |
+| 非线性建模     | 线性 FIR               | 高斯核 + 字典量化                           | 线性 + 所有二阶交叉项                   |
+| 退化条件      | —                    | —                                    | `M2 = 0` 时**数值等同** LMS         |
+
 
 `e` 长度差异是刻意保留的原始语义：KLMS/Volterra 的 Python 端必须返回长度 `N` 的数组，前 `M−1` 和尾部 `K` 个元素为 0。
 
@@ -87,7 +89,7 @@ Port 要点：
 - 线性基 `u1 = u[n+K : n-M1 : -1]`；二阶基 `u2_base = u[n+K : n-M2 : -1]`，再取 `np.tril` 的外积展开成 `L2*(L2+1)/2` 维向量。
 - 拼接 `U_vol = concat(u1, u2)`，权重长度 `L1 + L2*(L2+1)/2`。
 - 更新律 `w += 2μ · U_vol · e`。
-- **`M2 == 0` 时严格等价 `lms_filter(mu, M1, K, u, d)`**（测试守护此性质）。
+- `**M2 == 0` 时严格等价 `lms_filter(mu, M1, K, u, d)**`（测试守护此性质）。
 - 循环起点 `M_start = max(M1, M2)`；Python 索引 `range(M_start-1, N-K)`。
 
 ### 3.3 `adaptive_filter.py`（统一入口）
@@ -111,11 +113,13 @@ def apply_adaptive_cascade(
 
 Dispatch 逻辑：
 
-| strategy | 调用 |
-|---|---|
-| `"lms"` | `lms_filter(mu_base - corr/100, order, K, u, d)` → 返回 `e` |
-| `"klms"` | `klms_filter(params.klms_step_size, order, K, u, d, params.klms_sigma, params.klms_epsilon)` → 返回 `e`（注意：**不**减 `corr/100`，与 KLMS 参考项目一致） |
-| `"volterra"` | `volterra_filter(mu_base - corr/100, order, params.volterra_max_order_vol, K, u, d)` → 返回 `e` |
+
+| strategy     | 调用                                                                                                                                        |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `"lms"`      | `lms_filter(mu_base - corr/100, order, K, u, d)` → 返回 `e`                                                                                 |
+| `"klms"`     | `klms_filter(params.klms_step_size, order, K, u, d, params.klms_sigma, params.klms_epsilon)` → 返回 `e`（注意：**不**减 `corr/100`，与 KLMS 参考项目一致） |
+| `"volterra"` | `volterra_filter(mu_base - corr/100, order, params.volterra_max_order_vol, K, u, d)` → 返回 `e`                                             |
+
 
 未知 strategy 抛 `ValueError`。
 
@@ -192,7 +196,7 @@ def default_search_space(strategy: str = "lms") -> SearchSpace:
 - 生成的 `best_para_hf/acc` 字典自动携带当前策略的专属参数；
 - 输出 JSON 报告顶层新增 `"adaptive_filter": strategy` 字段，便于 view 命令复现。
 
-**MATLAB 行为对齐**：KLMS 参考项目中 `KLMS_StepSize` 替代了 `LMS_Mu_Base`（后者不再参与搜索）；因此 KLMS 的 `SearchSpace` 不包含任何现有 `slew_*` 之外的 LMS-only 步长字段——事实上现有 `SearchSpace` 本来就没把 `lms_mu_base` 列为搜索对象，所以无需删减。
+**MATLAB 行为对齐**：KLMS 参考项目中 `KLMS_StepSize` 替代了 `LMS_Mu_Base`（后者不再参与搜索）；因此 KLMS 的 `SearchSpace` 不包含任何现有 `slew_`* 之外的 LMS-only 步长字段——事实上现有 `SearchSpace` 本来就没把 `lms_mu_base` 列为搜索对象，所以无需删减。
 
 ## 7. CLI 改动
 
@@ -215,8 +219,8 @@ def default_search_space(strategy: str = "lms") -> SearchSpace:
 1. `_PARAM_GROUPS` 顶部新增一组："自适应滤波策略"，只包含 `adaptive_filter` 一项。
 2. `_PARAM_META["adaptive_filter"]` 新增 `kind="choice"`，选项 `[("lms","LMS (线性, 默认)"), ("klms","KLMS (核方法)"), ("volterra","Volterra (二阶非线性)")]`。
 3. 再增两组：
-   - "KLMS 参数"：`klms_step_size / klms_sigma / klms_epsilon`
-   - "Volterra 参数"：`volterra_max_order_vol`
+  - "KLMS 参数"：`klms_step_size / klms_sigma / klms_epsilon`
+  - "Volterra 参数"：`volterra_max_order_vol`
 4. `ParamForm._build_editor` 新增 `choice` 分支（`QComboBox`）。
 5. `ParamForm.__init__` 末尾连接 combo box 的 `currentTextChanged` 到一个 `_update_strategy_visibility` 方法，根据当前 strategy 显示/隐藏两组"算法专属"`QGroupBox`。默认 `lms`：两组都隐藏。
 6. `apply_to` / `set_values` 对 `QComboBox` 读写 `currentData()` 字符串。
@@ -239,7 +243,7 @@ python/tests/
 关键断言：
 
 1. `test_volterra_filter.py :: test_M2_zero_equals_lms`
-   `volterra_filter(μ, M, 0, K, u, d)[0] == lms_filter(μ, M, K, u, d)[0]`（`atol=1e-12`）。这是回归防线。
+  `volterra_filter(μ, M, 0, K, u, d)[0] == lms_filter(μ, M, K, u, d)[0]`（`atol=1e-12`）。这是回归防线。
 2. `test_klms_filter.py :: test_zscore_invariance` — 与 LMS 同款仿射不变性。
 3. `test_klms_filter.py :: test_dictionary_growth_bounded_by_epsilon` — 取极大 `ε`，字典应只增长到 1 个中心；取极小 `ε`，字典长度应接近 `N−K−M+1`。
 4. `test_adaptive_filter.py :: test_lms_dispatch_bit_for_bit` — 用 `apply_adaptive_cascade("lms", ...)` 与直接 `lms_filter(...)` 返回**完全一致**。
@@ -255,25 +259,27 @@ python/tests/
 
 1. 从 `main` 切分支 `feature/adaptive-filter-strategies`。
 2. 提交粒度（按 TDD 顺序；每一步的单元测试先于实现）：
-   1. `docs(spec): add adaptive filter strategies spec`（本文档）
-   2. `feat(core): port klms_filter from QKLMS reference`
-   3. `feat(core): port volterra_filter from Volterra reference`
-   4. `feat(params): add adaptive_filter + algo-specific fields to SolverParams`
-   5. `feat(core): add adaptive_filter dispatch layer`
-   6. `feat(solver): switch HF/ACC cascade to adaptive dispatch`
-   7. `feat(opt): per-strategy search space + strategy in report`
-   8. `feat(cli): --adaptive-filter + algo flags`
-   9. `feat(gui): dropdown + conditional KLMS/Volterra parameter groups`
-   10. `docs(readme): document adaptive filter strategies`
+  1. `docs(spec): add adaptive filter strategies spec`（本文档）
+  2. `feat(core): port klms_filter from QKLMS reference`
+  3. `feat(core): port volterra_filter from Volterra reference`
+  4. `feat(params): add adaptive_filter + algo-specific fields to SolverParams`
+  5. `feat(core): add adaptive_filter dispatch layer`
+  6. `feat(solver): switch HF/ACC cascade to adaptive dispatch`
+  7. `feat(opt): per-strategy search space + strategy in report`
+  8. `feat(cli): --adaptive-filter + algo flags`
+  9. `feat(gui): dropdown + conditional KLMS/Volterra parameter groups`
+  10. `docs(readme): document adaptive filter strategies`
 3. PR 名称：`feat: pluggable adaptive filter strategies (LMS / KLMS / Volterra)`；描述贴本 spec 链接 + AAE 对比表。
 
 ## 12. 风险与回退
 
-| 风险 | 缓解 |
-|---|---|
-| LMS 端到端回归 | `test_lms_strategy_unchanged` + 现有 golden 测试；两个都过才算通过 |
-| KLMS 字典无限增长内存爆炸 | 测试用合理默认 `ε=0.1`；`klms_filter` 循环内只做 `np.concatenate`，最大规模受限于 8 秒窗口样本数（≤1000），不设硬上限但留注释提醒 |
-| `M2=0` 等价性被破坏 | `test_M2_zero_equals_lms` 守护 |
-| GUI 组件在老 PySide6 上找不到 `QComboBox.currentData` | 使用 `QComboBox.itemData(currentIndex())` 的更保守写法（已验证 PySide6 6.x 均可） |
+
+| 风险                                            | 缓解                                                                                       |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| LMS 端到端回归                                     | `test_lms_strategy_unchanged` + 现有 golden 测试；两个都过才算通过                                    |
+| KLMS 字典无限增长内存爆炸                               | 测试用合理默认 `ε=0.1`；`klms_filter` 循环内只做 `np.concatenate`，最大规模受限于 8 秒窗口样本数（≤1000），不设硬上限但留注释提醒 |
+| `M2=0` 等价性被破坏                                 | `test_M2_zero_equals_lms` 守护                                                             |
+| GUI 组件在老 PySide6 上找不到 `QComboBox.currentData` | 使用 `QComboBox.itemData(currentIndex())` 的更保守写法（已验证 PySide6 6.x 均可）                       |
+
 
 实施完如出现端到端回归，立即回退第 5 步（`heart_rate_solver` 调用改造）——切回硬编码 `lms_filter`，保留滤波器本体与参数字段（这样其它 commit 仍可用于后续优化）。

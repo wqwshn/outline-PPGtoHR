@@ -128,7 +128,7 @@ class OptimiseWorker(QObject):
 
     def run(self) -> None:
         try:
-            space = default_search_space()
+            space = default_search_space(self._params.adaptive_filter)
             total_trials = int(self._cfg.num_repeats) * int(self._cfg.max_iterations)
 
             self.log.emit("=" * 50)
