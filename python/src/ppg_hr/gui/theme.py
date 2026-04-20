@@ -337,15 +337,20 @@ QProgressBar::chunk {{
 }}
 
 /* ------ Console log ------ */
+/* Pure-white foreground at weight 500 keeps every line legible even on
+   high-gamut displays / under strong ambient light, where the previous
+   slate-200 text looked washed out against the slate-900 background. */
 QPlainTextEdit#log {{
     background-color: #0F172A;
-    color: #E2E8F0;
+    color: #FFFFFF;
     border: 1px solid {Palette.border};
     border-radius: 8px;
     padding: 10px 12px;
     font-family: 'JetBrains Mono', 'Cascadia Code', 'Consolas', 'Menlo', monospace;
-    font-size: 13px;
+    font-size: 13.5px;
+    font-weight: 500;
     selection-background-color: #1E3A8A;
+    selection-color: #FFFFFF;
 }}
 
 /* ------ Tabs ------ */

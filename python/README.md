@@ -343,11 +343,13 @@ Python 版把 MATLAB 原先靠 `parpool` 并行的两件事同时做进来了，
 
 典型收益（`num_repeats=3`、`max_iterations=75`、一次运行 225 trials）：
 
-| 场景           | 优化项     | 预期加速      |
-| ------------ | ------- | --------- |
-| 数据缓存         | 消除重复 IO | 1.1–1.3×  |
-| 3 进程并行       | 3 个独立重启 | 2.5–2.9×  |
-| **缓存 + 并行合计** |         | **≈ 3×**  |
+
+| 场景            | 优化项     | 预期加速     |
+| ------------- | ------- | -------- |
+| 数据缓存          | 消除重复 IO | 1.1–1.3× |
+| 3 进程并行        | 3 个独立重启 | 2.5–2.9× |
+| **缓存 + 并行合计** |         | **≈ 3×** |
+
 
 ### 控制方式
 
@@ -359,8 +361,7 @@ Python 版把 MATLAB 原先靠 `parpool` 并行的两件事同时做进来了，
 
 `tests/test_bayes_optimizer.py::test_optimise_mode_parallel_matches_serial`
 是一个专门的回归测试：在同一搜索空间上分别跑 `parallel_repeats=1` 和
-`parallel_repeats=2`，断言 `best_err == best_err` 且 `best_params ==
-best_params`。每次 CI / 本地 `pytest` 都会跑这条用例。
+`parallel_repeats=2`，断言 `best_err == best_err` 且 `best_params == best_params`。每次 CI / 本地 `pytest` 都会跑这条用例。
 
 ### 多轮 restart 是**独立**的，不是 "一条长链"
 
@@ -560,7 +561,7 @@ GUI 启动时会扫描系统字体，优先挑 `Microsoft YaHei` / `PingFang SC`
 / 常见 Linux 发行版上都有。如果图表仍出现方框，多半是系统里没有这些字体：
 
 - **Windows**：默认已带 `Microsoft YaHei`，若被精简过，可在"设置 →
-  个性化 → 字体"里装 `Microsoft YaHei` 或 `SimHei`；
+个性化 → 字体"里装 `Microsoft YaHei` 或 `SimHei`；
 - **macOS**：默认已带 `PingFang SC`；
 - **Linux**：安装 `fonts-noto-cjk` 或 Adobe `source-han-sans`；
 - 装完字体后**重启 GUI**（让 matplotlib 刷新 `fontManager` 缓存）。

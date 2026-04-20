@@ -45,6 +45,23 @@ def test_theme_stylesheet_nonempty():
     assert "#sidebar" in STYLESHEET
 
 
+def test_theme_log_panel_uses_high_contrast_foreground():
+    """LogPanel's foreground must stay pure white on dark background.
+
+    The pane uses a slate-900 background (``#0F172A``); anything dimmer than
+    pure white starts to look washed out on high-gamut displays. This test
+    pins both the colour and the boldened weight to catch accidental
+    regressions into the old slate-200 / weight-400 combo.
+    """
+    from ppg_hr.gui.theme import STYLESHEET
+
+    # Extract the #log block and assert the foreground rules.
+    block_start = STYLESHEET.index("QPlainTextEdit#log")
+    block = STYLESHEET[block_start : block_start + 400]
+    assert "color: #FFFFFF" in block
+    assert "font-weight: 500" in block
+
+
 def test_theme_declares_spinbox_arrow_icons():
     from ppg_hr.gui.theme import STYLESHEET
 
