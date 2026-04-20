@@ -43,7 +43,8 @@ from .fft_peaks import fft_peaks
 from .find_maxpeak import find_maxpeak
 from .find_near_biggest import find_near_biggest
 from .find_real_hr import find_real_hr
-from .lms_filter import lms_filter
+from .adaptive_filter import apply_adaptive_cascade
+from .lms_filter import lms_filter  # noqa: F401  (re-exported for backwards compat)
 
 __all__ = ["SolverResult", "load_raw_data", "solve", "solve_from_arrays"]
 
@@ -289,12 +290,15 @@ def solve_from_arrays(
             for i in range(min(params.num_cascade_hf, mh_arr.size)):
                 curr_corr = sorted_corrs[i]
                 real_idx = int(np.argmax(mh_arr == curr_corr))
-                sig_lms_hf, _, _ = lms_filter(
-                    params.lms_mu_base - curr_corr / 100.0,
-                    ord_h,
-                    0,
-                    sig_h[real_idx],
-                    sig_lms_hf,
+                sig_lms_hf = apply_adaptive_cascade(
+                    strategy=params.adaptive_filter,
+                    mu_base=params.lms_mu_base,
+                    corr=float(curr_corr),
+                    order=ord_h,
+                    K=0,
+                    u=sig_h[real_idx],
+                    d=sig_lms_hf,
+                    params=params,
                 )
             penalty_ref_hf = sig_h[best_hf_idx]
         else:
@@ -316,12 +320,15 @@ def solve_from_arrays(
             for i in range(min(params.num_cascade_acc, ma_arr.size)):
                 curr_corr = sorted_corrs[i]
                 real_idx = int(np.argmax(ma_arr == curr_corr))
-                sig_lms_acc, _, _ = lms_filter(
-                    params.lms_mu_base - curr_corr / 100.0,
-                    ord_a,
-                    1,
-                    sig_a[real_idx],
-                    sig_lms_acc,
+                sig_lms_acc = apply_adaptive_cascade(
+                    strategy=params.adaptive_filter,
+                    mu_base=params.lms_mu_base,
+                    corr=float(curr_corr),
+                    order=ord_a,
+                    K=1,
+                    u=sig_a[real_idx],
+                    d=sig_lms_acc,
+                    params=params,
                 )
             penalty_ref_acc = sig_a[best_acc_idx]
         else:

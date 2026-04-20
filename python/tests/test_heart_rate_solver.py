@@ -92,3 +92,69 @@ def test_matches_golden_e2e(dataset_dir: Path, golden_dir: Path) -> None:
     assert_array_close(
         res.err_stats, expected_err, atol=5e-3, rtol=5e-3, err_msg="err_stats"
     )
+
+
+# ---------------------------------------------------------------------------
+# New tests for pluggable adaptive filter strategies
+# ---------------------------------------------------------------------------
+
+
+def _make_synthetic_raw(
+    n_sec: int = 90, fs: int = 100, seed: int = 0
+) -> tuple[np.ndarray, np.ndarray]:
+    """Build a deterministic (raw_data, ref_data) pair for smoke tests.
+
+    Produces an 11-column raw matrix with valid PPG / HF / ACC channels and a
+    constant-HR reference — enough for ``solve_from_arrays`` to run end-to-end
+    without touching disk.
+    """
+    rng = np.random.default_rng(seed)
+    n = n_sec * fs
+    t = np.arange(n) / fs
+    hr_hz = 1.3  # ~78 BPM
+    ppg = np.sin(2 * np.pi * hr_hz * t) + 0.3 * rng.normal(size=n)
+    motion = 0.4 * np.sin(2 * np.pi * 2.1 * t) + 0.1 * rng.normal(size=n)
+    hf1 = motion + 0.05 * rng.normal(size=n)
+    hf2 = motion + 0.05 * rng.normal(size=n)
+    accx = motion + 0.05 * rng.normal(size=n)
+    accy = motion + 0.05 * rng.normal(size=n)
+    accz = motion + 0.05 * rng.normal(size=n)
+    raw = np.zeros((n, 11))
+    raw[:, 5] = ppg    # Col_PPG=6 → 0-based 5
+    raw[:, 3] = hf1    # Col_HF1=4 → 3
+    raw[:, 4] = hf2    # Col_HF2=5 → 4
+    raw[:, 8] = accx   # Col_Acc[0]=9 → 8
+    raw[:, 9] = accy   # Col_Acc[1]=10 → 9
+    raw[:, 10] = accz  # Col_Acc[2]=11 → 10
+    ref_time = np.arange(n_sec, dtype=float)
+    ref = np.column_stack([ref_time, np.full(n_sec, hr_hz * 60.0)])
+    return raw, ref
+
+
+def test_lms_strategy_unchanged() -> None:
+    """``adaptive_filter='lms'`` must match the default bit-for-bit."""
+    from ppg_hr.core.heart_rate_solver import solve_from_arrays
+
+    raw, ref = _make_synthetic_raw()
+    base = SolverParams(fs_target=100, calib_time=5.0, time_buffer=2.0)
+    r_default = solve_from_arrays(raw, ref, base)
+    r_lms = solve_from_arrays(raw, ref, base.replace(adaptive_filter="lms"))
+    np.testing.assert_array_equal(r_default.HR, r_lms.HR)
+    np.testing.assert_array_equal(r_default.err_stats, r_lms.err_stats)
+
+
+@pytest.mark.parametrize("strategy", ["lms", "klms", "volterra"])
+def test_strategy_switch_smoke(strategy: str) -> None:
+    """All three strategies must produce HR of shape (T, 9) with finite values."""
+    from ppg_hr.core.heart_rate_solver import solve_from_arrays
+
+    raw, ref = _make_synthetic_raw()
+    params = SolverParams(
+        fs_target=100, calib_time=5.0, time_buffer=2.0, adaptive_filter=strategy
+    )
+    res = solve_from_arrays(raw, ref, params)
+    assert res.HR.ndim == 2 and res.HR.shape[1] == 9
+    assert res.HR.shape[0] > 0
+    assert np.all(np.isfinite(res.HR))
+    assert np.all(np.isfinite(res.HR_Ref_Interp))
+    assert not np.any(np.isinf(res.err_stats))
