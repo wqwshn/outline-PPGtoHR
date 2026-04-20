@@ -33,6 +33,9 @@ def _build_params(args: argparse.Namespace) -> SolverParams:
     for name in (
         "fs_target", "max_order", "calib_time", "motion_th_scale",
         "spec_penalty_weight", "spec_penalty_width", "smooth_win_len", "time_bias",
+        "adaptive_filter",
+        "klms_step_size", "klms_sigma", "klms_epsilon",
+        "volterra_max_order_vol",
     ):
         value = getattr(args, name, None)
         if value is not None:
@@ -91,7 +94,7 @@ def cmd_optimise(args: argparse.Namespace) -> int:
     out_path = Path(args.out) if args.out else None
     result = optimise(
         params,
-        space=default_search_space(),
+        space=default_search_space(params.adaptive_filter),
         config=cfg,
         out_path=out_path,
         verbose=not args.quiet,
@@ -148,6 +151,35 @@ def _add_common_io_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--spec-penalty-width", dest="spec_penalty_width", type=float, default=None)
     p.add_argument("--smooth-win-len", dest="smooth_win_len", type=int, default=None)
     p.add_argument("--time-bias", dest="time_bias", type=float, default=None)
+
+    p.add_argument(
+        "--adaptive-filter", dest="adaptive_filter",
+        choices=("lms", "klms", "volterra"), default=None,
+        help=(
+            "Adaptive filtering strategy used in the HF and ACC cascades. "
+            "Default: 'lms' (Normalized LMS, existing behaviour)."
+        ),
+    )
+    p.add_argument(
+        "--klms-step-size", dest="klms_step_size", type=float, default=None,
+        help="QKLMS step size (used when --adaptive-filter=klms).",
+    )
+    p.add_argument(
+        "--klms-sigma", dest="klms_sigma", type=float, default=None,
+        help="QKLMS Gaussian kernel width sigma.",
+    )
+    p.add_argument(
+        "--klms-epsilon", dest="klms_epsilon", type=float, default=None,
+        help="QKLMS quantisation distance threshold epsilon.",
+    )
+    p.add_argument(
+        "--volterra-max-order-vol", dest="volterra_max_order_vol",
+        type=int, default=None,
+        help=(
+            "Second-order Volterra LMS quadratic filter length "
+            "(used when --adaptive-filter=volterra)."
+        ),
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
