@@ -291,6 +291,13 @@ def render(
     out_dir = Path(out_dir) if out_dir is not None else Path(report_path).parent
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # Honour the adaptive-filter strategy stored in the report so that a
+    # KLMS/Volterra run replays with the same algorithm rather than silently
+    # falling back to LMS. JSON reports written before this field existed
+    # default to "lms", which matches the historical behaviour.
+    strategy = str(report.get("adaptive_filter", base_params.adaptive_filter))
+    base_params = base_params.replace(adaptive_filter=strategy)
+
     best_hf = _merge(base_params, report.get("best_para_hf", {}))
     best_acc = _merge(base_params, report.get("best_para_acc", {}))
 

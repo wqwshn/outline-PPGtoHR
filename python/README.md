@@ -347,9 +347,9 @@ python -m ppg_hr.gui        # 作为模块启动
 
 | 侧边栏           | 页面作用                                                                                                | 对应 CLI 动作  |
 | ------------- | --------------------------------------------------------------------------------------------------- | ---------- |
-| **求解**        | 选 CSV + 调参 → 一次跑完求解器，出 AAE 表与 HR 曲线，可选导出 HR 矩阵 CSV                                                  | `solve`    |
-| **优化**        | 配预算（试次/种子点/重启次数）→ 运行 Optuna 贝叶斯优化，实时显示 Best-Err 轨迹、最优参数表、参数重要性柱状图；完成后自动保存 JSON                      | `optimise` |
-| **可视化**       | 选 `Best_Params_Result_*.json` 或 MATLAB `.mat` → 调用 `render` 重跑并在右侧直接显示 PNG，同时列出误差/参数 CSV 路径         | `view`     |
+| **求解**        | 选 CSV + 调参（含「自适应滤波算法」下拉，切到 KLMS / Volterra 时显示对应专属参数）→ 一次跑完求解器，出 AAE 表与 HR 曲线，可选导出 HR 矩阵 CSV         | `solve`    |
+| **优化**        | 配预算（试次/种子点/重启次数）+ 选「自适应滤波算法」→ 运行 Optuna 贝叶斯优化（搜索空间会自动按所选算法切换），实时显示 Best-Err 轨迹、最优参数表、参数重要性柱状图；完成后自动保存 JSON | `optimise` |
+| **可视化**       | 选 `Best_Params_Result_*.json` 或 MATLAB `.mat` → 调用 `render` 重跑（自动按报告里记录的 `adaptive_filter` 选择算法）并在右侧直接显示 PNG，同时列出误差/参数 CSV 路径 | `view`     |
 | **MATLAB 对照** | 选 MATLAB 的 `.mat` 报告 → 自动找同名 CSV & `_ref.csv` → 用 MATLAB 最优参数在 Python 端复跑，表格列出 HF / ACC 的 AAE 差值 (` | Δ          |
 
 

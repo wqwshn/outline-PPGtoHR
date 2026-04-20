@@ -190,6 +190,66 @@ def test_param_form_apply_to_writes_adaptive_filter_fields():
         app.processEvents()
 
 
+def test_adaptive_filter_picker_lists_three_strategies():
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.pages import AdaptiveFilterPicker
+
+    app = QApplication.instance() or QApplication([])
+    picker = AdaptiveFilterPicker()
+    try:
+        assert picker.current_strategy() == "lms"
+        # Only the user-data values matter — labels can be localised freely.
+        values = [picker._combo.itemData(i) for i in range(picker._combo.count())]
+        assert values == ["lms", "klms", "volterra"]
+    finally:
+        picker.deleteLater()
+        app.processEvents()
+
+
+def test_adaptive_filter_picker_apply_to():
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.pages import AdaptiveFilterPicker
+    from ppg_hr.params import SolverParams
+
+    app = QApplication.instance() or QApplication([])
+    picker = AdaptiveFilterPicker()
+    try:
+        picker.set_strategy("klms")
+        out = picker.apply_to(SolverParams())
+        assert out.adaptive_filter == "klms"
+
+        picker.set_strategy("volterra")
+        out = picker.apply_to(SolverParams())
+        assert out.adaptive_filter == "volterra"
+    finally:
+        picker.deleteLater()
+        app.processEvents()
+
+
+def test_optimise_page_exposes_adaptive_filter_picker():
+    """Optimise page should let the user pick the strategy without exposing
+    every other knob — the optimiser is what tunes those."""
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.pages import AdaptiveFilterPicker, OptimisePage
+
+    app = QApplication.instance() or QApplication([])
+    page = OptimisePage()
+    try:
+        assert hasattr(page, "_algo_picker")
+        assert isinstance(page._algo_picker, AdaptiveFilterPicker)
+        page._algo_picker.set_strategy("volterra")
+        from ppg_hr.params import SolverParams
+        params = page._algo_picker.apply_to(SolverParams())
+        assert params.adaptive_filter == "volterra"
+    finally:
+        page.close()
+        page.deleteLater()
+        app.processEvents()
+
+
 def test_param_form_set_values_restores_adaptive_filter():
     from PySide6.QtWidgets import QApplication
 

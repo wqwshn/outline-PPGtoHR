@@ -202,6 +202,52 @@ _PARAM_META: dict[str, dict[str, Any]] = {
 }
 
 
+class AdaptiveFilterPicker(QWidget):
+    """Single-row picker for :attr:`SolverParams.adaptive_filter`.
+
+    Used on pages that should *only* expose the algorithm choice (e.g. the
+    optimise page, where the actual hyper-parameters are searched for by the
+    Bayesian optimiser). For pages that need to edit every solver knob,
+    use :class:`ParamForm` instead — it already embeds the same dropdown
+    along with every other field.
+    """
+
+    _OPTIONS: tuple[str, ...] = ("lms", "klms", "volterra")
+    _LABELS: dict[str, str] = {
+        "lms": "归一化 LMS（默认）",
+        "klms": "QKLMS（量化核 LMS）",
+        "volterra": "二阶 Volterra LMS",
+    }
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        layout = QFormLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setHorizontalSpacing(14)
+        layout.setVerticalSpacing(8)
+
+        self._combo = QComboBox()
+        for opt in self._OPTIONS:
+            self._combo.addItem(self._LABELS[opt], userData=opt)
+        # Default to whatever SolverParams() declares (currently "lms").
+        default = SolverParams().adaptive_filter
+        idx = self._combo.findData(default)
+        self._combo.setCurrentIndex(idx if idx >= 0 else 0)
+        self._combo.setFixedWidth(220)
+        layout.addRow("算法", self._combo)
+
+    def current_strategy(self) -> str:
+        return str(self._combo.currentData())
+
+    def set_strategy(self, strategy: str) -> None:
+        idx = self._combo.findData(strategy)
+        if idx >= 0:
+            self._combo.setCurrentIndex(idx)
+
+    def apply_to(self, params: SolverParams) -> SolverParams:
+        return params.replace(adaptive_filter=self.current_strategy())
+
+
 class ParamForm(QWidget):
     """Grid of labelled editors bound to :class:`SolverParams`.
 
@@ -511,13 +557,15 @@ class OptimisePage(_PageBase):
         cfg_card.add(cfg_form)
         self.body().addWidget(cfg_card)
 
-        param_card = SectionCard(
-            "求解器参数",
-            "选择自适应滤波算法（lms/klms/volterra）并设置参数；同一套参数会同时作用于 HF 与 ACC 两条级联路径。",
+        # Adaptive-filter picker (the only "manual" knob on this page —
+        # everything else is what the optimiser is supposed to search for).
+        algo_card = SectionCard(
+            "自适应滤波算法",
+            "选择优化时使用的自适应滤波算法；专属参数会自动加入贝叶斯搜索空间。",
         )
-        self._form = ParamForm()
-        param_card.add(self._form)
-        self.body().addWidget(param_card)
+        self._algo_picker = AdaptiveFilterPicker()
+        algo_card.add(self._algo_picker)
+        self.body().addWidget(algo_card)
 
         action_row = QHBoxLayout()
         action_row.setSpacing(12)
@@ -563,7 +611,7 @@ class OptimisePage(_PageBase):
             return
 
         params = SolverParams(file_name=in_path, ref_file=self._ref_pick.path())
-        params = self._form.apply_to(params)
+        params = self._algo_picker.apply_to(params)
         cfg = BayesConfig(
             max_iterations=int(self._max_iter.value()),
             num_seed_points=int(self._seed_pts.value()),
