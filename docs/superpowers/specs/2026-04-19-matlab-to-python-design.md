@@ -288,12 +288,12 @@ dependencies:
 2. 金标快照生成：`MATLAB/gen_golden_*.m` 全部跑完，金标 `.mat` 入库
 3. 数据预处理：`preprocess/data_loader.py` + 测试
 4. 辅助函数（无相互依赖、可并行 subagent）：
-   - `core/find_maxpeak.py`
-   - `core/find_real_hr.py`
-   - `core/find_near_biggest.py`
-   - `core/fft_peaks.py`
-   - `core/lms_filter.py`
-   - `core/ppg_peace.py`
+  - `core/find_maxpeak.py`
+  - `core/find_real_hr.py`
+  - `core/find_near_biggest.py`
+  - `core/fft_peaks.py`
+  - `core/lms_filter.py`
+  - `core/ppg_peace.py`
 5. 时延对齐：`core/choose_delay.py`
 6. 核心解算：`core/heart_rate_solver.py`（含三路径、运动检测、融合、误差统计）
 7. 贝叶斯优化：`optimization/bayes_optimizer.py`
@@ -310,3 +310,4 @@ dependencies:
 - `python/README.md` 含 13 场景 AAE 对照表
 - `pytest -q` 全部通过
 - `ruff check .` 无警告
+

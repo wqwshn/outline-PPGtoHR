@@ -14,18 +14,19 @@
 ## Task 0：准备阶段
 
 **Files**：
+
 - Create: `python/pyproject.toml`、`python/environment.yml`、`python/README.md`
 - Create: `python/src/ppg_hr/__init__.py` 与全部子包 `__init__.py`
 - Create: `python/tests/conftest.py`、`python/tests/__init__.py`
 
 **Steps**：
 
-- [ ] **Step 0.1**：写 `python/environment.yml`（按 spec §6）
-- [ ] **Step 0.2**：写 `python/pyproject.toml`（src layout、`ppg_hr` 包、entry point `ppg-hr=ppg_hr.cli:main`）
-- [ ] **Step 0.3**：建立 src/tests 骨架空文件
-- [ ] **Step 0.4**：本地 `conda env create -f environment.yml` 创建 `ppg-hr` 环境，验证 `python -c "import ppg_hr"`
-- [ ] **Step 0.5**：写 `python/README.md` 简要说明（环境创建、运行测试、CLI 用法）
-- [ ] **Step 0.6**：commit `chore: 初始化 Python 项目骨架与 conda 环境`
+- **Step 0.1**：写 `python/environment.yml`（按 spec §6）
+- **Step 0.2**：写 `python/pyproject.toml`（src layout、`ppg_hr` 包、entry point `ppg-hr=ppg_hr.cli:main`）
+- **Step 0.3**：建立 src/tests 骨架空文件
+- **Step 0.4**：本地 `conda env create -f environment.yml` 创建 `ppg-hr` 环境，验证 `python -c "import ppg_hr"`
+- **Step 0.5**：写 `python/README.md` 简要说明（环境创建、运行测试、CLI 用法）
+- **Step 0.6**：commit `chore: 初始化 Python 项目骨架与 conda 环境`
 
 ---
 
@@ -34,13 +35,14 @@
 为每个 MATLAB 函数生成"输入+输出"的 .mat 快照。
 
 **Files**：
+
 - Create: `MATLAB/gen_golden_all.m` —— 一个总入口脚本，生成全部快照
 - Create: `python/tests/golden/*.mat`（脚本产物）
 - Create: `python/tests/golden/README.md`（说明每个 .mat 的字段）
 
 **Steps**：
 
-- [ ] **Step 1.1**：在 `MATLAB/` 加 `gen_golden_all.m`，调用各函数固定输入并 save 到 `python/tests/golden/<func>.mat`
+- **Step 1.1**：在 `MATLAB/` 加 `gen_golden_all.m`，调用各函数固定输入并 save 到 `python/tests/golden/<func>.mat`
   - `lms_filter`：mu=0.005, M=3, K=0/1, u/d 为长度 800 的随机种子（rng(42)）
   - `fft_peaks`：长度 800、Fs=100、percent=0.3 的随机信号
   - `choose_delay`：从 `multi_tiaosheng1_processed.mat` 抽取 ppg/acc/hf 的 8s 切片
@@ -48,9 +50,9 @@
   - `ppg_peace`：长度 800、Fs=100 的 ppg 切片
   - `data_loader`：直接保存 `multi_tiaosheng1_processed.mat` 中 newData 与 ref_data 作为对照
   - `heart_rate_solver`：默认 para 跑 3 个场景（tiaosheng1/kaihe1/fuwo1）保存 HR + err_stats
-- [ ] **Step 1.2**：跑 `gen_golden_all.m`，确认所有 .mat 文件生成
-- [ ] **Step 1.3**：检查 `python/tests/golden/` 总体积；若 > 50MB 加入 `.gitignore` 并在 README 说明现场生成
-- [ ] **Step 1.4**：commit `test: 添加 MATLAB 金标快照生成脚本与首批快照文件`
+- **Step 1.2**：跑 `gen_golden_all.m`，确认所有 .mat 文件生成
+- **Step 1.3**：检查 `python/tests/golden/` 总体积；若 > 50MB 加入 `.gitignore` 并在 README 说明现场生成
+- **Step 1.4**：commit `test: 添加 MATLAB 金标快照生成脚本与首批快照文件`
 
 ---
 
@@ -61,6 +63,7 @@
 ### Task 2.1 `Find_maxpeak.m` → `find_maxpeak.py`
 
 **Files**：
+
 - Create: `python/src/ppg_hr/core/find_maxpeak.py`
 - Create: `python/tests/test_find_maxpeak.py`
 
@@ -72,6 +75,7 @@ def find_maxpeak(freqs: np.ndarray, _placeholder, amps: np.ndarray) -> np.ndarra
 ```
 
 **Implementation 要点**：
+
 - 空输入返回空数组
 - 用 `np.argsort(-amps)` 获取降序索引
 - `return freqs.flatten()[idx]`
@@ -81,10 +85,12 @@ def find_maxpeak(freqs: np.ndarray, _placeholder, amps: np.ndarray) -> np.ndarra
 ### Task 2.2 `Find_realHR.m` → `find_real_hr.py`
 
 **Files**：
+
 - Create: `python/src/ppg_hr/core/find_real_hr.py`
 - Create: `python/tests/test_find_real_hr.py`
 
 **Implementation 要点**：
+
 - `query_time = time_current + 4`（窗口中心）
 - `scipy.interpolate.interp1d(ref_time, ref_bpm, kind='linear', fill_value='extrapolate', assume_sorted=False)(query_time)`
 - 返回 `bpm / 60`（Hz）
@@ -92,6 +98,7 @@ def find_maxpeak(freqs: np.ndarray, _placeholder, amps: np.ndarray) -> np.ndarra
 ### Task 2.3 `Find_nearBiggest.m` → `find_near_biggest.py`
 
 **Files**：
+
 - Create: `python/src/ppg_hr/core/find_near_biggest.py`
 - Create: `python/tests/test_find_near_biggest.py`
 
@@ -103,6 +110,7 @@ def find_near_biggest(fre: np.ndarray, hr_prev: float, range_plus: float, range_
 ```
 
 **Implementation 要点**：
+
 - 长度限制：`len = min(5, len(fre))`
 - 区间严格开 `<` 与 `>`
 - 找到则 return `(fre[i], i+1)`（注意 1-based 编号以匹配 MATLAB whichPeak）
@@ -111,6 +119,7 @@ def find_near_biggest(fre: np.ndarray, hr_prev: float, range_plus: float, range_
 ### Task 2.4 `FFT_Peaks.m` → `fft_peaks.py`
 
 **Files**：
+
 - Create: `python/src/ppg_hr/core/fft_peaks.py`
 - Create: `python/tests/test_fft_peaks.py`
 
@@ -122,6 +131,7 @@ def fft_peaks(signal: np.ndarray, fs: float, percent: float) -> tuple[np.ndarray
 ```
 
 **Implementation 要点**：
+
 - `Len = 8192`、`a = len(signal)`
 - `X = np.fft.fft(signal, Len); amp = np.abs(X) / a`
 - 单边谱：`amp1 = amp[:Len//2]; amp1[1:] *= 2`
@@ -137,6 +147,7 @@ def fft_peaks(signal: np.ndarray, fs: float, percent: float) -> tuple[np.ndarray
 ### Task 2.5 `lmsFunc_h.m` → `lms_filter.py`
 
 **Files**：
+
 - Create: `python/src/ppg_hr/core/lms_filter.py`
 - Create: `python/tests/test_lms_filter.py`
 
@@ -148,6 +159,7 @@ def lms_filter(mu: float, M: int, K: int, u: np.ndarray, d: np.ndarray) -> tuple
 ```
 
 **Implementation 要点**：
+
 - `u = (u - u.mean()) / u.std(ddof=1)`，d 同样
 - `w = np.zeros(M + K)`
 - `N = len(u); e = np.zeros(N)`
@@ -160,10 +172,12 @@ def lms_filter(mu: float, M: int, K: int, u: np.ndarray, d: np.ndarray) -> tuple
 ### Task 2.6 `PpgPeace.m` → `ppg_peace.py`
 
 **Files**：
+
 - Create: `python/src/ppg_hr/core/ppg_peace.py`
 - Create: `python/tests/test_ppg_peace.py`
 
 **Implementation 要点**：
+
 - `Len = 1024`、`signal = (signal - mean) / std(ddof=1)`
 - 同样的 FFT + 单边谱归一化
 - `Sq01 = sum(amp1[:floor(1*Len/Fs)]**2)`（MATLAB 1-based `1:floor(...)`，Python 0-based `:floor(...)`）
@@ -177,6 +191,7 @@ def lms_filter(mu: float, M: int, K: int, u: np.ndarray, d: np.ndarray) -> tuple
 ## Task 3：`ChooseDelay1218.m` → `choose_delay.py`
 
 **Files**：
+
 - Create: `python/src/ppg_hr/core/choose_delay.py`
 - Create: `python/tests/test_choose_delay.py`
 
@@ -190,6 +205,7 @@ def choose_delay(fs: int, time_1: float, ppg: np.ndarray,
 ```
 
 **Implementation 要点**：
+
 - `delay_how_a = np.zeros((11, num_acc + 1))`、`delay_how_h = np.zeros((11, num_hf + 1))`
 - `p1_base = floor(time_1 * fs)` —— Python 0-based 起点
 - `ppg_seg = ppg[p1_base : p1_base + 8*fs]`（长度 8*fs 而非 8*fs - 1，因为 MATLAB 是 `p1:p2` 含上界）
@@ -205,16 +221,17 @@ def choose_delay(fs: int, time_1: float, ppg: np.ndarray,
 
 **Steps**：
 
-- [ ] **Step 3.1**：写 `test_choose_delay.py` 加载金标
-- [ ] **Step 3.2**：实现 `choose_delay`
-- [ ] **Step 3.3**：跑测试（容差 `atol=1e-9, rtol=1e-9`）
-- [ ] **Step 3.4**：commit `feat(core): 添加 choose_delay（金标对齐通过）`
+- **Step 3.1**：写 `test_choose_delay.py` 加载金标
+- **Step 3.2**：实现 `choose_delay`
+- **Step 3.3**：跑测试（容差 `atol=1e-9, rtol=1e-9`）
+- **Step 3.4**：commit `feat(core): 添加 choose_delay（金标对齐通过）`
 
 ---
 
 ## Task 4：`process_and_merge_sensor_data_new.m` → `preprocess/data_loader.py`
 
 **Files**：
+
 - Create: `python/src/ppg_hr/preprocess/data_loader.py`
 - Create: `python/src/ppg_hr/preprocess/utils.py`（封装 `filloutliers`、`fillmissing`、`smoothdata` 等 MATLAB 工具函数）
 - Create: `python/tests/test_data_loader.py`
@@ -234,6 +251,7 @@ def smoothdata_movmedian(x: np.ndarray, window: int) -> np.ndarray
 ```
 
 **Implementation 要点**：
+
 - `load_dataset`：
   - `pd.read_csv(sensor_csv)`，按列名读取
   - 重建 `Time_s = np.arange(N) / 100.0`
@@ -254,16 +272,17 @@ def smoothdata_movmedian(x: np.ndarray, window: int) -> np.ndarray
 
 **Steps**：
 
-- [ ] **Step 4.1**：先实现 `preprocess/utils.py`，写对应单元测试，每个工具函数独立 commit
-- [ ] **Step 4.2**：实现 `data_loader.py`
-- [ ] **Step 4.3**：金标对齐：加载金标 mat，比对 `data` 表的全部字段（容差 `atol=1e-6` 因 filtfilt + filloutliers 涉及大量浮点运算）
-- [ ] **Step 4.4**：commit `feat(preprocess): 添加 data_loader 与 utils 工具函数`
+- **Step 4.1**：先实现 `preprocess/utils.py`，写对应单元测试，每个工具函数独立 commit
+- **Step 4.2**：实现 `data_loader.py`
+- **Step 4.3**：金标对齐：加载金标 mat，比对 `data` 表的全部字段（容差 `atol=1e-6` 因 filtfilt + filloutliers 涉及大量浮点运算）
+- **Step 4.4**：commit `feat(preprocess): 添加 data_loader 与 utils 工具函数`
 
 ---
 
 ## Task 5：`HeartRateSolver_cas_chengfa.m` → `core/heart_rate_solver.py`
 
 **Files**：
+
 - Create: `python/src/ppg_hr/core/heart_rate_solver.py`
 - Create: `python/src/ppg_hr/params.py`（默认 para 与 dataclass 定义）
 - Create: `python/tests/test_heart_rate_solver.py`
@@ -310,19 +329,20 @@ def solve(para: SolverParams) -> SolverResult
 3. 4 阶 butter 0.5-5Hz + filtfilt
 4. 运动校准：`acc_mag = sqrt(x²+y²+z²)`、`baseline_std = std(acc_mag[:calib_len], ddof=1)`、`thr = scale * baseline_std`
 5. 主循环（`while time_1 + win_len <= time_end_after_buffer`）：
-   - 截取 8s 窗 → 计算 `is_motion = std(seg_acc_mag, ddof=1) > thr`
-   - 写 `HR[t, 7] = HR[t, 8] = is_motion`
-   - 调 `choose_delay` 得到 mh_arr/ma_arr/time_delay_h/time_delay_a
-   - 路径 A：HF 级联 LMS（K=0），ord_h = clamp(floor(|delay_h|*1) if delay_h<0 else 1, 1, max_order)
-   - 路径 B：ACC 级联 LMS（K=1），ord_a = clamp(floor(|delay_a|*1.5) if delay_a<0 else 1, 1, max_order)
-   - 路径 C：纯 FFT，去均值 + hamming 窗
-   - 各路径过 `_helper_process_spectrum`
+  - 截取 8s 窗 → 计算 `is_motion = std(seg_acc_mag, ddof=1) > thr`
+  - 写 `HR[t, 7] = HR[t, 8] = is_motion`
+  - 调 `choose_delay` 得到 mh_arr/ma_arr/time_delay_h/time_delay_a
+  - 路径 A：HF 级联 LMS（K=0），ord_h = clamp(floor(|delay_h|*1) if delay_h<0 else 1, 1, max_order)
+  - 路径 B：ACC 级联 LMS（K=1），ord_a = clamp(floor(|delay_a|*1.5) if delay_a<0 else 1, 1, max_order)
+  - 路径 C：纯 FFT，去均值 + hamming 窗
+  - 各路径过 `_helper_process_spectrum`
 6. 全局平滑：`smoothdata_movmedian(HR[:, c], smooth_win_len)` for c in [2,3,4]
 7. 融合决策（按 motion_flag）
 8. 连接点微调：`smoothdata_movmedian(HR[:, 5], 3)`、`HR[:, 6]` 同样
 9. 误差统计：`T_Pred = HR[:,0] + time_bias`；`HR_Ref_Interp = interp1(HR[:,0], HR[:,1], T_Pred, 'linear', 'extrap')`；逐列 `mean(|HR[:,c] - HR_Ref_Interp|*60)` 三段（all/rest/motion）
 
-**`_helper_process_spectrum`**：
+`**_helper_process_spectrum`**：
+
 - 调 `fft_peaks(sig_in, fs, 0.3)` → `S_rls, S_rls_amp`
 - 若启用频谱惩罚：调 `fft_peaks(sig_penalty_ref, fs, 0.3)` → 取最大幅值的频率 `motion_freq`；mask = `(|S_rls - motion_freq| < width) | (|S_rls - 2*motion_freq| < width)`；`S_rls_amp[mask] *= weight`
 - `Fre = find_maxpeak(S_rls, S_rls, S_rls_amp); curr_raw = Fre[0] if len(Fre) else 0`
@@ -330,18 +350,19 @@ def solve(para: SolverParams) -> SolverResult
 
 **Steps**：
 
-- [ ] **Step 5.1**：写 `params.py`、`SolverParams`、默认值与 MATLAB 一致
-- [ ] **Step 5.2**：写 `test_heart_rate_solver.py`，先用 `tiaosheng1` 金标测试 9 列 HR 矩阵 + err_stats
-- [ ] **Step 5.3**：实现 `heart_rate_solver.py`（数据加载、滤波、校准、主循环、_helper、融合、统计）
-- [ ] **Step 5.4**：跑测试确认通过；端到端容差：HR 列 `atol=1e-4`（涉及大量浮点累积），err_stats `atol=1e-3`
-- [ ] **Step 5.5**：再加 `kaihe1`、`fuwo1` 两个场景的端到端测试
-- [ ] **Step 5.6**：commit `feat(core): 添加 heart_rate_solver 主入口（端到端对齐通过）`
+- **Step 5.1**：写 `params.py`、`SolverParams`、默认值与 MATLAB 一致
+- **Step 5.2**：写 `test_heart_rate_solver.py`，先用 `tiaosheng1` 金标测试 9 列 HR 矩阵 + err_stats
+- **Step 5.3**：实现 `heart_rate_solver.py`（数据加载、滤波、校准、主循环、_helper、融合、统计）
+- **Step 5.4**：跑测试确认通过；端到端容差：HR 列 `atol=1e-4`（涉及大量浮点累积），err_stats `atol=1e-3`
+- **Step 5.5**：再加 `kaihe1`、`fuwo1` 两个场景的端到端测试
+- **Step 5.6**：commit `feat(core): 添加 heart_rate_solver 主入口（端到端对齐通过）`
 
 ---
 
 ## Task 6：`AutoOptimize_Bayes_Search_cas_chengfa.m` → `optimization/bayes_optimizer.py`
 
 **Files**：
+
 - Create: `python/src/ppg_hr/optimization/bayes_optimizer.py`
 - Create: `python/tests/test_bayes_optimizer.py`（**功能等价测试，不做数值对齐**）
 
@@ -378,6 +399,7 @@ def plot_partial_dependence(history: list[dict], output_path: Path) -> None
 ```
 
 **Implementation 要点**：
+
 - 用 `optuna.create_study(direction='minimize', sampler=optuna.samplers.TPESampler(seed=seed, n_startup_trials=n_seed))`
 - `objective(trial)`：每参数 `trial.suggest_categorical(name, SEARCH_SPACE[name])`，构造 SolverParams，try 调 solve(params)，按 target 取 `err_stats[3 if HF else 4, 0]`，except 返回 999
 - 重复 `n_repeats` 次取最低
@@ -386,20 +408,22 @@ def plot_partial_dependence(history: list[dict], output_path: Path) -> None
 - `plot_partial_dependence`：用 `sklearn.inspection.PartialDependenceDisplay.from_estimator` 画并 savefig
 
 **Test**：
+
 - mock solve 返回固定值 → 验证 study 跑完 + best_params 提取正确
 - 真实 solve 跑 1 个场景 + 5 trials（quick 模式），验证 `min_error < 999`
 
 **Steps**：
 
-- [ ] **Step 6.1**：写 `optimization/bayes_optimizer.py` 与测试
-- [ ] **Step 6.2**：跑 quick mode 测试通过
-- [ ] **Step 6.3**：commit `feat(optimization): 添加 optuna 贝叶斯优化模块`
+- **Step 6.1**：写 `optimization/bayes_optimizer.py` 与测试
+- **Step 6.2**：跑 quick mode 测试通过
+- **Step 6.3**：commit `feat(optimization): 添加 optuna 贝叶斯优化模块`
 
 ---
 
 ## Task 7：`AutoOptimize_Result_Viewer_cas_chengfa.m` → `visualization/result_viewer.py`
 
 **Files**：
+
 - Create: `python/src/ppg_hr/visualization/result_viewer.py`
 - Create: `python/tests/test_result_viewer.py`
 
@@ -415,6 +439,7 @@ def print_detailed_stats(hr: np.ndarray, hr_ref_interp: np.ndarray) -> pd.DataFr
 ```
 
 **Implementation 要点**：
+
 - 双子图：每子图含 ref / pure_fft / pure_lms_hf / pure_lms_acc / fusion_hf / fusion_acc 共 6 条曲线 + 运动区背景填充
 - `print_detailed_stats` 返回每路径的 (Total/Rest/Motion AAE) DataFrame，可 print 也可 to_csv
 - `output_dir/comparison.png`、`output_dir/stats_hf.csv`、`output_dir/stats_acc.csv`、`output_dir/params_compare.csv`
@@ -423,14 +448,15 @@ def print_detailed_stats(hr: np.ndarray, hr_ref_interp: np.ndarray) -> pd.DataFr
 
 **Steps**：
 
-- [ ] **Step 7.1**：实现 + 测试
-- [ ] **Step 7.2**：commit `feat(visualization): 添加结果对比可视化模块`
+- **Step 7.1**：实现 + 测试
+- **Step 7.2**：commit `feat(visualization): 添加结果对比可视化模块`
 
 ---
 
 ## Task 8：CLI 入口
 
 **Files**：
+
 - Create: `python/src/ppg_hr/cli.py`
 - Create: `python/tests/test_cli.py`
 
@@ -444,6 +470,7 @@ python -m ppg_hr view <result_hf.json> <result_acc.json> [--output-dir=viewer_ou
 ```
 
 **Implementation 要点**：
+
 - 用 `argparse`（不引入额外 CLI 库以保持依赖简洁）
 - `solve` / `batch` 输出 JSON：含 HR 矩阵 (列表) + err_stats + 元信息
 - `optimize` 输出 JSON：含 best_params + min_error + 重要性表
@@ -452,25 +479,26 @@ python -m ppg_hr view <result_hf.json> <result_acc.json> [--output-dir=viewer_ou
 
 **Steps**：
 
-- [ ] **Step 8.1**：实现 cli.py
-- [ ] **Step 8.2**：写测试（用一个小切片数据避免过慢）
-- [ ] **Step 8.3**：commit `feat(cli): 添加 ppg_hr 命令行入口`
+- **Step 8.1**：实现 cli.py
+- **Step 8.2**：写测试（用一个小切片数据避免过慢）
+- **Step 8.3**：commit `feat(cli): 添加 ppg_hr 命令行入口`
 
 ---
 
 ## Task 9：端到端 13 场景验证
 
 **Files**：
+
 - Create: `python/scripts/run_all_scenarios.py`
 - Modify: `python/README.md`（追加全场景 AAE 对照表）
 
 **Steps**：
 
-- [ ] **Step 9.1**：写 `scripts/run_all_scenarios.py` 遍历 13 个 CSV，调 `solve(default_params)`，收集 (Total/Rest/Motion AAE) for cols 3..7
-- [ ] **Step 9.2**：脚本输出 markdown 表格到 stdout，并写到 `python/scenarios_aae.md`
-- [ ] **Step 9.3**：把表格手工粘进 `python/README.md`（"端到端验证结果"小节）
-- [ ] **Step 9.4**：（可选）拿现有 MATLAB 结果做对照，证明每场景 |AAE_py - AAE_matlab| < 0.1 BPM
-- [ ] **Step 9.5**：commit `test(e2e): 13 场景端到端验证 + AAE 对照表`
+- **Step 9.1**：写 `scripts/run_all_scenarios.py` 遍历 13 个 CSV，调 `solve(default_params)`，收集 (Total/Rest/Motion AAE) for cols 3..7
+- **Step 9.2**：脚本输出 markdown 表格到 stdout，并写到 `python/scenarios_aae.md`
+- **Step 9.3**：把表格手工粘进 `python/README.md`（"端到端验证结果"小节）
+- **Step 9.4**：（可选）拿现有 MATLAB 结果做对照，证明每场景 |AAE_py - AAE_matlab| < 0.1 BPM
+- **Step 9.5**：commit `test(e2e): 13 场景端到端验证 + AAE 对照表`
 
 ---
 
@@ -478,8 +506,9 @@ python -m ppg_hr view <result_hf.json> <result_acc.json> [--output-dir=viewer_ou
 
 **Steps**：
 
-- [ ] **Step 10.1**：跑 `pytest -q --tb=short`，全部绿
-- [ ] **Step 10.2**：跑 `ruff check python/src python/tests`，修所有 lint
-- [ ] **Step 10.3**：跑 `python -m ppg_hr solve` smoke
-- [ ] **Step 10.4**：更新 `python/README.md`（环境创建、CLI 用法、测试、与 MATLAB 的对照说明）
-- [ ] **Step 10.5**：调用 finishing-a-development-branch skill 决定 merge / PR / cleanup
+- **Step 10.1**：跑 `pytest -q --tb=short`，全部绿
+- **Step 10.2**：跑 `ruff check python/src python/tests`，修所有 lint
+- **Step 10.3**：跑 `python -m ppg_hr solve` smoke
+- **Step 10.4**：更新 `python/README.md`（环境创建、CLI 用法、测试、与 MATLAB 的对照说明）
+- **Step 10.5**：调用 finishing-a-development-branch skill 决定 merge / PR / cleanup
+

@@ -32,6 +32,10 @@ htmlcov/
 # Jupyter
 .ipynb_checkpoints/
 
+# Local analysis artifacts (MATLAB ↔ Python comparison outputs, viewer renders, etc.)
+scripts/compare_out/
+**/viewer_out/
+
 # Conda / venv 本地环境目录
 .venv/
 venv/
