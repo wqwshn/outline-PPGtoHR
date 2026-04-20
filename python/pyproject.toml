@@ -25,9 +25,13 @@ dev = [
     "pytest-cov",
     "ruff>=0.4",
 ]
+gui = [
+    "PySide6>=6.6",
+]
 
 [project.scripts]
 ppg-hr = "ppg_hr.cli:main"
+ppg-hr-gui = "ppg_hr.gui:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

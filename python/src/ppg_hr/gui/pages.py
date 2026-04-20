@@ -1,0 +1,808 @@
+"""Page widgets that live in the MainWindow's QStackedWidget.
+
+Each page:
+* composes a dataset + parameter section,
+* offers an action button that fires off a worker thread,
+* shows the result in a tabbed area (chart / table / log).
+"""
+
+from __future__ import annotations
+
+from dataclasses import fields
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QDoubleSpinBox,
+    QFormLayout,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QSpinBox,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
+
+from ..core.heart_rate_solver import SolverResult
+from ..optimization.bayes_optimizer import BayesResult
+from ..params import SolverParams
+from ..visualization.result_viewer import ViewerArtefacts
+from .theme import Palette
+from .widgets import AAETable, FilePicker, LogPanel, MplCanvas, SectionCard
+from .workers import (
+    CompareResult,
+    CompareWorker,
+    OptimiseWorker,
+    SolveWorker,
+    ViewWorker,
+    WorkerThread,
+)
+
+try:  # optional: used only by OptimisePage for config typing
+    from ..optimization import BayesConfig
+except ImportError:  # pragma: no cover
+    BayesConfig = None  # type: ignore
+
+__all__ = ["SolvePage", "OptimisePage", "ViewPage", "ComparePage"]
+
+
+# ---------------------------------------------------------------------------
+# Shared building blocks
+# ---------------------------------------------------------------------------
+
+
+class _PageBase(QWidget):
+    """Base page: header + scrollable body."""
+
+    def __init__(self, title: str, subtitle: str):
+        super().__init__()
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # Header
+        title_lbl = QLabel(title)
+        title_lbl.setObjectName("pageTitle")
+        subtitle_lbl = QLabel(subtitle)
+        subtitle_lbl.setObjectName("pageSubtitle")
+        root.addWidget(title_lbl)
+        root.addWidget(subtitle_lbl)
+
+        # Scroll body
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.NoFrame)
+        scroll.setStyleSheet("background: transparent;")
+        inner = QWidget()
+        inner.setStyleSheet(f"background-color: {Palette.bg};")
+        self._body_layout = QVBoxLayout(inner)
+        self._body_layout.setContentsMargins(28, 8, 28, 20)
+        self._body_layout.setSpacing(14)
+        scroll.setWidget(inner)
+        root.addWidget(scroll, 1)
+
+    def body(self) -> QVBoxLayout:
+        return self._body_layout
+
+
+def _dataset_card(
+    *,
+    show_output: bool = True,
+    output_mode: str = "save",
+    output_label: str = "结果 CSV（可选）",
+    output_filter: str = "CSV (*.csv)",
+    input_filter: str = "传感器数据 (*.csv *.mat);;All files (*)",
+) -> tuple[SectionCard, FilePicker, FilePicker, FilePicker | None]:
+    """Build the Input/Reference/Output picker block used by every page."""
+    card = SectionCard("数据输入", "传感器 CSV + 参考心率 CSV（省略 --ref 时会找同名 *_ref.csv）")
+    form = QFormLayout()
+    form.setContentsMargins(0, 0, 0, 0)
+    form.setHorizontalSpacing(14)
+    form.setVerticalSpacing(8)
+
+    input_pick = FilePicker(placeholder="传感器 CSV 或 *_processed.mat", filter_str=input_filter)
+    ref_pick = FilePicker(placeholder="参考心率 CSV（留空则自动找 *_ref.csv）",
+                          filter_str="CSV (*.csv)")
+    form.addRow("数据文件", input_pick)
+    form.addRow("参考心率", ref_pick)
+
+    # Auto-fill ref / output when input changes
+    def _autofill(path_str: str) -> None:
+        if not path_str:
+            return
+        p = Path(path_str)
+        if not ref_pick.text():
+            sibling = p.with_name(p.stem + "_ref.csv")
+            if sibling.is_file():
+                ref_pick.setPath(sibling)
+
+    input_pick.changed.connect(_autofill)
+
+    out_pick: FilePicker | None = None
+    if show_output:
+        out_pick = FilePicker(
+            placeholder="留空则只在界面显示；填路径则保存到该位置",
+            filter_str=output_filter,
+            mode=output_mode,
+        )
+        form.addRow(output_label, out_pick)
+
+    card.add(form)
+    return card, input_pick, ref_pick, out_pick
+
+
+# Parameter groups shown per page
+_PARAM_GROUPS: list[tuple[str, list[str]]] = [
+    ("重采样 & 滤波", ["fs_target", "max_order"]),
+    ("窗口 & 校准", ["time_start", "time_buffer", "calib_time", "motion_th_scale"]),
+    ("频谱惩罚", ["spec_penalty_enable", "spec_penalty_weight", "spec_penalty_width"]),
+    ("HR 约束（运动路）", ["hr_range_hz", "slew_limit_bpm", "slew_step_bpm"]),
+    ("HR 约束（静止路）", ["hr_range_rest", "slew_limit_rest", "slew_step_rest"]),
+    ("输出 & 对齐", ["smooth_win_len", "time_bias"]),
+]
+
+_PARAM_META: dict[str, dict[str, Any]] = {
+    "fs_target": dict(label="目标采样率 (Hz)", kind="int",  lo=10,   hi=500,   step=5),
+    "max_order": dict(label="LMS 最大阶数",    kind="int",  lo=1,    hi=64,    step=1),
+    "time_start": dict(label="起始时间 (s)",   kind="float", lo=0,   hi=120,   step=0.5, decimals=2),
+    "time_buffer": dict(label="末尾缓冲 (s)",  kind="float", lo=0,   hi=60,    step=1,   decimals=1),
+    "calib_time": dict(label="校准时长 (s)",   kind="float", lo=1,   hi=300,   step=1,   decimals=1),
+    "motion_th_scale": dict(label="运动阈值倍数", kind="float", lo=0.1, hi=10, step=0.1, decimals=2),
+    "spec_penalty_enable": dict(label="启用频谱惩罚", kind="bool"),
+    "spec_penalty_weight": dict(label="惩罚权重",   kind="float", lo=0, hi=1, step=0.05, decimals=2),
+    "spec_penalty_width":  dict(label="惩罚频宽 (Hz)", kind="float", lo=0, hi=1, step=0.05, decimals=2),
+    "hr_range_hz":    dict(label="HR 搜索范围 (Hz, 运动)", kind="float", lo=0.1, hi=2,  step=0.05, decimals=4),
+    "slew_limit_bpm": dict(label="阶跃上限 (BPM, 运动)",   kind="float", lo=0,   hi=30, step=0.5, decimals=1),
+    "slew_step_bpm":  dict(label="追踪步长 (BPM, 运动)",   kind="float", lo=0,   hi=20, step=0.5, decimals=1),
+    "hr_range_rest":    dict(label="HR 搜索范围 (Hz, 静止)", kind="float", lo=0.1, hi=2,  step=0.05, decimals=4),
+    "slew_limit_rest":  dict(label="阶跃上限 (BPM, 静止)",   kind="float", lo=0,   hi=30, step=0.5, decimals=1),
+    "slew_step_rest":   dict(label="追踪步长 (BPM, 静止)",   kind="float", lo=0,   hi=20, step=0.5, decimals=1),
+    "smooth_win_len": dict(label="平滑窗长",       kind="int",  lo=1,   hi=51,  step=2),
+    "time_bias":      dict(label="时间偏移 (s)",   kind="float", lo=-30, hi=30, step=0.5, decimals=2),
+}
+
+
+class ParamForm(QWidget):
+    """Grid of labelled editors bound to :class:`SolverParams`."""
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self._editors: dict[str, QWidget] = {}
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        defaults = SolverParams()
+        for group_name, names in _PARAM_GROUPS:
+            box = QGroupBox(group_name)
+            grid = QGridLayout(box)
+            grid.setContentsMargins(14, 16, 14, 12)
+            grid.setHorizontalSpacing(16)
+            grid.setVerticalSpacing(8)
+            for i, name in enumerate(names):
+                meta = _PARAM_META[name]
+                label = QLabel(meta["label"])
+                label.setStyleSheet(f"color: {Palette.text_muted}; font-size: 12px;")
+                editor = self._build_editor(name, meta, getattr(defaults, name))
+                self._editors[name] = editor
+                row, col = divmod(i, 2)
+                grid.addWidget(label, row, col * 2)
+                grid.addWidget(editor, row, col * 2 + 1)
+                grid.setColumnStretch(col * 2 + 1, 1)
+            layout.addWidget(box)
+
+    def _build_editor(self, name: str, meta: dict, default) -> QWidget:
+        kind = meta["kind"]
+        if kind == "int":
+            w = QSpinBox()
+            w.setRange(meta["lo"], meta["hi"])
+            w.setSingleStep(meta.get("step", 1))
+            w.setValue(int(default))
+            w.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            return w
+        if kind == "float":
+            w = QDoubleSpinBox()
+            w.setRange(meta["lo"], meta["hi"])
+            w.setSingleStep(meta.get("step", 0.1))
+            w.setDecimals(meta.get("decimals", 2))
+            w.setValue(float(default))
+            w.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            return w
+        if kind == "bool":
+            w = QCheckBox("启用")
+            w.setChecked(bool(default))
+            return w
+        raise ValueError(f"Unknown editor kind: {kind!r}")
+
+    # ------------------------------------------------------------------
+    def apply_to(self, params: SolverParams) -> SolverParams:
+        """Return a copy of ``params`` with the form's current values applied."""
+        overrides: dict[str, Any] = {}
+        for name, w in self._editors.items():
+            if isinstance(w, (QSpinBox,)):
+                overrides[name] = int(w.value())
+            elif isinstance(w, QDoubleSpinBox):
+                overrides[name] = float(w.value())
+            elif isinstance(w, QCheckBox):
+                overrides[name] = bool(w.isChecked())
+        return params.replace(**overrides)
+
+    def set_values(self, values: dict[str, Any]) -> None:
+        """Apply values (as a dict) back onto the editors."""
+        for name, v in values.items():
+            w = self._editors.get(name)
+            if w is None:
+                continue
+            if isinstance(w, QSpinBox):
+                w.setValue(int(v))
+            elif isinstance(w, QDoubleSpinBox):
+                w.setValue(float(v))
+            elif isinstance(w, QCheckBox):
+                w.setChecked(bool(v))
+
+
+# ---------------------------------------------------------------------------
+# Plot helpers
+# ---------------------------------------------------------------------------
+
+
+def _plot_hr_curves(canvas: MplCanvas, res: SolverResult, title: str) -> None:
+    canvas.clear_axes()
+    ax = canvas.axes
+    t = res.HR[:, 0]
+    ref_hz = res.HR[:, 1] * 60.0
+    fus_hf = res.HR[:, 5] * 60.0
+    fus_acc = res.HR[:, 6] * 60.0
+    fft = res.HR[:, 4] * 60.0
+    ax.plot(t, ref_hz, color=Palette.text_muted, linewidth=1.2, label="Reference")
+    ax.plot(t, fft, color="#9CA3AF", linewidth=1.0, linestyle=":", label="Pure FFT")
+    ax.plot(t, fus_hf, color=Palette.primary, linewidth=1.8, label="Fusion (HF)")
+    ax.plot(t, fus_acc, color=Palette.success, linewidth=1.4, label="Fusion (ACC)")
+    ax.set_title(title)
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Heart rate (BPM)")
+    ax.legend(loc="best", ncol=2)
+    canvas.redraw()
+
+
+def _err_stats_rows(stats: np.ndarray) -> list[list[str]]:
+    names = ["LMS(HF)", "LMS(Acc)", "Pure FFT", "Fusion(HF)", "Fusion(Acc)"]
+    return [
+        [names[i], f"{stats[i, 0]:.3f}", f"{stats[i, 1]:.3f}", f"{stats[i, 2]:.3f}"]
+        for i in range(5)
+    ]
+
+
+# ===========================================================================
+# Solve page
+# ===========================================================================
+
+
+class SolvePage(_PageBase):
+    def __init__(self):
+        super().__init__(
+            "求解一次",
+            "一键跑完整流水线：重采样 → 带通 → 级联 NLMS / 纯 FFT → 融合，输出 AAE 与 HR 曲线。",
+        )
+
+        card, self._in_pick, self._ref_pick, self._out_pick = _dataset_card(
+            output_mode="save",
+            output_label="导出 HR 矩阵 CSV（可选）",
+            output_filter="CSV (*.csv)",
+        )
+        self.body().addWidget(card)
+
+        param_card = SectionCard("求解器参数",
+                                 "默认与 MATLAB 一致；运行时可随时调整后重新求解")
+        self._form = ParamForm()
+        param_card.add(self._form)
+        self.body().addWidget(param_card)
+
+        action_row = QHBoxLayout()
+        action_row.addStretch(1)
+        self._progress = QProgressBar()
+        self._progress.setRange(0, 0)
+        self._progress.setVisible(False)
+        self._progress.setMaximumWidth(200)
+        action_row.addWidget(self._progress)
+        self._btn = QPushButton("开始求解")
+        self._btn.setObjectName("primary")
+        self._btn.setMinimumWidth(120)
+        self._btn.clicked.connect(self._run)
+        action_row.addWidget(self._btn)
+        self.body().addLayout(action_row)
+
+        # Results
+        result_card = SectionCard("运行结果", "图表 · AAE 摘要 · 日志")
+        tabs = QTabWidget()
+        self._canvas = MplCanvas(height=320)
+        self._table = AAETable(["方法", "总 AAE (BPM)", "静止 AAE", "运动 AAE"])
+        self._log = LogPanel()
+        tabs.addTab(self._canvas, "心率曲线")
+        tabs.addTab(self._table, "AAE 表")
+        tabs.addTab(self._log, "日志")
+        result_card.add(tabs)
+        self.body().addWidget(result_card)
+        self.body().addStretch(1)
+
+        self._worker_holder: WorkerThread | None = None
+
+    # ------------------------------------------------------------------
+    def _run(self) -> None:
+        input_path = self._in_pick.path()
+        if input_path is None or not input_path.is_file():
+            self._log.error("请先选择一个有效的传感器数据文件")
+            return
+        ref_path = self._ref_pick.path()
+        params = SolverParams(file_name=input_path, ref_file=ref_path)
+        params = self._form.apply_to(params)
+        save_csv = self._out_pick.path() if self._out_pick else None
+
+        self._btn.setEnabled(False)
+        self._progress.setVisible(True)
+        self._log.info("—" * 40)
+
+        worker = SolveWorker(params, save_csv_path=save_csv)
+        worker.log.connect(self._log.info)
+        worker.finished.connect(self._on_done)
+        worker.failed.connect(self._on_failed)
+        holder = WorkerThread(worker)
+        worker.finished.connect(lambda _=None: self._cleanup())
+        worker.failed.connect(lambda _=None: self._cleanup())
+        self._worker_holder = holder
+        holder.start()
+
+    def _on_done(self, res: SolverResult) -> None:
+        self._table.set_rows(_err_stats_rows(res.err_stats))
+        _plot_hr_curves(self._canvas, res, "心率曲线 — 单次求解")
+        self._log.success(
+            f"Fusion(HF) AAE = {res.err_stats[3, 0]:.3f} BPM ， "
+            f"Fusion(ACC) AAE = {res.err_stats[4, 0]:.3f} BPM"
+        )
+
+    def _on_failed(self, msg: str) -> None:
+        self._log.error(msg)
+
+    def _cleanup(self) -> None:
+        self._btn.setEnabled(True)
+        self._progress.setVisible(False)
+
+
+# ===========================================================================
+# Optimise page
+# ===========================================================================
+
+
+class OptimisePage(_PageBase):
+    def __init__(self):
+        super().__init__(
+            "贝叶斯优化",
+            "Optuna TPE 多重启搜索：HF 路 → ACC 路，每轮独立打印 best_err，完成后可保存为 JSON 报告。",
+        )
+        card, self._in_pick, self._ref_pick, self._out_pick = _dataset_card(
+            output_mode="save",
+            output_label="报告 JSON 路径",
+            output_filter="JSON (*.json)",
+        )
+        self.body().addWidget(card)
+
+        cfg_card = SectionCard("搜索预算", "适当增大可降方差；单次 5–10 分钟以内较合适")
+        cfg_form = QFormLayout()
+        self._max_iter = QSpinBox()
+        self._max_iter.setRange(5, 1000)
+        self._max_iter.setValue(75)
+        self._seed_pts = QSpinBox()
+        self._seed_pts.setRange(2, 200)
+        self._seed_pts.setValue(10)
+        self._repeats = QSpinBox()
+        self._repeats.setRange(1, 20)
+        self._repeats.setValue(3)
+        self._seed = QSpinBox()
+        self._seed.setRange(0, 10_000)
+        self._seed.setValue(42)
+        for w in (self._max_iter, self._seed_pts, self._repeats, self._seed):
+            w.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        cfg_form.addRow("每轮试次 (max_iterations)", self._max_iter)
+        cfg_form.addRow("种子点数 (num_seed_points)", self._seed_pts)
+        cfg_form.addRow("多重启次数 (num_repeats)", self._repeats)
+        cfg_form.addRow("随机种子 (random_state)", self._seed)
+        cfg_card.add(cfg_form)
+        self.body().addWidget(cfg_card)
+
+        action_row = QHBoxLayout()
+        action_row.addStretch(1)
+        self._progress = QProgressBar()
+        self._progress.setRange(0, 100)
+        self._progress.setValue(0)
+        self._progress.setFormat("等待开始…")
+        self._progress.setMaximumWidth(260)
+        action_row.addWidget(self._progress)
+        self._btn = QPushButton("开始优化")
+        self._btn.setObjectName("primary")
+        self._btn.setMinimumWidth(120)
+        self._btn.clicked.connect(self._run)
+        action_row.addWidget(self._btn)
+        self.body().addLayout(action_row)
+
+        # Results
+        result_card = SectionCard("优化结果", "每轮最优 err 轨迹 · 最优参数 · 参数重要性 · 日志")
+        tabs = QTabWidget()
+        self._canvas = MplCanvas(height=280)
+        self._params_table = AAETable(["参数", "HF 最优", "ACC 最优"])
+        self._imp_canvas = MplCanvas(height=260)
+        self._log = LogPanel()
+        tabs.addTab(self._canvas, "Best Err 轨迹")
+        tabs.addTab(self._params_table, "最优参数")
+        tabs.addTab(self._imp_canvas, "参数重要性")
+        tabs.addTab(self._log, "日志")
+        result_card.add(tabs)
+        self.body().addWidget(result_card)
+        self.body().addStretch(1)
+
+        self._worker_holder: WorkerThread | None = None
+        self._hf_series: list[float] = []
+        self._acc_series: list[float] = []
+
+    # ------------------------------------------------------------------
+    def _run(self) -> None:
+        in_path = self._in_pick.path()
+        if in_path is None or not in_path.is_file():
+            self._log.error("请先选择一个有效的传感器数据文件")
+            return
+
+        params = SolverParams(file_name=in_path, ref_file=self._ref_pick.path())
+        cfg = BayesConfig(
+            max_iterations=int(self._max_iter.value()),
+            num_seed_points=int(self._seed_pts.value()),
+            num_repeats=int(self._repeats.value()),
+            random_state=int(self._seed.value()),
+        )
+        out_path = self._out_pick.path() if self._out_pick else None
+
+        self._hf_series.clear()
+        self._acc_series.clear()
+        self._canvas.clear_axes()
+        self._canvas.redraw()
+        self._progress.setValue(0)
+        self._progress.setFormat("HF 0/? ")
+        self._btn.setEnabled(False)
+        self._log.info("—" * 40)
+
+        worker = OptimiseWorker(params, cfg, out_path)
+        worker.log.connect(self._log.info)
+        worker.progress.connect(self._on_progress)
+        worker.finished.connect(self._on_done)
+        worker.failed.connect(self._on_failed)
+        holder = WorkerThread(worker)
+        worker.finished.connect(lambda _=None: self._cleanup())
+        worker.failed.connect(lambda _=None: self._cleanup())
+        self._worker_holder = holder
+        holder.start()
+
+    # progress: mode, run_idx, run_total, best_err
+    def _on_progress(self, mode: str, run_idx: int, run_total: int, best_err: float) -> None:
+        if mode == "HF":
+            self._hf_series.append(best_err)
+            pct = int(50 * run_idx / max(1, run_total))
+        else:
+            self._acc_series.append(best_err)
+            pct = 50 + int(50 * run_idx / max(1, run_total))
+        self._progress.setValue(pct)
+        self._progress.setFormat(f"{mode} {run_idx}/{run_total}  best={best_err:.3f} ({pct}%)")
+        self._redraw_trace()
+
+    def _redraw_trace(self) -> None:
+        ax = self._canvas.axes
+        self._canvas.clear_axes()
+        if self._hf_series:
+            ax.plot(range(1, len(self._hf_series) + 1), self._hf_series,
+                    "o-", color=Palette.primary, label="HF best err")
+        if self._acc_series:
+            ax.plot(range(1, len(self._acc_series) + 1), self._acc_series,
+                    "s--", color=Palette.success, label="ACC best err")
+        ax.set_title("Best Err 轨迹（逐重启）")
+        ax.set_xlabel("Run index")
+        ax.set_ylabel("AAE (BPM)")
+        ax.legend(loc="best")
+        self._canvas.redraw()
+
+    def _on_done(self, result: BayesResult) -> None:
+        # fill params table
+        hf = result.best_para_hf or {}
+        acc = result.best_para_acc or {}
+        keys = sorted(set(hf) | set(acc))
+        rows = [
+            [k, _fmt(hf.get(k, "—")), _fmt(acc.get(k, "—"))]
+            for k in keys
+        ]
+        rows.insert(0, ["min_err", f"{result.min_err_hf:.4f}", f"{result.min_err_acc:.4f}"])
+        self._params_table.set_rows(rows)
+
+        # importance bar chart
+        self._imp_canvas.clear_axes()
+        ax = self._imp_canvas.axes
+        if result.importance_hf is not None:
+            order = np.argsort(result.importance_hf.scores)[::-1]
+            names = [result.importance_hf.names[i] for i in order]
+            scores = [result.importance_hf.scores[i] for i in order]
+            ax.barh(range(len(names))[::-1], scores, color=Palette.primary, alpha=0.9)
+            ax.set_yticks(range(len(names))[::-1])
+            ax.set_yticklabels(names)
+            ax.set_xlabel("Random-forest importance")
+            ax.set_title("HF 路参数重要性")
+        else:
+            ax.text(0.5, 0.5, "有效 trial 不足 20 条，未计算重要性",
+                    ha="center", va="center", color=Palette.text_muted,
+                    transform=ax.transAxes)
+            ax.set_axis_off()
+        self._imp_canvas.redraw()
+
+        self._progress.setValue(100)
+        self._progress.setFormat(
+            f"完成  HF={result.min_err_hf:.3f}  ACC={result.min_err_acc:.3f}"
+        )
+        self._log.success("贝叶斯优化完成。")
+
+    def _on_failed(self, msg: str) -> None:
+        self._log.error(msg)
+
+    def _cleanup(self) -> None:
+        self._btn.setEnabled(True)
+
+
+def _fmt(v) -> str:
+    if isinstance(v, float):
+        return f"{v:.4f}"
+    return str(v)
+
+
+# ===========================================================================
+# View page (render a Bayes report)
+# ===========================================================================
+
+
+class ViewPage(_PageBase):
+    def __init__(self):
+        super().__init__(
+            "可视化报告",
+            "读取 optimise 输出的 JSON 或 MATLAB 报告 .mat，重跑并生成双子图 PNG + 误差 / 参数 CSV。",
+        )
+
+        # data
+        card, self._in_pick, self._ref_pick, _ = _dataset_card(show_output=False)
+        self.body().addWidget(card)
+
+        # report + out dir
+        rc = SectionCard("报告与输出目录", "JSON 来自 optimise；.mat 来自 MATLAB")
+        rf = QFormLayout()
+        self._report_pick = FilePicker(placeholder="Best_Params_Result_*.json 或 .mat",
+                                       filter_str="Report (*.json *.mat)")
+        self._out_dir = FilePicker(placeholder="留空则放到数据文件同级目录",
+                                   filter_str="", mode="dir")
+        rf.addRow("报告文件", self._report_pick)
+        rf.addRow("输出目录", self._out_dir)
+        rc.add(rf)
+        self.body().addWidget(rc)
+
+        # action
+        action_row = QHBoxLayout()
+        action_row.addStretch(1)
+        self._btn = QPushButton("渲染")
+        self._btn.setObjectName("primary")
+        self._btn.setMinimumWidth(120)
+        self._btn.clicked.connect(self._run)
+        action_row.addWidget(self._btn)
+        self.body().addLayout(action_row)
+
+        # result
+        rr = SectionCard("渲染结果", "双子图 PNG · 误差 CSV · 参数 CSV · 日志")
+        tabs = QTabWidget()
+        self._image_label = QLabel("渲染后在此显示 PNG")
+        self._image_label.setAlignment(Qt.AlignCenter)
+        self._image_label.setMinimumHeight(360)
+        self._image_label.setStyleSheet(
+            f"background: {Palette.surface}; color: {Palette.text_muted}; "
+            f"border: 1px solid {Palette.border}; border-radius: 8px;")
+        self._image_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._art_table = AAETable(["产出", "路径"])
+        self._log = LogPanel()
+        tabs.addTab(self._image_label, "图像")
+        tabs.addTab(self._art_table, "文件")
+        tabs.addTab(self._log, "日志")
+        rr.add(tabs)
+        self.body().addWidget(rr)
+        self.body().addStretch(1)
+
+        self._worker_holder: WorkerThread | None = None
+
+    # ------------------------------------------------------------------
+    def _run(self) -> None:
+        in_path = self._in_pick.path()
+        if in_path is None or not in_path.is_file():
+            self._log.error("请先选择数据文件")
+            return
+        report = self._report_pick.path()
+        if report is None or not report.is_file():
+            self._log.error("请选择一个有效的报告文件")
+            return
+        out_dir = self._out_dir.path() or in_path.parent / "viewer_out"
+
+        params = SolverParams(file_name=in_path, ref_file=self._ref_pick.path())
+
+        self._btn.setEnabled(False)
+        self._log.info("—" * 40)
+
+        worker = ViewWorker(params, report, out_dir)
+        worker.log.connect(self._log.info)
+        worker.finished.connect(self._on_done)
+        worker.failed.connect(self._on_failed)
+        holder = WorkerThread(worker)
+        worker.finished.connect(lambda _=None: self._btn.setEnabled(True))
+        worker.failed.connect(lambda _=None: self._btn.setEnabled(True))
+        self._worker_holder = holder
+        holder.start()
+
+    def _on_done(self, arte: ViewerArtefacts) -> None:
+        if arte.figure and Path(arte.figure).is_file():
+            pix = QPixmap(str(arte.figure))
+            if not pix.isNull():
+                self._image_label.setPixmap(pix.scaled(
+                    self._image_label.width() - 8,
+                    max(self._image_label.height() - 8, 360),
+                    Qt.KeepAspectRatio, Qt.SmoothTransformation,
+                ))
+        rows = []
+        if arte.figure:
+            rows.append(["figure.png", str(arte.figure)])
+        if arte.error_csv:
+            rows.append(["error_table.csv", str(arte.error_csv)])
+        if arte.param_csv:
+            rows.append(["param_table.csv", str(arte.param_csv)])
+        for name, p in arte.extras.items():
+            rows.append([name, str(p)])
+        self._art_table.set_rows(rows)
+        self._log.success(f"渲染完成，共产出 {len(rows)} 个文件。")
+
+    def _on_failed(self, msg: str) -> None:
+        self._log.error(msg)
+
+
+# ===========================================================================
+# Compare page (MATLAB .mat vs Python re-run)
+# ===========================================================================
+
+
+class ComparePage(_PageBase):
+    def __init__(self):
+        super().__init__(
+            "MATLAB 对照",
+            "加载 MATLAB 的 Best_Params_Result_*.mat，用同一套参数在 Python 端复跑，"
+            "对比 HF / ACC 融合 AAE。",
+        )
+        # MATLAB report
+        c1 = SectionCard("MATLAB 报告", "优化产物 *.mat")
+        f1 = QFormLayout()
+        self._mat_pick = FilePicker(
+            placeholder="Best_Params_Result_*.mat",
+            filter_str="MATLAB report (*.mat)",
+        )
+        f1.addRow("MAT 文件", self._mat_pick)
+        c1.add(f1)
+        self.body().addWidget(c1)
+
+        # data csv + ref
+        card, self._in_pick, self._ref_pick, _ = _dataset_card(show_output=False)
+        self.body().addWidget(card)
+
+        # auto-fill csv/ref from mat stem
+        self._mat_pick.changed.connect(self._autofill_from_mat)
+
+        action_row = QHBoxLayout()
+        action_row.addStretch(1)
+        self._btn = QPushButton("运行对照")
+        self._btn.setObjectName("primary")
+        self._btn.setMinimumWidth(120)
+        self._btn.clicked.connect(self._run)
+        action_row.addWidget(self._btn)
+        self.body().addLayout(action_row)
+
+        # Results
+        rr = SectionCard("对照结果", "融合 AAE 差值 · HR 曲线（Python 端） · 日志")
+        tabs = QTabWidget()
+        self._table = AAETable(["路径", "MATLAB (BPM)", "Python (BPM)", "Δ (BPM)", "判定 (|Δ|≤0.5)"])
+        self._canvas = MplCanvas(height=320)
+        self._log = LogPanel()
+        tabs.addTab(self._table, "AAE 对照")
+        tabs.addTab(self._canvas, "HR 曲线（HF 最优参数）")
+        tabs.addTab(self._log, "日志")
+        rr.add(tabs)
+        self.body().addWidget(rr)
+        self.body().addStretch(1)
+
+        self._worker_holder: WorkerThread | None = None
+
+    # ------------------------------------------------------------------
+    def _autofill_from_mat(self, text: str) -> None:
+        if not text:
+            return
+        mat = Path(text)
+        # Example name: Best_Params_Result_multi_tiaosheng1_processed.mat
+        stem = mat.stem
+        for prefix in ("Best_Params_Result_",):
+            if stem.startswith(prefix):
+                stem = stem[len(prefix):]
+                break
+        if stem.endswith("_processed"):
+            stem = stem[: -len("_processed")]
+        # search near-by folders
+        candidates = [mat.parent, mat.parent.parent]
+        for d in candidates:
+            csv = d / f"{stem}.csv"
+            ref = d / f"{stem}_ref.csv"
+            if csv.is_file() and ref.is_file():
+                self._in_pick.setPath(csv)
+                self._ref_pick.setPath(ref)
+                return
+
+    def _run(self) -> None:
+        mat = self._mat_pick.path()
+        csv = self._in_pick.path()
+        ref = self._ref_pick.path()
+        if mat is None or not mat.is_file():
+            self._log.error("请选择有效的 MATLAB 报告 .mat")
+            return
+        if csv is None or not csv.is_file():
+            self._log.error("请选择 CSV 数据文件")
+            return
+        if ref is None or not ref.is_file():
+            self._log.error("请选择参考心率 CSV")
+            return
+
+        self._btn.setEnabled(False)
+        self._log.info("—" * 40)
+
+        worker = CompareWorker(mat, csv, ref)
+        worker.log.connect(self._log.info)
+        worker.finished.connect(self._on_done)
+        worker.failed.connect(self._on_failed)
+        holder = WorkerThread(worker)
+        worker.finished.connect(lambda _=None: self._btn.setEnabled(True))
+        worker.failed.connect(lambda _=None: self._btn.setEnabled(True))
+        self._worker_holder = holder
+        holder.start()
+
+    def _on_done(self, cr: CompareResult) -> None:
+        hf_py = float(cr.py_solve_hf.err_stats[3, 0])
+        acc_py = float(cr.py_solve_acc.err_stats[4, 0])
+        d_hf = hf_py - cr.matlab_min_hf
+        d_acc = acc_py - cr.matlab_min_acc
+        rows = [
+            ["Fusion(HF)",  f"{cr.matlab_min_hf:.4f}",
+             f"{hf_py:.4f}",  f"{d_hf:+.4f}",
+             "PASS" if abs(d_hf) <= 0.5 else "FAIL"],
+            ["Fusion(ACC)", f"{cr.matlab_min_acc:.4f}",
+             f"{acc_py:.4f}", f"{d_acc:+.4f}",
+             "PASS" if abs(d_acc) <= 0.5 else "FAIL"],
+        ]
+        self._table.set_rows(rows)
+        _plot_hr_curves(self._canvas, cr.py_solve_hf, "HR 曲线 — MATLAB Best_Para_HF 参数下 Python 复跑")
+        self._log.success(
+            f"对照完成：HF |Δ|={abs(d_hf):.4f}, ACC |Δ|={abs(d_acc):.4f}"
+        )
+
+    def _on_failed(self, msg: str) -> None:
+        self._log.error(msg)
+
+
+# keep a reference to ``fields`` so ruff doesn't dead-code-eliminate the import
+_ = fields  # pragma: no cover
