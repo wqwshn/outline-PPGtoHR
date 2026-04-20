@@ -184,3 +184,66 @@ def test_optimise_full_budget(base_params: SolverParams, tmp_path: Path) -> None
     assert result.min_err_acc < 25
     assert result.importance_hf is not None
     assert len(result.importance_hf.names) == len(default_search_space().names())
+
+
+# ---------------------------------------------------------------------------
+# Per-strategy search-space tests
+# ---------------------------------------------------------------------------
+
+
+def test_default_search_space_lms_unchanged() -> None:
+    space = default_search_space("lms")
+    names = space.names()
+    assert "klms_sigma" not in names
+    assert "volterra_max_order_vol" not in names
+    assert "fs_target" in names
+    assert "max_order" in names
+
+
+def test_default_search_space_no_arg_equals_lms() -> None:
+    """Backwards compat: default_search_space() with no args still returns LMS grid."""
+    assert default_search_space().names() == default_search_space("lms").names()
+
+
+def test_default_search_space_klms_has_klms_fields() -> None:
+    space = default_search_space("klms")
+    names = space.names()
+    assert "klms_step_size" in names
+    assert "klms_sigma" in names
+    assert "klms_epsilon" in names
+    assert "volterra_max_order_vol" not in names
+
+
+def test_default_search_space_volterra_has_vol_field() -> None:
+    space = default_search_space("volterra")
+    names = space.names()
+    assert "volterra_max_order_vol" in names
+    assert "klms_sigma" not in names
+
+
+def test_default_search_space_unknown_raises() -> None:
+    with pytest.raises(ValueError):
+        default_search_space("bogus")
+
+
+def test_bayes_result_save_includes_strategy(tmp_path: Path) -> None:
+    res = BayesResult(
+        min_err_hf=1.0, best_para_hf={"fs_target": 100},
+        min_err_acc=2.0, best_para_acc={"fs_target": 100},
+        importance_hf=None,
+        search_space={"fs_target": [100]},
+        adaptive_filter="klms",
+    )
+    p = res.save(tmp_path / "out.json")
+    payload = json.loads(p.read_text(encoding="utf-8"))
+    assert payload["adaptive_filter"] == "klms"
+
+
+def test_bayes_result_default_strategy_is_lms(tmp_path: Path) -> None:
+    res = BayesResult(
+        min_err_hf=1.0, best_para_hf={}, min_err_acc=2.0, best_para_acc={},
+        importance_hf=None,
+    )
+    p = res.save(tmp_path / "out.json")
+    payload = json.loads(p.read_text(encoding="utf-8"))
+    assert payload["adaptive_filter"] == "lms"

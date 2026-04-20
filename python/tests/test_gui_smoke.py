@@ -111,6 +111,167 @@ def test_default_optimise_report_path_uses_matlab_style_name():
     )
 
 
+def test_param_form_exposes_adaptive_filter_dropdown():
+    from PySide6.QtWidgets import QApplication, QComboBox
+
+    from ppg_hr.gui.pages import ParamForm
+
+    app = QApplication.instance() or QApplication([])
+    form = ParamForm()
+    try:
+        combo = form._editors.get("adaptive_filter")
+        assert isinstance(combo, QComboBox)
+        items = [combo.itemText(i) for i in range(combo.count())]
+        assert items == ["lms", "klms", "volterra"]
+        assert combo.currentText() == "lms"
+    finally:
+        form.deleteLater()
+        app.processEvents()
+
+
+def test_param_form_conditional_groups_toggle_with_strategy():
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.pages import ParamForm
+
+    app = QApplication.instance() or QApplication([])
+    form = ParamForm()
+    try:
+        klms_group = form._group_boxes.get("klms")
+        volterra_group = form._group_boxes.get("volterra")
+        assert klms_group is not None and volterra_group is not None
+
+        assert not klms_group.isVisibleTo(form)
+        assert not volterra_group.isVisibleTo(form)
+
+        combo = form._editors["adaptive_filter"]
+        combo.setCurrentText("klms")
+        app.processEvents()
+        assert klms_group.isVisibleTo(form)
+        assert not volterra_group.isVisibleTo(form)
+
+        combo.setCurrentText("volterra")
+        app.processEvents()
+        assert not klms_group.isVisibleTo(form)
+        assert volterra_group.isVisibleTo(form)
+
+        combo.setCurrentText("lms")
+        app.processEvents()
+        assert not klms_group.isVisibleTo(form)
+        assert not volterra_group.isVisibleTo(form)
+    finally:
+        form.deleteLater()
+        app.processEvents()
+
+
+def test_param_form_apply_to_writes_adaptive_filter_fields():
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.pages import ParamForm
+    from ppg_hr.params import SolverParams
+
+    app = QApplication.instance() or QApplication([])
+    form = ParamForm()
+    try:
+        form._editors["adaptive_filter"].setCurrentText("klms")
+        form._editors["klms_step_size"].setValue(0.25)
+        form._editors["klms_sigma"].setValue(2.0)
+        form._editors["klms_epsilon"].setValue(0.05)
+        form._editors["volterra_max_order_vol"].setValue(5)
+
+        out = form.apply_to(SolverParams())
+        assert out.adaptive_filter == "klms"
+        assert out.klms_step_size == pytest.approx(0.25)
+        assert out.klms_sigma == pytest.approx(2.0)
+        assert out.klms_epsilon == pytest.approx(0.05)
+        assert out.volterra_max_order_vol == 5
+    finally:
+        form.deleteLater()
+        app.processEvents()
+
+
+def test_adaptive_filter_picker_lists_three_strategies():
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.pages import AdaptiveFilterPicker
+
+    app = QApplication.instance() or QApplication([])
+    picker = AdaptiveFilterPicker()
+    try:
+        assert picker.current_strategy() == "lms"
+        # Only the user-data values matter — labels can be localised freely.
+        values = [picker._combo.itemData(i) for i in range(picker._combo.count())]
+        assert values == ["lms", "klms", "volterra"]
+    finally:
+        picker.deleteLater()
+        app.processEvents()
+
+
+def test_adaptive_filter_picker_apply_to():
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.pages import AdaptiveFilterPicker
+    from ppg_hr.params import SolverParams
+
+    app = QApplication.instance() or QApplication([])
+    picker = AdaptiveFilterPicker()
+    try:
+        picker.set_strategy("klms")
+        out = picker.apply_to(SolverParams())
+        assert out.adaptive_filter == "klms"
+
+        picker.set_strategy("volterra")
+        out = picker.apply_to(SolverParams())
+        assert out.adaptive_filter == "volterra"
+    finally:
+        picker.deleteLater()
+        app.processEvents()
+
+
+def test_optimise_page_exposes_adaptive_filter_picker():
+    """Optimise page should let the user pick the strategy without exposing
+    every other knob — the optimiser is what tunes those."""
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.pages import AdaptiveFilterPicker, OptimisePage
+
+    app = QApplication.instance() or QApplication([])
+    page = OptimisePage()
+    try:
+        assert hasattr(page, "_algo_picker")
+        assert isinstance(page._algo_picker, AdaptiveFilterPicker)
+        page._algo_picker.set_strategy("volterra")
+        from ppg_hr.params import SolverParams
+        params = page._algo_picker.apply_to(SolverParams())
+        assert params.adaptive_filter == "volterra"
+    finally:
+        page.close()
+        page.deleteLater()
+        app.processEvents()
+
+
+def test_param_form_set_values_restores_adaptive_filter():
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.pages import ParamForm
+
+    app = QApplication.instance() or QApplication([])
+    form = ParamForm()
+    try:
+        form.set_values({
+            "adaptive_filter": "volterra",
+            "volterra_max_order_vol": 4,
+        })
+        app.processEvents()
+        assert form._editors["adaptive_filter"].currentText() == "volterra"
+        assert form._editors["volterra_max_order_vol"].value() == 4
+        volterra_group = form._group_boxes["volterra"]
+        assert volterra_group.isVisibleTo(form)
+    finally:
+        form.deleteLater()
+        app.processEvents()
+
+
 def test_optimise_page_autofills_and_preserves_custom_output_path(tmp_path):
     from PySide6.QtWidgets import QApplication
 

@@ -18,6 +18,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDoubleSpinBox,
     QFormLayout,
     QGridLayout,
@@ -158,14 +159,19 @@ def default_optimise_report_path(input_path: Path) -> Path:
     return input_path.with_name(f"Best_Params_Result_{input_path.stem}.json")
 
 
-# Parameter groups shown per page
-_PARAM_GROUPS: list[tuple[str, list[str]]] = [
-    ("重采样 & 滤波", ["fs_target", "max_order"]),
-    ("窗口 & 校准", ["time_start", "time_buffer", "calib_time", "motion_th_scale"]),
-    ("频谱惩罚", ["spec_penalty_enable", "spec_penalty_weight", "spec_penalty_width"]),
-    ("HR 约束（运动路）", ["hr_range_hz", "slew_limit_bpm", "slew_step_bpm"]),
-    ("HR 约束（静止路）", ["hr_range_rest", "slew_limit_rest", "slew_step_rest"]),
-    ("输出 & 对齐", ["smooth_win_len", "time_bias"]),
+# Parameter groups shown per page. Each tuple is (title, [field_names], group_id).
+# ``group_id`` is optional — groups tagged as ``"klms"`` / ``"volterra"`` are
+# hidden unless the matching ``adaptive_filter`` strategy is selected.
+_PARAM_GROUPS: list[tuple[str, list[str], str]] = [
+    ("自适应滤波算法", ["adaptive_filter"], "adaptive"),
+    ("KLMS 参数", ["klms_step_size", "klms_sigma", "klms_epsilon"], "klms"),
+    ("Volterra 参数", ["volterra_max_order_vol"], "volterra"),
+    ("重采样 & 滤波", ["fs_target", "max_order"], "misc"),
+    ("窗口 & 校准", ["time_start", "time_buffer", "calib_time", "motion_th_scale"], "misc"),
+    ("频谱惩罚", ["spec_penalty_enable", "spec_penalty_weight", "spec_penalty_width"], "misc"),
+    ("HR 约束（运动路）", ["hr_range_hz", "slew_limit_bpm", "slew_step_bpm"], "misc"),
+    ("HR 约束（静止路）", ["hr_range_rest", "slew_limit_rest", "slew_step_rest"], "misc"),
+    ("输出 & 对齐", ["smooth_win_len", "time_bias"], "misc"),
 ]
 
 _PARAM_META: dict[str, dict[str, Any]] = {
@@ -186,7 +192,60 @@ _PARAM_META: dict[str, dict[str, Any]] = {
     "slew_step_rest":   dict(label="追踪步长 (BPM, 静止)",   kind="float", lo=0,   hi=20, step=0.5, decimals=1),
     "smooth_win_len": dict(label="平滑窗长",       kind="int",  lo=1,   hi=51,  step=2),
     "time_bias":      dict(label="时间偏移 (s)",   kind="float", lo=-30, hi=30, step=0.5, decimals=2),
+    # Adaptive filter strategy + algo-specific parameters (2026-04)
+    "adaptive_filter": dict(label="算法", kind="choice",
+                            options=["lms", "klms", "volterra"]),
+    "klms_step_size":  dict(label="KLMS 步长 μ",     kind="float", lo=1e-4, hi=5,    step=0.01, decimals=4),
+    "klms_sigma":      dict(label="KLMS 核宽 σ",     kind="float", lo=1e-3, hi=20,   step=0.1,  decimals=4),
+    "klms_epsilon":    dict(label="KLMS 量化阈值 ε", kind="float", lo=1e-4, hi=5,    step=0.01, decimals=4),
+    "volterra_max_order_vol": dict(label="Volterra 二阶长度 M₂", kind="int", lo=0, hi=32, step=1),
 }
+
+
+class AdaptiveFilterPicker(QWidget):
+    """Single-row picker for :attr:`SolverParams.adaptive_filter`.
+
+    Used on pages that should *only* expose the algorithm choice (e.g. the
+    optimise page, where the actual hyper-parameters are searched for by the
+    Bayesian optimiser). For pages that need to edit every solver knob,
+    use :class:`ParamForm` instead — it already embeds the same dropdown
+    along with every other field.
+    """
+
+    _OPTIONS: tuple[str, ...] = ("lms", "klms", "volterra")
+    _LABELS: dict[str, str] = {
+        "lms": "归一化 LMS（默认）",
+        "klms": "QKLMS（量化核 LMS）",
+        "volterra": "二阶 Volterra LMS",
+    }
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        layout = QFormLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setHorizontalSpacing(14)
+        layout.setVerticalSpacing(8)
+
+        self._combo = QComboBox()
+        for opt in self._OPTIONS:
+            self._combo.addItem(self._LABELS[opt], userData=opt)
+        # Default to whatever SolverParams() declares (currently "lms").
+        default = SolverParams().adaptive_filter
+        idx = self._combo.findData(default)
+        self._combo.setCurrentIndex(idx if idx >= 0 else 0)
+        self._combo.setFixedWidth(220)
+        layout.addRow("算法", self._combo)
+
+    def current_strategy(self) -> str:
+        return str(self._combo.currentData())
+
+    def set_strategy(self, strategy: str) -> None:
+        idx = self._combo.findData(strategy)
+        if idx >= 0:
+            self._combo.setCurrentIndex(idx)
+
+    def apply_to(self, params: SolverParams) -> SolverParams:
+        return params.replace(adaptive_filter=self.current_strategy())
 
 
 class ParamForm(QWidget):
@@ -203,12 +262,13 @@ class ParamForm(QWidget):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._editors: dict[str, QWidget] = {}
+        self._group_boxes: dict[str, QGroupBox] = {}
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
 
         defaults = SolverParams()
-        for group_name, names in _PARAM_GROUPS:
+        for group_name, names, group_id in _PARAM_GROUPS:
             box = QGroupBox(group_name)
             grid = QGridLayout(box)
             grid.setContentsMargins(14, 18, 14, 14)
@@ -237,6 +297,23 @@ class ParamForm(QWidget):
                 grid.addWidget(label, row, label_col)
                 grid.addWidget(editor, row, editor_col)
             layout.addWidget(box)
+            # Only the first group tagged with a given id is registered,
+            # which lets us show/hide the conditional KLMS / Volterra groups.
+            self._group_boxes.setdefault(group_id, box)
+
+        # Wire up conditional visibility for algo-specific groups
+        combo = self._editors.get("adaptive_filter")
+        if isinstance(combo, QComboBox):
+            combo.currentTextChanged.connect(self._on_strategy_changed)
+            self._on_strategy_changed(combo.currentText())
+
+    def _on_strategy_changed(self, strategy: str) -> None:
+        klms_box = self._group_boxes.get("klms")
+        volterra_box = self._group_boxes.get("volterra")
+        if klms_box is not None:
+            klms_box.setVisible(strategy == "klms")
+        if volterra_box is not None:
+            volterra_box.setVisible(strategy == "volterra")
 
     def _build_editor(self, name: str, meta: dict, default) -> QWidget:
         kind = meta["kind"]
@@ -262,6 +339,14 @@ class ParamForm(QWidget):
             w.setChecked(bool(default))
             w.setMinimumWidth(self._EDITOR_WIDTH)
             return w
+        if kind == "choice":
+            w = QComboBox()
+            for opt in meta["options"]:
+                w.addItem(str(opt))
+            idx = w.findText(str(default))
+            w.setCurrentIndex(idx if idx >= 0 else 0)
+            w.setFixedWidth(self._EDITOR_WIDTH)
+            return w
         raise ValueError(f"Unknown editor kind: {kind!r}")
 
     # ------------------------------------------------------------------
@@ -275,6 +360,8 @@ class ParamForm(QWidget):
                 overrides[name] = float(w.value())
             elif isinstance(w, QCheckBox):
                 overrides[name] = bool(w.isChecked())
+            elif isinstance(w, QComboBox):
+                overrides[name] = w.currentText()
         return params.replace(**overrides)
 
     def set_values(self, values: dict[str, Any]) -> None:
@@ -289,6 +376,10 @@ class ParamForm(QWidget):
                 w.setValue(float(v))
             elif isinstance(w, QCheckBox):
                 w.setChecked(bool(v))
+            elif isinstance(w, QComboBox):
+                idx = w.findText(str(v))
+                if idx >= 0:
+                    w.setCurrentIndex(idx)
 
 
 # ---------------------------------------------------------------------------
@@ -466,6 +557,16 @@ class OptimisePage(_PageBase):
         cfg_card.add(cfg_form)
         self.body().addWidget(cfg_card)
 
+        # Adaptive-filter picker (the only "manual" knob on this page —
+        # everything else is what the optimiser is supposed to search for).
+        algo_card = SectionCard(
+            "自适应滤波算法",
+            "选择优化时使用的自适应滤波算法；专属参数会自动加入贝叶斯搜索空间。",
+        )
+        self._algo_picker = AdaptiveFilterPicker()
+        algo_card.add(self._algo_picker)
+        self.body().addWidget(algo_card)
+
         action_row = QHBoxLayout()
         action_row.setSpacing(12)
         action_row.addStretch(1)
@@ -510,6 +611,7 @@ class OptimisePage(_PageBase):
             return
 
         params = SolverParams(file_name=in_path, ref_file=self._ref_pick.path())
+        params = self._algo_picker.apply_to(params)
         cfg = BayesConfig(
             max_iterations=int(self._max_iter.value()),
             num_seed_points=int(self._seed_pts.value()),

@@ -68,6 +68,88 @@ def test_load_report_missing(tmp_path: Path) -> None:
         load_report(tmp_path / "nope.json")
 
 
+def _make_strategy_report(tmp_path: Path, strategy: str) -> Path:
+    payload = {
+        "adaptive_filter": strategy,
+        "min_err_hf": 1.0,
+        "min_err_acc": 1.0,
+        "best_para_hf": {"fs_target": 100, "max_order": 16},
+        "best_para_acc": {"fs_target": 100, "max_order": 16},
+        "importance_hf": None,
+        "search_space": {},
+    }
+    path = tmp_path / f"report_{strategy}.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+@pytest.mark.parametrize("strategy", ["lms", "klms", "volterra"])
+def test_render_honours_report_strategy(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, strategy: str,
+) -> None:
+    """Reports produced for klms/volterra must replay with that strategy."""
+    seen_strategies: list[str] = []
+
+    class _FakeRes:
+        err_stats = [[0] * 3] * 5
+        HR = [[0] * 9] * 1
+        T_Pred = [0]
+        HR_Ref_Interp = [0]
+
+    def _fake_solve(params):
+        seen_strategies.append(params.adaptive_filter)
+        # Return an object minimally compatible with the parts render()
+        # / write_*_csv touch.
+        import numpy as np
+        res = type("R", (), {})()
+        res.err_stats = np.zeros((5, 3))
+        res.HR = np.zeros((1, 9))
+        res.T_Pred = np.zeros((1,))
+        res.HR_Ref_Interp = np.zeros((1,))
+        res.motion_threshold = (0.0, 0.0)
+        return res
+
+    monkeypatch.setattr("ppg_hr.visualization.result_viewer.solve", _fake_solve)
+    report = _make_strategy_report(tmp_path, strategy)
+    base = SolverParams(file_name=tmp_path / "dummy.csv")  # adaptive_filter="lms"
+    render(report, base, out_dir=tmp_path / "out", show=False)
+
+    # render() calls solve() twice (HF + ACC) — both must use the report strategy.
+    assert seen_strategies == [strategy, strategy]
+
+
+def test_render_defaults_to_base_strategy_when_report_lacks_field(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    """Legacy reports (no adaptive_filter) keep the base SolverParams choice."""
+    seen: list[str] = []
+
+    def _fake_solve(params):
+        seen.append(params.adaptive_filter)
+        import numpy as np
+        res = type("R", (), {})()
+        res.err_stats = np.zeros((5, 3))
+        res.HR = np.zeros((1, 9))
+        res.T_Pred = np.zeros((1,))
+        res.HR_Ref_Interp = np.zeros((1,))
+        res.motion_threshold = (0.0, 0.0)
+        return res
+
+    monkeypatch.setattr("ppg_hr.visualization.result_viewer.solve", _fake_solve)
+    legacy = {
+        "min_err_hf": 1.0, "min_err_acc": 1.0,
+        "best_para_hf": {}, "best_para_acc": {},
+        "importance_hf": None, "search_space": {},
+    }
+    report = tmp_path / "legacy.json"
+    report.write_text(json.dumps(legacy), encoding="utf-8")
+    base = SolverParams(file_name=tmp_path / "x.csv").replace(
+        adaptive_filter="volterra"
+    )
+    render(report, base, out_dir=tmp_path / "out", show=False)
+    assert seen == ["volterra", "volterra"]
+
+
 def test_render_emits_figure_and_csvs(
     base_params: SolverParams,
     fake_json_report: Path,
