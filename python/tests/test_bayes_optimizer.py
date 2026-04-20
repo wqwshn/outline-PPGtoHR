@@ -60,6 +60,45 @@ def test_search_space_is_customisable() -> None:
     assert space.options("max_order") == [16]
 
 
+def test_optimise_mode_parallel_matches_serial(base_params: SolverParams) -> None:
+    """Repeat-level parallelism must not change the numeric outcome.
+
+    Each repeat uses ``seed = random_state + run_idx`` and the objective is
+    fully deterministic (``solve`` is pure numpy/scipy, no randomness), so the
+    serial path and the process-pool path have to agree bit-for-bit on the
+    best objective and on the decoded best parameters.
+    """
+    space = SearchSpace(
+        fs_target=[100],
+        max_order=[12, 16],
+        spec_penalty_width=[0.2],
+        hr_range_hz=[25 / 60],
+        slew_limit_bpm=[10],
+        slew_step_bpm=[7],
+        hr_range_rest=[30 / 60],
+        slew_limit_rest=[6],
+        slew_step_rest=[4],
+        smooth_win_len=[5, 7, 9],
+        time_bias=[5],
+    )
+    cfg_serial = BayesConfig(
+        max_iterations=3, num_seed_points=1, num_repeats=2, parallel_repeats=1
+    )
+    cfg_parallel = BayesConfig(
+        max_iterations=3, num_seed_points=1, num_repeats=2, parallel_repeats=2
+    )
+
+    err_s, params_s, study_s = optimise_mode(base_params, space, "HF", cfg_serial)
+    err_p, params_p, study_p = optimise_mode(base_params, space, "HF", cfg_parallel)
+
+    assert err_p == pytest.approx(err_s)
+    assert params_p == params_s
+    # Both paths must expose a study object (with trials) for downstream
+    # importance analysis; the parallel path rebuilds it from FrozenTrial list.
+    assert len(study_p.trials) == cfg_parallel.max_iterations
+    assert len(study_s.trials) == cfg_serial.max_iterations
+
+
 def test_optimise_mode_returns_valid_result(base_params: SolverParams) -> None:
     space = SearchSpace(
         fs_target=[100],

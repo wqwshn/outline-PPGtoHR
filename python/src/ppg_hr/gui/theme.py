@@ -12,8 +12,60 @@ Designers can override colors at runtime by mutating ``Palette`` *before*
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
 
 __all__ = ["Palette", "STYLESHEET", "font_stack", "matplotlib_rc"]
+
+
+# Prioritised CJK-capable sans-serif fonts. Walked in order until one is
+# actually installed. Keeping this list broad means the GUI renders Chinese
+# titles/labels correctly on fresh Windows, macOS and Linux installs without
+# bundling a font file.
+_CJK_FONT_CANDIDATES: tuple[str, ...] = (
+    # Windows
+    "Microsoft YaHei",
+    "Microsoft YaHei UI",
+    "SimHei",
+    "Microsoft JhengHei",
+    "SimSun",
+    # macOS
+    "PingFang SC",
+    "Heiti SC",
+    "Hiragino Sans GB",
+    "Arial Unicode MS",
+    # Linux (Noto / Source Han / WenQuanYi)
+    "Noto Sans CJK SC",
+    "Noto Sans SC",
+    "Source Han Sans SC",
+    "Source Han Sans CN",
+    "WenQuanYi Zen Hei",
+    "WenQuanYi Micro Hei",
+)
+
+
+@lru_cache(maxsize=1)
+def _detect_cjk_font() -> str | None:
+    """Return the first installed CJK-capable font family, or ``None``.
+
+    Imported lazily so importing :mod:`theme` stays cheap when matplotlib is
+    not in use. The scan walks :mod:`matplotlib.font_manager`'s registered
+    families and matches against ``_CJK_FONT_CANDIDATES`` in preference order.
+    """
+    try:
+        from matplotlib import font_manager as fm
+    except ImportError:
+        return None
+    available = {f.name for f in fm.fontManager.ttflist}
+    for name in _CJK_FONT_CANDIDATES:
+        if name in available:
+            return name
+    return None
+
+
+_ASSET_DIR = Path(__file__).resolve().parent / "assets"
+_SPIN_UP_ICON = (_ASSET_DIR / "spin-up.svg").resolve().as_posix()
+_SPIN_DOWN_ICON = (_ASSET_DIR / "spin-down.svg").resolve().as_posix()
 
 
 @dataclass
@@ -158,7 +210,7 @@ QSpinBox::up-button, QDoubleSpinBox::up-button {{
     width: 18px;
     border-left: 1px solid {Palette.border};
     border-top-right-radius: 5px;
-    background: {Palette.surface};
+    background: {Palette.surface_alt};
 }}
 QSpinBox::down-button, QDoubleSpinBox::down-button {{
     subcontrol-origin: border;
@@ -166,11 +218,21 @@ QSpinBox::down-button, QDoubleSpinBox::down-button {{
     width: 18px;
     border-left: 1px solid {Palette.border};
     border-bottom-right-radius: 5px;
-    background: {Palette.surface};
+    background: {Palette.surface_alt};
 }}
 QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
 QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {{
-    background: {Palette.surface_alt};
+    background: {Palette.primary_soft};
+}}
+QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{
+    image: url("{_SPIN_UP_ICON}");
+    width: 10px;
+    height: 10px;
+}}
+QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{
+    image: url("{_SPIN_DOWN_ICON}");
+    width: 10px;
+    height: 10px;
 }}
 QComboBox::drop-down {{ border: 0; width: 22px; }}
 QComboBox QAbstractItemView {{
@@ -343,8 +405,36 @@ QStatusBar::item {{ border: none; }}
 
 
 def matplotlib_rc() -> dict:
-    """Matplotlib rc dict matching the GUI palette (call once at import)."""
+    """Matplotlib rc dict matching the GUI palette (call once at import).
+
+    Also ensures CJK characters in plot titles/labels render correctly by
+    preferring an installed Chinese-capable font (``Microsoft YaHei`` /
+    ``PingFang SC`` / ``Noto Sans CJK SC`` …) over matplotlib's default
+    ``DejaVu Sans``, which does not ship CJK glyphs and otherwise prints
+    tofu boxes (□) for every Chinese character.
+    """
+    cjk_font = _detect_cjk_font()
+    sans_serif_stack = [cjk_font] if cjk_font else []
+    # Always keep a Latin fallback after the CJK font so ASCII metrics stay
+    # crisp and the stack degrades gracefully if the CJK font is removed.
+    sans_serif_stack.extend([
+        "Microsoft YaHei",
+        "SimHei",
+        "PingFang SC",
+        "Noto Sans CJK SC",
+        "DejaVu Sans",
+        "Segoe UI",
+        "Arial",
+        "sans-serif",
+    ])
+    # Deduplicate while preserving order (dict preserves insertion order).
+    sans_serif_stack = list(dict.fromkeys(sans_serif_stack))
     return {
+        "font.family": "sans-serif",
+        "font.sans-serif": sans_serif_stack,
+        # Matplotlib's default "−" (U+2212) is missing from several CJK fonts
+        # and also renders as □; falling back to ASCII hyphen is safer.
+        "axes.unicode_minus": False,
         "figure.facecolor": Palette.surface,
         "axes.facecolor": Palette.surface,
         "axes.edgecolor": Palette.border_strong,

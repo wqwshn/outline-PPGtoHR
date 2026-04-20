@@ -8,6 +8,7 @@ Each page:
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import fields
 from pathlib import Path
 from typing import Any
@@ -102,6 +103,7 @@ def _dataset_card(
     output_label: str = "结果 CSV（可选）",
     output_filter: str = "CSV (*.csv)",
     input_filter: str = "传感器数据 (*.csv *.mat);;All files (*)",
+    output_default_factory: Callable[[Path], Path] | None = None,
 ) -> tuple[SectionCard, FilePicker, FilePicker, FilePicker | None]:
     """Build the Input/Reference/Output picker block used by every page."""
     card = SectionCard("数据输入", "传感器 CSV + 参考心率 CSV（省略 --ref 时会找同名 *_ref.csv）")
@@ -116,8 +118,12 @@ def _dataset_card(
     form.addRow("数据文件", input_pick)
     form.addRow("参考心率", ref_pick)
 
+    out_pick: FilePicker | None = None
+    last_auto_out: Path | None = None
+
     # Auto-fill ref / output when input changes
     def _autofill(path_str: str) -> None:
+        nonlocal last_auto_out
         if not path_str:
             return
         p = Path(path_str)
@@ -126,12 +132,18 @@ def _dataset_card(
             if sibling.is_file():
                 ref_pick.setPath(sibling)
 
+        if out_pick is not None and output_default_factory is not None:
+            suggested = output_default_factory(p)
+            current_out = out_pick.path()
+            if current_out is None or current_out == last_auto_out:
+                out_pick.setPath(suggested)
+                last_auto_out = suggested
+
     input_pick.changed.connect(_autofill)
 
-    out_pick: FilePicker | None = None
     if show_output:
         out_pick = FilePicker(
-            placeholder="留空则只在界面显示；填路径则保存到该位置",
+            placeholder="默认保存到数据文件同级目录；也可手动修改",
             filter_str=output_filter,
             mode=output_mode,
         )
@@ -139,6 +151,11 @@ def _dataset_card(
 
     card.add(form)
     return card, input_pick, ref_pick, out_pick
+
+
+def default_optimise_report_path(input_path: Path) -> Path:
+    """Return the default JSON report path for an optimisation input file."""
+    return input_path.with_name(f"Best_Params_Result_{input_path.stem}.json")
 
 
 # Parameter groups shown per page
@@ -416,6 +433,7 @@ class OptimisePage(_PageBase):
             output_mode="save",
             output_label="报告 JSON 路径",
             output_filter="JSON (*.json)",
+            output_default_factory=default_optimise_report_path,
         )
         self.body().addWidget(card)
 

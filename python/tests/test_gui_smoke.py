@@ -6,8 +6,6 @@ test never needs a display server (works on CI and Windows Server).
 
 from __future__ import annotations
 
-import os
-
 import pytest
 
 pytest.importorskip("PySide6")
@@ -45,3 +43,84 @@ def test_theme_stylesheet_nonempty():
 
     assert "QPushButton" in STYLESHEET
     assert "#sidebar" in STYLESHEET
+
+
+def test_theme_declares_spinbox_arrow_icons():
+    from ppg_hr.gui.theme import STYLESHEET
+
+    assert "QSpinBox::up-arrow" in STYLESHEET
+    assert "QSpinBox::down-arrow" in STYLESHEET
+    assert ".svg" in STYLESHEET
+
+
+def test_matplotlib_rc_prefers_cjk_font_and_disables_unicode_minus():
+    """Plots with Chinese titles/labels must not render as tofu boxes.
+
+    Guarantees:
+    * ``font.sans-serif`` has a CJK-capable family (Microsoft YaHei / SimHei /
+      PingFang SC / Noto Sans CJK SC) in the first slot available on the host;
+    * ``axes.unicode_minus`` is disabled so the Unicode minus sign (U+2212)
+      doesn't itself render as a box on CJK fonts that miss that glyph.
+    """
+    from ppg_hr.gui.theme import matplotlib_rc
+
+    rc = matplotlib_rc()
+    assert rc["font.family"] == "sans-serif"
+    sans_serif = rc["font.sans-serif"]
+    assert any(
+        name in sans_serif
+        for name in (
+            "Microsoft YaHei",
+            "SimHei",
+            "PingFang SC",
+            "Noto Sans CJK SC",
+            "Noto Sans SC",
+        )
+    ), f"no CJK font declared in sans-serif stack: {sans_serif!r}"
+    assert rc["axes.unicode_minus"] is False
+
+
+def test_default_optimise_report_path_uses_matlab_style_name():
+    from pathlib import Path
+
+    from ppg_hr.gui.pages import default_optimise_report_path
+
+    csv_path = Path(r"D:\data\PPG_HeartRate\Algorithm\outline-PPGtoHR\20260418test_python\multi_tiaosheng1.csv")
+
+    assert default_optimise_report_path(csv_path) == csv_path.with_name(
+        "Best_Params_Result_multi_tiaosheng1.json"
+    )
+
+
+def test_optimise_page_autofills_and_preserves_custom_output_path(tmp_path):
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.pages import OptimisePage
+
+    app = QApplication.instance() or QApplication([])
+    page = OptimisePage()
+    try:
+        data_path = tmp_path / "multi_tiaosheng1.csv"
+        data_path.write_text("dummy\n", encoding="utf-8")
+
+        page._in_pick.setPath(data_path)
+        app.processEvents()
+        assert page._out_pick is not None
+        assert page._out_pick.path() == data_path.with_name(
+            "Best_Params_Result_multi_tiaosheng1.json"
+        )
+
+        custom_out = tmp_path / "manual" / "my-report.json"
+        page._out_pick.setPath(custom_out)
+        app.processEvents()
+
+        other_data = tmp_path / "multi_tiaosheng2.csv"
+        other_data.write_text("dummy\n", encoding="utf-8")
+        page._in_pick.setPath(other_data)
+        app.processEvents()
+
+        assert page._out_pick.path() == custom_out
+    finally:
+        page.close()
+        page.deleteLater()
+        app.processEvents()

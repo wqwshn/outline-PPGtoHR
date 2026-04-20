@@ -45,7 +45,7 @@ from .find_near_biggest import find_near_biggest
 from .find_real_hr import find_real_hr
 from .lms_filter import lms_filter
 
-__all__ = ["SolverResult", "solve", "solve_from_arrays"]
+__all__ = ["SolverResult", "load_raw_data", "solve", "solve_from_arrays"]
 
 
 # Column indices (1-based MATLAB) inside the processed DataFrame array view
@@ -108,7 +108,14 @@ def _load_processed_table(mat_path: Path) -> tuple[np.ndarray, np.ndarray]:
     )
 
 
-def _load_raw_data(params: SolverParams) -> tuple[np.ndarray, np.ndarray]:
+def load_raw_data(params: SolverParams) -> tuple[np.ndarray, np.ndarray]:
+    """Load ``(raw_data, ref_data)`` from the paths stored in ``params``.
+
+    This is the public wrapper used by the Bayesian optimiser to load the
+    scenario once and reuse the arrays across every trial (so CSV/.mat parsing
+    and :func:`load_dataset` preprocessing are *not* repeated for each
+    parameter sample).
+    """
     file_name = Path(params.file_name)
     if not file_name.exists():
         raise FileNotFoundError(f"File not found: {file_name}")
@@ -128,6 +135,10 @@ def _load_raw_data(params: SolverParams) -> tuple[np.ndarray, np.ndarray]:
         ref_path = Path(params.ref_file)
     ds = load_dataset(file_name, ref_path)
     return ds.data.to_numpy(dtype=float)[:, : len(ds.data.columns) // 2 + 1], ds.ref_data
+
+
+# Kept as a private alias for anyone importing the old name.
+_load_raw_data = load_raw_data
 
 
 # ----------------------------------------------------------------------------
@@ -185,7 +196,7 @@ def _process_spectrum(
 
 def solve(params: SolverParams) -> SolverResult:
     """Run the full pipeline; mirrors the MATLAB ``HeartRateSolver_cas_chengfa``."""
-    raw_data, ref_data = _load_raw_data(params)
+    raw_data, ref_data = load_raw_data(params)
     return solve_from_arrays(raw_data, ref_data, params)
 
 

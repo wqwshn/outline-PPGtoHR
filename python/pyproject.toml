@@ -37,7 +37,7 @@ ppg-hr-gui = "ppg_hr.gui:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-ppg_hr = ["py.typed"]
+ppg_hr = ["py.typed", "gui/assets/*.svg"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"

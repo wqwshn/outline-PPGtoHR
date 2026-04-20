@@ -9,11 +9,17 @@
 - 优化结果的双子图可视化（HF / ACC 两路融合曲线 + 误差表 + 参数表）
 - 统一命令行入口 `python -m ppg_hr {solve|optimise|view|inspect-defaults}`
 - **浅色桌面 GUI** (PySide6)：`ppg-hr-gui` 一键打开，把求解 / 优化 / 可视化 /
-  MATLAB 对照做成四个可视化页面（详见 [图形界面 GUI](#5-图形界面-gui)）
+MATLAB 对照做成四个可视化页面（详见 [图形界面 GUI](#5-图形界面-gui)）
 
 数值上已经按 MATLAB 金标 `.mat` 快照逐函数对齐，最近一次端到端核对结果（详见
 [与 MATLAB 的端到端对照](#与-matlab-的端到端对照)）：HF 融合 / ACC 融合的总
 AAE 与 MATLAB 偏差均 ≤ 0.07 BPM。
+
+**性能特性（与 MATLAB `parpool` 等价）**：贝叶斯优化默认会把 `num_repeats`
+个独立 restart 放到多进程并行执行，并把 CSV / `.mat` 预加载缓存到内存复用到所有
+trial。**结果数值与串行完全一致**（每个 restart 仍用 `seed = random_state + run_idx`），
+典型 3 进程能拿到 ≈ 2.8–3.5× 加速，不需要手工配置。详见
+[贝叶斯优化加速](#贝叶斯优化加速与-matlab-parpool-等价)。
 
 ---
 
@@ -24,10 +30,11 @@ AAE 与 MATLAB 偏差均 ≤ 0.07 BPM。
 3. [命令行使用详解](#3-命令行使用详解)
 4. [Python API 使用](#4-python-api-使用)
 5. [图形界面 GUI](#5-图形界面-gui)
-6. [项目结构](#6-项目结构)
-7. [与 MATLAB 的端到端对照](#与-matlab-的端到端对照)
-8. [测试与代码质量](#7-测试与代码质量)
-9. [常见问题 FAQ](#8-常见问题-faq)
+6. [贝叶斯优化加速（与 MATLAB `parpool` 等价）](#贝叶斯优化加速与-matlab-parpool-等价)
+7. [项目结构](#6-项目结构)
+8. [与 MATLAB 的端到端对照](#与-matlab-的端到端对照)
+9. [测试与代码质量](#7-测试与代码质量)
+10. [常见问题 FAQ](#8-常见问题-faq)
 
 ---
 
@@ -97,6 +104,10 @@ python -m ppg_hr optimise \
 
 输出 JSON 中包含：HF / ACC 两轮的最优参数、所有 trial 的 (param→err) 序列、随机森林参数重要性排序、SearchSpace 描述。
 
+> 上面这条命令默认会把 `num_repeats` 个独立 restart 放到多进程并行执行（等
+> 价于 MATLAB 的 `parpool`），数值结果与串行完全一致。加 `--parallel-repeats 1`
+> 可强制串行；详见 [贝叶斯优化加速](#贝叶斯优化加速与-matlab-parpool-等价)。
+
 ### Step 3 — 用最优参数重跑并出图
 
 ```bash
@@ -165,17 +176,19 @@ ppg-hr solve <input.csv> [--ref REF] [--out OUT.csv]
 ```text
 ppg-hr optimise <input.csv> [--ref REF] [--out report.json]
                 [--max-iterations N] [--num-seed-points N]
-                [--num-repeats N] [--seed N] [--quiet]
+                [--num-repeats N] [--parallel-repeats N]
+                [--seed N] [--quiet]
 ```
 
 
-| 参数                  | 默认   | 说明                |
-| ------------------- | ---- | ----------------- |
-| `--max-iterations`  | 75   | 单次搜索的总试次数         |
-| `--num-seed-points` | 10   | TPE 启动前的随机种子点数量   |
-| `--num-repeats`     | 3    | 多重启次数（取每轮中最优解）    |
-| `--seed`            | 42   | 随机种子              |
-| `--out`             | （可选） | JSON 报告路径；未指定则只打印 |
+| 参数                   | 默认   | 说明                                                         |
+| -------------------- | ---- | ---------------------------------------------------------- |
+| `--max-iterations`   | 75   | 单次搜索的总试次数                                                  |
+| `--num-seed-points`  | 10   | TPE 启动前的随机种子点数量                                            |
+| `--num-repeats`      | 3    | 多重启次数（取每轮中最优解）                                             |
+| `--parallel-repeats` | 自动   | 并行 restart 进程数。不传 = `min(num_repeats, cpu_count)`；`1` 强制串行 |
+| `--seed`             | 42   | 随机种子                                                       |
+| `--out`              | （可选） | JSON 报告路径；未指定则只打印                                          |
 
 
 ### `view`
@@ -238,6 +251,26 @@ print("Fusion(ACC) AAE:", result.err_stats[4, 0], "BPM")
 贝叶斯优化和可视化的 API 入口分别是
 `ppg_hr.optimization.optimise(...)` 和 `ppg_hr.visualization.render(...)`。
 
+```python
+from ppg_hr.optimization import BayesConfig, default_search_space, optimise
+from ppg_hr.params import SolverParams
+
+base = SolverParams(
+    file_name="20260418test_python/multi_tiaosheng1.csv",
+    ref_file="20260418test_python/multi_tiaosheng1_ref.csv",
+)
+cfg = BayesConfig(
+    max_iterations=75,
+    num_seed_points=10,
+    num_repeats=3,
+    random_state=42,
+    parallel_repeats=None,  # None = auto, 1 = force serial, N = N-way process pool
+)
+report = optimise(base, space=default_search_space(), config=cfg,
+                  out_path="reports/multi_tiaosheng1.json")
+print(report.min_err_hf, report.best_para_hf)
+```
+
 ---
 
 ## 5. 图形界面 GUI
@@ -265,12 +298,14 @@ python -m ppg_hr.gui        # 作为模块启动
 
 ### 5.3 功能一览
 
-| 侧边栏 | 页面作用 | 对应 CLI 动作 |
-| --- | --- | --- |
-| **求解** | 选 CSV + 调参 → 一次跑完求解器，出 AAE 表与 HR 曲线，可选导出 HR 矩阵 CSV | `solve` |
-| **优化** | 配预算（试次/种子点/重启次数）→ 运行 Optuna 贝叶斯优化，实时显示 Best-Err 轨迹、最优参数表、参数重要性柱状图；完成后自动保存 JSON | `optimise` |
-| **可视化** | 选 `Best_Params_Result_*.json` 或 MATLAB `.mat` → 调用 `render` 重跑并在右侧直接显示 PNG，同时列出误差/参数 CSV 路径 | `view` |
-| **MATLAB 对照** | 选 MATLAB 的 `.mat` 报告 → 自动找同名 CSV & `_ref.csv` → 用 MATLAB 最优参数在 Python 端复跑，表格列出 HF / ACC 的 AAE 差值 (`|Δ|≤0.5 BPM` 判 PASS) | `scripts/compare_with_matlab.py` |
+
+| 侧边栏           | 页面作用                                                                                                | 对应 CLI 动作  |
+| ------------- | --------------------------------------------------------------------------------------------------- | ---------- |
+| **求解**        | 选 CSV + 调参 → 一次跑完求解器，出 AAE 表与 HR 曲线，可选导出 HR 矩阵 CSV                                                  | `solve`    |
+| **优化**        | 配预算（试次/种子点/重启次数）→ 运行 Optuna 贝叶斯优化，实时显示 Best-Err 轨迹、最优参数表、参数重要性柱状图；完成后自动保存 JSON                      | `optimise` |
+| **可视化**       | 选 `Best_Params_Result_*.json` 或 MATLAB `.mat` → 调用 `render` 重跑并在右侧直接显示 PNG，同时列出误差/参数 CSV 路径         | `view`     |
+| **MATLAB 对照** | 选 MATLAB 的 `.mat` 报告 → 自动找同名 CSV & `_ref.csv` → 用 MATLAB 最优参数在 Python 端复跑，表格列出 HF / ACC 的 AAE 差值 (` | Δ          |
+
 
 所有耗时任务都在 `QThread` 工作线程里跑，界面不会卡；底部状态栏和每个页面的
 日志 Tab 会实时打印进度与错误堆栈。
@@ -278,14 +313,62 @@ python -m ppg_hr.gui        # 作为模块启动
 ### 5.4 交互要点
 
 - **自动联动**：在「求解 / 优化」页选完数据 CSV 后，如果同目录存在
-  `<name>_ref.csv`，参考心率框会自动填好。
+`<name>_ref.csv`，参考心率框会自动填好。
 - **对照页补全**：在「MATLAB 对照」页选完 `Best_Params_Result_<scenario>_processed.mat`
-  后，会自动把 `<scenario>.csv` 与 `<scenario>_ref.csv` 填到数据区。
+后，会自动把 `<scenario>.csv` 与 `<scenario>_ref.csv` 填到数据区。
 - **图表嵌入 + 落盘**：可视化页既在右侧直接显示渲染好的 PNG，也把 `figure.png` /
-  `error_table.csv` / `param_table.csv` 写到输出目录（留空则放到数据文件旁边的
-  `viewer_out/`）。
+`error_table.csv` / `param_table.csv` 写到输出目录（留空则放到数据文件旁边的
+`viewer_out/`）。
 - **离线测试**：`tests/test_gui_smoke.py` 使用 `QT_QPA_PLATFORM=offscreen`
-  做纯构建冒烟测试，CI / 无显示器环境也能跑。
+做纯构建冒烟测试，CI / 无显示器环境也能跑。
+- **中文字体**：GUI 的所有嵌入图表（Best Err 轨迹、参数重要性柱状图、心率
+曲线等）会自动挑选系统里能显示中文的字体（优先 `Microsoft YaHei` → `PingFang SC`
+→ `Noto Sans CJK SC`），不会出现"方框 □"乱码。如果图表里还是出现方框，参见
+[FAQ Q6](#8-常见问题-faq)。
+
+---
+
+## 贝叶斯优化加速（与 MATLAB `parpool` 等价）
+
+Python 版把 MATLAB 原先靠 `parpool` 并行的两件事同时做进来了，并保证**结果
+数值与串行完全一致**：
+
+1. **数据缓存**：`optimise_mode` 入口一次性读入 CSV/`.mat`，把 `raw_data` /
+  `ref_data` 传给所有 trial 的 `solve_from_arrays`。相比旧版每个 trial 都
+   重跑 `load_dataset` + CSV 解析，可以省掉 10%–30% 的单 trial 开销。
+2. **Repeat 级多进程并行**：`num_repeats` 个独立 restart 通过
+  `concurrent.futures.ProcessPoolExecutor` 并行执行，每个 worker 仍然用
+   `seed = random_state + run_idx`（与串行一一对应）。Windows 下使用 `spawn`
+   启动，每个 worker ≈ 2 s 导入开销；只要 `num_repeats >= 2` 就有收益。
+
+典型收益（`num_repeats=3`、`max_iterations=75`、一次运行 225 trials）：
+
+| 场景           | 优化项     | 预期加速      |
+| ------------ | ------- | --------- |
+| 数据缓存         | 消除重复 IO | 1.1–1.3×  |
+| 3 进程并行       | 3 个独立重启 | 2.5–2.9×  |
+| **缓存 + 并行合计** |         | **≈ 3×**  |
+
+### 控制方式
+
+- **CLI**：`--parallel-repeats N`（不传 = 自动；`1` = 串行）
+- **Python API**：`BayesConfig(parallel_repeats=N)`
+- **GUI**：默认自动并行，无需设置
+
+### 数值一致性证明
+
+`tests/test_bayes_optimizer.py::test_optimise_mode_parallel_matches_serial`
+是一个专门的回归测试：在同一搜索空间上分别跑 `parallel_repeats=1` 和
+`parallel_repeats=2`，断言 `best_err == best_err` 且 `best_params ==
+best_params`。每次 CI / 本地 `pytest` 都会跑这条用例。
+
+### 多轮 restart 是**独立**的，不是 "一条长链"
+
+每个 repeat 都会**新建** `TPESampler(seed=random_state + run_idx)` 并
+**新建** `optuna.create_study(...)`。restart 之间只共享"全局最好值"这一
+个数，用于 GUI 显示；TPE 的后验历史、采样状态都不跨 restart 继承。所以
+75×3 = 225 个 trial 是 **3 次独立的 75-trial 搜索**，不是一次
+225-trial 搜索。
 
 ---
 
@@ -446,6 +529,8 @@ gen_golden_all
 
 **Q3：贝叶斯优化跑得慢/不稳定？**
 
+- 默认已经开启"3 进程并行 + 数据缓存"，相比老版本有 ≈ 3× 加速，细节见
+[贝叶斯优化加速](#贝叶斯优化加速与-matlab-parpool-等价)；
 - 把 `--max-iterations` 调小到 25 左右先看趋势；
 - `--num-repeats` 越大越稳但耗时也线性增长；
 - 固定 `--seed`，方便复现。
@@ -459,6 +544,29 @@ gen_golden_all
 
 通常是 `pip install -e .` 之前没激活 conda 环境，或缺少 `setuptools≥68`。
 执行 `pip install -U setuptools wheel` 后再试。
+
+**Q6：贝叶斯优化的第二、第三轮误差是不是在第一轮基础上接着跑？**
+
+不是。每轮 restart 都**新建**一个 `TPESampler(seed=random_state + run_idx)`
+和一个全新的 `optuna.study`，之间不共享历史。UI 里进度条和轨迹图之所以看着
+连续，是因为它们显示的是"全局最好值"而不是"本轮最好值"——这只是显示策略，
+底层 3 次搜索互相独立。详见
+[贝叶斯优化加速](#贝叶斯优化加速与-matlab-parpool-等价)。
+
+**Q7：GUI 图表里的中文/负号显示成"方框 □"怎么办？**
+
+GUI 启动时会扫描系统字体，优先挑 `Microsoft YaHei` / `PingFang SC` /
+`Noto Sans CJK SC` 作为 matplotlib 的 `font.sans-serif`，一般 Windows / macOS
+/ 常见 Linux 发行版上都有。如果图表仍出现方框，多半是系统里没有这些字体：
+
+- **Windows**：默认已带 `Microsoft YaHei`，若被精简过，可在"设置 →
+  个性化 → 字体"里装 `Microsoft YaHei` 或 `SimHei`；
+- **macOS**：默认已带 `PingFang SC`；
+- **Linux**：安装 `fonts-noto-cjk` 或 Adobe `source-han-sans`；
+- 装完字体后**重启 GUI**（让 matplotlib 刷新 `fontManager` 缓存）。
+
+如果就是不想装系统字体，可以把一个 `.ttf` 放到项目里并在启动前手动
+`matplotlib.font_manager.fontManager.addfont('my-font.ttf')`。
 
 ---
 

@@ -86,6 +86,7 @@ def cmd_optimise(args: argparse.Namespace) -> int:
         num_seed_points=args.num_seed_points,
         num_repeats=args.num_repeats,
         random_state=args.seed,
+        parallel_repeats=args.parallel_repeats,
     )
     out_path = Path(args.out) if args.out else None
     result = optimise(
@@ -164,6 +165,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_opt.add_argument("--max-iterations", type=int, default=75)
     p_opt.add_argument("--num-seed-points", type=int, default=10)
     p_opt.add_argument("--num-repeats", type=int, default=3)
+    p_opt.add_argument(
+        "--parallel-repeats",
+        type=int,
+        default=None,
+        help=(
+            "How many repeats to run concurrently via a process pool. "
+            "Default: auto (min(num_repeats, cpu_count)). Set to 1 to force "
+            "serial execution. Does not affect numeric results — each repeat "
+            "still uses seed = random_state + run_idx."
+        ),
+    )
     p_opt.add_argument("--seed", type=int, default=42)
     p_opt.add_argument("--out", type=Path, default=None,
                        help="Destination JSON for the optimisation report.")
