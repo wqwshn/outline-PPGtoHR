@@ -329,9 +329,9 @@ def _struct_to_dict(s) -> dict[str, Any]:
 def _to_py(v):
     if isinstance(v, np.ndarray):
         return v.tolist()
-    if isinstance(v, (np.integer,)):
+    if isinstance(v, np.integer):
         return int(v)
-    if isinstance(v, (np.floating,)):
+    if isinstance(v, np.floating):
         return float(v)
     return v
 

@@ -30,6 +30,8 @@ class _Palette:
     primary_hover: str = "#1D4ED8"
     primary_pressed: str = "#1E40AF"
     primary_soft: str = "#DBEAFE"
+    primary_soft_strong: str = "#BFDBFE"  # disabled fill (blue-200)
+    primary_tint: str = "#93C5FD"  # active/pressed fill with dark text
     success: str = "#10B981"
     warning: str = "#F59E0B"
     danger: str = "#EF4444"
@@ -65,14 +67,14 @@ QFrame#sidebar {{
     border-right: 1px solid {Palette.border};
 }}
 QLabel#brand {{
-    font-size: 17px;
-    font-weight: 600;
+    font-size: 18px;
+    font-weight: 700;
     padding: 18px 20px 8px 20px;
     color: {Palette.text};
     letter-spacing: 0.2px;
 }}
 QLabel#brandSub {{
-    font-size: 11px;
+    font-size: 12px;
     color: {Palette.text_subtle};
     padding: 0 20px 16px 20px;
 }}
@@ -83,11 +85,11 @@ QListWidget#nav {{
     outline: 0;
 }}
 QListWidget#nav::item {{
-    padding: 10px 14px;
+    padding: 11px 14px;
     margin: 2px 4px;
     border-radius: 8px;
     color: {Palette.text_muted};
-    font-size: 13px;
+    font-size: 14px;
 }}
 QListWidget#nav::item:hover {{
     background-color: {Palette.surface_alt};
@@ -101,13 +103,13 @@ QListWidget#nav::item:selected {{
 
 /* ------ Page header ------ */
 QLabel#pageTitle {{
-    font-size: 22px;
-    font-weight: 600;
+    font-size: 24px;
+    font-weight: 700;
     color: {Palette.text};
     padding: 22px 28px 0 28px;
 }}
 QLabel#pageSubtitle {{
-    font-size: 12.5px;
+    font-size: 13.5px;
     color: {Palette.text_muted};
     padding: 4px 28px 18px 28px;
 }}
@@ -119,13 +121,13 @@ QFrame#card {{
     border-radius: 10px;
 }}
 QLabel#cardTitle {{
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 14.5px;
+    font-weight: 700;
     color: {Palette.text};
     padding: 0;
 }}
 QLabel#cardSubtitle {{
-    font-size: 11.5px;
+    font-size: 12.5px;
     color: {Palette.text_subtle};
 }}
 
@@ -136,14 +138,38 @@ QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {{
     border-radius: 6px;
     padding: 6px 10px;
     selection-background-color: {Palette.primary_soft};
-    min-height: 22px;
-    font-size: 12.5px;
+    min-height: 24px;
+    font-size: 13.5px;
 }}
 QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {{
     border: 1px solid {Palette.primary};
 }}
 QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled {{
     color: {Palette.text_subtle};
+    background: {Palette.surface_alt};
+}}
+/* Reserve clickable spinner columns so arrows never overlap digits */
+QSpinBox, QDoubleSpinBox {{
+    padding-right: 22px;
+}}
+QSpinBox::up-button, QDoubleSpinBox::up-button {{
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 18px;
+    border-left: 1px solid {Palette.border};
+    border-top-right-radius: 5px;
+    background: {Palette.surface};
+}}
+QSpinBox::down-button, QDoubleSpinBox::down-button {{
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    width: 18px;
+    border-left: 1px solid {Palette.border};
+    border-bottom-right-radius: 5px;
+    background: {Palette.surface};
+}}
+QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
+QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {{
     background: {Palette.surface_alt};
 }}
 QComboBox::drop-down {{ border: 0; width: 22px; }}
@@ -162,8 +188,8 @@ QPushButton {{
     color: {Palette.text};
     border: 1px solid {Palette.border_strong};
     border-radius: 6px;
-    padding: 7px 14px;
-    font-size: 12.5px;
+    padding: 8px 16px;
+    font-size: 13.5px;
     font-weight: 500;
 }}
 QPushButton:hover {{ background-color: {Palette.surface_alt}; }}
@@ -173,17 +199,22 @@ QPushButton:disabled {{
     background-color: {Palette.surface_alt};
     border-color: {Palette.border};
 }}
+/* Primary action: larger, bolder, higher contrast; disabled stays readable */
 QPushButton#primary {{
-    background-color: {Palette.primary};
-    color: white;
-    border: 1px solid {Palette.primary};
-}}
-QPushButton#primary:hover {{ background-color: {Palette.primary_hover}; border-color: {Palette.primary_hover}; }}
-QPushButton#primary:pressed {{ background-color: {Palette.primary_pressed}; border-color: {Palette.primary_pressed}; }}
-QPushButton#primary:disabled {{
     background-color: {Palette.primary_soft};
-    border-color: {Palette.primary_soft};
-    color: white;
+    color: {Palette.primary_pressed};
+    border: 1px solid {Palette.primary};
+    padding: 10px 22px;
+    font-size: 14.5px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+}}
+QPushButton#primary:hover {{ background-color: {Palette.primary_soft_strong}; border-color: {Palette.primary_hover}; }}
+QPushButton#primary:pressed {{ background-color: {Palette.primary_tint}; border-color: {Palette.primary_pressed}; }}
+QPushButton#primary:disabled {{
+    background-color: {Palette.surface_alt};
+    border-color: {Palette.border};
+    color: {Palette.text_muted};
 }}
 
 /* ------ Tables ------ */
@@ -193,18 +224,18 @@ QTableWidget, QTableView {{
     gridline-color: {Palette.border};
     border: 1px solid {Palette.border};
     border-radius: 8px;
-    font-size: 12.5px;
+    font-size: 13.5px;
 }}
 QHeaderView::section {{
     background-color: {Palette.surface_alt};
     color: {Palette.text_muted};
     border: 0;
     border-bottom: 1px solid {Palette.border};
-    padding: 6px 10px;
-    font-size: 12px;
+    padding: 7px 10px;
+    font-size: 13px;
     font-weight: 600;
 }}
-QTableWidget::item {{ padding: 4px 8px; }}
+QTableWidget::item {{ padding: 5px 8px; }}
 QTableWidget::item:selected {{
     background: {Palette.primary_soft};
     color: {Palette.text};
@@ -214,9 +245,9 @@ QTableWidget::item:selected {{
 QGroupBox {{
     border: 1px solid {Palette.border};
     border-radius: 8px;
-    margin-top: 14px;
+    margin-top: 16px;
     background-color: {Palette.surface};
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
     color: {Palette.text_muted};
 }}
@@ -233,9 +264,10 @@ QProgressBar {{
     border: 1px solid {Palette.border};
     border-radius: 6px;
     text-align: center;
-    height: 14px;
-    font-size: 11px;
-    color: {Palette.text_muted};
+    height: 20px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: {Palette.text};
 }}
 QProgressBar::chunk {{
     background-color: {Palette.primary};
@@ -248,9 +280,9 @@ QPlainTextEdit#log {{
     color: #E2E8F0;
     border: 1px solid {Palette.border};
     border-radius: 8px;
-    padding: 8px 10px;
+    padding: 10px 12px;
     font-family: 'JetBrains Mono', 'Cascadia Code', 'Consolas', 'Menlo', monospace;
-    font-size: 12px;
+    font-size: 13px;
     selection-background-color: #1E3A8A;
 }}
 
@@ -264,13 +296,13 @@ QTabWidget::pane {{
 QTabBar::tab {{
     background: transparent;
     color: {Palette.text_muted};
-    padding: 7px 14px;
+    padding: 8px 16px;
     margin-right: 2px;
     border: 1px solid transparent;
     border-bottom: none;
     border-top-left-radius: 6px;
     border-top-right-radius: 6px;
-    font-size: 12.5px;
+    font-size: 13.5px;
 }}
 QTabBar::tab:selected {{
     color: {Palette.text};
@@ -304,7 +336,7 @@ QStatusBar {{
     background: {Palette.surface};
     border-top: 1px solid {Palette.border};
     color: {Palette.text_muted};
-    font-size: 11.5px;
+    font-size: 12.5px;
 }}
 QStatusBar::item {{ border: none; }}
 """

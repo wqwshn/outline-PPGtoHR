@@ -173,7 +173,15 @@ _PARAM_META: dict[str, dict[str, Any]] = {
 
 
 class ParamForm(QWidget):
-    """Grid of labelled editors bound to :class:`SolverParams`."""
+    """Grid of labelled editors bound to :class:`SolverParams`.
+
+    Layout: 2 logical columns × N rows. Each logical column is
+    ``[ label | editor ]`` with the editor at a fixed width (~140 px) so the
+    number never gets dragged across the page. A trailing stretch column
+    absorbs extra horizontal space.
+    """
+
+    _EDITOR_WIDTH = 140
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -186,19 +194,31 @@ class ParamForm(QWidget):
         for group_name, names in _PARAM_GROUPS:
             box = QGroupBox(group_name)
             grid = QGridLayout(box)
-            grid.setContentsMargins(14, 16, 14, 12)
-            grid.setHorizontalSpacing(16)
-            grid.setVerticalSpacing(8)
+            grid.setContentsMargins(14, 18, 14, 14)
+            grid.setHorizontalSpacing(18)
+            grid.setVerticalSpacing(10)
+
+            # Column roles: 0=label₀, 1=editor₀, 2=gap, 3=label₁, 4=editor₁, 5=stretch
+            grid.setColumnStretch(0, 0)
+            grid.setColumnStretch(1, 0)
+            grid.setColumnMinimumWidth(2, 24)
+            grid.setColumnStretch(2, 0)
+            grid.setColumnStretch(3, 0)
+            grid.setColumnStretch(4, 0)
+            grid.setColumnStretch(5, 1)
+
             for i, name in enumerate(names):
                 meta = _PARAM_META[name]
                 label = QLabel(meta["label"])
-                label.setStyleSheet(f"color: {Palette.text_muted}; font-size: 12px;")
+                label.setStyleSheet(f"color: {Palette.text_muted}; font-size: 13px;")
+                label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
                 editor = self._build_editor(name, meta, getattr(defaults, name))
                 self._editors[name] = editor
                 row, col = divmod(i, 2)
-                grid.addWidget(label, row, col * 2)
-                grid.addWidget(editor, row, col * 2 + 1)
-                grid.setColumnStretch(col * 2 + 1, 1)
+                label_col = 0 if col == 0 else 3
+                editor_col = 1 if col == 0 else 4
+                grid.addWidget(label, row, label_col)
+                grid.addWidget(editor, row, editor_col)
             layout.addWidget(box)
 
     def _build_editor(self, name: str, meta: dict, default) -> QWidget:
@@ -209,6 +229,7 @@ class ParamForm(QWidget):
             w.setSingleStep(meta.get("step", 1))
             w.setValue(int(default))
             w.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            w.setFixedWidth(self._EDITOR_WIDTH)
             return w
         if kind == "float":
             w = QDoubleSpinBox()
@@ -217,10 +238,12 @@ class ParamForm(QWidget):
             w.setDecimals(meta.get("decimals", 2))
             w.setValue(float(default))
             w.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            w.setFixedWidth(self._EDITOR_WIDTH)
             return w
         if kind == "bool":
             w = QCheckBox("启用")
             w.setChecked(bool(default))
+            w.setMinimumWidth(self._EDITOR_WIDTH)
             return w
         raise ValueError(f"Unknown editor kind: {kind!r}")
 
@@ -229,7 +252,7 @@ class ParamForm(QWidget):
         """Return a copy of ``params`` with the form's current values applied."""
         overrides: dict[str, Any] = {}
         for name, w in self._editors.items():
-            if isinstance(w, (QSpinBox,)):
+            if isinstance(w, QSpinBox):
                 overrides[name] = int(w.value())
             elif isinstance(w, QDoubleSpinBox):
                 overrides[name] = float(w.value())
@@ -317,7 +340,7 @@ class SolvePage(_PageBase):
         action_row.addWidget(self._progress)
         self._btn = QPushButton("开始求解")
         self._btn.setObjectName("primary")
-        self._btn.setMinimumWidth(120)
+        self._btn.setMinimumWidth(140)
         self._btn.clicked.connect(self._run)
         action_row.addWidget(self._btn)
         self.body().addLayout(action_row)
@@ -398,6 +421,11 @@ class OptimisePage(_PageBase):
 
         cfg_card = SectionCard("搜索预算", "适当增大可降方差；单次 5–10 分钟以内较合适")
         cfg_form = QFormLayout()
+        cfg_form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        cfg_form.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
+        cfg_form.setFieldGrowthPolicy(QFormLayout.FieldsStayAtSizeHint)
+        cfg_form.setHorizontalSpacing(14)
+        cfg_form.setVerticalSpacing(10)
         self._max_iter = QSpinBox()
         self._max_iter.setRange(5, 1000)
         self._max_iter.setValue(75)
@@ -412,6 +440,7 @@ class OptimisePage(_PageBase):
         self._seed.setValue(42)
         for w in (self._max_iter, self._seed_pts, self._repeats, self._seed):
             w.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            w.setFixedWidth(140)
         cfg_form.addRow("每轮试次 (max_iterations)", self._max_iter)
         cfg_form.addRow("种子点数 (num_seed_points)", self._seed_pts)
         cfg_form.addRow("多重启次数 (num_repeats)", self._repeats)
@@ -420,16 +449,18 @@ class OptimisePage(_PageBase):
         self.body().addWidget(cfg_card)
 
         action_row = QHBoxLayout()
+        action_row.setSpacing(12)
         action_row.addStretch(1)
         self._progress = QProgressBar()
         self._progress.setRange(0, 100)
         self._progress.setValue(0)
         self._progress.setFormat("等待开始…")
-        self._progress.setMaximumWidth(260)
+        self._progress.setMinimumWidth(360)
+        self._progress.setMaximumWidth(420)
         action_row.addWidget(self._progress)
         self._btn = QPushButton("开始优化")
         self._btn.setObjectName("primary")
-        self._btn.setMinimumWidth(120)
+        self._btn.setMinimumWidth(140)
         self._btn.clicked.connect(self._run)
         action_row.addWidget(self._btn)
         self.body().addLayout(action_row)
@@ -622,7 +653,7 @@ class ViewPage(_PageBase):
         action_row.addStretch(1)
         self._btn = QPushButton("渲染")
         self._btn.setObjectName("primary")
-        self._btn.setMinimumWidth(120)
+        self._btn.setMinimumWidth(140)
         self._btn.clicked.connect(self._run)
         action_row.addWidget(self._btn)
         self.body().addLayout(action_row)
@@ -734,7 +765,7 @@ class ComparePage(_PageBase):
         action_row.addStretch(1)
         self._btn = QPushButton("运行对照")
         self._btn.setObjectName("primary")
-        self._btn.setMinimumWidth(120)
+        self._btn.setMinimumWidth(140)
         self._btn.clicked.connect(self._run)
         action_row.addWidget(self._btn)
         self.body().addLayout(action_row)
