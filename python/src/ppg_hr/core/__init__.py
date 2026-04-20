@@ -9,6 +9,7 @@ from .heart_rate_solver import SolverResult, solve, solve_from_arrays
 from .klms_filter import klms_filter
 from .lms_filter import lms_filter
 from .ppg_peace import ppg_peace
+from .volterra_filter import volterra_filter
 
 __all__ = [
     "choose_delay",
@@ -22,4 +23,5 @@ __all__ = [
     "solve",
     "solve_from_arrays",
     "SolverResult",
+    "volterra_filter",
 ]
