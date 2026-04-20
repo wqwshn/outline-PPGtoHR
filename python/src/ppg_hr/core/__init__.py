@@ -1,5 +1,6 @@
 """Core algorithm modules ported from MATLAB."""
 
+from .adaptive_filter import AdaptiveStrategy, apply_adaptive_cascade
 from .choose_delay import choose_delay
 from .fft_peaks import fft_peaks
 from .find_maxpeak import find_maxpeak
@@ -12,6 +13,8 @@ from .ppg_peace import ppg_peace
 from .volterra_filter import volterra_filter
 
 __all__ = [
+    "AdaptiveStrategy",
+    "apply_adaptive_cascade",
     "choose_delay",
     "fft_peaks",
     "find_maxpeak",
