@@ -6,9 +6,9 @@
 - 原始传感器 CSV → 100 Hz 多通道处理表的数据装载
 - PPG 心率算法主求解器（重采样 → 带通 → 运动判定 → 级联 NLMS / 纯 FFT → 融合 →结果平滑）
 - **可选的非线性自适应滤波**：归一化 LMS（默认）、QKLMS（量化核 LMS）、二阶
-  Volterra LMS，三种算法共用同一套 HF/ACC 级联流水线，可在 CLI / GUI 里切换
+Volterra LMS，三种算法共用同一套 HF/ACC 级联流水线，可在 CLI / GUI 里切换
 - 11 维参数空间的多重启贝叶斯优化（Optuna TPE，含随机森林参数重要性），
-  每种自适应滤波算法自带独立搜索空间
+每种自适应滤波算法自带独立搜索空间
 - 优化结果的双子图可视化（HF / ACC 两路融合曲线 + 误差表 + 参数表）
 - 统一命令行入口 `python -m ppg_hr {solve|optimise|view|inspect-defaults}`
 - **浅色桌面 GUI** (PySide6)：`ppg-hr-gui` 一键打开，把求解 / 优化 / 可视化 /
@@ -161,18 +161,18 @@ ppg-hr solve <input.csv> [--ref REF] [--out OUT.csv]
 ```
 
 
-| 参数            | 说明                               |
-| ------------- | -------------------------------- |
-| `input`       | 传感器 CSV 路径，或预处理 `.mat` 路径        |
-| `--ref`       | 参考心率 CSV；若同目录存在 `*_ref.csv` 可省略  |
-| `--out`       | 可选；写出 HR 矩阵 CSV                  |
-| `--fs-target` | 重采样目标采样率（25 / 50 / 100）          |
-| `--max-order` | LMS 最大阶数（12 / 16 / 20）           |
-| `--time-bias` | 预测时间相对参考的偏移（秒）                   |
-| `--adaptive-filter` | 自适应滤波算法：`lms`（默认）/ `klms` / `volterra`  |
-| `--klms-step-size` / `--klms-sigma` / `--klms-epsilon` | QKLMS 专属参数（仅 `--adaptive-filter=klms` 时生效） |
-| `--volterra-max-order-vol` | 二阶 Volterra 滤波器长度 M₂（仅 `--adaptive-filter=volterra` 时生效） |
-| 其他 `--*`      | 与 `SolverParams` 字段一一对应（不传则用默认值） |
+| 参数                                                     | 说明                                                       |
+| ------------------------------------------------------ | -------------------------------------------------------- |
+| `input`                                                | 传感器 CSV 路径，或预处理 `.mat` 路径                                |
+| `--ref`                                                | 参考心率 CSV；若同目录存在 `*_ref.csv` 可省略                          |
+| `--out`                                                | 可选；写出 HR 矩阵 CSV                                          |
+| `--fs-target`                                          | 重采样目标采样率（25 / 50 / 100）                                  |
+| `--max-order`                                          | LMS 最大阶数（12 / 16 / 20）                                   |
+| `--time-bias`                                          | 预测时间相对参考的偏移（秒）                                           |
+| `--adaptive-filter`                                    | 自适应滤波算法：`lms`（默认）/ `klms` / `volterra`                   |
+| `--klms-step-size` / `--klms-sigma` / `--klms-epsilon` | QKLMS 专属参数（仅 `--adaptive-filter=klms` 时生效）               |
+| `--volterra-max-order-vol`                             | 二阶 Volterra 滤波器长度 M₂（仅 `--adaptive-filter=volterra` 时生效） |
+| 其他 `--*`                                               | 与 `SolverParams` 字段一一对应（不传则用默认值）                         |
 
 
 ### `optimise`
@@ -221,19 +221,21 @@ HF 与 ACC 两条级联流水线目前内置三种自适应滤波算法，全部
 `--adaptive-filter` 切换（`solve` / `optimise` 都支持）。**默认 `lms`**，保
 持与原项目完全一致的数值行为。
 
-| 策略       | 说明                                                                                    | 关键参数                                                             |
-| ---------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `lms`      | 归一化 LMS（原项目的默认实现，MATLAB `lmsFunc_h.m` 等价）                                       | `max_order`, `lms_mu_base`                                       |
-| `klms`     | 量化核 LMS（QKLMS，参考 `ref/other-adaptivefilter/KLMS/`），含高斯核 + 字典量化            | `klms_step_size` (μ), `klms_sigma` (σ), `klms_epsilon` (ε)       |
-| `volterra` | 二阶 Volterra LMS（参考 `ref/other-adaptivefilter/Volterra/`），在一阶线性项上叠加二阶交叉项   | `max_order` (M₁), `volterra_max_order_vol` (M₂)；`M₂=0` 退化回 LMS |
+
+| 策略         | 说明                                                                      | 关键参数                                                           |
+| ---------- | ----------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `lms`      | 归一化 LMS（原项目的默认实现，MATLAB `lmsFunc_h.m` 等价）                               | `max_order`, `lms_mu_base`                                     |
+| `klms`     | 量化核 LMS（QKLMS，参考 `ref/other-adaptivefilter/KLMS/`），含高斯核 + 字典量化          | `klms_step_size` (μ), `klms_sigma` (σ), `klms_epsilon` (ε)     |
+| `volterra` | 二阶 Volterra LMS（参考 `ref/other-adaptivefilter/Volterra/`），在一阶线性项上叠加二阶交叉项 | `max_order` (M₁), `volterra_max_order_vol` (M₂)；`M₂=0` 退化回 LMS |
+
 
 两点使用建议：
 
 - **贝叶斯优化会自动换搜索空间**：`optimise` 侦测到 `--adaptive-filter=klms` /
-  `volterra` 时，会把各自的专属参数加入 11 维搜索空间、屏蔽对方的；最终生成
-  的 JSON 报告里会记录 `adaptive_filter` 字段，方便 `view` 侧读回并复现。
+`volterra` 时，会把各自的专属参数加入 11 维搜索空间、屏蔽对方的；最终生成
+的 JSON 报告里会记录 `adaptive_filter` 字段，方便 `view` 侧读回并复现。
 - **GUI 里是下拉 + 条件面板**：桌面端「自适应滤波算法」下拉里选到 `klms` /
-  `volterra` 时，会自动显示对应的专属参数面板，`lms` 模式下两组面板都隐藏。
+`volterra` 时，会自动显示对应的专属参数面板，`lms` 模式下两组面板都隐藏。
 
 示例——用 QKLMS 跑一次求解：
 
@@ -345,12 +347,12 @@ python -m ppg_hr.gui        # 作为模块启动
 ### 5.3 功能一览
 
 
-| 侧边栏           | 页面作用                                                                                                | 对应 CLI 动作  |
-| ------------- | --------------------------------------------------------------------------------------------------- | ---------- |
-| **求解**        | 选 CSV + 调参（含「自适应滤波算法」下拉，切到 KLMS / Volterra 时显示对应专属参数）→ 一次跑完求解器，出 AAE 表与 HR 曲线，可选导出 HR 矩阵 CSV         | `solve`    |
-| **优化**        | 配预算（试次/种子点/重启次数）+ 选「自适应滤波算法」→ 运行 Optuna 贝叶斯优化（搜索空间会自动按所选算法切换），实时显示 Best-Err 轨迹、最优参数表、参数重要性柱状图；完成后自动保存 JSON | `optimise` |
+| 侧边栏           | 页面作用                                                                                                                          | 对应 CLI 动作  |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| **求解**        | 选 CSV + 调参（含「自适应滤波算法」下拉，切到 KLMS / Volterra 时显示对应专属参数）→ 一次跑完求解器，出 AAE 表与 HR 曲线，可选导出 HR 矩阵 CSV                                  | `solve`    |
+| **优化**        | 配预算（试次/种子点/重启次数）+ 选「自适应滤波算法」→ 运行 Optuna 贝叶斯优化（搜索空间会自动按所选算法切换），实时显示 Best-Err 轨迹、最优参数表、参数重要性柱状图；完成后自动保存 JSON                    | `optimise` |
 | **可视化**       | 选 `Best_Params_Result_*.json` 或 MATLAB `.mat` → 调用 `render` 重跑（自动按报告里记录的 `adaptive_filter` 选择算法）并在右侧直接显示 PNG，同时列出误差/参数 CSV 路径 | `view`     |
-| **MATLAB 对照** | 选 MATLAB 的 `.mat` 报告 → 自动找同名 CSV & `_ref.csv` → 用 MATLAB 最优参数在 Python 端复跑，表格列出 HF / ACC 的 AAE 差值 (` | Δ          |
+| **MATLAB 对照** | 选 MATLAB 的 `.mat` 报告 → 自动找同名 CSV & `_ref.csv` → 用 MATLAB 最优参数在 Python 端复跑，表格列出 HF / ACC 的 AAE 差值 (`                           | Δ          |
 
 
 所有耗时任务都在 `QThread` 工作线程里跑，界面不会卡；底部状态栏和每个页面的
