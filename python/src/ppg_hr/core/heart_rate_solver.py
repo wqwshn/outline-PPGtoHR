@@ -420,7 +420,12 @@ def _select_ppg_signal(
     ppg_ir: np.ndarray,
     mode: str,
 ) -> np.ndarray:
-    """Select or compose the PPG channel according to ``mode``."""
+    """Pick the requested single-channel PPG trace.
+
+    Multi-spectral runs are orchestrated one channel at a time by the batch
+    pipeline (green / red / ir each produce an independent solver run and
+    visualisation), so this helper only supports single-channel selection.
+    """
     mode_norm = str(mode).strip().lower()
     if mode_norm == "green":
         return ppg_green
@@ -428,15 +433,6 @@ def _select_ppg_signal(
         return ppg_red
     if mode_norm in {"ir", "infrared"}:
         return ppg_ir
-    if mode_norm in {"tri", "all", "rgb"}:
-        return (_zscore(ppg_green) + _zscore(ppg_red) + _zscore(ppg_ir)) / 3.0
     raise ValueError(
-        f"Unsupported ppg_mode={mode!r}; expected one of "
-        "'green'/'red'/'ir'/'tri'."
+        f"Unsupported ppg_mode={mode!r}; expected one of 'green' / 'red' / 'ir'."
     )
-
-
-def _zscore(x: np.ndarray) -> np.ndarray:
-    mu = float(np.mean(x))
-    sigma = float(np.std(x))
-    return (x - mu) / (sigma + 1e-9)

@@ -751,16 +751,17 @@ def _fmt(v) -> str:
 
 class BatchPipelinePage(_PageBase):
     _MODE_LABELS: dict[str, str] = {
-        "green": "仅绿光",
-        "red": "仅红光",
-        "ir": "仅红外光",
-        "tri": "三光谱融合（默认）",
+        "green": "绿光 PPG",
+        "red": "红光 PPG",
+        "ir": "红外光 PPG",
     }
+    _MODE_ORDER: tuple[str, ...] = ("green", "red", "ir")
 
     def __init__(self):
         super().__init__(
             "批量全流程",
-            "批量执行：质量评估 → 运动段取样图 → 贝叶斯优化 → 结果可视化。",
+            "批量执行：质量评估 → 运动段取样图 → 贝叶斯优化 → 结果可视化。"
+            "每条数据会按勾选的 PPG 通道各自完整跑一遍，结果一一对应保存。",
         )
 
         io_card = SectionCard("输入与输出", "输入目录需包含 *.csv 与同名 *_ref.csv")
@@ -782,24 +783,36 @@ class BatchPipelinePage(_PageBase):
         io_card.add(io_form)
         self.body().addWidget(io_card)
 
-        run_card = SectionCard("关键参数", "PPG 模式可多选；每个模式都会完整跑一遍流程")
+        run_card = SectionCard(
+            "关键参数",
+            "每条数据会按勾选的 PPG 通道各自完整跑一遍流程（绿 / 红 / 红外默认全选）",
+        )
         run_form = QFormLayout()
         run_form.setHorizontalSpacing(14)
         run_form.setVerticalSpacing(10)
 
-        # PPG modes
         mode_row = QWidget()
         mode_layout = QHBoxLayout(mode_row)
         mode_layout.setContentsMargins(0, 0, 0, 0)
         mode_layout.setSpacing(10)
         self._mode_checks: dict[str, QCheckBox] = {}
-        for mode in ("green", "red", "ir", "tri"):
+        for mode in self._MODE_ORDER:
             cb = QCheckBox(self._MODE_LABELS[mode])
-            cb.setChecked(mode == "tri")
+            cb.setChecked(True)
             self._mode_checks[mode] = cb
             mode_layout.addWidget(cb)
+
+        self._mode_select_all = QPushButton("全选")
+        self._mode_select_all.setFlat(True)
+        self._mode_select_all.clicked.connect(lambda: self._set_all_modes(True))
+        self._mode_clear_all = QPushButton("清空")
+        self._mode_clear_all.setFlat(True)
+        self._mode_clear_all.clicked.connect(lambda: self._set_all_modes(False))
+        mode_layout.addSpacing(8)
+        mode_layout.addWidget(self._mode_select_all)
+        mode_layout.addWidget(self._mode_clear_all)
         mode_layout.addStretch(1)
-        run_form.addRow("PPG 信号模式", mode_row)
+        run_form.addRow("PPG 通道（可多选）", mode_row)
 
         # Adaptive filter
         self._adaptive_combo = QComboBox()
@@ -898,7 +911,11 @@ class BatchPipelinePage(_PageBase):
             self._last_auto_output = suggested
 
     def _selected_modes(self) -> list[str]:
-        return [mode for mode, cb in self._mode_checks.items() if cb.isChecked()]
+        return [mode for mode in self._MODE_ORDER if self._mode_checks[mode].isChecked()]
+
+    def _set_all_modes(self, checked: bool) -> None:
+        for cb in self._mode_checks.values():
+            cb.setChecked(checked)
 
     def _run(self) -> None:
         input_dir = self._input_dir_pick.path()
@@ -958,9 +975,13 @@ class BatchPipelinePage(_PageBase):
     def _on_progress(self, info: dict) -> None:
         overall_pct = int(info.get("overall_percent", 0))
         stage_pct = int(info.get("stage_percent", 0))
-        stage = str(info.get("stage_label", info.get("stage", "运行中")))
+        title = str(
+            info.get("title")
+            or info.get("stage_label")
+            or info.get("stage", "运行中")
+        )
         msg = str(info.get("message", "运行中…"))
-        self._progress_title.setText(stage)
+        self._progress_title.setText(title)
         self._progress_meta.setText(msg)
         self._overall_progress.setValue(max(0, min(100, overall_pct)))
         self._overall_progress.setFormat(f"总进度 {overall_pct}%")

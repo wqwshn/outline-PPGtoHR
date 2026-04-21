@@ -314,7 +314,11 @@ def test_batch_pipeline_page_defaults_and_autofill(tmp_path):
     app = QApplication.instance() or QApplication([])
     page = BatchPipelinePage()
     try:
-        assert page._selected_modes() == ["tri"]
+        # All three single-channel PPG modes are checked by default, and the
+        # "tri" (averaged) option is gone so batch results match Optimise's
+        # default single-channel behaviour for apples-to-apples comparison.
+        assert page._selected_modes() == ["green", "red", "ir"]
+        assert "tri" not in page._mode_checks
 
         input_dir = tmp_path / "raw_inputs"
         input_dir.mkdir()
@@ -322,7 +326,31 @@ def test_batch_pipeline_page_defaults_and_autofill(tmp_path):
         app.processEvents()
 
         assert page._output_dir_pick.path() == input_dir / "batch_outputs"
+
+        page._set_all_modes(False)
+        assert page._selected_modes() == []
+        page._set_all_modes(True)
+        assert page._selected_modes() == ["green", "red", "ir"]
     finally:
         page.close()
         page.deleteLater()
         app.processEvents()
+
+
+def test_select_ppg_signal_rejects_tri_mode():
+    """The averaged ``tri`` mode was removed — batch users run each channel
+    independently so results line up with the Optimise page.
+    """
+    import numpy as np
+    import pytest as _pytest
+
+    from ppg_hr.core.heart_rate_solver import _select_ppg_signal
+
+    g = np.arange(4, dtype=float)
+    r = np.arange(4, dtype=float) + 10
+    ir = np.arange(4, dtype=float) + 100
+    assert np.array_equal(_select_ppg_signal(g, r, ir, "green"), g)
+    assert np.array_equal(_select_ppg_signal(g, r, ir, "red"), r)
+    assert np.array_equal(_select_ppg_signal(g, r, ir, "ir"), ir)
+    with _pytest.raises(ValueError):
+        _select_ppg_signal(g, r, ir, "tri")

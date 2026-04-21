@@ -14,6 +14,7 @@ import pandas as pd
 from .optimization import BayesConfig, optimise
 from .params import SolverParams
 from .visualization import render
+from .visualization.result_viewer import ViewerArtefacts
 
 STANDARD_HEADER = [
     "Time(s)",
@@ -293,10 +294,10 @@ def run_batch_pipeline(
         sample_stem = row.file_path.stem
         for mode in modes:
             run_idx += 1
-            run_dir = output_dir / "batch_runs" / sample_stem / f"{mode}_{adaptive_filter}"
+            prefix = f"{sample_stem}-{mode}-{adaptive_filter}"
+            run_dir = output_dir / "batch_runs" / prefix
             run_dir.mkdir(parents=True, exist_ok=True)
-            report_name = f"Best_Params_Result_{sample_stem}_{mode}_{adaptive_filter}.json"
-            report_path = run_dir / report_name
+            report_path = run_dir / f"{prefix}-best_params.json"
 
             base = SolverParams(
                 file_name=row.file_path,
@@ -306,8 +307,8 @@ def run_batch_pipeline(
             )
             total_trials = int(bayes_cfg.num_repeats) * int(bayes_cfg.max_iterations) * 2
             _log(
-                f"开始优化：sample={row.file_name} | mode={mode} | "
-                f"adaptive_filter={adaptive_filter} | out={report_path}"
+                f"[{run_idx}/{total_runs}] 开始优化：sample={row.file_name} | "
+                f"通道={mode} | 滤波={adaptive_filter} | out={report_path.name}"
             )
             if on_progress is not None:
                 on_progress(
@@ -320,6 +321,8 @@ def run_batch_pipeline(
                         "stage_label": "贝叶斯优化",
                         "file": row.file_name,
                         "mode": mode,
+                        "run_idx": run_idx,
+                        "run_total": total_runs,
                         "detail": "准备搜索空间与数据缓存",
                     }
                 )
@@ -352,6 +355,8 @@ def run_batch_pipeline(
                         "stage_label": "贝叶斯优化",
                         "file": _file_name,
                         "mode": _mode,
+                        "run_idx": _run_idx,
+                        "run_total": _total_runs,
                         "detail": detail,
                         **info,
                     }
@@ -365,12 +370,11 @@ def run_batch_pipeline(
                 on_trial_step=_on_trial_step,
             )
             _log(
-                f"优化完成：sample={row.file_name} | mode={mode} | "
-                f"HF={result.min_err_hf:.3f}, ACC={result.min_err_acc:.3f}"
+                f"[{run_idx}/{total_runs}] 优化完成：sample={row.file_name} | "
+                f"通道={mode} | HF={result.min_err_hf:.3f} ACC={result.min_err_acc:.3f}"
             )
 
-            viewer_dir = run_dir / "viewer"
-            _log(f"开始可视化：{viewer_dir}")
+            _log(f"[{run_idx}/{total_runs}] 开始可视化：{row.file_name} | 通道={mode}")
             if on_progress is not None:
                 on_progress(
                     {
@@ -382,10 +386,15 @@ def run_batch_pipeline(
                         "stage_label": "结果可视化",
                         "file": row.file_name,
                         "mode": mode,
-                        "detail": "重跑最优参数并生成 PNG/CSV",
+                        "run_idx": run_idx,
+                        "run_total": total_runs,
+                        "detail": "重跑最优参数并生成 PNG / CSV",
                     }
                 )
-            arte = render(report_path, base, out_dir=run_dir / "viewer", show=False)
+            arte = render(report_path, base, out_dir=run_dir, show=False)
+            # Rename render's generic outputs to include sample / mode / filter so
+            # files remain unambiguous when users drag them out of the folder.
+            arte = _rename_viewer_artefacts(arte, run_dir, prefix)
             if on_progress is not None:
                 on_progress(
                     {
@@ -397,6 +406,8 @@ def run_batch_pipeline(
                         "stage_label": "结果可视化",
                         "file": row.file_name,
                         "mode": mode,
+                        "run_idx": run_idx,
+                        "run_total": total_runs,
                         "detail": "PNG / error_table / param_table 已生成",
                     }
                 )
@@ -414,9 +425,8 @@ def run_batch_pipeline(
                 )
             )
             _log(
-                f"[{run_idx}/{total_runs}] {row.file_name} | mode={mode} 完成，"
-                f"HF={result.min_err_hf:.3f}, ACC={result.min_err_acc:.3f} | "
-                f"figure={arte.figure}"
+                f"[{run_idx}/{total_runs}] {row.file_name} | 通道={mode} 完成 | "
+                f"figure={arte.figure.name if arte.figure else '—'}"
             )
 
     summary_csv = _write_run_summary(output_dir, records)
@@ -428,6 +438,42 @@ def run_batch_pipeline(
         "signal_plot_dir": signal_plot_dir,
         "output_dir": output_dir,
     }
+
+
+def _rename_viewer_artefacts(
+    arte: ViewerArtefacts,
+    run_dir: Path,
+    prefix: str,
+) -> ViewerArtefacts:
+    """Rename ``render``'s fixed outputs to dash-prefixed, unambiguous names.
+
+    ``visualization.render`` writes ``figure.png`` / ``error_table.csv`` /
+    ``param_table.csv`` at fixed paths inside ``out_dir``. The batch pipeline
+    runs many (sample × channel × filter) combinations into ``batch_runs/``,
+    so we tag each artefact with ``{sample_stem}-{mode}-{filter}-…`` to keep
+    outputs recognisable after they leave the folder.
+    """
+    renamed: dict[str, Path | None] = {"figure": None, "error_csv": None, "param_csv": None}
+    mapping = {
+        "figure": (arte.figure, f"{prefix}-figure.png"),
+        "error_csv": (arte.error_csv, f"{prefix}-error_table.csv"),
+        "param_csv": (arte.param_csv, f"{prefix}-param_table.csv"),
+    }
+    for attr, (current, new_name) in mapping.items():
+        if current is None:
+            continue
+        new_path = run_dir / new_name
+        try:
+            Path(current).replace(new_path)
+            renamed[attr] = new_path
+        except OSError:
+            renamed[attr] = Path(current)
+    return ViewerArtefacts(
+        figure=renamed["figure"],
+        error_csv=renamed["error_csv"],
+        param_csv=renamed["param_csv"],
+        extras=dict(arte.extras),
+    )
 
 
 def _write_qc_tables(output_dir: Path, good_rows: list[QcRow], bad_rows: list[QcRow]) -> None:

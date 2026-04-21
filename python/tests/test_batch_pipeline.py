@@ -4,6 +4,7 @@ from pathlib import Path
 
 from ppg_hr.batch_pipeline import BatchRunRecord, QcRow, QcThresholds, run_batch_pipeline
 from ppg_hr.optimization import BayesConfig, BayesResult
+from ppg_hr.visualization.result_viewer import ViewerArtefacts
 
 
 def test_run_batch_pipeline_reports_fine_grained_stages_and_interleaves_render(
@@ -59,19 +60,17 @@ def test_run_batch_pipeline_reports_fine_grained_stages_and_interleaves_render(
             ppg_mode=base.ppg_mode,
         )
 
-    class FakeArtefact:
-        def __init__(self, out_dir: Path):
-            self.figure = out_dir / "figure.png"
-            self.error_csv = out_dir / "error_table.csv"
-            self.param_csv = out_dir / "param_table.csv"
-            out_dir.mkdir(parents=True, exist_ok=True)
-            self.figure.write_text("fig", encoding="utf-8")
-            self.error_csv.write_text("err", encoding="utf-8")
-            self.param_csv.write_text("par", encoding="utf-8")
-
     def fake_render(report_path, base_params, *, out_dir, show):
         call_order.append(f"render:{base_params.ppg_mode}")
-        return FakeArtefact(Path(out_dir))
+        out_dir = Path(out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        figure = out_dir / "figure.png"
+        error_csv = out_dir / "error_table.csv"
+        param_csv = out_dir / "param_table.csv"
+        figure.write_text("fig", encoding="utf-8")
+        error_csv.write_text("err", encoding="utf-8")
+        param_csv.write_text("par", encoding="utf-8")
+        return ViewerArtefacts(figure=figure, error_csv=error_csv, param_csv=param_csv)
 
     monkeypatch.setattr("ppg_hr.batch_pipeline.quality_scan", fake_quality_scan)
     monkeypatch.setattr("ppg_hr.batch_pipeline.save_motion_segment_plot", fake_plot)
@@ -81,7 +80,7 @@ def test_run_batch_pipeline_reports_fine_grained_stages_and_interleaves_render(
     payload = run_batch_pipeline(
         input_dir=input_dir,
         output_dir=tmp_path / "out",
-        modes=["green", "tri"],
+        modes=["green", "red", "ir"],
         adaptive_filter="lms",
         bayes_cfg=BayesConfig(max_iterations=2, num_seed_points=1, num_repeats=1),
         thresholds=QcThresholds(),
@@ -92,12 +91,32 @@ def test_run_batch_pipeline_reports_fine_grained_stages_and_interleaves_render(
         "plot:sample01.csv",
         "optimise:green",
         "render:green",
-        "optimise:tri",
-        "render:tri",
+        "optimise:red",
+        "render:red",
+        "optimise:ir",
+        "render:ir",
     ]
     assert progress_stages[:2] == ["qc", "segment_plot"]
-    assert progress_stages.count("optimise") >= 2
-    assert progress_stages.count("visualise") >= 2
+    assert progress_stages.count("optimise") >= 3
+    assert progress_stages.count("visualise") >= 3
     records = payload["records"]
-    assert len(records) == 2
+    assert len(records) == 3
     assert all(isinstance(r, BatchRunRecord) for r in records)
+
+    # Output names must follow the short dash-separated convention so each
+    # artefact stays unambiguous when users drag it outside the folder.
+    run_root = payload["output_dir"] / "batch_runs"
+    for mode in ("green", "red", "ir"):
+        prefix = f"sample01-{mode}-lms"
+        run_dir = run_root / prefix
+        assert (run_dir / f"{prefix}-best_params.json").is_file()
+        assert (run_dir / f"{prefix}-figure.png").is_file()
+        assert (run_dir / f"{prefix}-error_table.csv").is_file()
+        assert (run_dir / f"{prefix}-param_table.csv").is_file()
+    rec_by_mode = {r.mode: r for r in records}
+    for mode in ("green", "red", "ir"):
+        rec = rec_by_mode[mode]
+        assert rec.figure_path is not None and rec.figure_path.name == f"sample01-{mode}-lms-figure.png"
+        assert rec.error_csv is not None and rec.error_csv.name == f"sample01-{mode}-lms-error_table.csv"
+        assert rec.param_csv is not None and rec.param_csv.name == f"sample01-{mode}-lms-param_table.csv"
+        assert rec.report_path.name == f"sample01-{mode}-lms-best_params.json"

@@ -379,21 +379,34 @@ class BatchPipelineWorker(QObject):
                 )
                 stage = str(info.get("stage", "unknown"))
                 stage_label = str(info.get("stage_label", stage))
-                message = stage_label
                 file_name = info.get("file")
                 mode = info.get("mode")
                 detail = str(info.get("detail", "")).strip()
+                run_idx = info.get("run_idx")
+                run_total = info.get("run_total")
+
+                title_parts: list[str] = [stage_label]
+                if run_idx and run_total:
+                    title_parts.append(f"[{run_idx}/{run_total}]")
                 if file_name:
-                    message += f" | {file_name}"
+                    title_parts.append(str(file_name))
                 if mode:
-                    message += f" | mode={mode}"
+                    title_parts.append(f"通道={mode}")
+                title = " · ".join(title_parts)
+
+                meta_parts: list[str] = []
                 if detail:
-                    message += f" | {detail}"
+                    meta_parts.append(detail)
+                if overall_total:
+                    meta_parts.append(f"总进度 {overall_current}/{overall_total}")
+                message = " | ".join(meta_parts) if meta_parts else stage_label
+
                 self.progress.emit(
                     {
                         **info,
                         "overall_percent": max(0, min(100, overall_percent)),
                         "stage_percent": max(0, min(100, stage_percent)),
+                        "title": title,
                         "message": message,
                     }
                 )
