@@ -19,6 +19,7 @@ import numpy as np
 from PySide6.QtCore import QObject, QThread, Signal
 from scipy.io import loadmat
 
+from ..batch_pipeline import QcThresholds, run_batch_pipeline
 from ..core.heart_rate_solver import SolverResult, solve
 from ..optimization import BayesConfig, default_search_space, optimise_mode
 from ..optimization.bayes_optimizer import (
@@ -32,6 +33,7 @@ __all__ = [
     "CompareResult",
     "CompareWorker",
     "OptimiseWorker",
+    "BatchPipelineWorker",
     "SolveWorker",
     "ViewWorker",
     "WorkerThread",
@@ -315,6 +317,115 @@ class CompareWorker(QObject):
         except Exception as exc:  # pragma: no cover
             tb = traceback.format_exc()
             self.failed.emit(f"对照失败：{exc}\n\n{tb}")
+
+
+# ---------------------------------------------------------------------------
+# Batch pipeline worker — QC + motion segment plot + Bayes + viewer
+# ---------------------------------------------------------------------------
+
+
+class BatchPipelineWorker(QObject):
+    finished = Signal(object)           # dict
+    failed = Signal(str)
+    log = Signal(str)
+    progress = Signal(dict)             # stage/current/total/percent/message
+
+    def __init__(
+        self,
+        *,
+        input_dir: Path,
+        output_dir: Path,
+        modes: list[str],
+        adaptive_filter: str,
+        bayes_cfg: BayesConfig,
+    ):
+        super().__init__()
+        self._input_dir = input_dir
+        self._output_dir = output_dir
+        self._modes = modes
+        self._adaptive_filter = adaptive_filter
+        self._bayes_cfg = bayes_cfg
+
+    def run(self) -> None:
+        try:
+            self.log.emit(f"输入目录: {self._input_dir}")
+            self.log.emit(f"输出目录: {self._output_dir}")
+            self.log.emit(
+                "运行配置: "
+                f"modes={','.join(self._modes)} | "
+                f"adaptive_filter={self._adaptive_filter} | "
+                f"max_iterations={self._bayes_cfg.max_iterations}, "
+                f"num_seed_points={self._bayes_cfg.num_seed_points}, "
+                f"num_repeats={self._bayes_cfg.num_repeats}, "
+                f"random_state={self._bayes_cfg.random_state}"
+            )
+
+            def _on_progress(info: dict) -> None:
+                overall_total = int(
+                    info.get("overall_total", info.get("total", 0)) or 0
+                )
+                overall_current = int(
+                    info.get("overall_current", info.get("current", 0)) or 0
+                )
+                stage_total = int(info.get("stage_total", 0) or 0)
+                stage_current = int(info.get("stage_current", 0) or 0)
+                overall_percent = (
+                    0 if overall_total <= 0
+                    else int(round(100.0 * overall_current / max(1, overall_total)))
+                )
+                stage_percent = (
+                    0 if stage_total <= 0
+                    else int(round(100.0 * stage_current / max(1, stage_total)))
+                )
+                stage = str(info.get("stage", "unknown"))
+                stage_label = str(info.get("stage_label", stage))
+                file_name = info.get("file")
+                mode = info.get("mode")
+                detail = str(info.get("detail", "")).strip()
+                run_idx = info.get("run_idx")
+                run_total = info.get("run_total")
+
+                title_parts: list[str] = [stage_label]
+                if run_idx and run_total:
+                    title_parts.append(f"[{run_idx}/{run_total}]")
+                if file_name:
+                    title_parts.append(str(file_name))
+                if mode:
+                    title_parts.append(f"通道={mode}")
+                title = " · ".join(title_parts)
+
+                meta_parts: list[str] = []
+                if detail:
+                    meta_parts.append(detail)
+                if overall_total:
+                    meta_parts.append(f"总进度 {overall_current}/{overall_total}")
+                message = " | ".join(meta_parts) if meta_parts else stage_label
+
+                self.progress.emit(
+                    {
+                        **info,
+                        "overall_percent": max(0, min(100, overall_percent)),
+                        "stage_percent": max(0, min(100, stage_percent)),
+                        "title": title,
+                        "message": message,
+                    }
+                )
+
+            payload = run_batch_pipeline(
+                input_dir=self._input_dir,
+                output_dir=self._output_dir,
+                modes=self._modes,
+                adaptive_filter=self._adaptive_filter,
+                bayes_cfg=self._bayes_cfg,
+                thresholds=QcThresholds(),
+                on_log=self.log.emit,
+                on_progress=_on_progress,
+            )
+            self.progress.emit({"percent": 100, "message": "全部任务完成"})
+            self.finished.emit(payload)
+        except Exception as exc:  # pragma: no cover
+            tb = traceback.format_exc()
+            self.failed.emit(f"批量流程失败：{exc}\n\n{tb}")
 
 
 # ---------------------------------------------------------------------------

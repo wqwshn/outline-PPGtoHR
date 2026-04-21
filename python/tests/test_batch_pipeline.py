@@ -1,0 +1,122 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from ppg_hr.batch_pipeline import BatchRunRecord, QcRow, QcThresholds, run_batch_pipeline
+from ppg_hr.optimization import BayesConfig, BayesResult
+from ppg_hr.visualization.result_viewer import ViewerArtefacts
+
+
+def test_run_batch_pipeline_reports_fine_grained_stages_and_interleaves_render(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    sample = input_dir / "sample01.csv"
+    sample.write_text("dummy\n", encoding="utf-8")
+    ref = input_dir / "sample01_ref.csv"
+    ref.write_text("dummy\n", encoding="utf-8")
+
+    call_order: list[str] = []
+    progress_stages: list[str] = []
+
+    def fake_quality_scan(input_dir, thresholds, *, on_file_scanned=None):
+        assert input_dir == sample.parent
+        assert isinstance(thresholds, QcThresholds)
+        if on_file_scanned is not None:
+            on_file_scanned(1, 1, sample.name)
+        return [QcRow(sample.name, "好采样", "无", sample)], []
+
+    def fake_plot(file_path, out_path, *, fs=100.0):
+        call_order.append(f"plot:{file_path.name}")
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text("png", encoding="utf-8")
+
+    def fake_optimise(base, *, config, out_path, verbose, on_trial_step=None):
+        call_order.append(f"optimise:{base.ppg_mode}")
+        if on_trial_step is not None:
+            on_trial_step(
+                {
+                    "mode": "HF",
+                    "repeat_idx": 1,
+                    "repeat_total": 1,
+                    "trial_idx": 1,
+                    "trial_total": 2,
+                    "global_trial": 1,
+                    "global_total": 2,
+                    "value": 1.5,
+                    "best_in_repeat": 1.5,
+                    "best_overall": 1.5,
+                }
+            )
+        Path(out_path).write_text("{}", encoding="utf-8")
+        return BayesResult(
+            min_err_hf=1.0,
+            best_para_hf={"fs_target": 100},
+            min_err_acc=2.0,
+            best_para_acc={"fs_target": 100},
+            importance_hf=None,
+            ppg_mode=base.ppg_mode,
+        )
+
+    def fake_render(report_path, base_params, *, out_dir, show):
+        call_order.append(f"render:{base_params.ppg_mode}")
+        out_dir = Path(out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        figure = out_dir / "figure.png"
+        error_csv = out_dir / "error_table.csv"
+        param_csv = out_dir / "param_table.csv"
+        figure.write_text("fig", encoding="utf-8")
+        error_csv.write_text("err", encoding="utf-8")
+        param_csv.write_text("par", encoding="utf-8")
+        return ViewerArtefacts(figure=figure, error_csv=error_csv, param_csv=param_csv)
+
+    monkeypatch.setattr("ppg_hr.batch_pipeline.quality_scan", fake_quality_scan)
+    monkeypatch.setattr("ppg_hr.batch_pipeline.save_motion_segment_plot", fake_plot)
+    monkeypatch.setattr("ppg_hr.batch_pipeline.optimise", fake_optimise)
+    monkeypatch.setattr("ppg_hr.batch_pipeline.render", fake_render)
+
+    payload = run_batch_pipeline(
+        input_dir=input_dir,
+        output_dir=tmp_path / "out",
+        modes=["green", "red", "ir"],
+        adaptive_filter="lms",
+        bayes_cfg=BayesConfig(max_iterations=2, num_seed_points=1, num_repeats=1),
+        thresholds=QcThresholds(),
+        on_progress=lambda info: progress_stages.append(str(info["stage"])),
+    )
+
+    assert call_order == [
+        "plot:sample01.csv",
+        "optimise:green",
+        "render:green",
+        "optimise:red",
+        "render:red",
+        "optimise:ir",
+        "render:ir",
+    ]
+    assert progress_stages[:2] == ["qc", "segment_plot"]
+    assert progress_stages.count("optimise") >= 3
+    assert progress_stages.count("visualise") >= 3
+    records = payload["records"]
+    assert len(records) == 3
+    assert all(isinstance(r, BatchRunRecord) for r in records)
+
+    # Output names must follow the short dash-separated convention so each
+    # artefact stays unambiguous when users drag it outside the folder.
+    run_root = payload["output_dir"] / "batch_runs"
+    for mode in ("green", "red", "ir"):
+        prefix = f"sample01-{mode}-lms"
+        run_dir = run_root / prefix
+        assert (run_dir / f"{prefix}-best_params.json").is_file()
+        assert (run_dir / f"{prefix}-figure.png").is_file()
+        assert (run_dir / f"{prefix}-error_table.csv").is_file()
+        assert (run_dir / f"{prefix}-param_table.csv").is_file()
+    rec_by_mode = {r.mode: r for r in records}
+    for mode in ("green", "red", "ir"):
+        rec = rec_by_mode[mode]
+        assert rec.figure_path is not None and rec.figure_path.name == f"sample01-{mode}-lms-figure.png"
+        assert rec.error_csv is not None and rec.error_csv.name == f"sample01-{mode}-lms-error_table.csv"
+        assert rec.param_csv is not None and rec.param_csv.name == f"sample01-{mode}-lms-param_table.csv"
+        assert rec.report_path.name == f"sample01-{mode}-lms-best_params.json"

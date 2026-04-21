@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .pages import ComparePage, OptimisePage, SolvePage, ViewPage
+from .pages import BatchPipelinePage, ComparePage, OptimisePage, SolvePage, ViewPage
 from .theme import STYLESHEET, Palette
 
 __all__ = ["MainWindow", "main"]
@@ -42,6 +42,7 @@ def _dot_icon(color: str, size: int = 10) -> QIcon:
 _NAV_ITEMS = [
     ("求解",     "单次跑求解器",   SolvePage,    Palette.primary),
     ("优化",     "贝叶斯搜索",      OptimisePage, Palette.success),
+    ("批量全流程", "质检+优化+可视化", BatchPipelinePage, "#8B5CF6"),
     ("可视化",   "渲染 Bayes 报告", ViewPage,     Palette.warning),
     ("MATLAB 对照", "对齐验证",     ComparePage,  Palette.danger),
 ]
@@ -97,7 +98,7 @@ class MainWindow(QMainWindow):
 
         lay.addWidget(self._nav, 1)
 
-        footer = QLabel("v0.1 · 本地运行")
+        footer = QLabel("v0.2.0 · 本地运行")
         footer.setAlignment(Qt.AlignCenter)
         footer.setStyleSheet(f"color: {Palette.text_subtle}; font-size: 11px; padding: 12px;")
         lay.addWidget(footer)

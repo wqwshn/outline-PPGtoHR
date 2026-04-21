@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import fields
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +43,7 @@ from ..visualization.result_viewer import ViewerArtefacts
 from .theme import Palette
 from .widgets import AAETable, FilePicker, LogPanel, MplCanvas, SectionCard
 from .workers import (
+    BatchPipelineWorker,
     CompareResult,
     CompareWorker,
     OptimiseWorker,
@@ -55,7 +57,7 @@ try:  # optional: used only by OptimisePage for config typing
 except ImportError:  # pragma: no cover
     BayesConfig = None  # type: ignore
 
-__all__ = ["SolvePage", "OptimisePage", "ViewPage", "ComparePage"]
+__all__ = ["SolvePage", "OptimisePage", "BatchPipelinePage", "ViewPage", "ComparePage"]
 
 
 # ---------------------------------------------------------------------------
@@ -502,6 +504,8 @@ class SolvePage(_PageBase):
         )
 
     def _on_failed(self, msg: str) -> None:
+        self._progress_title.setText("执行失败")
+        self._progress_meta.setText("请查看日志面板中的错误堆栈与阶段信息")
         self._log.error(msg)
 
     def _cleanup(self) -> None:
@@ -738,6 +742,285 @@ def _fmt(v) -> str:
     if isinstance(v, float):
         return f"{v:.4f}"
     return str(v)
+
+
+# ===========================================================================
+# Batch pipeline page
+# ===========================================================================
+
+
+class BatchPipelinePage(_PageBase):
+    _MODE_LABELS: dict[str, str] = {
+        "green": "绿光 PPG",
+        "red": "红光 PPG",
+        "ir": "红外光 PPG",
+    }
+    _MODE_ORDER: tuple[str, ...] = ("green", "red", "ir")
+
+    def __init__(self):
+        super().__init__(
+            "批量全流程",
+            "批量执行：质量评估 → 运动段取样图 → 贝叶斯优化 → 结果可视化。"
+            "每条数据会按勾选的 PPG 通道各自完整跑一遍，结果一一对应保存。",
+        )
+
+        io_card = SectionCard("输入与输出", "输入目录需包含 *.csv 与同名 *_ref.csv")
+        io_form = QFormLayout()
+        io_form.setHorizontalSpacing(14)
+        io_form.setVerticalSpacing(10)
+        self._input_dir_pick = FilePicker(
+            placeholder="选择原始数据目录（批处理）",
+            filter_str="",
+            mode="dir",
+        )
+        self._output_dir_pick = FilePicker(
+            placeholder="默认自动生成到输入目录下 batch_outputs",
+            filter_str="",
+            mode="dir",
+        )
+        io_form.addRow("输入目录", self._input_dir_pick)
+        io_form.addRow("输出目录", self._output_dir_pick)
+        io_card.add(io_form)
+        self.body().addWidget(io_card)
+
+        run_card = SectionCard(
+            "关键参数",
+            "每条数据会按勾选的 PPG 通道各自完整跑一遍流程（绿 / 红 / 红外默认全选）",
+        )
+        run_form = QFormLayout()
+        run_form.setHorizontalSpacing(14)
+        run_form.setVerticalSpacing(10)
+
+        mode_row = QWidget()
+        mode_layout = QHBoxLayout(mode_row)
+        mode_layout.setContentsMargins(0, 0, 0, 0)
+        mode_layout.setSpacing(10)
+        self._mode_checks: dict[str, QCheckBox] = {}
+        for mode in self._MODE_ORDER:
+            cb = QCheckBox(self._MODE_LABELS[mode])
+            cb.setChecked(True)
+            self._mode_checks[mode] = cb
+            mode_layout.addWidget(cb)
+
+        self._mode_select_all = QPushButton("全选")
+        self._mode_select_all.setFlat(True)
+        self._mode_select_all.clicked.connect(lambda: self._set_all_modes(True))
+        self._mode_clear_all = QPushButton("清空")
+        self._mode_clear_all.setFlat(True)
+        self._mode_clear_all.clicked.connect(lambda: self._set_all_modes(False))
+        mode_layout.addSpacing(8)
+        mode_layout.addWidget(self._mode_select_all)
+        mode_layout.addWidget(self._mode_clear_all)
+        mode_layout.addStretch(1)
+        run_form.addRow("PPG 通道（可多选）", mode_row)
+
+        # Adaptive filter
+        self._adaptive_combo = QComboBox()
+        self._adaptive_combo.addItem("归一化 LMS（默认）", userData="lms")
+        self._adaptive_combo.addItem("QKLMS（量化核 LMS）", userData="klms")
+        self._adaptive_combo.addItem("二阶 Volterra LMS", userData="volterra")
+        self._adaptive_combo.setCurrentIndex(0)
+        self._adaptive_combo.setFixedWidth(220)
+        run_form.addRow("自适应滤波", self._adaptive_combo)
+
+        # Bayes budget
+        self._max_iter = QSpinBox()
+        self._max_iter.setRange(5, 1000)
+        self._max_iter.setValue(75)
+        self._seed_pts = QSpinBox()
+        self._seed_pts.setRange(2, 200)
+        self._seed_pts.setValue(10)
+        self._repeats = QSpinBox()
+        self._repeats.setRange(1, 20)
+        self._repeats.setValue(3)
+        self._seed = QSpinBox()
+        self._seed.setRange(0, 10_000)
+        self._seed.setValue(42)
+        for w in (self._max_iter, self._seed_pts, self._repeats, self._seed):
+            w.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            w.setFixedWidth(140)
+        run_form.addRow("每轮试次 (max_iterations)", self._max_iter)
+        run_form.addRow("种子点数 (num_seed_points)", self._seed_pts)
+        run_form.addRow("多重启次数 (num_repeats)", self._repeats)
+        run_form.addRow("随机种子 (random_state)", self._seed)
+        run_card.add(run_form)
+        self.body().addWidget(run_card)
+
+        progress_card = SectionCard("运行进度", "总进度 + 当前阶段明细，便于定位卡在哪一步")
+        progress_layout = QVBoxLayout()
+        progress_layout.setSpacing(10)
+        self._progress_title = QLabel("等待开始…")
+        self._progress_title.setStyleSheet(
+            f"font-size: 16px; font-weight: 700; color: {Palette.text};"
+        )
+        self._progress_meta = QLabel("尚未开始执行批量流程")
+        self._progress_meta.setStyleSheet(
+            f"font-size: 12.5px; color: {Palette.text_muted};"
+        )
+        self._overall_progress = QProgressBar()
+        self._overall_progress.setObjectName("heroProgress")
+        self._overall_progress.setRange(0, 100)
+        self._overall_progress.setValue(0)
+        self._overall_progress.setFormat("总进度 0%")
+        self._stage_progress = QProgressBar()
+        self._stage_progress.setObjectName("stageProgress")
+        self._stage_progress.setRange(0, 100)
+        self._stage_progress.setValue(0)
+        self._stage_progress.setFormat("阶段进度 0%")
+        progress_layout.addWidget(self._progress_title)
+        progress_layout.addWidget(self._progress_meta)
+        progress_layout.addWidget(self._overall_progress)
+        progress_layout.addWidget(self._stage_progress)
+        progress_card.add(progress_layout)
+        self.body().addWidget(progress_card)
+
+        action_row = QHBoxLayout()
+        action_row.setSpacing(12)
+        action_row.addStretch(1)
+        self._btn = QPushButton("开始批量流程")
+        self._btn.setObjectName("primary")
+        self._btn.setMinimumWidth(160)
+        self._btn.clicked.connect(self._run)
+        action_row.addWidget(self._btn)
+        self.body().addLayout(action_row)
+
+        result_card = SectionCard("结果摘要", "输出目录、样本数量、运行记录")
+        tabs = QTabWidget()
+        self._summary = AAETable(["字段", "值"])
+        self._log = LogPanel()
+        tabs.addTab(self._summary, "摘要")
+        tabs.addTab(self._log, "日志")
+        result_card.add(tabs)
+        self.body().addWidget(result_card)
+        self.body().addStretch(1)
+
+        self._worker_holder: WorkerThread | None = None
+        self._last_auto_output: Path | None = None
+        self._input_dir_pick.changed.connect(self._autofill_output_dir)
+
+    def _autofill_output_dir(self, text: str) -> None:
+        if not text:
+            return
+        in_dir = Path(text)
+        if not in_dir.is_dir():
+            return
+        suggested = in_dir / "batch_outputs"
+        current = self._output_dir_pick.path()
+        if current is None or current == self._last_auto_output:
+            self._output_dir_pick.setPath(suggested)
+            self._last_auto_output = suggested
+
+    def _selected_modes(self) -> list[str]:
+        return [mode for mode in self._MODE_ORDER if self._mode_checks[mode].isChecked()]
+
+    def _set_all_modes(self, checked: bool) -> None:
+        for cb in self._mode_checks.values():
+            cb.setChecked(checked)
+
+    def _run(self) -> None:
+        input_dir = self._input_dir_pick.path()
+        if input_dir is None or not input_dir.is_dir():
+            self._log.error("请选择有效的输入目录")
+            return
+
+        modes = self._selected_modes()
+        if not modes:
+            self._log.error("请至少选择一种 PPG 模式")
+            return
+
+        out_dir = self._output_dir_pick.path()
+        if out_dir is None:
+            stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            out_dir = input_dir / "batch_outputs" / stamp
+
+        cfg = BayesConfig(
+            max_iterations=int(self._max_iter.value()),
+            num_seed_points=int(self._seed_pts.value()),
+            num_repeats=int(self._repeats.value()),
+            random_state=int(self._seed.value()),
+        )
+        adaptive_filter = str(self._adaptive_combo.currentData())
+
+        self._btn.setEnabled(False)
+        self._overall_progress.setValue(0)
+        self._overall_progress.setFormat("总进度 0%")
+        self._stage_progress.setValue(0)
+        self._stage_progress.setFormat("阶段进度 0%")
+        self._progress_title.setText("启动中…")
+        self._progress_meta.setText("准备执行质量评估、取样图、优化和可视化")
+        self._summary.set_rows([])
+        self._log.info("—" * 40)
+        self._log.info(f"输入目录: {input_dir}")
+        self._log.info(f"输出目录: {out_dir}")
+        self._log.info(f"模式: {','.join(modes)}")
+        self._log.info(f"算法: {adaptive_filter}")
+
+        worker = BatchPipelineWorker(
+            input_dir=input_dir,
+            output_dir=out_dir,
+            modes=modes,
+            adaptive_filter=adaptive_filter,
+            bayes_cfg=cfg,
+        )
+        worker.log.connect(self._log.info)
+        worker.progress.connect(self._on_progress)
+        worker.finished.connect(self._on_done)
+        worker.failed.connect(self._on_failed)
+        holder = WorkerThread(worker)
+        worker.finished.connect(lambda _=None: self._cleanup())
+        worker.failed.connect(lambda _=None: self._cleanup())
+        self._worker_holder = holder
+        holder.start()
+
+    def _on_progress(self, info: dict) -> None:
+        overall_pct = int(info.get("overall_percent", 0))
+        stage_pct = int(info.get("stage_percent", 0))
+        title = str(
+            info.get("title")
+            or info.get("stage_label")
+            or info.get("stage", "运行中")
+        )
+        msg = str(info.get("message", "运行中…"))
+        self._progress_title.setText(title)
+        self._progress_meta.setText(msg)
+        self._overall_progress.setValue(max(0, min(100, overall_pct)))
+        self._overall_progress.setFormat(f"总进度 {overall_pct}%")
+        self._stage_progress.setValue(max(0, min(100, stage_pct)))
+        self._stage_progress.setFormat(f"阶段进度 {stage_pct}%")
+
+    def _on_done(self, payload: dict) -> None:
+        good_rows = payload.get("good_rows", [])
+        bad_rows = payload.get("bad_rows", [])
+        records = payload.get("records", [])
+        summary_csv = payload.get("summary_csv")
+        signal_plot_dir = payload.get("signal_plot_dir")
+        out_dir = payload.get("output_dir")
+
+        self._summary.set_rows(
+            [
+                ["输出目录", str(out_dir)],
+                ["好采样数量", str(len(good_rows))],
+                ["坏采样数量", str(len(bad_rows))],
+                ["全流程运行数", str(len(records))],
+                ["汇总CSV", str(summary_csv)],
+                ["取样图片目录", str(signal_plot_dir)],
+            ]
+        )
+        self._progress_title.setText("全部任务完成")
+        self._progress_meta.setText(
+            f"输出目录：{out_dir} | 汇总文件：{summary_csv}"
+        )
+        self._overall_progress.setValue(100)
+        self._overall_progress.setFormat("总进度 100%")
+        self._stage_progress.setValue(100)
+        self._stage_progress.setFormat("阶段进度 100%")
+        self._log.success("批量全流程执行完成。")
+
+    def _on_failed(self, msg: str) -> None:
+        self._log.error(msg)
+
+    def _cleanup(self) -> None:
+        self._btn.setEnabled(True)
 
 
 # ===========================================================================

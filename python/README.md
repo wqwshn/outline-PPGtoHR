@@ -11,8 +11,8 @@ Volterra LMS，三种算法共用同一套 HF/ACC 级联流水线，可在 CLI /
 每种自适应滤波算法自带独立搜索空间
 - 优化结果的双子图可视化（HF / ACC 两路融合曲线 + 误差表 + 参数表）
 - 统一命令行入口 `python -m ppg_hr {solve|optimise|view|inspect-defaults}`
-- **浅色桌面 GUI** (PySide6)：`ppg-hr-gui` 一键打开，把求解 / 优化 / 可视化 /
-MATLAB 对照做成四个可视化页面（详见 [图形界面 GUI](#5-图形界面-gui)）
+- **浅色桌面 GUI** (PySide6)：`ppg-hr-gui` 一键打开，把求解 / 优化 / 批量全流程 /
+可视化 / MATLAB 对照做成五个可视化页面（详见 [图形界面 GUI](#5-图形界面-gui)）
 
 数值上已经按 MATLAB 金标 `.mat` 快照逐函数对齐，最近一次端到端核对结果（详见
 [与 MATLAB 的端到端对照](#与-matlab-的端到端对照)）：HF 融合 / ACC 融合的总
@@ -146,7 +146,7 @@ python scripts/compare_with_matlab.py \
 
 ## 3. 命令行使用详解
 
-入口名 `ppg-hr`（pip 安装后注册）等价于 `python -m ppg_hr`。共 4 个子命令：
+入口名 `ppg-hr`（pip 安装后注册）等价于 `python -m ppg_hr`。当前 CLI 共 4 个子命令：
 
 ### `solve`
 
@@ -324,7 +324,7 @@ print(report.min_err_hf, report.best_para_hf)
 ## 5. 图形界面 GUI
 
 如果不想在 PowerShell 里敲多行命令，可以直接使用内置的 **PySide6 桌面 GUI**，
-浅色 Notion 风格，四个页面对应四个 CLI 动作。
+浅色 Notion 风格，当前包含五个页面，其中「批量全流程」专门面向原始数据批处理。
 
 ### 5.1 安装 GUI 依赖
 
@@ -333,7 +333,8 @@ print(report.min_err_hf, report.best_para_hf)
 pip install -e .[gui]
 ```
 
-这会安装 `PySide6>=6.6` 并注册脚本入口 `ppg-hr-gui`。
+这会安装 `PySide6>=6.6` 并注册脚本入口 `ppg-hr-gui`。如果本机还没装 GUI 依赖，
+这是最直接的修复方式。
 
 ### 5.2 启动
 
@@ -347,21 +348,30 @@ python -m ppg_hr.gui        # 作为模块启动
 ### 5.3 功能一览
 
 
-| 侧边栏           | 页面作用                                                                                                                          | 对应 CLI 动作  |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| **求解**        | 选 CSV + 调参（含「自适应滤波算法」下拉，切到 KLMS / Volterra 时显示对应专属参数）→ 一次跑完求解器，出 AAE 表与 HR 曲线，可选导出 HR 矩阵 CSV                                  | `solve`    |
-| **优化**        | 配预算（试次/种子点/重启次数）+ 选「自适应滤波算法」→ 运行 Optuna 贝叶斯优化（搜索空间会自动按所选算法切换），实时显示 Best-Err 轨迹、最优参数表、参数重要性柱状图；完成后自动保存 JSON                    | `optimise` |
-| **可视化**       | 选 `Best_Params_Result_*.json` 或 MATLAB `.mat` → 调用 `render` 重跑（自动按报告里记录的 `adaptive_filter` 选择算法）并在右侧直接显示 PNG，同时列出误差/参数 CSV 路径 | `view`     |
-| **MATLAB 对照** | 选 MATLAB 的 `.mat` 报告 → 自动找同名 CSV & `_ref.csv` → 用 MATLAB 最优参数在 Python 端复跑，表格列出 HF / ACC 的 AAE 差值 (`                           | Δ          |
+| 侧边栏           | 页面作用                                                                                                                                  | 对应 CLI 动作  |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| **求解**        | 选 CSV + 调参（含「自适应滤波算法」下拉，切到 KLMS / Volterra 时显示对应专属参数）→ 一次跑完求解器，出 AAE 表与 HR 曲线，可选导出 HR 矩阵 CSV                                          | `solve`    |
+| **优化**        | 配预算（试次/种子点/重启次数）+ 选「自适应滤波算法」→ 运行 Optuna 贝叶斯优化（搜索空间会自动按所选算法切换），实时显示 Best-Err 轨迹、最优参数表、参数重要性柱状图；完成后自动保存 JSON                            | `optimise` |
+| **批量全流程**     | 选择原始数据目录后，自动执行质量评估 → 运动段取样图保存 → 对所有好数据按所选 PPG 通道**各自独立**跑贝叶斯优化（绿光 / 红光 / 红外光 可多选，默认三路全跑） → 每个通道优化结束后立即重跑并生成可视化，输出文件按 `{数据名}-{通道}-{滤波}-…` 命名；支持自适应滤波选择与搜索预算配置，进度条显示总进度 + 当前文件/通道 | 组合流水线      |
+| **可视化**       | 选 `Best_Params_Result_*.json` 或 MATLAB `.mat` → 调用 `render` 重跑（自动按报告里记录的 `adaptive_filter` 选择算法）并在右侧直接显示 PNG，同时列出误差/参数 CSV 路径         | `view`     |
+| **MATLAB 对照** | 选 MATLAB 的 `.mat` 报告 → 自动找同名 CSV & `_ref.csv` → 用 MATLAB 最优参数在 Python 端复跑，表格列出 HF / ACC 的 AAE 差值 (`                                   | Δ          |
 
 
 所有耗时任务都在 `QThread` 工作线程里跑，界面不会卡；底部状态栏和每个页面的
-日志 Tab 会实时打印进度与错误堆栈。
+日志 Tab 会实时打印进度与错误堆栈。批量页还会把进度拆成 **总进度** 与
+**当前阶段进度** 两层显示，并打印当前样本、当前模式、当前优化轮次/试次，便于定位运行位置。
 
 ### 5.4 交互要点
 
 - **自动联动**：在「求解 / 优化」页选完数据 CSV 后，如果同目录存在
 `<name>_ref.csv`，参考心率框会自动填好。
+- **批量输出规则**：在「批量全流程」页选择输入目录后，输出目录默认自动补成
+`<input_dir>/batch_outputs/`；每个样本/模式的产物会落到
+`batch_runs/<sample>/<mode>_<adaptive_filter>/`，并同时生成全局
+`batch_run_summary.csv`、`good_samples.csv`、`bad_samples.csv` 和
+`signal_plots/*.png`。
+- **批量执行顺序**：对同一个样本，当前实现会按所选 PPG 模式逐个执行
+“贝叶斯优化 → 立即可视化 → 下一模式”，不会先把所有模式都优化完再统一出图。
 - **对照页补全**：在「MATLAB 对照」页选完 `Best_Params_Result_<scenario>_processed.mat`
 后，会自动把 `<scenario>.csv` 与 `<scenario>_ref.csv` 填到数据区。
 - **图表嵌入 + 落盘**：可视化页既在右侧直接显示渲染好的 PNG，也把 `figure.png` /
@@ -596,6 +606,22 @@ gen_golden_all
 
 通常是 `pip install -e .` 之前没激活 conda 环境，或缺少 `setuptools≥68`。
 执行 `pip install -U setuptools wheel` 后再试。
+
+**Q5.1：GUI 打不开，提示缺少 `PySide6`？**
+
+直接在 `python/` 目录下执行：
+
+```powershell
+pip install -e .[gui]
+```
+
+如果你已经装过普通版 `pip install -e .`，也可以单独补：
+
+```powershell
+pip install PySide6>=6.6
+```
+
+安装完成后重新执行 `ppg-hr-gui` 或 `python -m ppg_hr.gui` 即可。
 
 **Q6：贝叶斯优化的第二、第三轮误差是不是在第一轮基础上接着跑？**
 

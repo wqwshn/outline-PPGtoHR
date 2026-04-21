@@ -32,6 +32,11 @@ htmlcov/
 # Jupyter
 .ipynb_checkpoints/
 
+# 本地测试/分析数据（不推送远程）
+20260418test_python/*/
+ref/
+docs/origindata_scancsv.ipynb
+
 # Local analysis artifacts (MATLAB ↔ Python comparison outputs, viewer renders, etc.)
 scripts/compare_out/
 **/viewer_out/

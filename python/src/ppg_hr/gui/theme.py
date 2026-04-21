@@ -324,16 +324,45 @@ QGroupBox::title {{
 QProgressBar {{
     background: {Palette.surface_alt};
     border: 1px solid {Palette.border};
-    border-radius: 6px;
+    border-radius: 10px;
     text-align: center;
-    height: 20px;
+    min-height: 20px;
     font-size: 12.5px;
     font-weight: 600;
     color: {Palette.text};
+    padding: 2px;
 }}
 QProgressBar::chunk {{
     background-color: {Palette.primary};
-    border-radius: 5px;
+    border-radius: 8px;
+}}
+QProgressBar#heroProgress {{
+    min-height: 28px;
+    font-size: 13px;
+    font-weight: 700;
+    background: {Palette.primary_soft};
+    border: 1px solid {Palette.primary_soft_strong};
+}}
+QProgressBar#heroProgress::chunk {{
+    background: qlineargradient(
+        x1:0, y1:0, x2:1, y2:0,
+        stop:0 {Palette.primary},
+        stop:1 {Palette.primary_hover}
+    );
+    border-radius: 8px;
+}}
+QProgressBar#stageProgress {{
+    min-height: 18px;
+    font-size: 12px;
+    color: {Palette.text_muted};
+}}
+QProgressBar#stageProgress::chunk {{
+    background: qlineargradient(
+        x1:0, y1:0, x2:1, y2:0,
+        stop:0 {Palette.success},
+        stop:1 #34D399
+    );
+    border-radius: 8px;
 }}
 
 /* ------ Console log ------ */

@@ -24,11 +24,11 @@ def test_main_window_builds():
     app = QApplication.instance() or QApplication([])
     win = MainWindow()
     try:
-        # Sidebar has 4 nav items and stack has 4 pages
-        assert win._nav.count() == 4
-        assert win._stack.count() == 4
+        # Sidebar has 5 nav items and stack has 5 pages
+        assert win._nav.count() == 5
+        assert win._stack.count() == 5
         # Switch pages to exercise on_nav_changed
-        for i in range(4):
+        for i in range(5):
             win._nav.setCurrentRow(i)
             app.processEvents()
             assert win._stack.currentIndex() == i
@@ -304,3 +304,53 @@ def test_optimise_page_autofills_and_preserves_custom_output_path(tmp_path):
         page.close()
         page.deleteLater()
         app.processEvents()
+
+
+def test_batch_pipeline_page_defaults_and_autofill(tmp_path):
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.pages import BatchPipelinePage
+
+    app = QApplication.instance() or QApplication([])
+    page = BatchPipelinePage()
+    try:
+        # All three single-channel PPG modes are checked by default, and the
+        # "tri" (averaged) option is gone so batch results match Optimise's
+        # default single-channel behaviour for apples-to-apples comparison.
+        assert page._selected_modes() == ["green", "red", "ir"]
+        assert "tri" not in page._mode_checks
+
+        input_dir = tmp_path / "raw_inputs"
+        input_dir.mkdir()
+        page._input_dir_pick.setPath(input_dir)
+        app.processEvents()
+
+        assert page._output_dir_pick.path() == input_dir / "batch_outputs"
+
+        page._set_all_modes(False)
+        assert page._selected_modes() == []
+        page._set_all_modes(True)
+        assert page._selected_modes() == ["green", "red", "ir"]
+    finally:
+        page.close()
+        page.deleteLater()
+        app.processEvents()
+
+
+def test_select_ppg_signal_rejects_tri_mode():
+    """The averaged ``tri`` mode was removed — batch users run each channel
+    independently so results line up with the Optimise page.
+    """
+    import numpy as np
+    import pytest as _pytest
+
+    from ppg_hr.core.heart_rate_solver import _select_ppg_signal
+
+    g = np.arange(4, dtype=float)
+    r = np.arange(4, dtype=float) + 10
+    ir = np.arange(4, dtype=float) + 100
+    assert np.array_equal(_select_ppg_signal(g, r, ir, "green"), g)
+    assert np.array_equal(_select_ppg_signal(g, r, ir, "red"), r)
+    assert np.array_equal(_select_ppg_signal(g, r, ir, "ir"), ir)
+    with _pytest.raises(ValueError):
+        _select_ppg_signal(g, r, ir, "tri")

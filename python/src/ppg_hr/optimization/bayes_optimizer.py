@@ -122,12 +122,14 @@ class BayesResult:
     importance_hf: ParameterImportance | None
     search_space: dict[str, list[Any]] = field(default_factory=dict)
     adaptive_filter: str = "lms"
+    ppg_mode: str = "green"
 
     def save(self, path: str | Path) -> Path:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "adaptive_filter": self.adaptive_filter,
+            "ppg_mode": self.ppg_mode,
             "min_err_hf": float(self.min_err_hf),
             "best_para_hf": _jsonify(self.best_para_hf),
             "min_err_acc": float(self.min_err_acc),
@@ -145,7 +147,7 @@ class BayesResult:
 def _jsonify(obj: Any) -> Any:
     if isinstance(obj, dict):
         return {str(k): _jsonify(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
+    if isinstance(obj, list | tuple):
         return [_jsonify(v) for v in obj]
     if isinstance(obj, np.integer):
         return int(obj)
@@ -384,6 +386,7 @@ def _optimise_mode_serial(
         base, space, mode, cfg.penalty_value, raw_data=raw_data, ref_data=ref_data
     )
     best_err = float("inf")
+    best_err_ref = [best_err]
     best_params: dict[str, Any] = {}
     last_study: optuna.study.Study | None = None
 
@@ -411,7 +414,7 @@ def _optimise_mode_serial(
                     best_in_repeat = float(st.best_value)
                 except ValueError:
                     best_in_repeat = float(value)
-                best_overall_now = min(float(best_err), best_in_repeat)
+                best_overall_now = min(float(best_err_ref[0]), best_in_repeat)
                 on_trial_step({
                     "mode": mode,
                     "repeat_idx": _run_idx + 1,
@@ -438,6 +441,7 @@ def _optimise_mode_serial(
         current = study.best_value
         if current < best_err:
             best_err = float(current)
+            best_err_ref[0] = best_err
             best_params = dict(study.best_trial.user_attrs.get("decoded", {}))
 
         if on_trial is not None:
@@ -617,6 +621,7 @@ def optimise(
     config: BayesConfig | None = None,
     out_path: str | Path | None = None,
     verbose: bool = True,
+    on_trial_step: Callable[[dict[str, Any]], None] | None = None,
 ) -> BayesResult:
     """Run both HF and ACC Bayesian searches and optionally save a JSON report.
 
@@ -649,7 +654,7 @@ def optimise(
         print(f"ROUND 1: Fusion(HF) minimisation{par_note}")
         print("=" * 54)
     min_err_hf, best_para_hf, study_hf = optimise_mode(
-        base, space, "HF", config, on_trial=_print
+        base, space, "HF", config, on_trial=_print, on_trial_step=on_trial_step
     )
     if verbose:
         print(f">> Round 1 (HF) final best err: {min_err_hf:.4f}")
@@ -657,7 +662,7 @@ def optimise(
         print("ROUND 2: Fusion(ACC) minimisation")
         print("=" * 54)
     min_err_acc, best_para_acc, _ = optimise_mode(
-        base, space, "ACC", config, on_trial=_print
+        base, space, "ACC", config, on_trial=_print, on_trial_step=on_trial_step
     )
     if verbose:
         print(f">> Round 2 (ACC) final best err: {min_err_acc:.4f}")
@@ -676,6 +681,7 @@ def optimise(
         importance_hf=importance,
         search_space={n: space.options(n) for n in space.names()},
         adaptive_filter=base.adaptive_filter,
+        ppg_mode=base.ppg_mode,
     )
 
     if out_path is None and base.file_name:
