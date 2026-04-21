@@ -296,7 +296,8 @@ def render(
     # falling back to LMS. JSON reports written before this field existed
     # default to "lms", which matches the historical behaviour.
     strategy = str(report.get("adaptive_filter", base_params.adaptive_filter))
-    base_params = base_params.replace(adaptive_filter=strategy)
+    ppg_mode = str(report.get("ppg_mode", base_params.ppg_mode))
+    base_params = base_params.replace(adaptive_filter=strategy, ppg_mode=ppg_mode)
 
     best_hf = _merge(base_params, report.get("best_para_hf", {}))
     best_acc = _merge(base_params, report.get("best_para_acc", {}))

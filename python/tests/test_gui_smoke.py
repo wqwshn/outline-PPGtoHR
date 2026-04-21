@@ -24,11 +24,11 @@ def test_main_window_builds():
     app = QApplication.instance() or QApplication([])
     win = MainWindow()
     try:
-        # Sidebar has 4 nav items and stack has 4 pages
-        assert win._nav.count() == 4
-        assert win._stack.count() == 4
+        # Sidebar has 5 nav items and stack has 5 pages
+        assert win._nav.count() == 5
+        assert win._stack.count() == 5
         # Switch pages to exercise on_nav_changed
-        for i in range(4):
+        for i in range(5):
             win._nav.setCurrentRow(i)
             app.processEvents()
             assert win._stack.currentIndex() == i
@@ -300,6 +300,28 @@ def test_optimise_page_autofills_and_preserves_custom_output_path(tmp_path):
         app.processEvents()
 
         assert page._out_pick.path() == custom_out
+    finally:
+        page.close()
+        page.deleteLater()
+        app.processEvents()
+
+
+def test_batch_pipeline_page_defaults_and_autofill(tmp_path):
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.pages import BatchPipelinePage
+
+    app = QApplication.instance() or QApplication([])
+    page = BatchPipelinePage()
+    try:
+        assert page._selected_modes() == ["tri"]
+
+        input_dir = tmp_path / "raw_inputs"
+        input_dir.mkdir()
+        page._input_dir_pick.setPath(input_dir)
+        app.processEvents()
+
+        assert page._output_dir_pick.path() == input_dir / "batch_outputs"
     finally:
         page.close()
         page.deleteLater()

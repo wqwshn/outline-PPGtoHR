@@ -3,11 +3,13 @@
 面向穿戴式 PPG 信号的心率估计算法工程，包含两套**功能等价**的参考实现
 与一份数据说明：
 
-| 子目录                     | 内容                                                                                                        | 入口文档                                                        |
-| ----------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `python/`               | **推荐使用**。Python 3.11 重构版：算法核心、贝叶斯优化（支持多进程并行）、可视化、CLI 与 PySide6 桌面 GUI，端到端 AAE 与 MATLAB 偏差 ≤ 0.07 BPM。 | [python/README.md](python/README.md)                        |
-| `MATLAB/`               | 原始 MATLAB 工程（12 个 `.m` 文件）；作为算法金标和 Python 单元测试的参考快照来源。                                                    | [MATLAB/README.md](MATLAB/README.md)                        |
-| `20260418test_python/`  | 6 种运动场景的原始 PPG 传感器 CSV、心率真值 CSV 与合并后的 `.mat`，以及数据合并脚本。                                                    | [20260418test_python/README.md](20260418test_python/README.md) |
+
+| 子目录                    | 内容                                                                                                    | 入口文档                                                           |
+| ---------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `python/`              | **推荐使用**。Python 3.11 重构版：算法核心、贝叶斯优化（支持多进程并行）、可视化、CLI 与 PySide6 桌面 GUI，端到端 AAE 与 MATLAB 偏差 ≤ 0.07 BPM。 | [python/README.md](python/README.md)                           |
+| `MATLAB/`              | 原始 MATLAB 工程（12 个 `.m` 文件）；作为算法金标和 Python 单元测试的参考快照来源。                                                | [MATLAB/README.md](MATLAB/README.md)                           |
+| `20260418test_python/` | 6 种运动场景的原始 PPG 传感器 CSV、心率真值 CSV 与合并后的 `.mat`，以及数据合并脚本。                                                | [20260418test_python/README.md](20260418test_python/README.md) |
+
 
 ---
 
@@ -38,15 +40,15 @@ FAQ 全部集中在 [python/README.md](python/README.md)。
 ## 功能亮点
 
 - **数值对齐**：8 个核心函数 + 数据装载对 MATLAB 金标 `.mat` 快照做
-  `assert_allclose(atol=1e-6)` 级验证；`multi_tiaosheng1` 端到端 AAE 与
-  MATLAB 偏差 ≤ 0.07 BPM。
+`assert_allclose(atol=1e-6)` 级验证；`multi_tiaosheng1` 端到端 AAE 与
+MATLAB 偏差 ≤ 0.07 BPM。
 - **贝叶斯优化加速**：默认开启"数据缓存 + `num_repeats` 多进程并行"，与
-  MATLAB `parpool` 等价，合计 ≈ 3× 加速，且数值与串行 bit-for-bit 一致。
+MATLAB `parpool` 等价，合计 ≈ 3× 加速，且数值与串行 bit-for-bit 一致。
 - **桌面 GUI**：PySide6 浅色主题，四个页面对应 `solve` / `optimise` /
-  `view` / `compare-with-matlab`，所有耗时任务后台线程，不卡界面；嵌入
-  matplotlib 图表已支持中文字体自动选择。
+`view` / `compare-with-matlab`，所有耗时任务后台线程，不卡界面；嵌入
+matplotlib 图表已支持中文字体自动选择。
 - **完备测试**：79 个单元 + 端到端 + CLI + GUI smoke 测试；专门的
-  "串行 vs 并行数值等价"回归用例。
+"串行 vs 并行数值等价"回归用例。
 
 ## 许可证
 

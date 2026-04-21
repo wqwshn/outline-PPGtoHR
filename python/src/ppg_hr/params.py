@@ -54,6 +54,7 @@ class SolverParams:
 
     # Adaptive filter selection (new in 2026-04)
     adaptive_filter: str = "lms"  # one of: "lms", "klms", "volterra"
+    ppg_mode: str = "green"  # one of: "green", "red", "ir", "tri"
 
     # KLMS-specific parameters (only used when adaptive_filter == "klms")
     klms_step_size: float = 0.1

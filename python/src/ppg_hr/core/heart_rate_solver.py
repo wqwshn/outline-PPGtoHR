@@ -38,19 +38,21 @@ from scipy.signal.windows import hamming
 from ..params import SolverParams
 from ..preprocess.data_loader import load_dataset
 from ..preprocess.utils import filloutliers_mean_previous, smoothdata_movmedian
+from .adaptive_filter import apply_adaptive_cascade
 from .choose_delay import choose_delay
 from .fft_peaks import fft_peaks
 from .find_maxpeak import find_maxpeak
 from .find_near_biggest import find_near_biggest
 from .find_real_hr import find_real_hr
-from .adaptive_filter import apply_adaptive_cascade
 from .lms_filter import lms_filter  # noqa: F401  (re-exported for backwards compat)
 
 __all__ = ["SolverResult", "load_raw_data", "solve", "solve_from_arrays"]
 
 
 # Column indices (1-based MATLAB) inside the processed DataFrame array view
-_COL_PPG = 6
+_COL_PPG_GREEN = 6
+_COL_PPG_RED = 7
+_COL_PPG_IR = 8
 _COL_HF1 = 4
 _COL_HF2 = 5
 _COL_ACC = (9, 10, 11)
@@ -211,7 +213,15 @@ def solve_from_arrays(
     fs = int(params.fs_target)
 
     # MATLAB column indices are 1-based; numpy is 0-based
-    ppg_raw = raw_data[:, _COL_PPG - 1]
+    ppg_green_raw = raw_data[:, _COL_PPG_GREEN - 1]
+    ppg_red_raw = raw_data[:, _COL_PPG_RED - 1]
+    ppg_ir_raw = raw_data[:, _COL_PPG_IR - 1]
+    ppg_raw = _select_ppg_signal(
+        ppg_green_raw,
+        ppg_red_raw,
+        ppg_ir_raw,
+        params.ppg_mode,
+    )
     hf1_raw = raw_data[:, _COL_HF1 - 1]
     hf2_raw = raw_data[:, _COL_HF2 - 1]
     accx_raw = raw_data[:, _COL_ACC[0] - 1]
@@ -402,3 +412,31 @@ def solve_from_arrays(
         HR_Ref_Interp=hr_ref_interp,
         err_fus_hf=float(err_stats[3, 0]),
     )
+
+
+def _select_ppg_signal(
+    ppg_green: np.ndarray,
+    ppg_red: np.ndarray,
+    ppg_ir: np.ndarray,
+    mode: str,
+) -> np.ndarray:
+    """Select or compose the PPG channel according to ``mode``."""
+    mode_norm = str(mode).strip().lower()
+    if mode_norm == "green":
+        return ppg_green
+    if mode_norm == "red":
+        return ppg_red
+    if mode_norm in {"ir", "infrared"}:
+        return ppg_ir
+    if mode_norm in {"tri", "all", "rgb"}:
+        return (_zscore(ppg_green) + _zscore(ppg_red) + _zscore(ppg_ir)) / 3.0
+    raise ValueError(
+        f"Unsupported ppg_mode={mode!r}; expected one of "
+        "'green'/'red'/'ir'/'tri'."
+    )
+
+
+def _zscore(x: np.ndarray) -> np.ndarray:
+    mu = float(np.mean(x))
+    sigma = float(np.std(x))
+    return (x - mu) / (sigma + 1e-9)
