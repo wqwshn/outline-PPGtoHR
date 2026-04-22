@@ -86,6 +86,7 @@ time_1 = para.Time_Start;
 
 % LMS 固定参数
 Num_Cascade_HF = 2; Num_Cascade_Acc = 3; LMS_Mu_Base = 0.01;
+last_motion_flag = false;
 
 %% 4. 核心处理循环
 while stop_flag
@@ -113,68 +114,77 @@ while stop_flag
     HR(times, 8) = is_motion; % 原 ACC 运动标记
     HR(times, 9) = is_motion; % 原 HF 运动标记 (现已强制同步为 ACC 结果)
 
-    % 计算相关性与时延
-    [mh_arr, ma_arr, time_delay_h, time_delay_a] = ...
-        ChooseDelay1218(Fs, time_1, ppg, {accx,accy,accz}, {hotf1,hotf2});
-
     % =====================================================================
-    % 路径 A: Pure LMS (HF Reference) - 纯 HF 生态
-    % =====================================================================
-    Sig_LMS_HF = Sig_p;
-    if time_delay_h < 0, ord_h = floor(abs(time_delay_h)*1); else, ord_h = 1; end
-    ord_h = min(max(ord_h, 1), para.Max_Order);
-
-    mh_mat = sort(mh_arr, 'descend');
-    [~, best_hf_idx] = max(mh_arr);
-
-    for i = 1:min(Num_Cascade_HF, length(mh_arr))
-        curr_corr = mh_mat(i);
-        real_idx = find(mh_arr == curr_corr, 1);
-        [Sig_LMS_HF,~,~] = lmsFunc_h(LMS_Mu_Base - curr_corr/100, ord_h, 0, Sig_h{real_idx}, Sig_LMS_HF);
-    end
-
-    % HF 路径频谱惩罚
-    Freq_HF = Helper_Process_Spectrum(Sig_LMS_HF, Sig_h{best_hf_idx}, Fs, para, times, HR(:,3), ...
-                                    true, para.HR_Range_Hz, para.Slew_Limit_BPM, para.Slew_Step_BPM);
-    HR(times, 3) = Freq_HF;
-
-    % =====================================================================
-    % 路径 B: Pure LMS (ACC Reference) - 保持原样
-    % =====================================================================
-    Sig_LMS_ACC = Sig_p;
-    if time_delay_a < 0, ord_a = floor(abs(time_delay_a)*1.5); else, ord_a = 1; end
-    ord_a = min(max(ord_a, 1), para.Max_Order);
-
-    ma_mat = sort(ma_arr, 'descend');
-    [~, best_acc_idx] = max(ma_arr);
-    for i = 1:min(Num_Cascade_Acc, length(ma_arr))
-        curr_corr = ma_mat(i);
-        real_idx = find(ma_arr == curr_corr, 1);
-        Ref_Sig = Sig_a{real_idx};
-        [Sig_LMS_ACC,~,~] = lmsFunc_h(LMS_Mu_Base - curr_corr/100, ord_a, 1, Ref_Sig, Sig_LMS_ACC);
-    end
-
-    % ACC 路径频谱惩罚
-    Freq_ACC = Helper_Process_Spectrum(Sig_LMS_ACC, Sig_a{best_acc_idx}, Fs, para, times, HR(:,4), ...
-                                     true, para.HR_Range_Hz, para.Slew_Limit_BPM, para.Slew_Step_BPM);
-    HR(times, 4) = Freq_ACC;
-
-    % =====================================================================
-    % 路径 C: Pure FFT (原始信号) [修改核心]
+    % 路径 C: Pure FFT (始终运行)
     % =====================================================================
     Sig_FFT = Sig_p - mean(Sig_p);
     Sig_FFT = Sig_FFT .* hamming(length(Sig_FFT));
-    
-    % [修改] 启用频谱惩罚
-    % 为了对比 LMS 的去噪效果，此处将 Pure FFT 也加入频谱惩罚。
-    % 1. 参考信号：Sig_a{3} (ACC Z轴)，与 ACC LMS 路径的参考一致。
-    % 2. 启用标志：改为 true (原为 false)。
-    % 3. 追踪参数：保持 Rest 参数不变 (以免影响 Fusion 逻辑中的静息段回退功能)。
     Freq_FFT = Helper_Process_Spectrum(Sig_FFT, Sig_a{3}, Fs, para, times, HR(:,5), ...
                                      true, para.HR_Range_Rest, para.Slew_Limit_Rest, para.Slew_Step_Rest);
     HR(times, 5) = Freq_FFT;
 
-    % 循环推进
+    if is_motion
+        % 静息→运动转换时重置追踪链 (传 times=1 跳过历史追踪, 直接取当前谱峰)
+        rest_to_motion = ~last_motion_flag;
+        if rest_to_motion
+            times_hf  = 1;
+            times_acc = 1;
+        else
+            times_hf  = times;
+            times_acc = times;
+        end
+
+        % 计算相关性与时延 (仅运动段需要)
+        [mh_arr, ma_arr, time_delay_h, time_delay_a] = ...
+            ChooseDelay1218(Fs, time_1, ppg, {accx,accy,accz}, {hotf1,hotf2});
+
+        % =================================================================
+        % 路径 A: Pure LMS (HF Reference)
+        % =================================================================
+        Sig_LMS_HF = Sig_p;
+        if time_delay_h < 0, ord_h = floor(abs(time_delay_h)*1); else, ord_h = 1; end
+        ord_h = min(max(ord_h, 1), para.Max_Order);
+
+        mh_mat = sort(mh_arr, 'descend');
+        [~, best_hf_idx] = max(mh_arr);
+
+        for i = 1:min(Num_Cascade_HF, length(mh_arr))
+            curr_corr = mh_mat(i);
+            real_idx = find(mh_arr == curr_corr, 1);
+            [Sig_LMS_HF,~,~] = lmsFunc_h(LMS_Mu_Base - curr_corr/100, ord_h, 0, Sig_h{real_idx}, Sig_LMS_HF);
+        end
+
+        Freq_HF = Helper_Process_Spectrum(Sig_LMS_HF, Sig_h{best_hf_idx}, Fs, para, times_hf, HR(:,3), ...
+                                        true, para.HR_Range_Hz, para.Slew_Limit_BPM, para.Slew_Step_BPM);
+        HR(times, 3) = Freq_HF;
+
+        % =================================================================
+        % 路径 B: Pure LMS (ACC Reference)
+        % =================================================================
+        Sig_LMS_ACC = Sig_p;
+        if time_delay_a < 0, ord_a = floor(abs(time_delay_a)*1.5); else, ord_a = 1; end
+        ord_a = min(max(ord_a, 1), para.Max_Order);
+
+        ma_mat = sort(ma_arr, 'descend');
+        [~, best_acc_idx] = max(ma_arr);
+        for i = 1:min(Num_Cascade_Acc, length(ma_arr))
+            curr_corr = ma_mat(i);
+            real_idx = find(ma_arr == curr_corr, 1);
+            Ref_Sig = Sig_a{real_idx};
+            [Sig_LMS_ACC,~,~] = lmsFunc_h(LMS_Mu_Base - curr_corr/100, ord_a, 1, Ref_Sig, Sig_LMS_ACC);
+        end
+
+        Freq_ACC = Helper_Process_Spectrum(Sig_LMS_ACC, Sig_a{best_acc_idx}, Fs, para, times_acc, HR(:,4), ...
+                                         true, para.HR_Range_Hz, para.Slew_Limit_BPM, para.Slew_Step_BPM);
+        HR(times, 4) = Freq_ACC;
+    else
+        % 静息段: 跳过 LMS, 直接复制 FFT 结果, 避免瞬态误差污染追踪链
+        HR(times, 3) = Freq_FFT;
+        HR(times, 4) = Freq_FFT;
+    end
+
+    % 状态记录与循环推进
+    last_motion_flag = is_motion;
     time_1 = time_1 + Win_Step;
     times = times + 1;
     if time_1 > time_end, stop_flag = 0; end

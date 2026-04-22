@@ -125,6 +125,8 @@ time_delay = DelayHow(max_row, 1);
 
 在 ±5 个采样点范围内搜索，找到参考信号与 PPG 相关性最大的偏移量。负值表示参考信号领先于 PPG（物理上：传感器检测到运动先于血流变化）。
 
+> **注**: 搜索范围已改为基于时间的动态计算（以 25Hz 下 ±5 样本 = 200ms 为基准），详见 `ChooseDelay1218.m` 中的 `delay_range = round(0.2 * Fs)`。
+
 ### 4.2 时延决定滤波器阶数
 
 ```matlab
@@ -280,3 +282,52 @@ S_rls_amp(mask) *= Penalty_Weight;   % 抑制运动频率及倍频
 ```
 
 在 FFT 峰值选择前，将运动基频及其二倍频附近的频谱幅值降低（乘以 0.2），减少运动频率被误选为心率的风险。
+
+---
+
+## 8. 静息段跳过 LMS 策略
+
+### 8.1 问题背景
+
+原设计中，三个路径（LMS-HF、LMS-ACC、Pure FFT）在每个窗口都独立运行。融合决策在静息段取 FFT 结果，路径 A/B 的 LMS 输出不被使用。但由于每条路径维护独立的谱峰追踪链（`history_arr`），静息段 LMS 的瞬态误差（前 1-2 秒权重从零开始学习）会写入 `HR(:,3/4)`，污染追踪历史。当静息→运动过渡时，运动段首窗口的 `prev_hr` 继承了静息段 LMS 坏值，导致 Slew 限幅需要多步才能收敛到真值。
+
+### 8.2 解决方案
+
+**静息段跳过 LMS**：仅运动段执行路径 A/B，静息段直接将 FFT 结果复制到 `HR(:,3/4)`，确保追踪链始终维护干净的频谱值。
+
+**状态转换追踪链重置**：检测到静息→运动转换（`~last_motion_flag && is_motion`）时，路径 A/B 的 `Helper_Process_Spectrum` 调用传入 `times=1`，跳过历史追踪直接取当前 LMS 输出的谱峰。这避免了从 FFT 值到 LMS 频谱的系统性偏差跳变。
+
+### 8.3 代码结构
+
+```matlab
+% Path C: Pure FFT (始终运行)
+Freq_FFT = Helper_Process_Spectrum(Sig_FFT, ...);
+HR(times, 5) = Freq_FFT;
+
+if is_motion
+    % 静息→运动: 重置追踪链
+    rest_to_motion = ~last_motion_flag;
+    times_hf  = ternary(rest_to_motion, 1, times);
+    times_acc = ternary(rest_to_motion, 1, times);
+
+    % ChooseDelay1218 + LMS(HF) + LMS(ACC)
+    ...
+    HR(times, 3) = Freq_HF;
+    HR(times, 4) = Freq_ACC;
+else
+    % 静息段: 复制 FFT, 追踪链保持干净
+    HR(times, 3) = Freq_FFT;
+    HR(times, 4) = Freq_FFT;
+end
+
+last_motion_flag = is_motion;
+```
+
+### 8.4 设计权衡
+
+| 特性 | 说明 |
+| ---- | ---- |
+| 计算效率 | 静息段跳过 LMS + ChooseDelay1218，节省约 40% 窗口计算量 |
+| 追踪链一致性 | 静息段 HR(:,3/4) = FFT 值，运动段首次从干净谱峰出发 |
+| 首窗口风险 | 运动段首窗口无追踪保护，但 LMS 输出频谱比纯 FFT 更干净，直接取峰风险可控 |
+| 副作用 | 融合逻辑不变；全局平滑和连接点微调照常运行 |
