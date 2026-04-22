@@ -32,23 +32,28 @@ para_base.Motion_Th_Scale = 2.5;
 para_base.Spec_Penalty_Enable = 1;
 para_base.Spec_Penalty_Weight = 0.2;
 
-% 专家模式配置
+% 专家模式配置: 直接从各运动场景的贝叶斯优化结果中加载前级参数
 para_base.expert_mode = true;
 para_base.classifier_mode = 'window';
 para_base.model_path = 'models';
+expert_files = struct( ...
+    'arm_curl',   'dataformatlab\Best_Params_Result_multi_wanju1_processed.mat', ...
+    'jump_rope',  'dataformatlab\Best_Params_Result_multi_tiaosheng2_processed.mat', ...
+    'push_up',    'dataformatlab\Best_Params_Result_multi_fuwo2_processed.mat');
+expert_names = fieldnames(expert_files);
 para_base.expert_params = struct();
-expert_files = {'params\expert_arm_curl.mat', ...
-                'params\expert_jump_rope.mat', ...
-                'params\expert_push_up.mat'};
-expert_names = {'arm_curl', 'jump_rope', 'push_up'};
-for ei = 1:length(expert_files)
-    if isfile(expert_files{ei})
-        tmp = load(expert_files{ei});
-        fnames = fieldnames(tmp);
-        para_base.expert_params.(expert_names{ei}) = tmp.(fnames{1});
+for ei = 1:length(expert_names)
+    en = expert_names{ei};
+    ef = expert_files.(en);
+    if isfile(ef)
+        tmp = load(ef);
+        bp_hf = tmp.Best_Para_HF;
+        para_base.expert_params.(en) = struct( ...
+            'Fs_Target', bp_hf.Fs_Target, 'Max_Order', bp_hf.Max_Order, ...
+            'LMS_Mu_Base', 0.01, 'Num_Cascade_HF', 2, 'Num_Cascade_Acc', 3);
     else
-        warning('专家参数文件不存在: %s, 使用默认参数', expert_files{ei});
-        para_base.expert_params.(expert_names{ei}) = struct( ...
+        warning('专家参数文件不存在: %s, 使用默认值', ef);
+        para_base.expert_params.(en) = struct( ...
             'Fs_Target', 25, 'Max_Order', 16, 'LMS_Mu_Base', 0.01, ...
             'Num_Cascade_HF', 2, 'Num_Cascade_Acc', 3);
     end

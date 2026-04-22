@@ -33,6 +33,7 @@ PPG 心率估计算法 (MATLAB): LMS 自适应滤波 + FFT 频谱分析融合，
 - `PpgPeace.m` - 信号质量评估(未启用)
 - `AutoOptimize_Bayes_Search_cas_chengfa.m` - 贝叶斯参数优化(仅后级参数)
 - `AutoOptimize_Result_Viewer_cas_chengfa.m` - 结果可视化与分类器概率图
+- `QuickTest.m` - 快速调试: 一条命令运行标准/专家模式并对比
 - `export_classifier_to_mat.py` - Python: 3类RF训练+导出.mat
 
 ## 数据格式

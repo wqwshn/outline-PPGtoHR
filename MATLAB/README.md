@@ -76,11 +76,25 @@
 
 ## 使用方法
 
+### 0. 快速调试 (推荐)
+
+```matlab
+% 前置: 需先运行一次 Python 导出分类器模型
+%   cd MATLAB && python export_classifier_to_mat.py
+
+QuickTest                  % bobi1, 标准模式 vs 专家模式对比
+QuickTest('bobi2')         % 换数据集
+QuickTest('bobi1', 'std')  % 仅标准模式 (基线)
+QuickTest('bobi1', 'expert') % 仅专家模式
+```
+
+QuickTest 会自动从 `dataformatlab/Best_Params_Result_multi_*.mat` 加载专家参数，无需手动配置。
+
 ### 1. 标准模式
 
 ```matlab
 para.FileName = 'dataformatlab\multi_bobi1_processed.mat';
-para.Fs_Target = 100;
+para.Fs_Target = 25;
 para.Max_Order = 16;
 % ... 其他参数 ...
 Result = HeartRateSolver_cas_chengfa(para);
@@ -91,48 +105,30 @@ Result = HeartRateSolver_cas_chengfa(para);
 **前置准备（只需执行一次）：**
 
 ```bash
-# 步骤 A: 训练分类器并导出模型
-cd MATLAB
-python export_classifier_to_mat.py
+# 训练分类器并导出模型
+cd MATLAB && python export_classifier_to_mat.py
 # 生成: models/scaler_params.mat, models/rf_model_3class.mat, models/label_map.mat
 ```
 
+**运行算法（推荐使用 QuickTest）：**
+
 ```matlab
-% 步骤 B: 从各简单运动的贝叶斯优化结果中提取前级参数
-% 对每个运动类型 (arm_curl, jump_rope, push_up)，将其 Best_Para 中的
-% Fs_Target, Max_Order, LMS_Mu_Base, Num_Cascade_HF, Num_Cascade_Acc
-% 保存到 params/expert_<exercise>.mat
-% 示例:
-tmp = load('dataformatlab\Best_Params_Result_arm_curl_data.mat');
-ep = struct('Fs_Target', tmp.Best_Para_HF.Fs_Target, ...
-            'Max_Order', tmp.Best_Para_HF.Max_Order, ...
-            'LMS_Mu_Base', 0.01, ...
-            'Num_Cascade_HF', 2, 'Num_Cascade_Acc', 3);
-save('params\expert_arm_curl.mat', 'ep');
-% 对 jump_rope 和 push_up 重复上述操作
+QuickTest('bobi1', 'expert')  % 一条命令, 自动加载专家参数
 ```
 
-**运行算法：**
+**手动运行（如需细粒度控制）：**
 
 ```matlab
 para.FileName = 'dataformatlab\multi_bobi1_processed.mat';
 para.expert_mode = true;
 para.classifier_mode = 'window';  % 'window' 或 'segment'
 para.model_path = 'models';
-para.expert_params = struct();
-
-% 加载专家参数
-for en = {'arm_curl','jump_rope','push_up'}
-    tmp = load(sprintf('params\\expert_%s.mat', en{1}));
-    para.expert_params.(en{1}) = tmp.ep;
-end
-
-% 后级参数 (待优化, 先用默认值)
-para.Spec_Penalty_Width = 0.2;
-para.HR_Range_Hz = 30/60;
-para.Slew_Limit_BPM = 10;
-para.Slew_Step_BPM = 7;
-% ... 其余参数 ...
+% 专家参数: 从贝叶斯优化结果中加载前级参数
+tmp = load('dataformatlab\Best_Params_Result_multi_wanju1_processed.mat');
+para.expert_params.arm_curl = struct('Fs_Target', tmp.Best_Para_HF.Fs_Target, ...
+    'Max_Order', tmp.Best_Para_HF.Max_Order, 'LMS_Mu_Base', 0.01, ...
+    'Num_Cascade_HF', 2, 'Num_Cascade_Acc', 3);
+% 对 jump_rope (tiaosheng2) 和 push_up (fuwo2) 重复...
 
 Result = HeartRateSolver_cas_chengfa(para);
 ```
