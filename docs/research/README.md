@@ -8,7 +8,14 @@ PPG 心率求解器 (LMS/KLMS/Volterra 自适应滤波) 的精度高度依赖参
 
 ### 思路
 
-复合运动在时间上可以近似为多种简单运动的组合。如果在 MIMU (加速度计 + 陀螺仪) 特征空间中，每个时间窗口都能被识别为"更像哪种简单运动"，那么就可以用对应简单运动的优化参数来加权融合多条心率估计曲线。
+复合运动在时间上可以近似为多种简单运动的组合。如果在 MIMU (加速度计 + 陀螺仪) 特征空间中，每个时间窗口都能被识别为"更像哪种简单运动"，那么就可以用对应简单运动的优化参数来加权融合多条心率估计曲线。核心思路如下：
+
+专家库构建（Base Experts）： 针对动作模式单一的简单运动（如静止、跳绳、弯举、高抬腿等），分别利用历史数据进行贝叶斯寻优，获取每个简单场景下的全局最优参数配置（如滤波器阶数、步长、频谱惩罚阈值等）。每一个参数集即为一个“专家”。
+
+门控网络（Gating Network）： 构建一个轻量级的运动状态分类器。在实际预测时，对每一个时间窗口（如 8 秒）的 IMU 信号（加速度、陀螺仪）进行特征提取，分类器输出当前窗口属于各个“简单运动”的概率分布。
+
+后期融合（Late Fusion）： 根据分类器输出的概率分布，对多个专家模型在该窗口下独立计算出的结果（心率值或频谱分布）进行加权求和，得到最终的心率预测值。
+
 
 核心公式：
 
@@ -139,6 +146,19 @@ PPG_Green, PPG_Red, PPG_IR
 
 **可行性检查**：t-SNE 散点图应显示不同运动类型形成明显聚类。如果简单运动在特征空间中不可分，后续分类器方法无意义。
 
+### Step 1b: `01b_mimu_feature_extraction_shortwin.ipynb` — 短窗口特征提取 (改进版)
+
+**目的**：将窗口缩短至 2s 以匹配波比跳单动作阶段，用偏度和峰度替换短窗口下不稳定的谱类特征。
+
+| 项目 | 内容 |
+|------|------|
+| 输入 | `data/multi_*.csv` |
+| 输出 | `artifacts/mimu_features_shortwin.pkl` |
+
+**特征提取配置**：
+- 窗口长度 2s，步长 0.5s，采样率 100Hz
+- 75 维特征 (9 时域 + 1 频域 per channel，同维度但组成不同)
+
 ### Step 2: `02_exercise_classifier.ipynb` — 运动分类器
 
 **目的**：仅使用简单运动窗口训练分类器，输出波比跳每个窗口属于各简单运动类型的概率分布。
@@ -155,6 +175,22 @@ PPG_Green, PPG_Red, PPG_IR
 输出文件 `burpee_meta.pkl` 中的 `files` 字段记录每个波比窗口所属的文件 stem，用于后续按文件筛选 (P0)。
 
 **注意**：波比跳的全部窗口 (含静息段) 均用于推理，热力图和堆叠面积图展示的是包含静息段的完整分布。静息段窗口的分类概率通常较低且接近均匀分布。
+
+### Step 2b: `02b_exercise_classifier_shortwin.ipynb` — 短窗口分类器 (改进版)
+
+**目的**：基于 2s 短窗口特征训练 RF 分类器，对波比跳推理后将短窗口概率聚合回 8s 粒度，与原版结果自动对比。
+
+| 项目 | 内容 |
+|------|------|
+| 输入 | `artifacts/mimu_features_shortwin.pkl` |
+| 输出 | `artifacts/burpee_window_distributions_shortwin.npy` (8s 聚合概率) |
+|      | `artifacts/classifier_model_shortwin.pkl` |
+|      | `artifacts/burpee_meta_shortwin.pkl` |
+
+**改进要点**：
+- 短窗口概率通过均值聚合回 8s，对下游融合管线透明
+- 两个 bobi 文件合并处理，增加分解目标的样本量
+- 自动与原版 8s 分类器结果对比分布差异
 
 ### Step 3: `03_weighted_fusion_hr.ipynb` — 加权融合心率估计
 
@@ -235,6 +271,19 @@ artifacts/fusion_results.pkl
 [04_evaluation_and_comparison]
 
 [00_prepare_simple_params]  -- 独立参考文档，无下游依赖
+
+--- 短窗口改进管线 (独立，可与原版对比) ---
+
+data/multi_*.csv
+        |
+        v
+[01b_shortwin_feature_extraction]
+        |
+        v
+artifacts/mimu_features_shortwin.pkl
+        |
+        v
+[02b_shortwin_classifier]  --> artifacts/*_shortwin.npy/pkl
 ```
 
 ---
@@ -245,7 +294,9 @@ artifacts/fusion_results.pkl
 docs/research/
   00_prepare_simple_params.ipynb    # Step 0: 参数汇总展示 (可选, 独立)
   01_mimu_feature_extraction.ipynb  # Step 1: MIMU 特征提取 + 可行性检查
+  01b_mimu_feature_extraction_shortwin.ipynb  # Step 1b: 短窗口特征提取 (改进版)
   02_exercise_classifier.ipynb      # Step 2: 分类器训练 + 推理
+  02b_exercise_classifier_shortwin.ipynb      # Step 2b: 短窗口分类器 (改进版)
   03_weighted_fusion_hr.ipynb       # Step 3: 加权融合核心实验
   04_evaluation_and_comparison.ipynb # Step 4: 全面评估对比
   ALGORITHM_DESIGN.md               # 算法边界、假设、数据契约
