@@ -1,16 +1,18 @@
 function QuickTest(dataset, mode)
-%% QuickTest 快速调试脚本 - 标准模式 vs 专家模式对比
+%% QuickTest 快速调试脚本
 % 用法:
-%   QuickTest                  % bobi1, 标准模式 vs 专家模式对比
-%   QuickTest('bobi2')         % 换数据集
+%   QuickTest                    % bobi1, 标准模式 vs 专家模式(基线参数)
+%   QuickTest('bobi2')           % 换数据集
 %   QuickTest('bobi1', 'std')    % 仅标准模式
-%   QuickTest('bobi1', 'expert') % 仅专家模式
+%   QuickTest('bobi1', 'expert') % 仅专家模式 (优先加载优化后参数)
+%   QuickTest('bobi1', 'compare') % 优化后评估: 专家(基线) vs 专家(优化后) 对比
 %
-% 前置: 需先运行 python export_classifier_to_mat.py 生成 models/ 目录
+% 'compare' 模式需要先运行 AutoOptimize_Bayes_Search_cas_chengfa 生成
+% Best_Params_Expert_Result_multi_*.mat 文件。
 
 arguments
     dataset (1,:) char = 'bobi1'
-    mode    (1,:) char = 'both'   % 'both' | 'std' | 'expert'
+    mode    (1,:) char = 'both'   % 'both' | 'std' | 'expert' | 'compare'
 end
 
 clc; close all;
@@ -23,7 +25,7 @@ if ~isfile(data_file)
 end
 fprintf('数据文件: %s\n', data_file);
 
-%% 2. 专家参数加载 (从各运动场景的贝叶斯优化结果中提取)
+%% 2. 专家参数加载 (前级参数, 固定不变)
 expert_sources = struct( ...
     'arm_curl',  fullfile(data_dir, 'Best_Params_Result_multi_wanju1_processed.mat'), ...
     'jump_rope', fullfile(data_dir, 'Best_Params_Result_multi_tiaosheng2_processed.mat'), ...
@@ -31,7 +33,7 @@ expert_sources = struct( ...
 
 expert_names = fieldnames(expert_sources);
 expert_params = struct();
-fprintf('\n--- 加载专家参数 ---\n');
+fprintf('\n--- 加载专家前级参数 ---\n');
 for i = 1:length(expert_names)
     en = expert_names{i};
     ef = expert_sources.(en);
@@ -41,77 +43,28 @@ for i = 1:length(expert_names)
         expert_params.(en) = struct( ...
             'Fs_Target', bp.Fs_Target, 'Max_Order', bp.Max_Order, ...
             'LMS_Mu_Base', 0.01, 'Num_Cascade_HF', 2, 'Num_Cascade_Acc', 3);
-        fprintf('  %s: Fs=%dHz, MaxOrder=%d [from %s]\n', en, bp.Fs_Target, bp.Max_Order, ef);
+        fprintf('  %s: Fs=%dHz, MaxOrder=%d\n', en, bp.Fs_Target, bp.Max_Order);
     else
         expert_params.(en) = struct( ...
             'Fs_Target', 25, 'Max_Order', 16, ...
             'LMS_Mu_Base', 0.01, 'Num_Cascade_HF', 2, 'Num_Cascade_Acc', 3);
-        fprintf('  %s: 文件不存在, 使用默认值 (Fs=25, MaxOrder=16)\n', en);
+        fprintf('  %s: 文件不存在, 使用默认值\n', en);
     end
 end
 
-%% 3. 基线参数 (从波比跳的贝叶斯优化结果加载, 无则用默认值)
-bobi_param_file = fullfile(data_dir, sprintf('Best_Params_Result_multi_%s_processed.mat', dataset));
-base_para_loaded = false;
-if isfile(bobi_param_file)
-    tmp = load(bobi_param_file, 'Best_Para_HF');
-    bp_base = tmp.Best_Para_HF;
-    base_para_loaded = true;
-    fprintf('\n基线参数: 从 %s 加载\n', bobi_param_file);
-else
-    fprintf('\n基线参数: 使用默认值 (未找到 %s)\n', bobi_param_file);
-end
+%% 3. 后级参数: 基线 vs 优化后
+% 基线参数 (标准模式贝叶斯优化的结果, 或默认值)
+[para_base, base_loaded] = LoadBackEndParams(data_dir, dataset, data_file);
+fprintf('\n');
 
-%% 4. 构建标准模式参数
-para_std = struct();
-para_std.FileName = data_file;
-para_std.Time_Start = 1;
-para_std.Time_Buffer = 10;
-para_std.Calib_Time = 30;
-para_std.Fs_Target = 25;
-para_std.Motion_Th_Scale = 2.5;
-para_std.Spec_Penalty_Enable = 1;
-para_std.Spec_Penalty_Weight = 0.2;
-
-if base_para_loaded
-    % 从基线文件中提取后级参数
-    if isfield(bp_base, 'Max_Order'),         para_std.Max_Order = bp_base.Max_Order;         else, para_std.Max_Order = 16; end
-    if isfield(bp_base, 'Spec_Penalty_Width'), para_std.Spec_Penalty_Width = bp_base.Spec_Penalty_Width; else, para_std.Spec_Penalty_Width = 0.2; end
-    if isfield(bp_base, 'HR_Range_Hz'),        para_std.HR_Range_Hz = bp_base.HR_Range_Hz;     else, para_std.HR_Range_Hz = 25/60; end
-    if isfield(bp_base, 'Slew_Limit_BPM'),     para_std.Slew_Limit_BPM = bp_base.Slew_Limit_BPM; else, para_std.Slew_Limit_BPM = 10; end
-    if isfield(bp_base, 'Slew_Step_BPM'),      para_std.Slew_Step_BPM = bp_base.Slew_Step_BPM;   else, para_std.Slew_Step_BPM = 7; end
-    if isfield(bp_base, 'HR_Range_Rest'),       para_std.HR_Range_Rest = bp_base.HR_Range_Rest;   else, para_std.HR_Range_Rest = 30/60; end
-    if isfield(bp_base, 'Slew_Limit_Rest'),     para_std.Slew_Limit_Rest = bp_base.Slew_Limit_Rest; else, para_std.Slew_Limit_Rest = 6; end
-    if isfield(bp_base, 'Slew_Step_Rest'),      para_std.Slew_Step_Rest = bp_base.Slew_Step_Rest;   else, para_std.Slew_Step_Rest = 4; end
-    if isfield(bp_base, 'Smooth_Win_Len'),      para_std.Smooth_Win_Len = bp_base.Smooth_Win_Len;   else, para_std.Smooth_Win_Len = 7; end
-    if isfield(bp_base, 'Time_Bias'),           para_std.Time_Bias = bp_base.Time_Bias;             else, para_std.Time_Bias = 5; end
-else
-    % 默认参数
-    para_std.Max_Order = 16;
-    para_std.Spec_Penalty_Width = 0.2;
-    para_std.HR_Range_Hz = 25/60;
-    para_std.Slew_Limit_BPM = 10;
-    para_std.Slew_Step_BPM = 7;
-    para_std.HR_Range_Rest = 30/60;
-    para_std.Slew_Limit_Rest = 6;
-    para_std.Slew_Step_Rest = 4;
-    para_std.Smooth_Win_Len = 7;
-    para_std.Time_Bias = 5;
-end
-
-%% 5. 构建专家模式参数 (在标准参数基础上覆盖)
-para_exp = para_std;
-para_exp.expert_mode = true;
-para_exp.classifier_mode = 'window';
-para_exp.model_path = 'models';
-para_exp.expert_params = expert_params;
-
-% 尝试从专家模式优化结果加载后级参数
+% 优化后参数 (专家模式专属贝叶斯优化)
 expert_param_file = fullfile(data_dir, sprintf('Best_Params_Expert_Result_multi_%s_processed.mat', dataset));
+optimized_loaded = false;
+para_optimized = [];
 if isfile(expert_param_file)
     tmp = load(expert_param_file, 'Best_Para_Expert_ACC');
     bp_exp = tmp.Best_Para_Expert_ACC;
-    % 用专家模式专属参数覆盖后级参数
+    para_optimized = para_base;
     override_fields = {'Spec_Penalty_Width', 'Spec_Penalty_Weight', ...
         'HR_Range_Hz', 'Slew_Limit_BPM', 'Slew_Step_BPM', ...
         'HR_Range_Rest', 'Slew_Limit_Rest', 'Slew_Step_Rest', ...
@@ -119,94 +72,184 @@ if isfile(expert_param_file)
     for fi = 1:length(override_fields)
         fn = override_fields{fi};
         if isfield(bp_exp, fn)
-            para_exp.(fn) = bp_exp.(fn);
+            para_optimized.(fn) = bp_exp.(fn);
         end
     end
-    fprintf('专家后级参数: 从 %s 加载\n', expert_param_file);
+    optimized_loaded = true;
+    fprintf('优化后参数: 已从 %s 加载\n', expert_param_file);
 else
-    fprintf('专家后级参数: 使用标准模式基线值 (未找到 %s)\n', expert_param_file);
+    fprintf('优化后参数: 未找到 (需先运行 AutoOptimize_Bayes_Search_cas_chengfa)\n');
 end
 
-%% 6. 运行解算
-res_std = []; res_exp = [];
-if strcmp(mode, 'both') || strcmp(mode, 'std')
-    fprintf('\n=== 运行标准模式 ===\n');
-    tic;
-    res_std = HeartRateSolver_cas_chengfa(para_std);
-    t_std = toc;
-    fprintf('标准模式耗时: %.1f s\n', t_std);
-    PrintStats('标准模式', res_std);
-end
-
-if strcmp(mode, 'both') || strcmp(mode, 'expert')
-    fprintf('\n=== 运行专家模式 ===\n');
-    tic;
-    res_exp = HeartRateSolver_cas_chengfa(para_exp);
-    t_exp = toc;
-    fprintf('专家模式耗时: %.1f s\n', t_exp);
-    PrintStats('专家模式', res_exp);
-end
-
-%% 7. 绘图对比
-if ~isempty(res_std) && ~isempty(res_exp)
-    % 双子图对比
-    figure('Name', 'QuickTest: 标准模式 vs 专家模式', 'Color', 'w', 'Position', [50 50 1400 900]);
-
-    data_sets = {res_std, res_exp};
-    titles = {'标准模式', '专家模式 (频谱融合)'};
-    for p = 1:2
-        ax = subplot(2, 1, p);
-        R = data_sets{p};
-        HR = R.HR;
-        T_Pred = R.T_Pred;
-
-        motion_bg = HR(:, 8) * 220;
-        a = area(T_Pred, motion_bg, 'FaceColor', [0.94 0.94 0.96], 'EdgeColor', 'none', 'BaseValue', 0);
-        hold on;
-
-        plot(HR(:,1), HR(:,2)*60, 'k-', 'LineWidth', 2.5, 'DisplayName', '真值');
-        plot(T_Pred, HR(:,5)*60, '-', 'Color', [0.6 0.6 0.6], 'LineWidth', 1.2, 'DisplayName', 'FFT');
-        plot(T_Pred, HR(:,6)*60, 'm.-', 'LineWidth', 1.5, 'MarkerSize', 6, 'DisplayName', 'Fusion-HF');
-        plot(T_Pred, HR(:,7)*60, 'b.-', 'LineWidth', 1.5, 'MarkerSize', 6, 'DisplayName', 'Fusion-ACC');
-
-        uistack(a, 'bottom');
-        ylabel('HR (BPM)'); ylim([50 200]); grid on; set(gca, 'GridAlpha', 0.3);
-
-        % 标题含关键指标
-        es = R.err_stats;
-        title(sprintf('%s | 数据: %s | Fusion-HF Total=%.1f Motion=%.1f | Fusion-ACC Total=%.1f Motion=%.1f', ...
-            titles{p}, dataset, es(4,1), es(4,3), es(5,1), es(5,3)), 'FontSize', 11, 'FontWeight', 'bold');
-        legend('Location', 'bestoutside');
-        if p == 2, xlabel('Time (s)'); end
-    end
-    linkaxes(findobj(gcf, 'type', 'axes'), 'x');
-
-    % 专家模式分类器概率图
-    if size(res_exp.HR, 2) >= 12
-        figure('Name', '分类器概率时程', 'Color', 'w', 'Position', [50 50 1000 300]);
-        area(res_exp.T_Pred, res_exp.HR(:,10:12));
-        legend('arm\_curl', 'jump\_rope', 'push\_up', 'Location', 'best');
-        title(sprintf('分类器概率 [%s, %s]', dataset, para_exp.classifier_mode));
-        xlabel('Time (s)'); ylabel('Probability'); ylim([0 1]); grid on;
-    end
-
-elseif ~isempty(res_std)
-    PlotSingle('标准模式', res_std, dataset);
-elseif ~isempty(res_exp)
-    PlotSingle('专家模式', res_exp, dataset);
-    if size(res_exp.HR, 2) >= 12
-        figure('Name', '分类器概率时程', 'Color', 'w', 'Position', [50 50 1000 300]);
-        area(res_exp.T_Pred, res_exp.HR(:,10:12));
-        legend('arm\_curl', 'jump\_rope', 'push\_up', 'Location', 'best');
-        title(sprintf('分类器概率 [%s, %s]', dataset, para_exp.classifier_mode));
-        xlabel('Time (s)'); ylabel('Probability'); ylim([0 1]); grid on;
-    end
+%% 4. 根据模式执行
+switch mode
+    case 'compare'
+        RunCompare(dataset, data_file, expert_params, para_base, para_optimized, optimized_loaded);
+    case 'std'
+        RunStd(dataset, para_base);
+    case 'expert'
+        RunExpert(dataset, expert_params, para_base, para_optimized, optimized_loaded);
+    otherwise  % 'both'
+        RunBoth(dataset, para_base, expert_params, para_base);
 end
 
 fprintf('\n=== QuickTest 完成 ===\n');
 end
 
-%% 辅助函数
+%% ========================================================================
+%  执行模式
+%  ========================================================================
+
+function RunStd(dataset, para)
+    fprintf('\n=== 运行标准模式 ===\n');
+    tic;
+    res = HeartRateSolver_cas_chengfa(para);
+    fprintf('耗时: %.1f s\n', toc);
+    PrintStats('标准模式', res);
+    PlotSingle('标准模式', res, dataset);
+end
+
+function RunExpert(dataset, expert_params, para_baseline, para_optimized, optimized_loaded)
+    % 优先使用优化后参数, 否则回退基线
+    if optimized_loaded
+        para = BuildExpertPara(para_optimized, expert_params);
+        label = '专家模式 (优化后)';
+    else
+        para = BuildExpertPara(para_baseline, expert_params);
+        label = '专家模式 (基线参数)';
+    end
+    fprintf('\n=== 运行%s ===\n', label);
+    tic;
+    res = HeartRateSolver_cas_chengfa(para);
+    fprintf('耗时: %.1f s\n', toc);
+    PrintStats(label, res);
+    PlotSingle(label, res, dataset);
+    PlotClassifierProba(res, dataset, para.classifier_mode);
+end
+
+function RunBoth(dataset, para_std, expert_params, para_exp_backend)
+    % 标准模式
+    fprintf('\n=== 运行标准模式 ===\n');
+    tic;
+    res_std = HeartRateSolver_cas_chengfa(para_std);
+    t_std = toc;
+    fprintf('耗时: %.1f s\n', t_std);
+    PrintStats('标准模式', res_std);
+
+    % 专家模式 (基线参数)
+    para_exp = BuildExpertPara(para_exp_backend, expert_params);
+    fprintf('\n=== 运行专家模式 (基线参数) ===\n');
+    tic;
+    res_exp = HeartRateSolver_cas_chengfa(para_exp);
+    t_exp = toc;
+    fprintf('耗时: %.1f s\n', t_exp);
+    PrintStats('专家模式', res_exp);
+
+    % 对比图
+    PlotCompare2('标准模式', res_std, '专家模式 (基线)', res_exp, dataset);
+    PlotClassifierProba(res_exp, dataset, para_exp.classifier_mode);
+end
+
+function RunCompare(dataset, data_file, expert_params, para_baseline, para_optimized, optimized_loaded)
+    if ~optimized_loaded
+        error('未找到优化后参数文件, 无法对比。请先运行 AutoOptimize_Bayes_Search_cas_chengfa。');
+    end
+
+    % 专家模式 - 基线参数
+    para_bl = BuildExpertPara(para_baseline, expert_params);
+    fprintf('\n=== 运行专家模式 (优化前 - 基线参数) ===\n');
+    tic;
+    res_bl = HeartRateSolver_cas_chengfa(para_bl);
+    fprintf('耗时: %.1f s\n', toc);
+    PrintStats('专家(优化前)', res_bl);
+
+    % 专家模式 - 优化后参数
+    para_op = BuildExpertPara(para_optimized, expert_params);
+    fprintf('\n=== 运行专家模式 (优化后) ===\n');
+    tic;
+    res_op = HeartRateSolver_cas_chengfa(para_op);
+    fprintf('耗时: %.1f s\n', toc);
+    PrintStats('专家(优化后)', res_op);
+
+    % 对比图
+    PlotCompare2('专家(优化前)', res_bl, '专家(优化后)', res_op, dataset);
+    PlotClassifierProba(res_op, dataset, para_op.classifier_mode);
+
+    % 优化效果摘要
+    fprintf('\n=== 优化效果摘要 ===\n');
+    es_bl = res_bl.err_stats;
+    es_op = res_op.err_stats;
+    fprintf('%-14s | %8s | %8s | %8s\n', '指标', '优化前', '优化后', '改善');
+    fprintf('---------------|----------|----------|----------\n');
+    items = {'Fus-HF Total', 'Fus-HF Motion', 'Fus-ACC Total', 'Fus-ACC Motion'};
+    rows = {[4,1], [4,3], [5,1], [5,3]};
+    for i = 1:length(items)
+        v_bl = es_bl(rows{i}{1}, rows{i}{2});
+        v_op = es_op(rows{i}{1}, rows{i}{2});
+        delta = v_bl - v_op;
+        sign = '+'; if delta < 0, sign = '-'; end
+        fprintf('%-14s | %7.2f  | %7.2f  | %s%.2f\n', items{i}, v_bl, v_op, sign, abs(delta));
+    end
+end
+
+%% ========================================================================
+%  参数构建
+%  ========================================================================
+
+function [para, loaded] = LoadBackEndParams(data_dir, dataset, data_file)
+    bobi_param_file = fullfile(data_dir, sprintf('Best_Params_Result_multi_%s_processed.mat', dataset));
+    loaded = false;
+
+    para = struct();
+    para.FileName = data_file;
+    para.Time_Start = 1;
+    para.Time_Buffer = 10;
+    para.Calib_Time = 30;
+    para.Fs_Target = 25;
+    para.Motion_Th_Scale = 2.5;
+    para.Spec_Penalty_Enable = 1;
+    para.Spec_Penalty_Weight = 0.2;
+
+    if isfile(bobi_param_file)
+        tmp = load(bobi_param_file, 'Best_Para_HF');
+        bp = tmp.Best_Para_HF;
+        loaded = true;
+        fprintf('基线参数: 从 %s 加载', bobi_param_file);
+        fields = {'Max_Order', 'Spec_Penalty_Width', 'HR_Range_Hz', 'Slew_Limit_BPM', ...
+            'Slew_Step_BPM', 'HR_Range_Rest', 'Slew_Limit_Rest', 'Slew_Step_Rest', ...
+            'Smooth_Win_Len', 'Time_Bias'};
+        defaults = {16, 0.2, 25/60, 10, 7, 30/60, 6, 4, 7, 5};
+        for i = 1:length(fields)
+            if isfield(bp, fields{i}), para.(fields{i}) = bp.(fields{i});
+            else, para.(fields{i}) = defaults{i}; end
+        end
+    else
+        fprintf('基线参数: 使用默认值');
+        para.Max_Order = 16;
+        para.Spec_Penalty_Width = 0.2;
+        para.HR_Range_Hz = 25/60;
+        para.Slew_Limit_BPM = 10;
+        para.Slew_Step_BPM = 7;
+        para.HR_Range_Rest = 30/60;
+        para.Slew_Limit_Rest = 6;
+        para.Slew_Step_Rest = 4;
+        para.Smooth_Win_Len = 7;
+        para.Time_Bias = 5;
+    end
+end
+
+function para = BuildExpertPara(para_backend, expert_params)
+    para = para_backend;
+    para.expert_mode = true;
+    para.classifier_mode = 'window';
+    para.model_path = 'models';
+    para.expert_params = expert_params;
+end
+
+%% ========================================================================
+%  可视化
+%  ========================================================================
+
 function PrintStats(label, res)
     es = res.err_stats;
     fprintf('\n%s 误差统计 (AAE, BPM):\n', label);
@@ -234,4 +277,41 @@ function PlotSingle(label, res, dataset)
     es = res.err_stats;
     title(sprintf('%s | %s | Fus-HF T=%.1f M=%.1f | Fus-ACC T=%.1f M=%.1f', ...
         label, dataset, es(4,1), es(4,3), es(5,1), es(5,3)), 'FontSize', 11);
+end
+
+function PlotCompare2(label1, res1, label2, res2, dataset)
+    figure('Name', 'QuickTest 对比', 'Color', 'w', 'Position', [50 50 1400 900]);
+    data_sets = {res1, res2};
+    titles = {label1, label2};
+    for p = 1:2
+        ax = subplot(2, 1, p);
+        R = data_sets{p};
+        HR = R.HR;
+        T_Pred = R.T_Pred;
+        motion_bg = HR(:, 8) * 220;
+        a = area(T_Pred, motion_bg, 'FaceColor', [0.94 0.94 0.96], 'EdgeColor', 'none', 'BaseValue', 0);
+        hold on;
+        plot(HR(:,1), HR(:,2)*60, 'k-', 'LineWidth', 2.5, 'DisplayName', '真值');
+        plot(T_Pred, HR(:,5)*60, '-', 'Color', [0.6 0.6 0.6], 'LineWidth', 1.2, 'DisplayName', 'FFT');
+        plot(T_Pred, HR(:,6)*60, 'm.-', 'LineWidth', 1.5, 'MarkerSize', 6, 'DisplayName', 'Fusion-HF');
+        plot(T_Pred, HR(:,7)*60, 'b.-', 'LineWidth', 1.5, 'MarkerSize', 6, 'DisplayName', 'Fusion-ACC');
+        uistack(a, 'bottom');
+        ylabel('HR (BPM)'); ylim([50 200]); grid on; set(gca, 'GridAlpha', 0.3);
+        es = R.err_stats;
+        title(sprintf('%s | %s | Fus-HF T=%.1f M=%.1f | Fus-ACC T=%.1f M=%.1f', ...
+            titles{p}, dataset, es(4,1), es(4,3), es(5,1), es(5,3)), 'FontSize', 11, 'FontWeight', 'bold');
+        legend('Location', 'bestoutside');
+        if p == 2, xlabel('Time (s)'); end
+    end
+    linkaxes(findobj(gcf, 'type', 'axes'), 'x');
+end
+
+function PlotClassifierProba(res, dataset, classifier_mode)
+    if size(res.HR, 2) >= 12
+        figure('Name', '分类器概率时程', 'Color', 'w', 'Position', [50 50 1000 300]);
+        area(res.T_Pred, res.HR(:,10:12));
+        legend('arm\_curl', 'jump\_rope', 'push\_up', 'Location', 'best');
+        title(sprintf('分类器概率 [%s, %s]', dataset, classifier_mode));
+        xlabel('Time (s)'); ylabel('Probability'); ylim([0 1]); grid on;
+    end
 end

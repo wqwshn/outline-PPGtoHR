@@ -143,7 +143,7 @@ ProcessMergedSpectrum(freqs_common, S_fused_hf, ref_hf_fused, ...):
 | `Best_Params_Result_multi_wanju1_processed.mat` | arm_curl 专家的前级参数 (Fs_Target, Max_Order) | 必须 |
 | `Best_Params_Result_multi_tiaosheng2_processed.mat` | jump_rope 专家的前级参数 | 必须 |
 | `Best_Params_Result_multi_fuwo2_processed.mat` | push_up 专家的前级参数 | 必须 |
-| `Best_Params_Result_multi_bobi1_processed.mat` | bobi1 后级参数 (初次可为标准模式结果, 优化后更新) | 可选 |
+| `Best_Params_Result_multi_bobi1_processed.mat` | 标准模式基线参数 (后级参数的初始值) | 可选 |
 
 分类器模型文件 (均应在 `models/` 目录下):
 
@@ -153,6 +153,15 @@ ProcessMergedSpectrum(freqs_common, S_fused_hf, ref_hf_fused, ...):
 | `rf_model_3class.mat` | 同上 |
 | `label_map.mat` | 同上 |
 
+### QuickTest 命令速查
+
+| 命令 | 用途 | 时机 |
+|------|------|------|
+| `QuickTest('bobi1')` | 标准模式 vs 专家模式(基线参数) | 优化前, 验证管线通畅 |
+| `QuickTest('bobi1', 'std')` | 仅标准模式 | 调试基线 |
+| `QuickTest('bobi1', 'expert')` | 仅专家模式 (优先用优化后参数) | 快速检查 |
+| `QuickTest('bobi1', 'compare')` | 专家(基线) vs 专家(优化后) | **优化后, 评估效果** |
+
 ### Step 0: 生成分类器模型 (仅需一次)
 
 ```bash
@@ -161,23 +170,20 @@ python export_classifier_to_mat.py
 # 输出: models/scaler_params.mat, models/rf_model_3class.mat, models/label_map.mat
 ```
 
-### Step 1: 快速验证管线通畅
+### Step 1: 优化前基线评估
 
-用 QuickTest 确认标准模式和专家模式均能正常运行，无报错:
+用 `QuickTest('bobi1')` 确认标准模式和专家模式均能正常运行:
 
 ```matlab
-cd MATLAB
-QuickTest('bobi1', 'std')      % 仅标准模式 (~1s)
-QuickTest('bobi1', 'expert')   % 仅专家模式 (~3s)
-QuickTest('bobi1')             % 两者对比
+QuickTest('bobi1')              % 标准模式 vs 专家模式(基线参数), ~4s
 ```
 
 **预期输出:**
-- 命令行: 误差统计表 (Total / Rest / Motion AAE, BPM)
-- 图1: 标准模式 vs 专家模式心率轨迹对比 (灰色背景=运动段)
-- 图2 (仅专家模式): 分类器概率时程图 (3 类概率随时间变化)
+- 命令行: 两种模式的误差统计表
+- 图1: 双子图对比 (标准 vs 专家)
+- 图2: 分类器概率时程图
 
-**此阶段使用默认/旧参数, 专家模式效果可能仅略优于标准模式, 这是正常的。**
+**此阶段专家模式使用标准模式的基线后级参数, 效果可能仅略优于标准模式, 这是正常的。**
 
 ### Step 2: 专家模式后级参数优化
 
@@ -193,10 +199,10 @@ AutoOptimize_Bayes_Search_cas_chengfa   % 约 10-15 分钟
 - 策略: 75 次迭代 x 3 轮重启, 并行加速
 - 前级参数: 从各运动 Best_Params 文件固定加载, 不参与搜索
 
-**输出:** `dataformatlab/Best_Params_Result_multi_bobi1_processed.mat`
-- `Best_Para_HF`: Fusion(HF) 最优参数 (含 expert_mode=true + expert_params)
-- `Best_Para_ACC`: Fusion(ACC) 最优参数
-- `Min_Err_HF`, `Min_Err_ACC`: 对应最低全局 AAE
+**输出:** `dataformatlab/Best_Params_Expert_Result_multi_bobi1_processed.mat`
+- `Best_Para_Expert_HF`: Fusion(HF) 最优参数
+- `Best_Para_Expert_ACC`: Fusion(ACC) 最优参数
+- `Min_Err_Expert_HF`, `Min_Err_Expert_ACC`: 对应最低全局 AAE
 
 ### Step 3: 可视化优化结果
 
@@ -207,31 +213,41 @@ AutoOptimize_Result_Viewer_cas_chengfa
 **预期输出:**
 - 图1: HF 最优参数 vs ACC 最优参数 双子图对比
 - 图2: 分类器概率时程堆叠面积图
-- 命令行: 全参数对比表 (每个参数在 HF/ACC 方案中的取值)
+- 命令行: 全参数对比表
 
-### Step 4: 优化后评估对比
+### Step 4: 优化后效果评估
 
-再次运行 QuickTest, 对比优化前后的专家模式效果:
+用 `'compare'` 模式对比优化前后:
 
 ```matlab
-QuickTest('bobi1')   % 标准模式 vs 优化后的专家模式
+QuickTest('bobi1', 'compare')
 ```
+
+**此命令会运行两次专家模式:**
+1. 使用基线后级参数 (来自 `Best_Params_Result_multi_bobi1_processed.mat`)
+2. 使用优化后后级参数 (来自 `Best_Params_Expert_Result_multi_bobi1_processed.mat`)
+
+**预期输出:**
+- 命令行: 优化前后误差统计 + **优化效果摘要表** (含改善幅度)
+- 图1: 双子图对比 (优化前 vs 优化后)
+- 图2: 分类器概率时程图
 
 **检查要点:**
 
 | 检查项 | 预期 | 如何判断 |
 |--------|------|---------|
-| 专家模式 Fus-ACC Motion AAE | 应低于标准模式 | 命令行误差表 Motion 列 |
-| 静息段误差 | 不应恶化 | Rest AAE 两模式应接近 |
+| Fus-ACC Total/Motion AAE | 优化后应低于优化前 | 优化效果摘要表的改善列 |
+| 静息段误差 | 不应恶化 | Rest AAE 两行应接近 |
 | 分类器概率 | 随运动模式变化 | 概率时程图不应全平 |
 | 运动检测 | 灰色背景覆盖运动段 | 不应全满或全空 |
-| 心率轨迹 | 跟踪真值紧密, 无大幅跳变 | 对比图中两条曲线重合度 |
+| 心率轨迹 | 跟踪真值更紧密 | 对比图中优化后曲线更贴近真值 |
 
 ### Step 5: 换数据集验证泛化性
 
 ```matlab
-QuickTest('bobi2')                    % 另一组波比跳数据
-AutoOptimize_Bayes_Search_cas_chengfa % 修改 FileName 为 bobi2 后重新优化
+QuickTest('bobi2')                               % 基线评估
+AutoOptimize_Bayes_Search_cas_chengfa            % 修改 FileName 为 bobi2 后重新优化
+QuickTest('bobi2', 'compare')                    % 优化后评估
 ```
 
 ## 手动运行 (高级)
