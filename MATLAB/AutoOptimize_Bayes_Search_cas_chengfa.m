@@ -68,10 +68,12 @@ Num_Seed_Points = 10;
 % 重启次数 (每个方案独立运行几次，最终取所有运行中的历史最低误差)
 Num_Repeats = 3;
 
-%% 3. 定义搜索空间 (离散列表)
-% Fs_Target=25Hz 已固定在 para_base 中, 不再纳入优化
-SearchSpace.Max_Order = [12, 16, 20, 24];
+%% 3. 定义搜索空间 (仅后级参数)
+% 前级参数 (Fs_Target, Max_Order, LMS_Mu_Base, Num_Cascade) 已在各专家的 Best_Params 中固定,
+% 专家模式下 HeartRateSolver 使用 expert_params.(name).Max_Order 而非 para.Max_Order,
+% 因此这里只搜索后级处理 (频谱惩罚/谱峰追踪/平滑) 相关参数.
 SearchSpace.Spec_Penalty_Width = [0.1, 0.2, 0.3];
+SearchSpace.Spec_Penalty_Weight = [0.1, 0.2, 0.3, 0.5];
 
 SearchSpace.HR_Range_Hz = [15, 20, 25, 30, 35, 40] / 60;
 SearchSpace.Slew_Limit_BPM = 8:15;        
