@@ -9,7 +9,7 @@
 clc; clear; close all;
 
 %% 1. 加载寻优结果
-ResultFile = 'data20260418\Best_Params_Result_multi_kaihe2_processed.mat';
+ResultFile = 'dataformatlab\Best_Params_Result_multi_bobi1_processed.mat';
 if ~isfile(ResultFile)
     error('未找到结果文件 %s，请先运行 AutoOptimize_Bayes_Search.m', ResultFile);
 end
@@ -104,6 +104,24 @@ grid on; set(gca, 'GridAlpha', 0.3);
 legend([h_ref2, h_fft2, h_fus_h2, h_fus_a2, h_lms_h2, h_lms_a2, a2], 'Location', 'bestoutside', 'NumColumns', 1);
 
 linkaxes([ax1, ax2], 'x');
+
+%% 4b. 分类器概率时程图 (专家模式)
+if size(HR_HF, 2) >= 12
+    figure('Name', 'Classifier Probability Timeline', 'Color', 'w', 'Position', [50, 50, 1000, 400]);
+    subplot(2,1,1);
+    area(T_Pred_HF, HR_HF(:,10:12), 'Stacked');
+    legend({'arm\_curl', 'jump\_rope', 'push\_up'}, 'Location', 'best');
+    title(sprintf('Fusion(HF) 分类器概率 | 运动段AAE=%.4f', M_FusHF_1));
+    xlabel('Time (s)'); ylabel('Probability');
+    ylim([0 1]); grid on;
+
+    subplot(2,1,2);
+    area(T_Pred_ACC, HR_ACC(:,10:12), 'Stacked');
+    legend({'arm\_curl', 'jump\_rope', 'push\_up'}, 'Location', 'best');
+    title(sprintf('Fusion(ACC) 分类器概率 | 运动段AAE=%.4f', M_FusACC_2));
+    xlabel('Time (s)'); ylabel('Probability');
+    ylim([0 1]); grid on;
+end
 
 %% 4. 详细误差表与参数对比
 % --- 误差表 (HF Case) ---
