@@ -46,20 +46,27 @@ base = build_base_para(data_file);
 %% === 标准模式 ===
 if strcmp(mode, 'std') || strcmp(mode, 'both')
     fprintf('\n======== 标准模式 ========\n');
-    % 尝试加载该数据集已有的最优参数
     bp_file = sprintf('dataformatlab\\Best_Params_Result_%s', ...
         strrep(data_file, 'dataformatlab\', ''));
     if isfile(bp_file)
         bp = load(bp_file);
-        % 使用 HF 最优参数
         para_std = bp.Best_Para_HF;
         fprintf('已加载最优参数: %s\n', bp_file);
     else
         para_std = base;
         fprintf('使用默认参数 (未找到最优参数文件)\n');
     end
+    % 确保必要字段存在 (兼容新旧格式参数文件)
+    if ~isfield(para_std, 'Fs_Target'),   para_std.Fs_Target = 25; end
+    if ~isfield(para_std, 'Max_Order'),   para_std.Max_Order = 16; end
+    if ~isfield(para_std, 'Time_Bias'),   para_std.Time_Bias = 5; end
+    if ~isfield(para_std, 'Smooth_Win_Len'), para_std.Smooth_Win_Len = 7; end
     para_std.expert_mode = false;
     para_std.FileName = data_file;
+    fprintf('  Fs=%d, Order=%d, HR_Range=%.0f/%.0f BPM, Slew=%d/%d\n', ...
+        para_std.Fs_Target, para_std.Max_Order, ...
+        para_std.HR_Range_Hz*60, para_std.HR_Range_Rest*60, ...
+        para_std.Slew_Limit_BPM, para_std.Slew_Limit_Rest);
     tic;
     Res_std = HeartRateSolver_cas_chengfa(para_std);
     t_std = toc;
@@ -106,6 +113,11 @@ if strcmp(mode, 'expert') || strcmp(mode, 'both')
         para_exp = base;
         fprintf('后级参数: 使用默认值\n');
     end
+    % 确保必要字段存在
+    if ~isfield(para_exp, 'Fs_Target'),   para_exp.Fs_Target = 25; end
+    if ~isfield(para_exp, 'Max_Order'),   para_exp.Max_Order = 16; end
+    if ~isfield(para_exp, 'Time_Bias'),   para_exp.Time_Bias = 5; end
+    if ~isfield(para_exp, 'Smooth_Win_Len'), para_exp.Smooth_Win_Len = 7; end
 
     para_exp.expert_mode = true;
     para_exp.classifier_mode = 'window';

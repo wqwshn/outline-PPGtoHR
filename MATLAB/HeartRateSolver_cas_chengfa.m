@@ -87,10 +87,16 @@ if isfield(para, 'expert_mode') && para.expert_mode
     scaler_data = load(fullfile(classifier_model_path, 'scaler_params.mat'));
     rf_data     = load(fullfile(classifier_model_path, 'rf_model_3class.mat'));
 
-    % IMU 陀螺仪数据
+    % IMU 陀螺仪数据 (分类器 + 运动检测共用)
     imu_gyrox = resample(raw_data(:, Col_Gyro(1)), Fs_common, Fs_Origin);
     imu_gyroy = resample(raw_data(:, Col_Gyro(2)), Fs_common, Fs_Origin);
     imu_gyroz = resample(raw_data(:, Col_Gyro(3)), Fs_common, Fs_Origin);
+
+    % 运动检测用的带通滤波陀螺仪
+    [b_g, a_g] = butter(4, [0.5 5]/(Fs_common/2), 'bandpass');
+    gyrox = filtfilt(b_g, a_g, imu_gyrox);
+    gyroy = filtfilt(b_g, a_g, imu_gyroy);
+    gyroz = filtfilt(b_g, a_g, imu_gyroz);
 
 else
     %% 原始模式: 单遍预处理
