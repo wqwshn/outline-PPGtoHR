@@ -13,8 +13,8 @@ function [mh_arr,ma_arr,time_delay_h,time_delay_a] = ChooseDelay1218(Fs,time_1,p
     num_acc = length(acc_signals);
     num_hf  = length(hf_signals);
 
-    % 时延搜索范围: 以 25Hz 下 ±5 样本(=200ms) 为基准，按采样率等比缩放
-    delay_range = round(0.2 * Fs);
+    % 时延搜索范围: ±800ms (25Hz 下 ±20 样本), 按采样率等比缩放
+    delay_range = round(0.8 * Fs);
     num_delays  = 2 * delay_range + 1;
 
     DelayHow_a = zeros(num_delays, num_acc + 1);  % Col1=lag, Col2..N=各通道相关系数

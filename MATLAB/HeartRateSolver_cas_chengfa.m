@@ -30,7 +30,8 @@ raw_data = table2array(data);
 Fs_Origin = 100;      % 原始采样率
 Col_PPG  = 6;           
 Col_HF1  = 4; Col_HF2 = 5;        
-Col_Acc  = [9, 10, 11];        
+Col_Acc  = [9, 10, 11];
+Col_Gyro = [12, 13, 14]; if isfield(para, 'Col_Gyro'), Col_Gyro = para.Col_Gyro; end
 
 % % Spo2的数据格式
 % Fs_Origin = 125;      % 原始采样率
@@ -86,9 +87,7 @@ if isfield(para, 'expert_mode') && para.expert_mode
     scaler_data = load(fullfile(classifier_model_path, 'scaler_params.mat'));
     rf_data     = load(fullfile(classifier_model_path, 'rf_model_3class.mat'));
 
-    % IMU 陀螺仪列配置
-    Col_Gyro = [12, 13, 14];
-    if isfield(para, 'Col_Gyro'), Col_Gyro = para.Col_Gyro; end
+    % IMU 陀螺仪数据
     imu_gyrox = resample(raw_data(:, Col_Gyro(1)), Fs_common, Fs_Origin);
     imu_gyroy = resample(raw_data(:, Col_Gyro(2)), Fs_common, Fs_Origin);
     imu_gyroz = resample(raw_data(:, Col_Gyro(3)), Fs_common, Fs_Origin);
@@ -102,6 +101,9 @@ else
     accx_ori  = resample(raw_data(:, Col_Acc(1)), Fs, Fs_Origin);
     accy_ori  = resample(raw_data(:, Col_Acc(2)), Fs, Fs_Origin);
     accz_ori  = resample(raw_data(:, Col_Acc(3)), Fs, Fs_Origin);
+    gyrox_ori = resample(raw_data(:, Col_Gyro(1)), Fs, Fs_Origin);
+    gyroy_ori = resample(raw_data(:, Col_Gyro(2)), Fs, Fs_Origin);
+    gyroz_ori = resample(raw_data(:, Col_Gyro(3)), Fs, Fs_Origin);
 
     BP_Low = 0.5; BP_High = 5; BP_Order = 4;
     [b_but, a_but] = butter(BP_Order, [BP_Low BP_High]/(Fs/2), 'bandpass');
@@ -112,15 +114,23 @@ else
     accx  = filtfilt(b_but, a_but, accx_ori);
     accy  = filtfilt(b_but, a_but, accy_ori);
     accz  = filtfilt(b_but, a_but, accz_ori);
+    gyrox = filtfilt(b_but, a_but, gyrox_ori);
+    gyroy = filtfilt(b_but, a_but, gyroy_ori);
+    gyroz = filtfilt(b_but, a_but, gyroz_ori);
 end
 
-%% 2. 运动阈值校准 (统一仅使用 ACC 阈值)
+%% 2. 运动阈值校准 (MIMU 六轴: ACC + Gyro 联合判定)
 calib_len = min(round(para.Calib_Time * Fs), length(ppg));
 
-% 2.1 ACC 阈值计算 (保留并作为唯一标准)
-acc_mag = sqrt(accx.^2 + accy.^2 + accz.^2); 
+% 2.1 幅值计算
+acc_mag = sqrt(accx.^2 + accy.^2 + accz.^2);
+gyro_mag = sqrt(gyrox.^2 + gyroy.^2 + gyroz.^2);
+
+% 2.2 基线校准: 各自归一化后联合判定
 acc_baseline_std = std(acc_mag(1:calib_len));
+gyro_baseline_std = std(gyro_mag(1:calib_len));
 Motion_Threshold_ACC = para.Motion_Th_Scale * acc_baseline_std;
+Motion_Threshold_Gyro = para.Motion_Th_Scale * gyro_baseline_std;
 
 %% 3. 主循环初始化
 Win_Len = 8; Win_Step = 1;
@@ -166,14 +176,16 @@ while stop_flag
     Sig_a = {accx(idx_s:idx_e), accy(idx_s:idx_e), accz(idx_s:idx_e)};
     
     Sig_acc_mag = acc_mag(idx_s:idx_e);
+    Sig_gyro_mag = gyro_mag(idx_s:idx_e);
     
     HR(times, 1) = time_1; 
     HR(times, 2) = Find_realHR('dummy', time_1, HR_Ref_Data); 
     
     % =====================================================================
-    % 4.1 运动状态判断 (统一修改为 ACC 标准)
+    % 4.1 运动状态判断 (MIMU 六轴: ACC 或 Gyro 任一超阈值即判定运动)
     % =====================================================================
-    is_motion = std(Sig_acc_mag) > Motion_Threshold_ACC;
+    is_motion = (std(Sig_acc_mag) > Motion_Threshold_ACC) || ...
+                (std(Sig_gyro_mag) > Motion_Threshold_Gyro);
     
     % 将同一运动状态写入两列，供后续融合逻辑使用
     HR(times, 8) = is_motion; % 原 ACC 运动标记
@@ -219,9 +231,9 @@ while stop_flag
 
                 [mh_k, ma_k, td_h_k, td_a_k] = ChooseDelay1218(Fs_k, time_1, ss.ppg, Sig_a_k, Sig_h_k);
 
-                % LMS-HF
+                % LMS-HF (阶数由延时的绝对值决定)
                 Sig_e_hf = Sig_p_k;
-                if td_h_k < 0, ord_h = floor(abs(td_h_k)*1); else, ord_h = 1; end
+                ord_h = max(floor(abs(td_h_k)), 1);
                 ord_h = min(max(ord_h, 1), ep.Max_Order);
                 mh_mat_k = sort(mh_k, 'descend');
                 [~, best_hf_idx_k] = max(mh_k);
@@ -233,9 +245,9 @@ while stop_flag
                     Sig_e_hf = lmsFunc_h(lms_mu_hf - curr_corr/100, ord_h, 0, Sig_h_k{ri}, Sig_e_hf);
                 end
 
-                % LMS-ACC
+                % LMS-ACC (阶数由延时的绝对值决定, 系数与 HF 一致为 1.0)
                 Sig_e_acc = Sig_p_k;
-                if td_a_k < 0, ord_a = floor(abs(td_a_k)*1.5); else, ord_a = 1; end
+                ord_a = max(floor(abs(td_a_k)), 1);
                 ord_a = min(max(ord_a, 1), ep.Max_Order);
                 ma_mat_k = sort(ma_k, 'descend');
                 [~, best_acc_idx_k] = max(ma_k);
@@ -297,9 +309,9 @@ while stop_flag
             [mh_arr, ma_arr, time_delay_h, time_delay_a] = ...
                 ChooseDelay1218(Fs, time_1, ppg, {accx,accy,accz}, {hotf1,hotf2});
 
-            % 路径 A: LMS-HF
+            % 路径 A: LMS-HF (阶数由延时的绝对值决定)
             Sig_LMS_HF = Sig_p;
-            if time_delay_h < 0, ord_h = floor(abs(time_delay_h)*1); else, ord_h = 1; end
+            ord_h = max(floor(abs(time_delay_h)), 1);
             ord_h = min(max(ord_h, 1), para.Max_Order);
             mh_mat = sort(mh_arr, 'descend');
             [~, best_hf_idx] = max(mh_arr);
@@ -312,9 +324,9 @@ while stop_flag
                                             true, para.HR_Range_Hz, para.Slew_Limit_BPM, para.Slew_Step_BPM);
             HR(times, 3) = Freq_HF;
 
-            % 路径 B: LMS-ACC
+            % 路径 B: LMS-ACC (阶数由延时的绝对值决定, 系数与 HF 一致为 1.0)
             Sig_LMS_ACC = Sig_p;
-            if time_delay_a < 0, ord_a = floor(abs(time_delay_a)*1.5); else, ord_a = 1; end
+            ord_a = max(floor(abs(time_delay_a)), 1);
             ord_a = min(max(ord_a, 1), para.Max_Order);
             ma_mat = sort(ma_arr, 'descend');
             [~, best_acc_idx] = max(ma_arr);
@@ -396,7 +408,7 @@ Result.Err_Fus_HF = err_stats(4, 1);
 Result.HR = HR;
 Result.err_stats = err_stats;
 Result.T_Pred = T_Pred;
-Result.Motion_Threshold = [Motion_Threshold_ACC, Motion_Threshold_ACC]; 
+Result.Motion_Threshold = [Motion_Threshold_ACC, Motion_Threshold_Gyro]; 
 Result.HR_Ref_Interp = HR_Ref_Interp;
 
 end
