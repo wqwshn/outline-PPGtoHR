@@ -1,6 +1,7 @@
 function [mh_arr,ma_arr,time_delay_h,time_delay_a] = ChooseDelay1218(Fs,time_1,ppg,acc_signals,hf_signals)
 % 计算 PPG 与参考信号(ACC/HF)之间的时延和各通道最大相关系数
 % 输入:
+%   Fs          - 当前采样率(Hz)
 %   acc_signals - ACC信号cell数组, 如 {accx, accy, accz}
 %   hf_signals  - HF信号cell数组,  如 {hotf1, hotf2}
 % 输出:
@@ -12,16 +13,20 @@ function [mh_arr,ma_arr,time_delay_h,time_delay_a] = ChooseDelay1218(Fs,time_1,p
     num_acc = length(acc_signals);
     num_hf  = length(hf_signals);
 
-    DelayHow_a = zeros(11, num_acc + 1);  % Col1=lag, Col2..N=各通道相关系数
-    DelayHow_h = zeros(11, num_hf + 1);
+    % 时延搜索范围: 以 25Hz 下 ±5 样本(=200ms) 为基准，按采样率等比缩放
+    delay_range = round(0.2 * Fs);
+    num_delays  = 2 * delay_range + 1;
+
+    DelayHow_a = zeros(num_delays, num_acc + 1);  % Col1=lag, Col2..N=各通道相关系数
+    DelayHow_h = zeros(num_delays, num_hf + 1);
 
     p1 = floor(time_1*Fs);
     p2 = p1 + 8*Fs - 1;
     if p2 > length(ppg), p2 = length(ppg); end
     ppg_seg = ppg(p1:p2);
 
-    for ii = -5:5
-        row = ii + 6;  % -5->1, 0->6, 5->11
+    for ii = -delay_range:delay_range
+        row = ii + delay_range + 1;  % -delay_range -> 1, 0 -> delay_range+1
         DelayHow_a(row, 1) = ii;
         DelayHow_h(row, 1) = ii;
 
