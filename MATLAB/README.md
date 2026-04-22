@@ -35,11 +35,67 @@
 |------|------|---------|
 | 前级 | K 组专家特异化 LMS 滤波 | 各运动类型的贝叶斯优化结果 (固定) |
 | 中层 | 分类器概率加权频谱融合 | Python 训练的 Random Forest (离线) |
-| 后级 | 频谱惩罚、寻峰追踪、平滑 | 新一轮贝叶斯优化 (待优化) |
+| 后级 | 频谱惩罚、寻峰追踪、平滑 | 针对专家模式管线的贝叶斯优化 |
 
 **分类器：** Random Forest (3 类: arm_curl / jump_rope / push_up)，支持两种模式：
 - **窗级模式** (`classifier_mode='window'`): 每 8s 窗口独立计算概率，响应快
 - **段级模式** (`classifier_mode='segment'`): 整个运动段统一概率，更稳定
+
+### 专家模式数据流
+
+以一个运动时间窗口 (8s) 为例，展示三阶段之间的数据传递：
+
+```
+=== 前级: K=3 路独立 LMS 滤波 ===
+
+sig_sets{1} (arm_curl:  Fs=25Hz, MaxOrder=12)
+  -> 截取窗口 PPG + HF/ACC 参考信号
+  -> ChooseDelay1218 计算时延 -> lmsFunc_h 级联滤波 (2级HF, 3级ACC)
+  -> 输出: Sig_e_hf, Sig_e_acc (时域去噪信号)
+  -> resample 统一到公共 Fs -> compute_spectrum (FFT, 8192点)
+  -> spectra_hf[:,1] = amps_hf (4096点幅度谱)
+
+sig_sets{2} (jump_rope: Fs=25Hz, MaxOrder=20)  -- 同上流程
+  -> spectra_hf[:,2] = amps_hf
+
+sig_sets{3} (push_up:   Fs=25Hz, MaxOrder=12)  -- 同上流程
+  -> spectra_hf[:,3] = amps_hf
+
+  前级还额外保存各路最佳参考信号 best_hf_ref_k, best_acc_ref_k (用于后级惩罚)
+
+=== 中层: 分类器加权频谱融合 ===
+
+分类器 (RF) 读取当前窗口 IMU 6轴信号 -> 提取75维特征 -> 推理
+  -> weights = [w_arm_curl, w_jump_rope, w_push_up]  (总和=1)
+
+weighted_spectrum_fusion:
+  S_fused_hf = w1 * spectra_hf[:,1] + w2 * spectra_hf[:,2] + w3 * spectra_hf[:,3]
+             (4096点融合幅度谱: 各专家滤波特长的加权组合)
+
+ref_hf_fused = w1 * best_hf_ref_1 + w2 * best_hf_ref_2 + w3 * best_hf_ref_3
+             (时域参考信号的加权平均, 用于后级频谱惩罚)
+
+=== 后级: 频谱惩罚 + 寻峰 + 追踪 (贝叶斯优化目标) ===
+
+ProcessMergedSpectrum(freqs_common, S_fused_hf, ref_hf_fused, ...):
+  1. 频谱惩罚: ref_hf_fused 的主频附近 -> S_fused_hf 衰减
+     参数: Spec_Penalty_Width, Spec_Penalty_Weight
+  2. 1~4Hz 有效频段寻峰 -> 候选频率列表 Fre
+  3. Find_nearBiggest 历史追踪 -> 最终心率
+     参数: HR_Range_Hz, Slew_Limit_BPM, Slew_Step_BPM
+
+-> Freq_HF (标量, 当前窗口估计心率 Hz)
+```
+
+**前后级参数分离：**
+
+| 参数类型 | 作用位置 | 来源 | 优化? |
+|----------|---------|------|-------|
+| Fs_Target, Max_Order, LMS_Mu_Base, Num_Cascade | 前级 LMS | 各运动 Best_Params 文件 | 固定 |
+| Spec_Penalty_Width, Spec_Penalty_Weight | 后级惩罚 | 贝叶斯优化搜索 | 搜索 |
+| HR_Range_Hz, Slew_Limit_BPM, Slew_Step_BPM | 后级追踪 (运动段) | 贝叶斯优化搜索 | 搜索 |
+| HR_Range_Rest, Slew_Limit_Rest, Slew_Step_Rest | 后级追踪 (静息段) | 贝叶斯优化搜索 | 搜索 |
+| Smooth_Win_Len, Time_Bias | 全局平滑 | 贝叶斯优化搜索 | 搜索 |
 
 ## 文件说明
 
@@ -71,26 +127,116 @@
 
 | 文件 | 说明 |
 |------|------|
-| `AutoOptimize_Bayes_Search_cas_chengfa.m` | 贝叶斯参数优化 (专家模式下仅优化后级参数) |
+| `QuickTest.m` | 快速调试: 一条命令运行标准/专家模式并对比 |
+| `AutoOptimize_Bayes_Search_cas_chengfa.m` | 贝叶斯参数优化 (专家模式下仅优化后级 10 个参数) |
 | `AutoOptimize_Result_Viewer_cas_chengfa.m` | 结果可视化 + 分类器概率时程图 |
 
-## 使用方法
+## 完整测试流程 (以 bobi1 为例)
 
-### 0. 快速调试 (推荐)
+### 前置条件
 
-```matlab
-% 前置: 需先运行一次 Python 导出分类器模型
-%   cd MATLAB && python export_classifier_to_mat.py
+所需文件清单 (均应在 `dataformatlab/` 目录下):
 
-QuickTest                  % bobi1, 标准模式 vs 专家模式对比
-QuickTest('bobi2')         % 换数据集
-QuickTest('bobi1', 'std')  % 仅标准模式 (基线)
-QuickTest('bobi1', 'expert') % 仅专家模式
+| 文件 | 用途 | 状态检查 |
+|------|------|---------|
+| `multi_bobi1_processed.mat` | 波比跳测试数据 (含 PPG + HF + ACC + Gyro + 真值) | 必须 |
+| `Best_Params_Result_multi_wanju1_processed.mat` | arm_curl 专家的前级参数 (Fs_Target, Max_Order) | 必须 |
+| `Best_Params_Result_multi_tiaosheng2_processed.mat` | jump_rope 专家的前级参数 | 必须 |
+| `Best_Params_Result_multi_fuwo2_processed.mat` | push_up 专家的前级参数 | 必须 |
+| `Best_Params_Result_multi_bobi1_processed.mat` | bobi1 后级参数 (初次可为标准模式结果, 优化后更新) | 可选 |
+
+分类器模型文件 (均应在 `models/` 目录下):
+
+| 文件 | 来源 |
+|------|------|
+| `scaler_params.mat` | `python export_classifier_to_mat.py` 生成 |
+| `rf_model_3class.mat` | 同上 |
+| `label_map.mat` | 同上 |
+
+### Step 0: 生成分类器模型 (仅需一次)
+
+```bash
+cd MATLAB
+python export_classifier_to_mat.py
+# 输出: models/scaler_params.mat, models/rf_model_3class.mat, models/label_map.mat
 ```
 
-QuickTest 会自动从 `dataformatlab/Best_Params_Result_multi_*.mat` 加载专家参数，无需手动配置。
+### Step 1: 快速验证管线通畅
 
-### 1. 标准模式
+用 QuickTest 确认标准模式和专家模式均能正常运行，无报错:
+
+```matlab
+cd MATLAB
+QuickTest('bobi1', 'std')      % 仅标准模式 (~1s)
+QuickTest('bobi1', 'expert')   % 仅专家模式 (~3s)
+QuickTest('bobi1')             % 两者对比
+```
+
+**预期输出:**
+- 命令行: 误差统计表 (Total / Rest / Motion AAE, BPM)
+- 图1: 标准模式 vs 专家模式心率轨迹对比 (灰色背景=运动段)
+- 图2 (仅专家模式): 分类器概率时程图 (3 类概率随时间变化)
+
+**此阶段使用默认/旧参数, 专家模式效果可能仅略优于标准模式, 这是正常的。**
+
+### Step 2: 专家模式后级参数优化
+
+运行贝叶斯优化, 专对专家模式管线搜索最优后级参数:
+
+```matlab
+AutoOptimize_Bayes_Search_cas_chengfa   % 约 10-15 分钟
+```
+
+**优化配置:**
+- 搜索空间: 10 个后级参数 (Spec_Penalty_Width/Weight, HR_Range, Slew, Smooth, Time_Bias)
+- 目标函数: 全局 AAE (err_stats(:,1))
+- 策略: 75 次迭代 x 3 轮重启, 并行加速
+- 前级参数: 从各运动 Best_Params 文件固定加载, 不参与搜索
+
+**输出:** `dataformatlab/Best_Params_Result_multi_bobi1_processed.mat`
+- `Best_Para_HF`: Fusion(HF) 最优参数 (含 expert_mode=true + expert_params)
+- `Best_Para_ACC`: Fusion(ACC) 最优参数
+- `Min_Err_HF`, `Min_Err_ACC`: 对应最低全局 AAE
+
+### Step 3: 可视化优化结果
+
+```matlab
+AutoOptimize_Result_Viewer_cas_chengfa
+```
+
+**预期输出:**
+- 图1: HF 最优参数 vs ACC 最优参数 双子图对比
+- 图2: 分类器概率时程堆叠面积图
+- 命令行: 全参数对比表 (每个参数在 HF/ACC 方案中的取值)
+
+### Step 4: 优化后评估对比
+
+再次运行 QuickTest, 对比优化前后的专家模式效果:
+
+```matlab
+QuickTest('bobi1')   % 标准模式 vs 优化后的专家模式
+```
+
+**检查要点:**
+
+| 检查项 | 预期 | 如何判断 |
+|--------|------|---------|
+| 专家模式 Fus-ACC Motion AAE | 应低于标准模式 | 命令行误差表 Motion 列 |
+| 静息段误差 | 不应恶化 | Rest AAE 两模式应接近 |
+| 分类器概率 | 随运动模式变化 | 概率时程图不应全平 |
+| 运动检测 | 灰色背景覆盖运动段 | 不应全满或全空 |
+| 心率轨迹 | 跟踪真值紧密, 无大幅跳变 | 对比图中两条曲线重合度 |
+
+### Step 5: 换数据集验证泛化性
+
+```matlab
+QuickTest('bobi2')                    % 另一组波比跳数据
+AutoOptimize_Bayes_Search_cas_chengfa % 修改 FileName 为 bobi2 后重新优化
+```
+
+## 手动运行 (高级)
+
+### 标准模式
 
 ```matlab
 para.FileName = 'dataformatlab\multi_bobi1_processed.mat';
@@ -100,23 +246,7 @@ para.Max_Order = 16;
 Result = HeartRateSolver_cas_chengfa(para);
 ```
 
-### 2. 专家模式
-
-**前置准备（只需执行一次）：**
-
-```bash
-# 训练分类器并导出模型
-cd MATLAB && python export_classifier_to_mat.py
-# 生成: models/scaler_params.mat, models/rf_model_3class.mat, models/label_map.mat
-```
-
-**运行算法（推荐使用 QuickTest）：**
-
-```matlab
-QuickTest('bobi1', 'expert')  % 一条命令, 自动加载专家参数
-```
-
-**手动运行（如需细粒度控制）：**
+### 专家模式 (手动配置)
 
 ```matlab
 para.FileName = 'dataformatlab\multi_bobi1_processed.mat';
@@ -131,13 +261,6 @@ para.expert_params.arm_curl = struct('Fs_Target', tmp.Best_Para_HF.Fs_Target, ..
 % 对 jump_rope (tiaosheng2) 和 push_up (fuwo2) 重复...
 
 Result = HeartRateSolver_cas_chengfa(para);
-```
-
-**运行贝叶斯优化（仅优化后级 9 个参数）：**
-
-```matlab
-AutoOptimize_Bayes_Search_cas_chengfa  % 已内置 expert_mode 配置
-AutoOptimize_Result_Viewer_cas_chengfa % 查看结果 + 分类器概率时程图
 ```
 
 ## 数据要求
@@ -164,13 +287,3 @@ AutoOptimize_Result_Viewer_cas_chengfa % 查看结果 + 分类器概率时程图
 | 8 | 运动标记 ACC (0/1) | |
 | 9 | 运动标记 HF (0/1) | 与 Col8 同步 |
 | 10-12 | 分类器概率 | arm_curl, jump_rope, push_up (仅专家模式) |
-
-## 核心检查要点
-
-专家模式运行后，重点检查以下内容：
-
-1. **分类器概率分布** (Col 10-12): 概率应合理反映当前运动模式，且总和为 1。通过 `AutoOptimize_Result_Viewer` 的概率时程图可视化检查
-2. **运动段 AAE**: 专家模式的核心目标是降低运动段误差，对比标准模式和专家模式的 `err_stats(:,3)` (第 3 列为运动段)
-3. **频谱融合有效性**: 检查融合后的心率轨迹是否比单一专家更平滑、跟踪真值更紧密
-4. **静息段不受影响**: 静息段应仍使用 Pure FFT，与标准模式结果一致
-5. **向后兼容**: 设置 `expert_mode=false` 时，结果应与旧版本完全一致
