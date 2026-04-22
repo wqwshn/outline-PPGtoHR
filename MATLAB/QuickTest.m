@@ -171,8 +171,8 @@ function RunCompare(dataset, data_file, expert_params, para_baseline, para_optim
     fprintf('耗时: %.1f s\n', toc);
     PrintStats('专家(优化后)', res_op);
 
-    % 对比图
-    PlotCompare2('专家(优化前)', res_bl, '专家(优化后)', res_op, dataset);
+    % 四子图对比: 优化前HF/ACC + 优化后HF/ACC
+    PlotCompare4(res_bl, res_op, dataset);
     PlotClassifierProba(res_op, dataset, para_op.classifier_mode);
 
     % 优化效果摘要
@@ -181,14 +181,13 @@ function RunCompare(dataset, data_file, expert_params, para_baseline, para_optim
     es_op = res_op.err_stats;
     fprintf('%-14s | %8s | %8s | %8s\n', '指标', '优化前', '优化后', '改善');
     fprintf('---------------|----------|----------|----------\n');
-    items = {'Fus-HF Total', 'Fus-HF Motion', 'Fus-ACC Total', 'Fus-ACC Motion'};
-    rows = {[4,1], [4,3], [5,1], [5,3]};
-    for i = 1:length(items)
-        v_bl = es_bl(rows{i}{1}, rows{i}{2});
-        v_op = es_op(rows{i}{1}, rows{i}{2});
-        delta = v_bl - v_op;
+    metrics = {'Fus-HF Total', 'Fus-HF Motion', 'Fus-ACC Total', 'Fus-ACC Motion'};
+    bl_vals = [es_bl(4,1), es_bl(4,3), es_bl(5,1), es_bl(5,3)];
+    op_vals = [es_op(4,1), es_op(4,3), es_op(5,1), es_op(5,3)];
+    for i = 1:length(metrics)
+        delta = bl_vals(i) - op_vals(i);
         sign = '+'; if delta < 0, sign = '-'; end
-        fprintf('%-14s | %7.2f  | %7.2f  | %s%.2f\n', items{i}, v_bl, v_op, sign, abs(delta));
+        fprintf('%-14s | %7.2f  | %7.2f  | %s%.2f\n', metrics{i}, bl_vals(i), op_vals(i), sign, abs(delta));
     end
 end
 
@@ -277,6 +276,56 @@ function PlotSingle(label, res, dataset)
     es = res.err_stats;
     title(sprintf('%s | %s | Fus-HF T=%.1f M=%.1f | Fus-ACC T=%.1f M=%.1f', ...
         label, dataset, es(4,1), es(4,3), es(5,1), es(5,3)), 'FontSize', 11);
+end
+
+function PlotCompare4(res_bl, res_op, dataset)
+% 四子图: 优化前HF / 优化前ACC / 优化后HF / 优化后ACC
+% 各子图仅显示对应方案的曲线, 标题含 Motion/Total AAE (与摘要表一致)
+    figure('Name', 'QuickTest: 优化前后四方案对比', 'Color', 'w', 'Position', [50 50 1600 1000]);
+
+    % 方案定义: {结果, 标签, 主曲线列, Fusion列(用于标题), 路径名}
+    schemes = {
+        res_bl,  '优化前', 6, 4, 'HF';    % Fusion-HF: col6=融合结果, err_stats row4
+        res_bl,  '优化前', 7, 5, 'ACC';   % Fusion-ACC: col7=融合结果, err_stats row5
+        res_op,  '优化后', 6, 4, 'HF';
+        res_op,  '优化后', 7, 5, 'ACC'
+    };
+
+    for p = 1:4
+        ax = subplot(2, 2, p);
+        R = schemes{p,1};
+        label = schemes{p,2};
+        fus_col = schemes{p,3};
+        err_row = schemes{p,4};
+        path_name = schemes{p,5};
+
+        HR = R.HR;
+        T_Pred = R.T_Pred;
+        es = R.err_stats;
+
+        motion_bg = HR(:, 8) * 220;
+        a = area(T_Pred, motion_bg, 'FaceColor', [0.94 0.94 0.96], 'EdgeColor', 'none', 'BaseValue', 0);
+        hold on;
+        plot(HR(:,1), HR(:,2)*60, 'k-', 'LineWidth', 2.5, 'DisplayName', '真值');
+        plot(T_Pred, HR(:,5)*60, '-', 'Color', [0.6 0.6 0.6], 'LineWidth', 1, 'DisplayName', 'FFT');
+
+        if strcmp(path_name, 'HF')
+            plot(T_Pred, HR(:,fus_col)*60, 'm-', 'LineWidth', 2, 'DisplayName', 'Fusion-HF');
+        else
+            plot(T_Pred, HR(:,fus_col)*60, 'b-', 'LineWidth', 2, 'DisplayName', 'Fusion-ACC');
+        end
+
+        uistack(a, 'bottom');
+        ylabel('HR (BPM)'); ylim([50 200]); grid on; set(gca, 'GridAlpha', 0.3);
+        legend('Location', 'bestoutside');
+
+        title(sprintf('%s Fusion-%s | Total=%.2f  Motion=%.2f', ...
+            label, path_name, es(err_row,1), es(err_row,3)), ...
+            'FontSize', 11, 'FontWeight', 'bold');
+
+        if p >= 3, xlabel('Time (s)'); end
+    end
+    linkaxes(findobj(gcf, 'type', 'axes'), 'x');
 end
 
 function PlotCompare2(label1, res1, label2, res2, dataset)
