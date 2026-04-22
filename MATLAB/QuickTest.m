@@ -1,21 +1,31 @@
-function QuickTest(dataset, mode)
+function QuickTest(dataset, mode, classifier_mode)
 %% QuickTest 快速调试脚本
 % 用法:
-%   QuickTest                    % bobi1, 标准模式 vs 专家模式(基线参数)
-%   QuickTest('bobi2')           % 换数据集
-%   QuickTest('bobi1', 'std')    % 仅标准模式
-%   QuickTest('bobi1', 'expert') % 仅专家模式 (优先加载优化后参数)
-%   QuickTest('bobi1', 'compare') % 优化后评估: 专家(基线) vs 专家(优化后) 对比
+%   QuickTest                              % bobi1, 标准 vs 专家(基线, window)
+%   QuickTest('bobi2')                     % 换数据集
+%   QuickTest('bobi1', 'std')              % 仅标准模式
+%   QuickTest('bobi1', 'expert')           % 仅专家模式 (优先加载优化后参数)
+%   QuickTest('bobi1', 'compare')          % 专家(基线) vs 专家(优化后) 对比
+%   QuickTest('bobi1', 'both', 'segment')  % 使用段级分类器模式
+%   QuickTest('bobi1', 'compare', 'segment') % 段级模式 + 优化对比
+%
+% classifier_mode:
+%   'window'  - 每8s窗口独立推理概率 (默认, 响应快)
+%   'segment' - 整个运动段统一概率 (更稳定)
 %
 % 'compare' 模式需要先运行 AutoOptimize_Bayes_Search_cas_chengfa 生成
 % Best_Params_Expert_Result_multi_*.mat 文件。
+% 注意: AutoOptimize 的 classifier_mode 需手动与 QuickTest 保持一致。
 
 arguments
-    dataset (1,:) char = 'bobi1'
-    mode    (1,:) char = 'both'   % 'both' | 'std' | 'expert' | 'compare'
+    dataset          (1,:) char = 'bobi1'
+    mode             (1,:) char = 'both'       % 'both' | 'std' | 'expert' | 'compare'
+    classifier_mode  (1,:) char = 'window'     % 'window' | 'segment'
 end
 
 clc; close all;
+
+fprintf('分类器模式: %s\n', classifier_mode);
 
 %% 1. 数据文件定位
 data_dir = 'dataformatlab';
@@ -112,10 +122,10 @@ end
 function RunExpert(dataset, expert_params, para_baseline, para_optimized, optimized_loaded)
     % 优先使用优化后参数, 否则回退基线
     if optimized_loaded
-        para = BuildExpertPara(para_optimized, expert_params);
+        para = BuildExpertPara(para_optimized, expert_params, classifier_mode);
         label = '专家模式 (优化后)';
     else
-        para = BuildExpertPara(para_baseline, expert_params);
+        para = BuildExpertPara(para_baseline, expert_params, classifier_mode);
         label = '专家模式 (基线参数)';
     end
     fprintf('\n=== 运行%s ===\n', label);
@@ -137,7 +147,7 @@ function RunBoth(dataset, para_std, expert_params, para_exp_backend)
     PrintStats('标准模式', res_std);
 
     % 专家模式 (基线参数)
-    para_exp = BuildExpertPara(para_exp_backend, expert_params);
+    para_exp = BuildExpertPara(para_exp_backend, expert_params, classifier_mode);
     fprintf('\n=== 运行专家模式 (基线参数) ===\n');
     tic;
     res_exp = HeartRateSolver_cas_chengfa(para_exp);
@@ -156,7 +166,7 @@ function RunCompare(dataset, data_file, expert_params, para_baseline, para_optim
     end
 
     % 专家模式 - 基线参数
-    para_bl = BuildExpertPara(para_baseline, expert_params);
+    para_bl = BuildExpertPara(para_baseline, expert_params, classifier_mode);
     fprintf('\n=== 运行专家模式 (优化前 - 基线参数) ===\n');
     tic;
     res_bl = HeartRateSolver_cas_chengfa(para_bl);
@@ -164,7 +174,7 @@ function RunCompare(dataset, data_file, expert_params, para_baseline, para_optim
     PrintStats('专家(优化前)', res_bl);
 
     % 专家模式 - 优化后参数
-    para_op = BuildExpertPara(para_optimized, expert_params);
+    para_op = BuildExpertPara(para_optimized, expert_params, classifier_mode);
     fprintf('\n=== 运行专家模式 (优化后) ===\n');
     tic;
     res_op = HeartRateSolver_cas_chengfa(para_op);
@@ -237,10 +247,10 @@ function [para, loaded] = LoadBackEndParams(data_dir, dataset, data_file)
     end
 end
 
-function para = BuildExpertPara(para_backend, expert_params)
+function para = BuildExpertPara(para_backend, expert_params, clf_mode)
     para = para_backend;
     para.expert_mode = true;
-    para.classifier_mode = 'window';
+    para.classifier_mode = clf_mode;
     para.model_path = 'models';
     para.expert_params = expert_params;
 end

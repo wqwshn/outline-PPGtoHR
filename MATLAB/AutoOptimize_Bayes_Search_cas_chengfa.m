@@ -35,7 +35,9 @@ para_base.Spec_Penalty_Weight = 0.2;
 
 % 专家模式配置: 直接从各运动场景的贝叶斯优化结果中加载前级参数
 para_base.expert_mode = true;
-para_base.classifier_mode = 'segment';
+% 分类器模式: 需与 QuickTest 中使用的 classifier_mode 保持一致
+% 'window' = 每8s窗口独立推理 (响应快), 'segment' = 整个运动段统一概率 (更稳定)
+para_base.classifier_mode = 'window';
 para_base.model_path = 'models';
 expert_files = struct( ...
     'arm_curl',   'dataformatlab\Best_Params_Result_multi_wanju1_processed.mat', ...
