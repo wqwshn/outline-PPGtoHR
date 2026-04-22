@@ -1,13 +1,12 @@
 function QuickTest(dataset, mode, classifier_mode)
 %% QuickTest 快速调试脚本
 % 用法:
-%   QuickTest                              % bobi1, 标准 vs 专家(基线, window)
-%   QuickTest('bobi2')                     % 换数据集
-%   QuickTest('bobi1', 'std')              % 仅标准模式
-%   QuickTest('bobi1', 'expert')           % 仅专家模式 (优先加载优化后参数)
-%   QuickTest('bobi1', 'compare')          % 专家(基线) vs 专家(优化后) 对比
-%   QuickTest('bobi1', 'both', 'segment')  % 使用段级分类器模式
-%   QuickTest('bobi1', 'compare', 'segment') % 段级模式 + 优化对比
+% QuickTest('bobi1')                              % 默认 window
+% QuickTest('bobi2')                              % 换数据集
+% QuickTest('bobi1', 'std')                       % 仅标准
+% QuickTest('bobi1', 'expert', 'segment')         % 段级分类器
+% QuickTest('bobi1', 'compare')                   % window + 优化对比
+% QuickTest('bobi1', 'compare', 'segment')        % segment + 优化对比
 %
 % classifier_mode:
 %   'window'  - 每8s窗口独立推理概率 (默认, 响应快)
@@ -362,11 +361,34 @@ function PlotCompare2(label1, res1, label2, res2, dataset)
 end
 
 function PlotClassifierProba(res, dataset, classifier_mode)
-    if size(res.HR, 2) >= 12
-        figure('Name', '分类器概率时程', 'Color', 'w', 'Position', [50 50 1000 300]);
-        area(res.T_Pred, res.HR(:,10:12));
-        legend('arm\_curl', 'jump\_rope', 'push\_up', 'Location', 'best');
-        title(sprintf('分类器概率 [%s, %s]', dataset, classifier_mode));
-        xlabel('Time (s)'); ylabel('Probability'); ylim([0 1]); grid on;
+    if size(res.HR, 2) < 12, return; end
+
+    HR = res.HR;
+    T_Pred = res.T_Pred;
+
+    % 仅保留运动段
+    motion_mask = HR(:, 8) == 1;
+    if ~any(motion_mask), return; end
+
+    prob = HR(motion_mask, 10:12);
+    t_motion = T_Pred(motion_mask);
+
+    figure('Name', '分类器概率 (仅运动段)', 'Color', 'w', 'Position', [50 50 1000 350]);
+
+    % 淡雅配色
+    colors = [0.55, 0.77, 0.95;   % arm_curl: 浅蓝
+              0.70, 0.88, 0.70;   % jump_rope: 浅绿
+              0.95, 0.75, 0.75]; % push_up: 浅粉
+
+    h = area(t_motion, prob, 'LineStyle', 'none');
+    for i = 1:3
+        h(i).FaceColor = colors(i,:);
+        h(i).EdgeColor = 'none';
     end
+
+    legend('arm\_curl', 'jump\_rope', 'push\_up', 'Location', 'best');
+    title(sprintf('分类器概率 [%s, %s] - 仅运动段', dataset, classifier_mode));
+    xlabel('Time (s)'); ylabel('Probability');
+    ylim([0 1]); grid on; set(gca, 'GridAlpha', 0.15);
+    set(gca, 'FontSize', 10);
 end
