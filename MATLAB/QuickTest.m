@@ -94,13 +94,13 @@ end
 %% 4. 根据模式执行
 switch mode
     case 'compare'
-        RunCompare(dataset, data_file, expert_params, para_base, para_optimized, optimized_loaded);
+        RunCompare(dataset, expert_params, para_base, para_optimized, optimized_loaded, classifier_mode);
     case 'std'
         RunStd(dataset, para_base);
     case 'expert'
-        RunExpert(dataset, expert_params, para_base, para_optimized, optimized_loaded);
+        RunExpert(dataset, expert_params, para_base, para_optimized, optimized_loaded, classifier_mode);
     otherwise  % 'both'
-        RunBoth(dataset, para_base, expert_params, para_base);
+        RunBoth(dataset, para_base, expert_params, para_base, classifier_mode);
 end
 
 fprintf('\n=== QuickTest 完成 ===\n');
@@ -119,13 +119,12 @@ function RunStd(dataset, para)
     PlotSingle('标准模式', res, dataset);
 end
 
-function RunExpert(dataset, expert_params, para_baseline, para_optimized, optimized_loaded)
-    % 优先使用优化后参数, 否则回退基线
+function RunExpert(dataset, expert_params, para_baseline, para_optimized, optimized_loaded, clf_mode)
     if optimized_loaded
-        para = BuildExpertPara(para_optimized, expert_params, classifier_mode);
+        para = BuildExpertPara(para_optimized, expert_params, clf_mode);
         label = '专家模式 (优化后)';
     else
-        para = BuildExpertPara(para_baseline, expert_params, classifier_mode);
+        para = BuildExpertPara(para_baseline, expert_params, clf_mode);
         label = '专家模式 (基线参数)';
     end
     fprintf('\n=== 运行%s ===\n', label);
@@ -137,8 +136,7 @@ function RunExpert(dataset, expert_params, para_baseline, para_optimized, optimi
     PlotClassifierProba(res, dataset, para.classifier_mode);
 end
 
-function RunBoth(dataset, para_std, expert_params, para_exp_backend)
-    % 标准模式
+function RunBoth(dataset, para_std, expert_params, para_exp_backend, clf_mode)
     fprintf('\n=== 运行标准模式 ===\n');
     tic;
     res_std = HeartRateSolver_cas_chengfa(para_std);
@@ -146,8 +144,7 @@ function RunBoth(dataset, para_std, expert_params, para_exp_backend)
     fprintf('耗时: %.1f s\n', t_std);
     PrintStats('标准模式', res_std);
 
-    % 专家模式 (基线参数)
-    para_exp = BuildExpertPara(para_exp_backend, expert_params, classifier_mode);
+    para_exp = BuildExpertPara(para_exp_backend, expert_params, clf_mode);
     fprintf('\n=== 运行专家模式 (基线参数) ===\n');
     tic;
     res_exp = HeartRateSolver_cas_chengfa(para_exp);
@@ -160,13 +157,12 @@ function RunBoth(dataset, para_std, expert_params, para_exp_backend)
     PlotClassifierProba(res_exp, dataset, para_exp.classifier_mode);
 end
 
-function RunCompare(dataset, data_file, expert_params, para_baseline, para_optimized, optimized_loaded)
+function RunCompare(dataset, expert_params, para_baseline, para_optimized, optimized_loaded, clf_mode)
     if ~optimized_loaded
         error('未找到优化后参数文件, 无法对比。请先运行 AutoOptimize_Bayes_Search_cas_chengfa。');
     end
 
-    % 专家模式 - 基线参数
-    para_bl = BuildExpertPara(para_baseline, expert_params, classifier_mode);
+    para_bl = BuildExpertPara(para_baseline, expert_params, clf_mode);
     fprintf('\n=== 运行专家模式 (优化前 - 基线参数) ===\n');
     tic;
     res_bl = HeartRateSolver_cas_chengfa(para_bl);
@@ -174,7 +170,7 @@ function RunCompare(dataset, data_file, expert_params, para_baseline, para_optim
     PrintStats('专家(优化前)', res_bl);
 
     % 专家模式 - 优化后参数
-    para_op = BuildExpertPara(para_optimized, expert_params, classifier_mode);
+    para_op = BuildExpertPara(para_optimized, expert_params, clf_mode);
     fprintf('\n=== 运行专家模式 (优化后) ===\n');
     tic;
     res_op = HeartRateSolver_cas_chengfa(para_op);
