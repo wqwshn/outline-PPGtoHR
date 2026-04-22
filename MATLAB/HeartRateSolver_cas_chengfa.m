@@ -227,6 +227,16 @@ while stop_flag
             best_hf_ref_k = cell(K_local, 1);
             best_acc_ref_k = cell(K_local, 1);
 
+            % 诊断: 记录最后一个运动窗口的中间层数据
+            diag_spectra_hf = [];
+            diag_spectra_acc = [];
+            diag_S_fused_hf = [];
+            diag_S_fused_acc = [];
+            diag_weights = [];
+            diag_freqs = [];
+            diag_ref_hf_fused = [];
+            diag_ref_acc_fused = [];
+
             for k = 1:K_local
                 ss = sig_sets{k};
                 ep = para.expert_params.(expert_names_local{k});
@@ -304,6 +314,16 @@ while stop_flag
                 ref_hf_fused  = ref_hf_fused  + weights(k) * best_hf_ref_k{k}(:);
                 ref_acc_fused = ref_acc_fused + weights(k) * best_acc_ref_k{k}(:);
             end
+
+            % 诊断: 保存最后一个运动窗口的中间层数据快照
+            diag_spectra_hf = spectra_hf;
+            diag_spectra_acc = spectra_acc;
+            diag_S_fused_hf = S_fused_hf;
+            diag_S_fused_acc = S_fused_acc;
+            diag_weights = weights;
+            diag_freqs = freqs_common;
+            diag_ref_hf_fused = ref_hf_fused;
+            diag_ref_acc_fused = ref_acc_fused;
 
             % 后级处理
             Freq_HF = ProcessMergedSpectrum(freqs_common, S_fused_hf, ref_hf_fused, ...
@@ -421,8 +441,22 @@ Result.HR = HR;
 Result.err_stats = err_stats;
 Result.T_Pred = T_Pred;
 Result.Motion_Threshold = Motion_Threshold;
-Result.Baseline_Std = [acc_baseline_std, gyro_baseline_std]; 
+Result.Baseline_Std = [acc_baseline_std, gyro_baseline_std];
 Result.HR_Ref_Interp = HR_Ref_Interp;
+
+% 专家模式诊断: 最后一个运动窗口的中间层数据快照
+if isfield(para, 'expert_mode') && para.expert_mode && ~isempty(diag_S_fused_hf)
+    Result.diag.expert_names = expert_names_local;
+    Result.diag.K = K_local;
+    Result.diag.spectra_hf = diag_spectra_hf;       % K路HF频谱 (4096xK)
+    Result.diag.spectra_acc = diag_spectra_acc;      % K路ACC频谱 (4096xK)
+    Result.diag.S_fused_hf = diag_S_fused_hf;        % 融合后HF频谱 (4096x1)
+    Result.diag.S_fused_acc = diag_S_fused_acc;       % 融合后ACC频谱 (4096x1)
+    Result.diag.weights = diag_weights;               % 分类器权重 (Kx1)
+    Result.diag.freqs = diag_freqs;                   % 频率向量 (Hz)
+    Result.diag.ref_hf_fused = diag_ref_hf_fused;     % 加权HF惩罚参考 (时域)
+    Result.diag.ref_acc_fused = diag_ref_acc_fused;    % 加权ACC惩罚参考 (时域)
+end
 
 end
 
