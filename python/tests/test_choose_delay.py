@@ -50,7 +50,9 @@ def test_zero_signals_return_zero_corr() -> None:
     zeros = np.zeros(n)
     mh, ma, td_h, td_a = choose_delay(fs, 5.0, ppg, [zeros], [zeros])
     assert mh.max() == 0 and ma.max() == 0
-    assert td_h == -5 and td_a == -5  # argmax of all zeros -> first index
+    # delay_range = round(0.2 * fs) = 20; argmax of all zeros -> first lag = -20
+    expected_lag = -round(0.2 * fs)
+    assert td_h == expected_lag and td_a == expected_lag
 
 
 def test_matches_golden(golden_dir: Path) -> None:

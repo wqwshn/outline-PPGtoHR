@@ -265,6 +265,7 @@ def solve_from_arrays(
 
     time_1 = float(params.time_start)
     times_idx = 0
+    last_motion_flag = False
     while True:
         time_2 = time_1 + win_len_s
         idx_s = int(round(time_1 * fs))      # MATLAB round(time_1*fs)+1 -> Python idx_s = round(...) (0-based start)
@@ -286,71 +287,7 @@ def solve_from_arrays(
         row[7] = is_motion_flag
         row[8] = is_motion_flag
 
-        mh_arr, ma_arr, td_h, td_a = choose_delay(
-            fs, time_1, ppg, sig_a_full, sig_h_full
-        )
-
-        # Path A: HF cascade NLMS
-        sig_lms_hf = sig_p
-        ord_h = int(np.floor(abs(td_h))) if td_h < 0 else 1
-        ord_h = int(np.clip(ord_h, 1, params.max_order))
-        if mh_arr.size:
-            sorted_corrs = np.sort(mh_arr)[::-1]
-            best_hf_idx = int(np.argmax(mh_arr))
-            for i in range(min(params.num_cascade_hf, mh_arr.size)):
-                curr_corr = sorted_corrs[i]
-                real_idx = int(np.argmax(mh_arr == curr_corr))
-                sig_lms_hf = apply_adaptive_cascade(
-                    strategy=params.adaptive_filter,
-                    mu_base=params.lms_mu_base,
-                    corr=float(curr_corr),
-                    order=ord_h,
-                    K=0,
-                    u=sig_h[real_idx],
-                    d=sig_lms_hf,
-                    params=params,
-                )
-            penalty_ref_hf = sig_h[best_hf_idx]
-        else:
-            penalty_ref_hf = sig_h[0]
-
-        history3 = np.array([r[2] for r in rows] + [0.0])
-        row[2] = _process_spectrum(
-            sig_lms_hf, penalty_ref_hf, fs, params, times_idx, history3,
-            True, params.hr_range_hz, params.slew_limit_bpm, params.slew_step_bpm,
-        )
-
-        # Path B: ACC cascade NLMS
-        sig_lms_acc = sig_p
-        ord_a = int(np.floor(abs(td_a) * 1.5)) if td_a < 0 else 1
-        ord_a = int(np.clip(ord_a, 1, params.max_order))
-        if ma_arr.size:
-            sorted_corrs = np.sort(ma_arr)[::-1]
-            best_acc_idx = int(np.argmax(ma_arr))
-            for i in range(min(params.num_cascade_acc, ma_arr.size)):
-                curr_corr = sorted_corrs[i]
-                real_idx = int(np.argmax(ma_arr == curr_corr))
-                sig_lms_acc = apply_adaptive_cascade(
-                    strategy=params.adaptive_filter,
-                    mu_base=params.lms_mu_base,
-                    corr=float(curr_corr),
-                    order=ord_a,
-                    K=1,
-                    u=sig_a[real_idx],
-                    d=sig_lms_acc,
-                    params=params,
-                )
-            penalty_ref_acc = sig_a[best_acc_idx]
-        else:
-            penalty_ref_acc = sig_a[0]
-
-        history4 = np.array([r[3] for r in rows] + [0.0])
-        row[3] = _process_spectrum(
-            sig_lms_acc, penalty_ref_acc, fs, params, times_idx, history4,
-            True, params.hr_range_hz, params.slew_limit_bpm, params.slew_step_bpm,
-        )
-
-        # Path C: Pure FFT (Hamming windowed)
+        # Path C: Pure FFT (always runs)
         sig_fft = sig_p - sig_p.mean()
         sig_fft = sig_fft * hamming(len(sig_fft))
         history5 = np.array([r[4] for r in rows] + [0.0])
@@ -359,6 +296,81 @@ def solve_from_arrays(
             True, params.hr_range_rest, params.slew_limit_rest, params.slew_step_rest,
         )
 
+        if is_motion_flag:
+            # Rest→motion transition: reset tracking chain (times_idx=0 skips history)
+            rest_to_motion = not last_motion_flag
+            times_hf = 0 if rest_to_motion else times_idx
+            times_acc = 0 if rest_to_motion else times_idx
+
+            mh_arr, ma_arr, td_h, td_a = choose_delay(
+                fs, time_1, ppg, sig_a_full, sig_h_full
+            )
+
+            # Path A: HF cascade NLMS
+            sig_lms_hf = sig_p
+            ord_h = int(np.floor(abs(td_h))) if td_h < 0 else 1
+            ord_h = int(np.clip(ord_h, 1, params.max_order))
+            if mh_arr.size:
+                sorted_corrs = np.sort(mh_arr)[::-1]
+                best_hf_idx = int(np.argmax(mh_arr))
+                for i in range(min(params.num_cascade_hf, mh_arr.size)):
+                    curr_corr = sorted_corrs[i]
+                    real_idx = int(np.argmax(mh_arr == curr_corr))
+                    sig_lms_hf = apply_adaptive_cascade(
+                        strategy=params.adaptive_filter,
+                        mu_base=params.lms_mu_base,
+                        corr=float(curr_corr),
+                        order=ord_h,
+                        K=0,
+                        u=sig_h[real_idx],
+                        d=sig_lms_hf,
+                        params=params,
+                    )
+                penalty_ref_hf = sig_h[best_hf_idx]
+            else:
+                penalty_ref_hf = sig_h[0]
+
+            history3 = np.array([r[2] for r in rows] + [0.0])
+            row[2] = _process_spectrum(
+                sig_lms_hf, penalty_ref_hf, fs, params, times_hf, history3,
+                True, params.hr_range_hz, params.slew_limit_bpm, params.slew_step_bpm,
+            )
+
+            # Path B: ACC cascade NLMS
+            sig_lms_acc = sig_p
+            ord_a = int(np.floor(abs(td_a) * 1.5)) if td_a < 0 else 1
+            ord_a = int(np.clip(ord_a, 1, params.max_order))
+            if ma_arr.size:
+                sorted_corrs = np.sort(ma_arr)[::-1]
+                best_acc_idx = int(np.argmax(ma_arr))
+                for i in range(min(params.num_cascade_acc, ma_arr.size)):
+                    curr_corr = sorted_corrs[i]
+                    real_idx = int(np.argmax(ma_arr == curr_corr))
+                    sig_lms_acc = apply_adaptive_cascade(
+                        strategy=params.adaptive_filter,
+                        mu_base=params.lms_mu_base,
+                        corr=float(curr_corr),
+                        order=ord_a,
+                        K=1,
+                        u=sig_a[real_idx],
+                        d=sig_lms_acc,
+                        params=params,
+                    )
+                penalty_ref_acc = sig_a[best_acc_idx]
+            else:
+                penalty_ref_acc = sig_a[0]
+
+            history4 = np.array([r[3] for r in rows] + [0.0])
+            row[3] = _process_spectrum(
+                sig_lms_acc, penalty_ref_acc, fs, params, times_acc, history4,
+                True, params.hr_range_hz, params.slew_limit_bpm, params.slew_step_bpm,
+            )
+        else:
+            # Rest: skip LMS, copy FFT result to keep tracking chains clean
+            row[2] = row[4]
+            row[3] = row[4]
+
+        last_motion_flag = bool(is_motion_flag)
         rows.append(row)
         time_1 += win_step_s
         times_idx += 1

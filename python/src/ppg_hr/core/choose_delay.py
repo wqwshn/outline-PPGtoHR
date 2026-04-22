@@ -1,14 +1,16 @@
 """Estimate optimal lag between PPG and reference (ACC / HF) channels.
 
-Port of ``ChooseDelay1218.m``. For each integer lag ``ii`` in ``[-5, 5]`` the
-correlation between the current 8-second PPG window and each reference
-channel's lag-shifted window is computed; the lag that maximises the
-correlation magnitude in the best channel becomes the delay estimate.
+Port of ``ChooseDelay1218.m``. For each integer lag ``ii`` in
+``[-delay_range, delay_range]`` (where ``delay_range = round(0.2 * fs)``,
+i.e. a fixed +/-200 ms time window) the correlation between the current
+8-second PPG window and each reference channel's lag-shifted window is
+computed; the lag that maximises the correlation magnitude in the best
+channel becomes the delay estimate.
 
 Returns
 -------
 mh_arr : 1-D array of length ``len(hf_signals)``
-    Per-channel max |corr| across the 11 candidate lags (HF channels).
+    Per-channel max |corr| across the candidate lags (HF channels).
 ma_arr : 1-D array of length ``len(acc_signals)``
     Same for ACC channels.
 time_delay_h, time_delay_a : int
@@ -23,7 +25,8 @@ import numpy as np
 
 __all__ = ["choose_delay"]
 
-_LAG_RANGE = range(-5, 6)  # MATLAB ii = -5:5
+# Baseline: 25 Hz / 5 samples = 200 ms time window for delay search
+_DELAY_TIME_SECONDS = 0.2
 _WINDOW_SECONDS: int = 8
 
 
@@ -52,7 +55,9 @@ def choose_delay(
 
     num_acc = len(acc)
     num_hf = len(hf)
-    n_lags = len(_LAG_RANGE)
+    delay_range = round(_DELAY_TIME_SECONDS * fs)
+    lag_range = range(-delay_range, delay_range + 1)
+    n_lags = len(lag_range)
 
     delay_a = np.zeros((n_lags, num_acc + 1), dtype=float)
     delay_h = np.zeros((n_lags, num_hf + 1), dtype=float)
@@ -64,7 +69,7 @@ def choose_delay(
         p2_ref = len(ppg)
     ppg_seg = ppg[p1_ref - 1 : p2_ref]
 
-    for row, ii in enumerate(_LAG_RANGE):
+    for row, ii in enumerate(lag_range):
         delay_a[row, 0] = ii
         delay_h[row, 0] = ii
 
