@@ -28,6 +28,7 @@ para_base.FileName = 'dataformatlab\multi_bobi1_processed.mat';
 para_base.Time_Start = 1;
 para_base.Time_Buffer = 10;
 para_base.Calib_Time = 30;
+para_base.Fs_Target = 25;
 para_base.Motion_Th_Scale = 2.5;
 para_base.Spec_Penalty_Enable = 1;
 para_base.Spec_Penalty_Weight = 0.2;
@@ -68,8 +69,8 @@ Num_Seed_Points = 10;
 Num_Repeats = 3;
 
 %% 3. 定义搜索空间 (离散列表)
-% 注意：此处通过索引映射方式处理非连续数值，方便贝叶斯优化器处理离散变量
-% 前级参数 (Fs_Target, Max_Order) 已固定在各专家参数中, 不再纳入优化
+% Fs_Target=25Hz 已固定在 para_base 中, 不再纳入优化
+SearchSpace.Max_Order = [12, 16, 20, 24];
 SearchSpace.Spec_Penalty_Width = [0.1, 0.2, 0.3];
 
 SearchSpace.HR_Range_Hz = [15, 20, 25, 30, 35, 40] / 60;

@@ -125,18 +125,17 @@ else
     gyroz = filtfilt(b_but, a_but, gyroz_ori);
 end
 
-%% 2. 运动阈值校准 (MIMU 六轴: ACC + Gyro 联合判定)
+%% 2. 运动阈值校准 (MIMU 六轴: ACC + Gyro 各自归一化比值联合判定)
 calib_len = min(round(para.Calib_Time * Fs), length(ppg));
 
 % 2.1 幅值计算
 acc_mag = sqrt(accx.^2 + accy.^2 + accz.^2);
 gyro_mag = sqrt(gyrox.^2 + gyroy.^2 + gyroz.^2);
 
-% 2.2 基线校准: 各自归一化后联合判定
+% 2.2 基线校准: 各轴分别归一化, 取最大比值与阈值比较
 acc_baseline_std = std(acc_mag(1:calib_len));
 gyro_baseline_std = std(gyro_mag(1:calib_len));
-Motion_Threshold_ACC = para.Motion_Th_Scale * acc_baseline_std;
-Motion_Threshold_Gyro = para.Motion_Th_Scale * gyro_baseline_std;
+Motion_Threshold = para.Motion_Th_Scale;
 
 %% 3. 主循环初始化
 Win_Len = 8; Win_Step = 1;
@@ -188,10 +187,15 @@ while stop_flag
     HR(times, 2) = Find_realHR('dummy', time_1, HR_Ref_Data); 
     
     % =====================================================================
-    % 4.1 运动状态判断 (MIMU 六轴: ACC 或 Gyro 任一超阈值即判定运动)
+    % 4.1 运动状态判断 (MIMU 六轴: 各轴归一化比值取最大, 超阈值即运动)
     % =====================================================================
-    is_motion = (std(Sig_acc_mag) > Motion_Threshold_ACC) || ...
-                (std(Sig_gyro_mag) > Motion_Threshold_Gyro);
+    acc_ratio = std(Sig_acc_mag) / acc_baseline_std;
+    if gyro_baseline_std > eps
+        gyro_ratio = std(Sig_gyro_mag) / gyro_baseline_std;
+    else
+        gyro_ratio = 0;
+    end
+    is_motion = max(acc_ratio, gyro_ratio) > Motion_Threshold;
     
     % 将同一运动状态写入两列，供后续融合逻辑使用
     HR(times, 8) = is_motion; % 原 ACC 运动标记
@@ -235,7 +239,9 @@ while stop_flag
                 Sig_h_k = {ss.hf1(idx_s_k:idx_e_k), ss.hf2(idx_s_k:idx_e_k)};
                 Sig_a_k = {ss.accx(idx_s_k:idx_e_k), ss.accy(idx_s_k:idx_e_k), ss.accz(idx_s_k:idx_e_k)};
 
-                [mh_k, ma_k, td_h_k, td_a_k] = ChooseDelay1218(Fs_k, time_1, ss.ppg, Sig_a_k, Sig_h_k);
+                % 时延计算需要全局信号 (ChooseDelay1218 用全局索引)
+                [mh_k, ma_k, td_h_k, td_a_k] = ChooseDelay1218(Fs_k, time_1, ...
+                    ss.ppg, {ss.accx, ss.accy, ss.accz}, {ss.hf1, ss.hf2});
 
                 % LMS-HF (阶数由延时的绝对值决定)
                 Sig_e_hf = Sig_p_k;
@@ -414,7 +420,8 @@ Result.Err_Fus_HF = err_stats(4, 1);
 Result.HR = HR;
 Result.err_stats = err_stats;
 Result.T_Pred = T_Pred;
-Result.Motion_Threshold = [Motion_Threshold_ACC, Motion_Threshold_Gyro]; 
+Result.Motion_Threshold = Motion_Threshold;
+Result.Baseline_Std = [acc_baseline_std, gyro_baseline_std]; 
 Result.HR_Ref_Interp = HR_Ref_Interp;
 
 end
