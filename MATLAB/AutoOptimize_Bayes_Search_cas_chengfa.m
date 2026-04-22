@@ -24,13 +24,35 @@ end
 
 %% 2. 基础配置
 % 数据文件路径 (请确认路径正确)
-para_base.FileName = 'data20260418\multi_kaihe2_processed.mat'; 
+para_base.FileName = 'dataformatlab\multi_bobi1_processed.mat'; 
 para_base.Time_Start = 1;
 para_base.Time_Buffer = 10;
 para_base.Calib_Time = 30;
 para_base.Motion_Th_Scale = 2.5;
-para_base.Spec_Penalty_Enable = 1; 
+para_base.Spec_Penalty_Enable = 1;
 para_base.Spec_Penalty_Weight = 0.2;
+
+% 专家模式配置
+para_base.expert_mode = true;
+para_base.classifier_mode = 'window';
+para_base.model_path = 'models';
+para_base.expert_params = struct();
+expert_files = {'params\expert_arm_curl.mat', ...
+                'params\expert_jump_rope.mat', ...
+                'params\expert_push_up.mat'};
+expert_names = {'arm_curl', 'jump_rope', 'push_up'};
+for ei = 1:length(expert_files)
+    if isfile(expert_files{ei})
+        tmp = load(expert_files{ei});
+        fnames = fieldnames(tmp);
+        para_base.expert_params.(expert_names{ei}) = tmp.(fnames{1});
+    else
+        warning('专家参数文件不存在: %s, 使用默认参数', expert_files{ei});
+        para_base.expert_params.(expert_names{ei}) = struct( ...
+            'Fs_Target', 50, 'Max_Order', 16, 'LMS_Mu_Base', 0.01, ...
+            'Num_Cascade_HF', 2, 'Num_Cascade_Acc', 3);
+    end
+end
 
 % --- 贝叶斯优化核心设置 ---
 % 单次优化的最大迭代次数，数值越大寻找最优解的概率越高，但耗时更长
@@ -42,8 +64,7 @@ Num_Repeats = 3;
 
 %% 3. 定义搜索空间 (离散列表)
 % 注意：此处通过索引映射方式处理非连续数值，方便贝叶斯优化器处理离散变量
-SearchSpace.Fs_Target = [25, 50, 100]; 
-SearchSpace.Max_Order = [12, 16, 20];
+% 前级参数 (Fs_Target, Max_Order) 已固定在各专家参数中, 不再纳入优化
 SearchSpace.Spec_Penalty_Width = [0.1, 0.2, 0.3];
 
 SearchSpace.HR_Range_Hz = [15, 20, 25, 30, 35, 40] / 60;
