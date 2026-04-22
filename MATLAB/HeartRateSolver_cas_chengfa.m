@@ -38,28 +38,81 @@ Col_Acc  = [9, 10, 11];
 % Col_HF1  = 2; Col_HF2 = 3;        
 % Col_Acc  = [8, 9, 10]; 
 
-% 重采样处理
-Fs = para.Fs_Target; 
-ppg_ori   = resample(filloutliers(raw_data(:, Col_PPG),'previous','mean'), Fs, Fs_Origin);
-hotf1_ori = resample(raw_data(:, Col_HF1), Fs, Fs_Origin);
-hotf2_ori = resample(raw_data(:, Col_HF2), Fs, Fs_Origin);
-% HF 信号仅两路, 无第三路占位
-accx_ori  = resample(raw_data(:, Col_Acc(1)), Fs, Fs_Origin);
-accy_ori  = resample(raw_data(:, Col_Acc(2)), Fs, Fs_Origin);
-accz_ori  = resample(raw_data(:, Col_Acc(3)), Fs, Fs_Origin);
+HR_Ref_Data = ref_data;
 
-HR_Ref_Data = ref_data; 
+if isfield(para, 'expert_mode') && para.expert_mode
+    %% 专家模式: K 遍预处理
+    expert_names = fieldnames(para.expert_params);
+    K = length(expert_names);
+    Fs_list = zeros(K, 1);
+    for k = 1:K
+        Fs_list(k) = para.expert_params.(expert_names{k}).Fs_Target;
+    end
+    Fs_common = max(Fs_list);
 
-% 带通滤波 (0.5 - 5 Hz)
-BP_Low = 0.5; BP_High = 5; BP_Order = 4;
-[b_but, a_but] = butter(BP_Order, [BP_Low BP_High]/(Fs/2), 'bandpass');
+    sig_sets = cell(K, 1);
+    for k = 1:K
+        ep = para.expert_params.(expert_names{k});
+        Fs_k = ep.Fs_Target;
 
-ppg   = filtfilt(b_but, a_but, ppg_ori);
-hotf1 = filtfilt(b_but, a_but, hotf1_ori);
-hotf2 = filtfilt(b_but, a_but, hotf2_ori);
-accx  = filtfilt(b_but, a_but, accx_ori);
-accy  = filtfilt(b_but, a_but, accy_ori);
-accz  = filtfilt(b_but, a_but, accz_ori);
+        ppg_k   = resample(filloutliers(raw_data(:, Col_PPG),'previous','mean'), Fs_k, Fs_Origin);
+        hf1_k   = resample(raw_data(:, Col_HF1), Fs_k, Fs_Origin);
+        hf2_k   = resample(raw_data(:, Col_HF2), Fs_k, Fs_Origin);
+        accx_k  = resample(raw_data(:, Col_Acc(1)), Fs_k, Fs_Origin);
+        accy_k  = resample(raw_data(:, Col_Acc(2)), Fs_k, Fs_Origin);
+        accz_k  = resample(raw_data(:, Col_Acc(3)), Fs_k, Fs_Origin);
+
+        BP_Low = 0.5; BP_High = 5; BP_Order = 4;
+        [b_k, a_k] = butter(BP_Order, [BP_Low BP_High]/(Fs_k/2), 'bandpass');
+
+        sig_sets{k} = struct( ...
+            'ppg',  filtfilt(b_k, a_k, ppg_k), ...
+            'hf1',  filtfilt(b_k, a_k, hf1_k), ...
+            'hf2',  filtfilt(b_k, a_k, hf2_k), ...
+            'accx', filtfilt(b_k, a_k, accx_k), ...
+            'accy', filtfilt(b_k, a_k, accy_k), ...
+            'accz', filtfilt(b_k, a_k, accz_k), ...
+            'Fs',   Fs_k);
+    end
+
+    % 公共信号集用于运动检测和静息 FFT (取最高 Fs)
+    Fs = Fs_common;
+    ss0 = sig_sets{find(Fs_list == Fs_common, 1)};
+    ppg  = ss0.ppg;  hotf1 = ss0.hf1; hotf2 = ss0.hf2;
+    accx = ss0.accx; accy  = ss0.accy; accz = ss0.accz;
+
+    % 加载分类器
+    classifier_model_path = para.model_path;
+    scaler_data = load(fullfile(classifier_model_path, 'scaler_params.mat'));
+    rf_data     = load(fullfile(classifier_model_path, 'rf_model_3class.mat'));
+
+    % IMU 陀螺仪列配置
+    Col_Gyro = [12, 13, 14];
+    if isfield(para, 'Col_Gyro'), Col_Gyro = para.Col_Gyro; end
+    imu_gyrox = resample(raw_data(:, Col_Gyro(1)), Fs_common, Fs_Origin);
+    imu_gyroy = resample(raw_data(:, Col_Gyro(2)), Fs_common, Fs_Origin);
+    imu_gyroz = resample(raw_data(:, Col_Gyro(3)), Fs_common, Fs_Origin);
+
+else
+    %% 原始模式: 单遍预处理
+    Fs = para.Fs_Target;
+    ppg_ori   = resample(filloutliers(raw_data(:, Col_PPG),'previous','mean'), Fs, Fs_Origin);
+    hotf1_ori = resample(raw_data(:, Col_HF1), Fs, Fs_Origin);
+    hotf2_ori = resample(raw_data(:, Col_HF2), Fs, Fs_Origin);
+    accx_ori  = resample(raw_data(:, Col_Acc(1)), Fs, Fs_Origin);
+    accy_ori  = resample(raw_data(:, Col_Acc(2)), Fs, Fs_Origin);
+    accz_ori  = resample(raw_data(:, Col_Acc(3)), Fs, Fs_Origin);
+
+    BP_Low = 0.5; BP_High = 5; BP_Order = 4;
+    [b_but, a_but] = butter(BP_Order, [BP_Low BP_High]/(Fs/2), 'bandpass');
+
+    ppg   = filtfilt(b_but, a_but, ppg_ori);
+    hotf1 = filtfilt(b_but, a_but, hotf1_ori);
+    hotf2 = filtfilt(b_but, a_but, hotf2_ori);
+    accx  = filtfilt(b_but, a_but, accx_ori);
+    accy  = filtfilt(b_but, a_but, accy_ori);
+    accz  = filtfilt(b_but, a_but, accz_ori);
+end
 
 %% 2. 运动阈值校准 (统一仅使用 ACC 阈值)
 calib_len = min(round(para.Calib_Time * Fs), length(ppg));
@@ -71,22 +124,34 @@ Motion_Threshold_ACC = para.Motion_Th_Scale * acc_baseline_std;
 
 %% 3. 主循环初始化
 Win_Len = 8; Win_Step = 1;
-time_end = length(ppg_ori)/Fs - para.Time_Buffer;
-
-% HR 矩阵列定义: 
-% 1:Time, 2:Ref, 
-% 3:Pure_LMS_HF, 4:Pure_LMS_ACC, 5:Pure_FFT, 
-% 6:Fusion_HF,   7:Fusion_ACC,    
-% 8:Motion_Flag_ACC(0/1), 9:Motion_Flag_HF(0/1) 
-HR = zeros(1, 9); 
+time_end = length(ppg)/Fs - para.Time_Buffer;
 
 stop_flag = 1;
 times = 1;
 time_1 = para.Time_Start;
-
-% LMS 固定参数
-Num_Cascade_HF = 2; Num_Cascade_Acc = 3; LMS_Mu_Base = 0.01;
 last_motion_flag = false;
+
+if isfield(para, 'expert_mode') && para.expert_mode
+    expert_names_local = fieldnames(para.expert_params);
+    K_local = length(expert_names_local);
+    Fs_common_local = Fs_common;
+    if ~isfield(para, 'classifier_mode'), para.classifier_mode = 'window'; end
+
+    % 段级模式: 预计算全部分类器权重
+    if strcmp(para.classifier_mode, 'segment')
+        all_weights = precompute_segment_weights(...
+            accx, accy, accz, imu_gyrox, imu_gyroy, imu_gyroz, ...
+            Fs_common_local, Win_Len, Win_Step, time_end, ...
+            scaler_data, rf_data, para);
+    else
+        all_weights = [];
+    end
+
+    HR = zeros(1, 12); % Col10-12: 分类器概率
+else
+    Num_Cascade_HF = 2; Num_Cascade_Acc = 3; LMS_Mu_Base = 0.01;
+    HR = zeros(1, 9);
+end
 
 %% 4. 核心处理循环
 while stop_flag
@@ -124,7 +189,6 @@ while stop_flag
     HR(times, 5) = Freq_FFT;
 
     if is_motion
-        % 静息→运动转换时重置追踪链 (传 times=1 跳过历史追踪, 直接取当前谱峰)
         rest_to_motion = ~last_motion_flag;
         if rest_to_motion
             times_hf  = 1;
@@ -134,51 +198,138 @@ while stop_flag
             times_acc = times;
         end
 
-        % 计算相关性与时延 (仅运动段需要)
-        [mh_arr, ma_arr, time_delay_h, time_delay_a] = ...
-            ChooseDelay1218(Fs, time_1, ppg, {accx,accy,accz}, {hotf1,hotf2});
+        if isfield(para, 'expert_mode') && para.expert_mode
+            %% === 专家模式: K 路 LMS -> 频谱融合 ===
+            spectra_hf = zeros(2^12, K_local);
+            spectra_acc = zeros(2^12, K_local);
+            best_hf_ref_k = cell(K_local, 1);
+            best_acc_ref_k = cell(K_local, 1);
 
-        % =================================================================
-        % 路径 A: Pure LMS (HF Reference)
-        % =================================================================
-        Sig_LMS_HF = Sig_p;
-        if time_delay_h < 0, ord_h = floor(abs(time_delay_h)*1); else, ord_h = 1; end
-        ord_h = min(max(ord_h, 1), para.Max_Order);
+            for k = 1:K_local
+                ss = sig_sets{k};
+                ep = para.expert_params.(expert_names_local{k});
+                Fs_k = ss.Fs;
+                idx_s_k = round(time_1 * Fs_k) + 1;
+                idx_e_k = round(time_2 * Fs_k);
+                if idx_e_k > length(ss.ppg), idx_e_k = length(ss.ppg); end
 
-        mh_mat = sort(mh_arr, 'descend');
-        [~, best_hf_idx] = max(mh_arr);
+                Sig_p_k = ss.ppg(idx_s_k:idx_e_k);
+                Sig_h_k = {ss.hf1(idx_s_k:idx_e_k), ss.hf2(idx_s_k:idx_e_k)};
+                Sig_a_k = {ss.accx(idx_s_k:idx_e_k), ss.accy(idx_s_k:idx_e_k), ss.accz(idx_s_k:idx_e_k)};
 
-        for i = 1:min(Num_Cascade_HF, length(mh_arr))
-            curr_corr = mh_mat(i);
-            real_idx = find(mh_arr == curr_corr, 1);
-            [Sig_LMS_HF,~,~] = lmsFunc_h(LMS_Mu_Base - curr_corr/100, ord_h, 0, Sig_h{real_idx}, Sig_LMS_HF);
+                [mh_k, ma_k, td_h_k, td_a_k] = ChooseDelay1218(Fs_k, time_1, ss.ppg, Sig_a_k, Sig_h_k);
+
+                % LMS-HF
+                Sig_e_hf = Sig_p_k;
+                if td_h_k < 0, ord_h = floor(abs(td_h_k)*1); else, ord_h = 1; end
+                ord_h = min(max(ord_h, 1), ep.Max_Order);
+                mh_mat_k = sort(mh_k, 'descend');
+                [~, best_hf_idx_k] = max(mh_k);
+                lms_mu_hf = ep.LMS_Mu_Base;
+                if isfield(ep, 'Num_Cascade_HF'), nc_hf = ep.Num_Cascade_HF; else, nc_hf = 2; end
+                for ci = 1:min(nc_hf, length(mh_k))
+                    curr_corr = mh_mat_k(ci);
+                    ri = find(mh_k == curr_corr, 1);
+                    Sig_e_hf = lmsFunc_h(lms_mu_hf - curr_corr/100, ord_h, 0, Sig_h_k{ri}, Sig_e_hf);
+                end
+
+                % LMS-ACC
+                Sig_e_acc = Sig_p_k;
+                if td_a_k < 0, ord_a = floor(abs(td_a_k)*1.5); else, ord_a = 1; end
+                ord_a = min(max(ord_a, 1), ep.Max_Order);
+                ma_mat_k = sort(ma_k, 'descend');
+                [~, best_acc_idx_k] = max(ma_k);
+                lms_mu_acc = ep.LMS_Mu_Base;
+                if isfield(ep, 'Num_Cascade_Acc'), nc_acc = ep.Num_Cascade_Acc; else, nc_acc = 3; end
+                for ci = 1:min(nc_acc, length(ma_k))
+                    curr_corr = ma_mat_k(ci);
+                    ri = find(ma_k == curr_corr, 1);
+                    Sig_e_acc = lmsFunc_h(lms_mu_acc - curr_corr/100, ord_a, 1, Sig_a_k{ri}, Sig_e_acc);
+                end
+
+                % 重采样到公共 Fs
+                if Fs_k ~= Fs_common_local
+                    Sig_e_hf = resample(Sig_e_hf, Fs_common_local, Fs_k);
+                    Sig_e_acc = resample(Sig_e_acc, Fs_common_local, Fs_k);
+                end
+
+                % 计算频谱
+                [freqs_common, amps_hf] = compute_spectrum(Sig_e_hf, Fs_common_local);
+                [~, amps_acc] = compute_spectrum(Sig_e_acc, Fs_common_local);
+                spectra_hf(1:length(amps_hf), k) = amps_hf;
+                spectra_acc(1:length(amps_acc), k) = amps_acc;
+
+                best_hf_ref_k{k} = resample(Sig_h_k{best_hf_idx_k}, Fs_common_local, Fs_k);
+                best_acc_ref_k{k} = resample(Sig_a_k{best_acc_idx_k}, Fs_common_local, Fs_k);
+            end
+
+            % 分类器权重
+            weights = Helper_ClassifierWeights(times, time_1, Win_Len, Fs_common_local, ...
+                accx, accy, accz, imu_gyrox, imu_gyroy, imu_gyroz, ...
+                all_weights, para, scaler_data, rf_data);
+            HR(times, 10:12) = weights(:)';
+
+            % 频谱融合
+            [~, S_fused_hf] = weighted_spectrum_fusion(spectra_hf, weights);
+            [~, S_fused_acc] = weighted_spectrum_fusion(spectra_acc, weights);
+
+            % 加权惩罚参考
+            ref_hf_fused = zeros(length(best_hf_ref_k{1}), 1);
+            ref_acc_fused = zeros(length(best_acc_ref_k{1}), 1);
+            for k = 1:K_local
+                ref_hf_fused  = ref_hf_fused  + weights(k) * best_hf_ref_k{k}(:);
+                ref_acc_fused = ref_acc_fused + weights(k) * best_acc_ref_k{k}(:);
+            end
+
+            % 后级处理
+            Freq_HF = ProcessMergedSpectrum(freqs_common, S_fused_hf, ref_hf_fused, ...
+                Fs_common_local, para, times_hf, HR(:,3), ...
+                true, para.HR_Range_Hz, para.Slew_Limit_BPM, para.Slew_Step_BPM);
+            HR(times, 3) = Freq_HF;
+
+            Freq_ACC = ProcessMergedSpectrum(freqs_common, S_fused_acc, ref_acc_fused, ...
+                Fs_common_local, para, times_acc, HR(:,4), ...
+                true, para.HR_Range_Hz, para.Slew_Limit_BPM, para.Slew_Step_BPM);
+            HR(times, 4) = Freq_ACC;
+
+        else
+            %% === 原始模式 (保持不变) ===
+            [mh_arr, ma_arr, time_delay_h, time_delay_a] = ...
+                ChooseDelay1218(Fs, time_1, ppg, {accx,accy,accz}, {hotf1,hotf2});
+
+            % 路径 A: LMS-HF
+            Sig_LMS_HF = Sig_p;
+            if time_delay_h < 0, ord_h = floor(abs(time_delay_h)*1); else, ord_h = 1; end
+            ord_h = min(max(ord_h, 1), para.Max_Order);
+            mh_mat = sort(mh_arr, 'descend');
+            [~, best_hf_idx] = max(mh_arr);
+            for i = 1:min(Num_Cascade_HF, length(mh_arr))
+                curr_corr = mh_mat(i);
+                real_idx = find(mh_arr == curr_corr, 1);
+                [Sig_LMS_HF,~,~] = lmsFunc_h(LMS_Mu_Base - curr_corr/100, ord_h, 0, Sig_h{real_idx}, Sig_LMS_HF);
+            end
+            Freq_HF = Helper_Process_Spectrum(Sig_LMS_HF, Sig_h{best_hf_idx}, Fs, para, times_hf, HR(:,3), ...
+                                            true, para.HR_Range_Hz, para.Slew_Limit_BPM, para.Slew_Step_BPM);
+            HR(times, 3) = Freq_HF;
+
+            % 路径 B: LMS-ACC
+            Sig_LMS_ACC = Sig_p;
+            if time_delay_a < 0, ord_a = floor(abs(time_delay_a)*1.5); else, ord_a = 1; end
+            ord_a = min(max(ord_a, 1), para.Max_Order);
+            ma_mat = sort(ma_arr, 'descend');
+            [~, best_acc_idx] = max(ma_arr);
+            for i = 1:min(Num_Cascade_Acc, length(ma_arr))
+                curr_corr = ma_mat(i);
+                real_idx = find(ma_arr == curr_corr, 1);
+                Ref_Sig = Sig_a{real_idx};
+                [Sig_LMS_ACC,~,~] = lmsFunc_h(LMS_Mu_Base - curr_corr/100, ord_a, 1, Ref_Sig, Sig_LMS_ACC);
+            end
+            Freq_ACC = Helper_Process_Spectrum(Sig_LMS_ACC, Sig_a{best_acc_idx}, Fs, para, times_acc, HR(:,4), ...
+                                             true, para.HR_Range_Hz, para.Slew_Limit_BPM, para.Slew_Step_BPM);
+            HR(times, 4) = Freq_ACC;
         end
-
-        Freq_HF = Helper_Process_Spectrum(Sig_LMS_HF, Sig_h{best_hf_idx}, Fs, para, times_hf, HR(:,3), ...
-                                        true, para.HR_Range_Hz, para.Slew_Limit_BPM, para.Slew_Step_BPM);
-        HR(times, 3) = Freq_HF;
-
-        % =================================================================
-        % 路径 B: Pure LMS (ACC Reference)
-        % =================================================================
-        Sig_LMS_ACC = Sig_p;
-        if time_delay_a < 0, ord_a = floor(abs(time_delay_a)*1.5); else, ord_a = 1; end
-        ord_a = min(max(ord_a, 1), para.Max_Order);
-
-        ma_mat = sort(ma_arr, 'descend');
-        [~, best_acc_idx] = max(ma_arr);
-        for i = 1:min(Num_Cascade_Acc, length(ma_arr))
-            curr_corr = ma_mat(i);
-            real_idx = find(ma_arr == curr_corr, 1);
-            Ref_Sig = Sig_a{real_idx};
-            [Sig_LMS_ACC,~,~] = lmsFunc_h(LMS_Mu_Base - curr_corr/100, ord_a, 1, Ref_Sig, Sig_LMS_ACC);
-        end
-
-        Freq_ACC = Helper_Process_Spectrum(Sig_LMS_ACC, Sig_a{best_acc_idx}, Fs, para, times_acc, HR(:,4), ...
-                                         true, para.HR_Range_Hz, para.Slew_Limit_BPM, para.Slew_Step_BPM);
-        HR(times, 4) = Freq_ACC;
     else
-        % 静息段: 跳过 LMS, 直接复制 FFT 结果, 避免瞬态误差污染追踪链
+        % 静息段: 跳过 LMS, 直接复制 FFT 结果
         HR(times, 3) = Freq_FFT;
         HR(times, 4) = Freq_FFT;
     end
@@ -289,5 +440,113 @@ function est_freq = Helper_Process_Spectrum(sig_in, sig_penalty_ref, Fs, para, t
         elseif diff_hr < -limit, est_freq = prev_hr - step;
         else,                    est_freq = calc_hr;
         end
+    end
+end
+
+function weights = Helper_ClassifierWeights(times, time_1, Win_Len, Fs, ...
+    accx, accy, accz, gyrox, gyroy, gyroz, ...
+    all_weights, para, scaler_data, rf_data)
+% Helper_ClassifierWeights 计算当前窗口的分类器权重
+
+    if strcmp(para.classifier_mode, 'segment') && ~isempty(all_weights)
+        % 段级模式
+        t_idx = find(abs(all_weights(:,1) - time_1) < 0.01, 1);
+        if ~isempty(t_idx)
+            weights = all_weights(t_idx, 2:end)';
+        else
+            n_cls = rf_data.n_classes;
+            weights = ones(n_cls, 1) / n_cls;
+        end
+    else
+        % 窗级模式: 实时推理
+        win_len_samples = round(Win_Len * Fs);
+        idx_s = round(time_1 * Fs) + 1;
+        idx_e = idx_s + win_len_samples - 1;
+        if idx_e > length(accx)
+            n_cls = rf_data.n_classes;
+            weights = ones(n_cls, 1) / n_cls;
+            return;
+        end
+        features = extract_mimu_features(...
+            accx(idx_s:idx_e), accy(idx_s:idx_e), accz(idx_s:idx_e), ...
+            gyrox(idx_s:idx_e), gyroy(idx_s:idx_e), gyroz(idx_s:idx_e), Fs);
+        proba_raw = predict_exercise_proba_local(features, scaler_data, rf_data);
+
+        % 按专家顺序排列权重
+        label_data = load(fullfile(para.model_path, 'label_map.mat'));
+        class_names = label_data.class_names;
+        expert_names_local = fieldnames(para.expert_params);
+        weights = zeros(length(expert_names_local), 1);
+        for k = 1:length(expert_names_local)
+            en = expert_names_local{k};
+            cls_idx = find(strcmp(class_names, en));
+            if ~isempty(cls_idx)
+                weights(k) = proba_raw(cls_idx);
+            end
+        end
+        total = sum(weights);
+        if total > 0, weights = weights / total;
+        else, weights = ones(length(expert_names_local), 1) / length(expert_names_local);
+        end
+    end
+end
+
+function proba = predict_exercise_proba_local(features, scaler_data, rf_data)
+% predict_exercise_proba_local 内联 RF 推理
+    mean_vals = scaler_data.feature_mean(:)';
+    std_vals  = scaler_data.feature_std(:)';
+    x = (features(:)' - mean_vals) ./ std_vals;
+    x(isnan(x)) = 0;
+
+    n_trees   = rf_data.n_trees;
+    n_classes = rf_data.n_classes;
+    class_counts = zeros(1, n_classes);
+
+    for t = 1:n_trees
+        node = 1;
+        cl = rf_data.tree_children_left{t};
+        cr = rf_data.tree_children_right{t};
+        feat = rf_data.tree_feature{t};
+        thresh = rf_data.tree_threshold{t};
+        val = rf_data.tree_value{t};
+
+        while cl(node) ~= -1
+            f_idx = feat(node) + 1;
+            if f_idx < 1 || f_idx > length(x), break; end
+            if x(f_idx) <= thresh(node)
+                node = cl(node) + 1;
+            else
+                node = cr(node) + 1;
+            end
+        end
+        class_counts = class_counts + val(node, :);
+    end
+
+    total = sum(class_counts);
+    if total > 0
+        proba = class_counts(:) / total;
+    else
+        proba = ones(n_classes, 1) / n_classes;
+    end
+end
+
+function all_weights = precompute_segment_weights(...
+    accx, accy, accz, gyrox, gyroy, gyroz, ...
+    Fs, Win_Len, Win_Step, time_end, ...
+    scaler_data, rf_data, para)
+% precompute_segment_weights 段级模式: 预计算每个窗口概率
+    all_weights = [];
+    t = para.Time_Start;
+    while t + Win_Len <= time_end
+        idx_s = round(t * Fs) + 1;
+        idx_e = idx_s + round(Win_Len * Fs) - 1;
+        if idx_e > length(accx), break; end
+
+        features = extract_mimu_features(...
+            accx(idx_s:idx_e), accy(idx_s:idx_e), accz(idx_s:idx_e), ...
+            gyrox(idx_s:idx_e), gyroy(idx_s:idx_e), gyroz(idx_s:idx_e), Fs);
+        proba = predict_exercise_proba_local(features, scaler_data, rf_data);
+        all_weights = [all_weights; t, proba(:)'];
+        t = t + Win_Step;
     end
 end
