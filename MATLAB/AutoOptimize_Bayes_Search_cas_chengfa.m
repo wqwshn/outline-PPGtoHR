@@ -1,12 +1,12 @@
 %% 自动参数寻优脚本 - 贝叶斯优化版 (AutoOptimize_Bayes_Search)
 % 功能：
 % 1. 使用贝叶斯优化 (Bayesian Optimization) 寻找最优参数。
-% 2. [优化目标变更] 目标函数现在聚焦于 **Motion AAE** (运动段误差)。
-%    - 旨在提升运动状态下的解算精度，忽略静息段误差。
+% 2. 优化目标: **全局 AAE** (Total AAE, err_stats(:,1))。
+%    - 兼顾运动段和静息段的整体精度。
 % 3. 增强功能：并行计算 (Parallel Pool) + 多轮重启机制 (Restart Strategy)。
 % 4. 流程：
-%    - Round 1: 寻找 Fusion(HF) 的最小 Motion AAE。
-%    - Round 2: 寻找 Fusion(ACC) 的最小 Motion AAE。
+%    - Round 1: 寻找 Fusion(HF) 的最小全局 AAE。
+%    - Round 2: 寻找 Fusion(ACC) 的最小全局 AAE。
 %
 % 依赖：HeartRateSolver_cas_chengfa (返回结果已针对 Motion AAE 调整)
 
@@ -35,7 +35,7 @@ para_base.Spec_Penalty_Weight = 0.2;
 
 % 专家模式配置: 直接从各运动场景的贝叶斯优化结果中加载前级参数
 para_base.expert_mode = true;
-para_base.classifier_mode = 'window';
+para_base.classifier_mode = 'segment';
 para_base.model_path = 'models';
 expert_files = struct( ...
     'arm_curl',   'dataformatlab\Best_Params_Result_multi_wanju1_processed.mat', ...
@@ -275,17 +275,11 @@ function Error_Val = Wrapper_CostFunction(Idx_Table, SearchSpace, para_base, Tar
     try
         Res = HeartRateSolver_cas_chengfa(current_para);
         
-        % 3. 根据目标模式返回对应的 Motion 误差
+        % 3. 根据目标模式返回对应的全局 AAE (Total AAE)
         if strcmp(Target_Mode, 'HF')
-            % =========================================================
-            % [核心修复]: 之前使用 Res.Err_Fus_HF 会错误提取到全局融合 AAE。
-            % 现修改为直接从统计矩阵中提取 Motion AAE，对齐 ACC 的提取逻辑。
-            % (假设：err_stats 中第4行为 Fusion(HF)，第3列为运动段误差，第1段为fusion误差)
-            % =========================================================
-            Error_Val = Res.err_stats(4, 1);      
+            Error_Val = Res.err_stats(4, 1);      % Fusion(HF) 全局 AAE
         elseif strcmp(Target_Mode, 'ACC')
-            % 读取第5行(通常为 FusACC) 第3列(Motion AAE)
-            Error_Val = Res.err_stats(5, 1); 
+            Error_Val = Res.err_stats(5, 1);       % Fusion(ACC) 全局 AAE
         else
             error('未知的优化目标模式');
         end

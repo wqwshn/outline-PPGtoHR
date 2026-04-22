@@ -18,4 +18,6 @@ function [freqs, amps_fused] = weighted_spectrum_fusion(spectra_list, weights)
         % 矩阵形式: 每列一个 expert
         amps_fused = spectra_list * weights(:);
     end
+
+    freqs = [];
 end
