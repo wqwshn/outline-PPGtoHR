@@ -106,6 +106,27 @@ para_exp.classifier_mode = 'window';
 para_exp.model_path = 'models';
 para_exp.expert_params = expert_params;
 
+% 尝试从专家模式优化结果加载后级参数
+expert_param_file = fullfile(data_dir, sprintf('Best_Params_Expert_Result_multi_%s_processed.mat', dataset));
+if isfile(expert_param_file)
+    tmp = load(expert_param_file, 'Best_Para_Expert_ACC');
+    bp_exp = tmp.Best_Para_Expert_ACC;
+    % 用专家模式专属参数覆盖后级参数
+    override_fields = {'Spec_Penalty_Width', 'Spec_Penalty_Weight', ...
+        'HR_Range_Hz', 'Slew_Limit_BPM', 'Slew_Step_BPM', ...
+        'HR_Range_Rest', 'Slew_Limit_Rest', 'Slew_Step_Rest', ...
+        'Smooth_Win_Len', 'Time_Bias'};
+    for fi = 1:length(override_fields)
+        fn = override_fields{fi};
+        if isfield(bp_exp, fn)
+            para_exp.(fn) = bp_exp.(fn);
+        end
+    end
+    fprintf('专家后级参数: 从 %s 加载\n', expert_param_file);
+else
+    fprintf('专家后级参数: 使用标准模式基线值 (未找到 %s)\n', expert_param_file);
+end
+
 %% 6. 运行解算
 res_std = []; res_exp = [];
 if strcmp(mode, 'both') || strcmp(mode, 'std')

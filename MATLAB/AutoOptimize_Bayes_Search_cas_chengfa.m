@@ -128,9 +128,9 @@ for run_idx = 1:Num_Repeats
     % 检查本次运行结果是否打破了当前记录的全局最低误差
     current_min = results_hf.MinObjective;
     if current_min < Global_Min_HF
-        fprintf('  >>> 发现更好的解! Motion Error从 %.4f 降低到 %.4f\n', Global_Min_HF, current_min);
+        fprintf('  >>> 发现更好的解! 全局AAE从 %.4f 降低到 %.4f\n', Global_Min_HF, current_min);
         Global_Min_HF = current_min;
-        Best_Para_HF = Extract_Best_Params(results_hf, SearchSpace, para_base);
+        Best_Para_Expert_HF = Extract_Best_Params(results_hf, SearchSpace, para_base);
     else
         fprintf('  >>> 本次结果 (%.4f) 未超过历史最佳 (%.4f)\n', current_min, Global_Min_HF);
     end
@@ -166,9 +166,9 @@ for run_idx = 1:Num_Repeats
     % 检查本次运行结果是否打破历史记录
     current_min = results_acc.MinObjective;
     if current_min < Global_Min_ACC
-        fprintf('  >>> 发现更好的解! Motion Error从 %.4f 降低到 %.4f\n', Global_Min_ACC, current_min);
+        fprintf('  >>> 发现更好的解! 全局AAE从 %.4f 降低到 %.4f\n', Global_Min_ACC, current_min);
         Global_Min_ACC = current_min;
-        Best_Para_ACC = Extract_Best_Params(results_acc, SearchSpace, para_base);
+        Best_Para_Expert_ACC = Extract_Best_Params(results_acc, SearchSpace, para_base);
     else
         fprintf('  >>> 本次结果 (%.4f) 未超过历史最佳 (%.4f)\n', current_min, Global_Min_ACC);
     end
@@ -177,15 +177,15 @@ end
 fprintf('\n>> Round 2 (ACC) 最终最低 Motion 误差: %.4f\n', Global_Min_ACC);
 
 %% 7. 保存结果
-% 为了兼容 Result_Viewer，将变量命名为 Min_Err_HF 和 Min_Err_ACC
-Min_Err_HF = Global_Min_HF;
-Min_Err_ACC = Global_Min_ACC;
+% 使用 _Expert 后缀避免与标准模式基线参数 (Best_Para_HF/ACC) 混淆
+Min_Err_Expert_HF = Global_Min_HF;
+Min_Err_Expert_ACC = Global_Min_ACC;
 
 % 使用 fileparts 提取输入数据文件的路径和名称，以便动态生成保存文件名
-[dataPath, dataFileName, ~] = fileparts(para_base.FileName); 
+[dataPath, dataFileName, ~] = fileparts(para_base.FileName);
 
 % 生成新的文件名（加上 .mat 后缀以确保能被正常保存和读取）
-newFileName = sprintf('Best_Params_Result_%s.mat', dataFileName); 
+newFileName = sprintf('Best_Params_Expert_Result_%s.mat', dataFileName);
 
 % 利用 fullfile 将原路径与新文件名拼接。如果未指定路径，则默认保存在当前目录
 if isempty(dataPath)
@@ -195,7 +195,8 @@ else
 end
 
 % 将寻优得到的最优参数组合和最低误差保存到本地文件
-save(SaveFileName, 'Best_Para_HF', 'Best_Para_ACC', 'Min_Err_HF', 'Min_Err_ACC', 'SearchSpace');
+save(SaveFileName, 'Best_Para_Expert_HF', 'Best_Para_Expert_ACC', ...
+    'Min_Err_Expert_HF', 'Min_Err_Expert_ACC', 'SearchSpace');
 
 fprintf('\n=== 全部寻优结束 ===\n');
 fprintf('结果已保存至: %s\n', SaveFileName);
