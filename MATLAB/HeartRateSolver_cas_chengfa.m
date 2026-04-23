@@ -517,19 +517,11 @@ function weights = Helper_ClassifierWeights(times, time_1, Win_Len, Fs, ...
             weights = ones(n_cls, 1) / n_cls;
         end
     else
-        % 窗级模式: 实时推理
-        win_len_samples = round(Win_Len * Fs);
-        idx_s = round(time_1 * Fs) + 1;
-        idx_e = idx_s + win_len_samples - 1;
-        if idx_e > length(accx)
-            n_cls = rf_data.n_classes;
-            weights = ones(n_cls, 1) / n_cls;
-            return;
-        end
-        features = extract_mimu_features(...
-            accx(idx_s:idx_e), accy(idx_s:idx_e), accz(idx_s:idx_e), ...
-            gyrox(idx_s:idx_e), gyroy(idx_s:idx_e), gyroz(idx_s:idx_e), Fs);
-        proba_raw = predict_exercise_proba_local(features, scaler_data, rf_data);
+        % 窗级模式: 短窗口聚合推理
+        proba_raw = aggregate_proba_in_range(...
+            time_1, Win_Len, Fs, ...
+            accx, accy, accz, gyrox, gyroy, gyroz, ...
+            scaler_data, rf_data);
 
         % 按专家顺序排列权重
         label_data = load(fullfile(para.model_path, 'label_map.mat'));
@@ -589,6 +581,50 @@ function proba = predict_exercise_proba_local(features, scaler_data, rf_data)
     end
 end
 
+function proba_avg = aggregate_proba_in_range(...
+    time_1, Win_Len, Fs, ...
+    accx, accy, accz, gyrox, gyroy, gyroz, ...
+    scaler_data, rf_data)
+% aggregate_proba_in_range 短窗口滑窗推理 + 概率均值聚合
+%   在 [time_1, time_1+Win_Len) 范围内以 2s/0.5s 滑窗提取特征并 RF 推理,
+%   最终返回所有短窗口概率的均值, 对齐训练端语义.
+    CLS_WIN_SEC  = 2;    % 分类器特征窗口长度 (与训练端一致)
+    CLS_STEP_SEC = 0.5;  % 分类器滑窗步长 (与训练端一致)
+
+    n_cls = rf_data.n_classes;
+    proba_sum = zeros(n_cls, 1);
+    n_valid = 0;
+
+    cls_win_samples  = round(CLS_WIN_SEC  * Fs);
+    cls_step_samples = round(CLS_STEP_SEC * Fs);
+    range_end = time_1 + Win_Len;
+
+    t = time_1;
+    while t + CLS_WIN_SEC <= range_end
+        idx_s = round(t * Fs) + 1;
+        idx_e = idx_s + cls_win_samples - 1;
+        if idx_e > length(accx)
+            t = t + CLS_STEP_SEC;
+            continue;
+        end
+
+        features = extract_mimu_features(...
+            accx(idx_s:idx_e), accy(idx_s:idx_e), accz(idx_s:idx_e), ...
+            gyrox(idx_s:idx_e), gyroy(idx_s:idx_e), gyroz(idx_s:idx_e), Fs);
+        proba = predict_exercise_proba_local(features, scaler_data, rf_data);
+        proba_sum = proba_sum + proba;
+        n_valid = n_valid + 1;
+
+        t = t + CLS_STEP_SEC;
+    end
+
+    if n_valid > 0
+        proba_avg = proba_sum / n_valid;
+    else
+        proba_avg = ones(n_cls, 1) / n_cls;
+    end
+end
+
 function all_weights = precompute_segment_weights(...
     accx, accy, accz, gyrox, gyroy, gyroz, ...
     Fs, Win_Len, Win_Step, time_end, ...
@@ -597,14 +633,10 @@ function all_weights = precompute_segment_weights(...
     all_weights = [];
     t = para.Time_Start;
     while t + Win_Len <= time_end
-        idx_s = round(t * Fs) + 1;
-        idx_e = idx_s + round(Win_Len * Fs) - 1;
-        if idx_e > length(accx), break; end
-
-        features = extract_mimu_features(...
-            accx(idx_s:idx_e), accy(idx_s:idx_e), accz(idx_s:idx_e), ...
-            gyrox(idx_s:idx_e), gyroy(idx_s:idx_e), gyroz(idx_s:idx_e), Fs);
-        proba = predict_exercise_proba_local(features, scaler_data, rf_data);
+        proba = aggregate_proba_in_range(...
+            t, Win_Len, Fs, ...
+            accx, accy, accz, gyrox, gyroy, gyroz, ...
+            scaler_data, rf_data);
         all_weights = [all_weights; t, proba(:)'];
         t = t + Win_Step;
     end

@@ -13,7 +13,9 @@ PPG 心率估计算法 (MATLAB): LMS 自适应滤波 + FFT 频谱分析融合，
 
 专家模式 (expert_mode=true):
   预处理(K遍,各专家独立Fs) -> K路LMS(双参考HF/ACC) -> FFT -> 加权频谱融合 -> 后级处理
-  分类器: RF (3类: arm_curl, jump_rope, push_up) 提供 per-window 或 per-segment 权重
+  分类器: RF (3类: arm_curl, jump_rope, push_up)
+    短窗口推理: 2s窗口/0.5s步长 (对齐训练端) -> 8s心率窗口内概率均值聚合
+    输出: per-window 或 per-segment 权重
 ```
 
 ## 文件职责
@@ -24,7 +26,7 @@ PPG 心率估计算法 (MATLAB): LMS 自适应滤波 + FFT 频谱分析融合，
 - `compute_spectrum.m` - 完整FFT频谱计算(返回全频段)
 - `weighted_spectrum_fusion.m` - K路频谱加权融合
 - `ProcessMergedSpectrum.m` - 融合频谱后级处理(惩罚+寻峰+追踪)
-- `extract_mimu_features.m` - 75维IMU特征提取(6轴时频域+互相关)
+- `extract_mimu_features.m` - 75维IMU特征提取(6轴时频域+互相关, 接受任意长度信号)
 - `predict_exercise_proba.m` - RF分类器推理(独立调用版)
 - `ChooseDelay1218.m` - PPG与参考信号时延对齐
 - `Find_nearBiggest.m` - 心率历史追踪
