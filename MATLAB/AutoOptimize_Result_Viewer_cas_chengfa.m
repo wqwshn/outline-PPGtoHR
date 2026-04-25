@@ -9,7 +9,7 @@
 clc; clear; close all;
 
 %% 1. 加载寻优结果
-ResultFile = 'dataformatlab\Best_Params_Expert_Result_multi_bobi1_processed.mat';
+ResultFile = 'dataformatlab\Best_Params_Expert_Result_multi_bobi2_processed.mat';
 if ~isfile(ResultFile)
     error('未找到专家模式结果文件 %s，请先运行 AutoOptimize_Bayes_Search_cas_chengfa.m', ResultFile);
 end

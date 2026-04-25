@@ -22,6 +22,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import numpy as np
+from numpy.lib.stride_tricks import sliding_window_view
 
 __all__ = ["choose_delay"]
 
@@ -41,6 +42,47 @@ def _safe_corr(a: np.ndarray, b: np.ndarray) -> float:
     return 0.0 if not np.isfinite(c) else float(c)
 
 
+def _lagged_segment_correlations(
+    ppg_seg: np.ndarray,
+    signal: np.ndarray,
+    starts: np.ndarray,
+    win_len: int,
+) -> np.ndarray:
+    """Return correlations between ``ppg_seg`` and many lagged windows.
+
+    Invalid windows keep MATLAB parity with the original loop: their
+    correlation stays zero, so all-zero ties still pick the first lag.
+    """
+    ppg_seg = np.asarray(ppg_seg, dtype=float).ravel()
+    signal = np.asarray(signal, dtype=float).ravel()
+    starts = np.asarray(starts, dtype=int).ravel()
+    out = np.zeros(starts.size, dtype=float)
+
+    if ppg_seg.size != win_len or win_len < 2 or signal.size < win_len:
+        return out
+
+    valid = (starts >= 0) & (starts + win_len <= signal.size)
+    if not np.any(valid):
+        return out
+
+    ppg_centered = ppg_seg - ppg_seg.mean()
+    ppg_norm_sq = float(ppg_centered @ ppg_centered)
+    if ppg_norm_sq == 0.0 or not np.isfinite(ppg_norm_sq):
+        return out
+
+    windows = sliding_window_view(signal, win_len)[starts[valid]]
+    win_centered = windows - windows.mean(axis=1, keepdims=True)
+    win_norm_sq = np.einsum("ij,ij->i", win_centered, win_centered)
+    denom = np.sqrt(ppg_norm_sq * win_norm_sq)
+    numer = win_centered @ ppg_centered
+
+    corr = np.zeros(valid.sum(), dtype=float)
+    finite = (denom > 0.0) & np.isfinite(denom) & np.isfinite(numer)
+    corr[finite] = numer[finite] / denom[finite]
+    out[valid] = corr
+    return out
+
+
 def choose_delay(
     fs: int,
     time_1: float,
@@ -57,10 +99,13 @@ def choose_delay(
     num_hf = len(hf)
     delay_range = round(_DELAY_TIME_SECONDS * fs)
     lag_range = range(-delay_range, delay_range + 1)
+    lags = np.asarray(list(lag_range), dtype=int)
     n_lags = len(lag_range)
 
     delay_a = np.zeros((n_lags, num_acc + 1), dtype=float)
     delay_h = np.zeros((n_lags, num_hf + 1), dtype=float)
+    delay_a[:, 0] = lags
+    delay_h[:, 0] = lags
 
     # Reference PPG segment (MATLAB ppg(p1:p2) one-based -> Python p1-1 : p2)
     p1_ref = int(np.floor(time_1 * fs))
@@ -69,24 +114,18 @@ def choose_delay(
         p2_ref = len(ppg)
     ppg_seg = ppg[p1_ref - 1 : p2_ref]
 
-    for row, ii in enumerate(lag_range):
-        delay_a[row, 0] = ii
-        delay_h[row, 0] = ii
+    p1_by_lag = np.floor(time_1 * fs + lags).astype(int)
+    starts = p1_by_lag - 1
+    win_len = _WINDOW_SECONDS * fs
 
-        p1 = int(np.floor((time_1 + ii / fs) * fs))
-        p2 = p1 + _WINDOW_SECONDS * fs - 1
-        if p1 < 1 or p2 > len(ppg):
-            continue  # row stays zero
-
-        py_start = p1 - 1
-        py_end = p2  # MATLAB inclusive end -> Python exclusive end
-
-        for ch_idx, sig in enumerate(acc):
-            seg = sig[py_start:py_end]
-            delay_a[row, ch_idx + 1] = _safe_corr(ppg_seg, seg)
-        for ch_idx, sig in enumerate(hf):
-            seg = sig[py_start:py_end]
-            delay_h[row, ch_idx + 1] = _safe_corr(ppg_seg, seg)
+    for ch_idx, sig in enumerate(acc):
+        delay_a[:, ch_idx + 1] = _lagged_segment_correlations(
+            ppg_seg, sig, starts, win_len
+        )
+    for ch_idx, sig in enumerate(hf):
+        delay_h[:, ch_idx + 1] = _lagged_segment_correlations(
+            ppg_seg, sig, starts, win_len
+        )
 
     # NaN -> 0 (matches MATLAB's NaN scrub for all-zero channels)
     delay_h[np.isnan(delay_h)] = 0.0

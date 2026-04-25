@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from .lms_filter import lms_filter
+
 __all__ = ["volterra_filter"]
 
 
@@ -44,6 +46,12 @@ def volterra_filter(
     K : int
         Delay.
     """
+    if M2 == 0:
+        e_lms, w, ee = lms_filter(mu, M1, K, u, d)
+        e = np.zeros(np.atleast_1d(np.asarray(u)).size, dtype=float)
+        e[: e_lms.size] = e_lms
+        return e, w, ee
+
     u_arr = _zscore(np.atleast_1d(np.asarray(u, dtype=float)).ravel())
     d_arr = _zscore(np.atleast_1d(np.asarray(d, dtype=float)).ravel())
 

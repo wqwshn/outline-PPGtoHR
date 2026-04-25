@@ -24,7 +24,7 @@ end
 
 %% 2. 基础配置
 % 数据文件路径 (请确认路径正确)
-para_base.FileName = 'dataformatlab\multi_bobi1_processed.mat'; 
+para_base.FileName = 'dataformatlab\multi_bobi2_processed.mat'; 
 para_base.Time_Start = 1;
 para_base.Time_Buffer = 10;
 para_base.Calib_Time = 30;
@@ -75,7 +75,7 @@ Num_Repeats = 3;
 % 专家模式下 HeartRateSolver 使用 expert_params.(name).Max_Order 而非 para.Max_Order,
 % 因此这里只搜索后级处理 (频谱惩罚/谱峰追踪/平滑) 相关参数.
 SearchSpace.Spec_Penalty_Width = [0.1, 0.2, 0.3];
-SearchSpace.Spec_Penalty_Weight = [0.1, 0.2, 0.3, 0.5];
+SearchSpace.Spec_Penalty_Weight = [0.1, 0.3, 0.5];
 
 SearchSpace.HR_Range_Hz = [15, 20, 25, 30, 35, 40] / 60;
 SearchSpace.Slew_Limit_BPM = 8:15;        

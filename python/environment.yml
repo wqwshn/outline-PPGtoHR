@@ -9,6 +9,7 @@ dependencies:
   - matplotlib>=3.8
   - scikit-learn>=1.4
   - optuna>=3.5
+  - numba>=0.59
   - pytest>=8
   - pytest-cov
   - jupyterlab
