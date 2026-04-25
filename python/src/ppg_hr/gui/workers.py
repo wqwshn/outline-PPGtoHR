@@ -242,6 +242,7 @@ class ViewWorker(QObject):
                     self._report,
                     self._params,
                     out_dir=self._out_dir,
+                    output_prefix=Path(self._params.file_name).stem,
                     show=False,
                 )
             self.log.emit(buf.getvalue().rstrip())

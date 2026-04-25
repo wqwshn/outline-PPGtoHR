@@ -824,7 +824,7 @@ class BatchPipelinePage(_PageBase):
         self._mode_checks: dict[str, QCheckBox] = {}
         for mode in self._MODE_ORDER:
             cb = QCheckBox(self._MODE_LABELS[mode])
-            cb.setChecked(True)
+            cb.setChecked(mode == "green")
             self._mode_checks[mode] = cb
             mode_layout.addWidget(cb)
 
@@ -1118,7 +1118,7 @@ class ViewPage(_PageBase):
         if report is None or not report.is_file():
             self._log.error("请选择一个有效的报告文件")
             return
-        out_dir = self._out_dir.path() or in_path.parent / "viewer_out"
+        out_dir = self._out_dir.path() or self._default_output_dir(in_path)
 
         params = SolverParams(file_name=in_path, ref_file=self._ref_pick.path())
 
@@ -1135,6 +1135,9 @@ class ViewPage(_PageBase):
         self._worker_holder = holder
         holder.start()
 
+    def _default_output_dir(self, input_path: Path) -> Path:
+        return input_path.parent / "viewer_out" / input_path.stem
+
     def _on_done(self, arte: ViewerArtefacts) -> None:
         if arte.figure and Path(arte.figure).is_file():
             pix = QPixmap(str(arte.figure))
@@ -1146,11 +1149,11 @@ class ViewPage(_PageBase):
                 ))
         rows = []
         if arte.figure:
-            rows.append(["figure.png", str(arte.figure)])
+            rows.append([Path(arte.figure).name, str(arte.figure)])
         if arte.error_csv:
-            rows.append(["error_table.csv", str(arte.error_csv)])
+            rows.append([Path(arte.error_csv).name, str(arte.error_csv)])
         if arte.param_csv:
-            rows.append(["param_table.csv", str(arte.param_csv)])
+            rows.append([Path(arte.param_csv).name, str(arte.param_csv)])
         for name, p in arte.extras.items():
             rows.append([name, str(p)])
         self._art_table.set_rows(rows)

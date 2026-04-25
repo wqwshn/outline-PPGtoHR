@@ -114,10 +114,13 @@ def cmd_optimise(args: argparse.Namespace) -> int:
 
 def cmd_view(args: argparse.Namespace) -> int:
     params = _build_params(args)
+    data_stem = Path(params.file_name).stem
+    out_dir = (Path(args.out_dir) / data_stem) if args.out_dir is not None else None
     artefacts = render(
         args.report,
         params,
-        out_dir=args.out_dir,
+        out_dir=out_dir,
+        output_prefix=data_stem,
         show=args.show,
     )
     print(f"figure    → {artefacts.figure}")

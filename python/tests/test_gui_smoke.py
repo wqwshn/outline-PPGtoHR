@@ -341,10 +341,9 @@ def test_batch_pipeline_page_defaults_and_autofill(tmp_path):
     app = QApplication.instance() or QApplication([])
     page = BatchPipelinePage()
     try:
-        # All three single-channel PPG modes are checked by default, and the
-        # "tri" (averaged) option is gone so batch results match Optimise's
-        # default single-channel behaviour for apples-to-apples comparison.
-        assert page._selected_modes() == ["green", "red", "ir"]
+        # Batch defaults to green only; other single-channel modes remain
+        # opt-in for comparison runs.
+        assert page._selected_modes() == ["green"]
         assert "tri" not in page._mode_checks
 
         input_dir = tmp_path / "raw_inputs"
@@ -358,6 +357,24 @@ def test_batch_pipeline_page_defaults_and_autofill(tmp_path):
         assert page._selected_modes() == []
         page._set_all_modes(True)
         assert page._selected_modes() == ["green", "red", "ir"]
+    finally:
+        page.close()
+        page.deleteLater()
+        app.processEvents()
+
+
+def test_view_page_default_output_dir_uses_data_stem(tmp_path):
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.pages import ViewPage
+
+    app = QApplication.instance() or QApplication([])
+    page = ViewPage()
+    try:
+        data_path = tmp_path / "multi_bobi1.csv"
+        data_path.write_text("dummy\n", encoding="utf-8")
+
+        assert page._default_output_dir(data_path) == tmp_path / "viewer_out" / "multi_bobi1"
     finally:
         page.close()
         page.deleteLater()

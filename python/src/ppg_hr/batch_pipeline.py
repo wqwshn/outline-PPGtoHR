@@ -36,10 +36,10 @@ STANDARD_HEADER = [
 
 @dataclass
 class QcThresholds:
-    std_max_threshold: float = 2.5
-    std_ratio_threshold: float = 2.0
-    outlier_std_multiplier: float = 2.5
-    outlier_ratio_threshold: float = 2.5
+    std_max_threshold: float = 5.0
+    std_ratio_threshold: float = 3.0
+    outlier_std_multiplier: float = 3.0
+    outlier_ratio_threshold: float = 4.0
     fs: float = 100.0
     precheck_seconds: float = 10.0
 
@@ -252,18 +252,18 @@ def run_batch_pipeline(
     )
     _log(f"质量评估完成：好采样 {len(good_rows)}，坏采样 {len(bad_rows)}")
 
-    _write_qc_tables(output_dir, good_rows, bad_rows)
+    all_rows = [*good_rows, *bad_rows]
     signal_plot_dir = output_dir / "signal_plots"
-    for i, row in enumerate(good_rows, start=1):
+    for i, row in enumerate(all_rows, start=1):
         if row.file_path is None:
             continue
         if on_progress is not None:
             on_progress({
                 "stage": "segment_plot",
                 "overall_current": i,
-                "overall_total": len(good_rows),
+                "overall_total": len(all_rows),
                 "stage_current": i,
-                "stage_total": len(good_rows),
+                "stage_total": len(all_rows),
                 "stage_label": "运动段取样图",
                 "file": row.file_name,
             })
@@ -274,7 +274,7 @@ def run_batch_pipeline(
     _log(f"运动段取样图已输出：{signal_plot_dir}")
 
     runnable: list[tuple[QcRow, Path]] = []
-    for row in good_rows:
+    for row in all_rows:
         if row.file_path is None:
             continue
         ref = row.file_path.with_name(f"{row.file_path.stem}_ref.csv")
@@ -283,6 +283,8 @@ def run_batch_pipeline(
         else:
             bad_rows.append(QcRow(row.file_name, "坏采样", "缺少同名 _ref.csv", row.file_path))
             _log(f"跳过 {row.file_name}：未找到参考文件 {ref.name}")
+
+    _write_qc_tables(output_dir, good_rows, bad_rows)
 
     total_runs = len(runnable) * max(1, len(modes))
     records: list[BatchRunRecord] = []

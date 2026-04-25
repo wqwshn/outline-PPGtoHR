@@ -123,11 +123,11 @@ python -m ppg_hr view \
     --out-dir viewer_out/
 ```
 
-`viewer_out/` 下会生成：
+`viewer_out/<数据文件名>/` 下会生成：
 
-- `figure_*.png`：上下两个子图（HF 融合 vs 参考、ACC 融合 vs 参考）
-- `error_table_*.csv`：每个时间窗的预测心率与误差
-- `param_table_*.csv`：HF / ACC 最优参数对比表
+- `<数据文件名>-figure.png`：上下两个子图（HF 融合 vs 参考、ACC 融合 vs 参考）
+- `<数据文件名>-error_table.csv`：每个时间窗的预测心率与误差
+- `<数据文件名>-param_table.csv`：HF / ACC 最优参数对比表
 
 ### Step 4 — 与 MATLAB 结果对照（可选）
 
@@ -385,7 +385,7 @@ python -m ppg_hr.gui        # 作为模块启动
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
 | **求解**        | 选 CSV + 调参（含「自适应滤波算法」下拉，切到 KLMS / Volterra 时显示对应专属参数）→ 一次跑完求解器，出 AAE 表与 HR 曲线，可选导出 HR 矩阵 CSV                                          | `solve`    |
 | **优化**        | 配预算（试次/种子点/重启次数）+ 选「自适应滤波算法」→ 运行 Optuna 贝叶斯优化（搜索空间会自动按所选算法切换），实时显示 Best-Err 轨迹、最优参数表、参数重要性柱状图；完成后自动保存 JSON                            | `optimise` |
-| **批量全流程**     | 选择原始数据目录后，自动执行质量评估 → 运动段取样图保存 → 对所有好数据按所选 PPG 通道**各自独立**跑贝叶斯优化（绿光 / 红光 / 红外光 可多选，默认三路全跑） → 每个通道优化结束后立即重跑并生成可视化，输出文件按 `{数据名}-{通道}-{滤波}-…` 命名；支持自适应滤波选择与搜索预算配置，进度条显示总进度 + 当前文件/通道 | 组合流水线      |
+| **批量全流程**     | 选择原始数据目录后，自动执行质量评估 → 运动段取样图保存 → 对所有带同名参考文件的数据按所选 PPG 通道**各自独立**跑贝叶斯优化（默认只跑绿光，红光 / 红外光可手动勾选） → 每个通道优化结束后立即重跑并生成可视化；质量判断只写入 `good_samples.csv` / `bad_samples.csv` 作为说明，不再阻断后续算法计算；输出文件按 `{数据名}-{通道}-{滤波}-…` 命名 | 组合流水线      |
 | **可视化**       | 选 `Best_Params_Result_*.json` 或 MATLAB `.mat` → 调用 `render` 重跑（自动按报告里记录的 `adaptive_filter` 选择算法）并在右侧直接显示 PNG，同时列出误差/参数 CSV 路径         | `view`     |
 | **MATLAB 对照** | 选 MATLAB 的 `.mat` 报告 → 自动找同名 CSV & `_ref.csv` → 用 MATLAB 最优参数在 Python 端复跑，表格列出 HF / ACC 的 AAE 差值 (`                                   | Δ          |
 
@@ -400,16 +400,18 @@ python -m ppg_hr.gui        # 作为模块启动
 `<name>_ref.csv`，参考心率框会自动填好。
 - **批量输出规则**：在「批量全流程」页选择输入目录后，输出目录默认自动补成
 `<input_dir>/batch_outputs/`；每个样本/模式的产物会落到
-`batch_runs/<sample>/<mode>_<adaptive_filter>/`，并同时生成全局
+`batch_runs/<sample>-<mode>-<adaptive_filter>/`，并同时生成全局
 `batch_run_summary.csv`、`good_samples.csv`、`bad_samples.csv` 和
 `signal_plots/*.png`。
+- **批量质检策略**：默认 QC 阈值已放宽；除缺少同名 `_ref.csv` 等无法计算的输入外，坏采样也会继续进入贝叶斯优化和可视化，坏采样原因仅作为数据说明保留在 CSV 中。
 - **批量执行顺序**：对同一个样本，当前实现会按所选 PPG 模式逐个执行
 “贝叶斯优化 → 立即可视化 → 下一模式”，不会先把所有模式都优化完再统一出图。
 - **对照页补全**：在「MATLAB 对照」页选完 `Best_Params_Result_<scenario>_processed.mat`
 后，会自动把 `<scenario>.csv` 与 `<scenario>_ref.csv` 填到数据区。
-- **图表嵌入 + 落盘**：可视化页既在右侧直接显示渲染好的 PNG，也把 `figure.png` /
-`error_table.csv` / `param_table.csv` 写到输出目录（留空则放到数据文件旁边的
-`viewer_out/`）。
+- **图表嵌入 + 落盘**：可视化页既在右侧直接显示渲染好的 PNG，也把
+`<数据文件名>-figure.png` / `<数据文件名>-error_table.csv` /
+`<数据文件名>-param_table.csv` 写到输出目录（留空则放到数据文件旁边的
+`viewer_out/<数据文件名>/`）。
 - **离线测试**：`tests/test_gui_smoke.py` 使用 `QT_QPA_PLATFORM=offscreen`
 做纯构建冒烟测试，CI / 无显示器环境也能跑。
 - **中文字体**：GUI 的所有嵌入图表（Best Err 轨迹、参数重要性柱状图、心率

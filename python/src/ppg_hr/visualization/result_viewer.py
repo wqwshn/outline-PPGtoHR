@@ -273,6 +273,7 @@ def render(
     base_params: SolverParams,
     *,
     out_dir: str | Path | None = None,
+    output_prefix: str | None = None,
     show: bool = False,
 ) -> ViewerArtefacts:
     """Re-run the solver with HF/ACC optima, then emit figure + CSVs.
@@ -288,6 +289,9 @@ def render(
     out_dir:
         Target directory for ``figure.png``, ``error_table.csv`` and
         ``param_table.csv``. Defaults to the report's directory.
+    output_prefix:
+        Optional dash-style prefix for all emitted files, e.g.
+        ``multi_bobi1`` writes ``multi_bobi1-figure.png``.
     show:
         When ``True`` and a display is available, calls ``plt.show()``.
     """
@@ -334,15 +338,19 @@ def render(
     ax2.set_xlabel("Time (s)")
     fig.tight_layout()
 
-    fig_path = out_dir / "figure.png"
+    fig_path = out_dir / _viewer_name("figure.png", output_prefix)
     fig.savefig(fig_path, dpi=150)
     if show:
         plt.show()
     plt.close(fig)
 
-    error_csv = write_error_csv(out_dir / "error_table.csv", res_hf, res_acc)
+    error_csv = write_error_csv(
+        out_dir / _viewer_name("error_table.csv", output_prefix),
+        res_hf,
+        res_acc,
+    )
     param_csv = write_param_csv(
-        out_dir / "param_table.csv", best_hf, best_acc,
+        out_dir / _viewer_name("param_table.csv", output_prefix), best_hf, best_acc,
         min_err_hf, min_err_acc, res_hf.err_stats, res_acc.err_stats,
     )
 
@@ -351,6 +359,12 @@ def render(
         error_csv=error_csv,
         param_csv=param_csv,
     )
+
+
+def _viewer_name(base_name: str, output_prefix: str | None) -> str:
+    if not output_prefix:
+        return base_name
+    return f"{output_prefix}-{base_name}"
 
 
 def _print_delay_profile(label: str, res: SolverResult) -> None:

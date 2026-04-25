@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from ppg_hr import cli
+from ppg_hr.visualization.result_viewer import ViewerArtefacts
 
 SCENARIO = "multi_tiaosheng1"
 
@@ -64,6 +65,43 @@ def test_parser_rejects_unknown_command() -> None:
     parser = cli.build_parser()
     with pytest.raises(SystemExit):
         parser.parse_args(["does-not-exist"])
+
+
+def test_view_passes_data_stem_output_dir_and_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    report = tmp_path / "report.json"
+    report.write_text("{}", encoding="utf-8")
+    output_root = tmp_path / "viewer_out"
+    seen: dict[str, object] = {}
+
+    def fake_render(report_path, params, *, out_dir, output_prefix, show):
+        seen["report_path"] = report_path
+        seen["file_name"] = Path(params.file_name)
+        seen["out_dir"] = out_dir
+        seen["output_prefix"] = output_prefix
+        seen["show"] = show
+        return ViewerArtefacts(
+            figure=Path(out_dir) / f"{output_prefix}-figure.png",
+            error_csv=Path(out_dir) / f"{output_prefix}-error_table.csv",
+            param_csv=Path(out_dir) / f"{output_prefix}-param_table.csv",
+        )
+
+    monkeypatch.setattr(cli, "render", fake_render)
+
+    rc = cli.main([
+        "view",
+        str(tmp_path / "multi_bobi1.csv"),
+        "--report",
+        str(report),
+        "--out-dir",
+        str(output_root),
+    ])
+
+    assert rc == 0
+    assert seen["out_dir"] == output_root / "multi_bobi1"
+    assert seen["output_prefix"] == "multi_bobi1"
 
 
 # ---------------------------------------------------------------------------

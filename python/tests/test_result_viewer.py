@@ -210,3 +210,42 @@ def test_render_emits_figure_and_csvs(
     assert "motion_aae" in first_col
     assert "fs_target" in first_col
     assert "time_bias" in first_col
+
+
+def test_render_can_prefix_output_files(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def _fake_solve(params):
+        import numpy as np
+        res = type("R", (), {})()
+        res.err_stats = np.zeros((5, 3))
+        res.HR = np.zeros((1, 9))
+        res.T_Pred = np.zeros((1,))
+        res.HR_Ref_Interp = np.zeros((1,))
+        res.motion_threshold = (0.0, 0.0)
+        res.delay_profile = None
+        return res
+
+    monkeypatch.setattr("ppg_hr.visualization.result_viewer.solve", _fake_solve)
+    report = tmp_path / "report.json"
+    report.write_text(
+        json.dumps({
+            "min_err_hf": 1.0,
+            "min_err_acc": 1.0,
+            "best_para_hf": {},
+            "best_para_acc": {},
+        }),
+        encoding="utf-8",
+    )
+    artefacts = render(
+        report,
+        SolverParams(file_name=tmp_path / "multi_bobi1.csv"),
+        out_dir=tmp_path / "viewer_out" / "multi_bobi1",
+        output_prefix="multi_bobi1",
+        show=False,
+    )
+
+    assert artefacts.figure == tmp_path / "viewer_out" / "multi_bobi1" / "multi_bobi1-figure.png"
+    assert artefacts.error_csv == tmp_path / "viewer_out" / "multi_bobi1" / "multi_bobi1-error_table.csv"
+    assert artefacts.param_csv == tmp_path / "viewer_out" / "multi_bobi1" / "multi_bobi1-param_table.csv"
