@@ -184,6 +184,15 @@ _PARAM_FIELDS = [
     "smooth_win_len", "time_bias",
 ]
 
+_DELAY_FIELDS = (
+    "delay_search_mode",
+    "delay_prefit_max_seconds",
+    "delay_prefit_windows",
+    "delay_prefit_min_corr",
+    "delay_prefit_margin_samples",
+    "delay_prefit_min_span_samples",
+)
+
 
 def write_param_csv(
     path: Path,
@@ -298,12 +307,23 @@ def render(
     strategy = str(report.get("adaptive_filter", base_params.adaptive_filter))
     ppg_mode = str(report.get("ppg_mode", base_params.ppg_mode))
     base_params = base_params.replace(adaptive_filter=strategy, ppg_mode=ppg_mode)
+    delay_search = report.get("delay_search", {})
+    if isinstance(delay_search, dict):
+        delay_overrides = {
+            k: delay_search[k]
+            for k in _DELAY_FIELDS
+            if k in delay_search
+        }
+        if delay_overrides:
+            base_params = base_params.replace(**delay_overrides)
 
     best_hf = _merge(base_params, report.get("best_para_hf", {}))
     best_acc = _merge(base_params, report.get("best_para_acc", {}))
 
     res_hf = solve(best_hf)
     res_acc = solve(best_acc)
+    _print_delay_profile("HF best", res_hf)
+    _print_delay_profile("ACC best", res_acc)
 
     min_err_hf = float(report.get("min_err_hf", res_hf.err_stats[3, 0]))
     min_err_acc = float(report.get("min_err_acc", res_acc.err_stats[4, 0]))
@@ -331,6 +351,15 @@ def render(
         error_csv=error_csv,
         param_csv=param_csv,
     )
+
+
+def _print_delay_profile(label: str, res: SolverResult) -> None:
+    profile = getattr(res, "delay_profile", None)
+    if profile is None:
+        return
+    print(f"{label} delay profile:")
+    for line in profile.summary_lines():
+        print(f"  {line}")
 
 
 def _merge(base: SolverParams, overrides: dict[str, Any]) -> SolverParams:

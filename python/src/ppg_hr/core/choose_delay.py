@@ -24,11 +24,37 @@ from collections.abc import Sequence
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
-__all__ = ["choose_delay"]
+__all__ = ["choose_delay", "default_delay_bounds"]
 
 # Baseline: 25 Hz / 5 samples = 200 ms time window for delay search
 _DELAY_TIME_SECONDS = 0.2
 _WINDOW_SECONDS: int = 8
+
+
+def default_delay_bounds(
+    fs: int,
+    seconds: float = _DELAY_TIME_SECONDS,
+) -> tuple[int, int]:
+    """Return the legacy symmetric delay-search bounds in samples."""
+    delay_range = round(float(seconds) * int(fs))
+    return -delay_range, delay_range
+
+
+def _sanitize_lag_bounds(
+    fs: int,
+    bounds: tuple[int, int] | None,
+    *,
+    max_seconds: float = _DELAY_TIME_SECONDS,
+) -> tuple[int, int]:
+    default_min, default_max = default_delay_bounds(fs, max_seconds)
+    if bounds is None:
+        return default_min, default_max
+
+    lo = max(default_min, int(bounds[0]))
+    hi = min(default_max, int(bounds[1]))
+    if lo > hi:
+        return default_min, default_max
+    return lo, hi
 
 
 def _safe_corr(a: np.ndarray, b: np.ndarray) -> float:
@@ -89,6 +115,9 @@ def choose_delay(
     ppg: np.ndarray,
     acc_signals: Sequence[np.ndarray],
     hf_signals: Sequence[np.ndarray],
+    *,
+    lag_bounds_acc: tuple[int, int] | None = None,
+    lag_bounds_hf: tuple[int, int] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, int, int]:
     """See module docstring."""
     ppg = np.asarray(ppg, dtype=float).ravel()
@@ -97,15 +126,15 @@ def choose_delay(
 
     num_acc = len(acc)
     num_hf = len(hf)
-    delay_range = round(_DELAY_TIME_SECONDS * fs)
-    lag_range = range(-delay_range, delay_range + 1)
-    lags = np.asarray(list(lag_range), dtype=int)
-    n_lags = len(lag_range)
+    acc_min, acc_max = _sanitize_lag_bounds(fs, lag_bounds_acc)
+    hf_min, hf_max = _sanitize_lag_bounds(fs, lag_bounds_hf)
+    lags_a = np.arange(acc_min, acc_max + 1, dtype=int)
+    lags_h = np.arange(hf_min, hf_max + 1, dtype=int)
 
-    delay_a = np.zeros((n_lags, num_acc + 1), dtype=float)
-    delay_h = np.zeros((n_lags, num_hf + 1), dtype=float)
-    delay_a[:, 0] = lags
-    delay_h[:, 0] = lags
+    delay_a = np.zeros((lags_a.size, num_acc + 1), dtype=float)
+    delay_h = np.zeros((lags_h.size, num_hf + 1), dtype=float)
+    delay_a[:, 0] = lags_a
+    delay_h[:, 0] = lags_h
 
     # Reference PPG segment (MATLAB ppg(p1:p2) one-based -> Python p1-1 : p2)
     p1_ref = int(np.floor(time_1 * fs))
@@ -114,17 +143,20 @@ def choose_delay(
         p2_ref = len(ppg)
     ppg_seg = ppg[p1_ref - 1 : p2_ref]
 
-    p1_by_lag = np.floor(time_1 * fs + lags).astype(int)
-    starts = p1_by_lag - 1
     win_len = _WINDOW_SECONDS * fs
 
+    p1_by_lag_a = np.floor(time_1 * fs + lags_a).astype(int)
+    starts_a = p1_by_lag_a - 1
     for ch_idx, sig in enumerate(acc):
         delay_a[:, ch_idx + 1] = _lagged_segment_correlations(
-            ppg_seg, sig, starts, win_len
+            ppg_seg, sig, starts_a, win_len
         )
+
+    p1_by_lag_h = np.floor(time_1 * fs + lags_h).astype(int)
+    starts_h = p1_by_lag_h - 1
     for ch_idx, sig in enumerate(hf):
         delay_h[:, ch_idx + 1] = _lagged_segment_correlations(
-            ppg_seg, sig, starts, win_len
+            ppg_seg, sig, starts_h, win_len
         )
 
     # NaN -> 0 (matches MATLAB's NaN scrub for all-zero channels)

@@ -190,6 +190,33 @@ def test_param_form_apply_to_writes_adaptive_filter_fields():
         app.processEvents()
 
 
+def test_param_form_apply_to_writes_delay_search_fields():
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.pages import ParamForm
+    from ppg_hr.params import SolverParams
+
+    app = QApplication.instance() or QApplication([])
+    form = ParamForm()
+    try:
+        form._editors["delay_search_mode"].setCurrentText("fixed")
+        form._editors["delay_prefit_max_seconds"].setValue(0.12)
+        form._editors["delay_prefit_windows"].setValue(5)
+        form._editors["delay_prefit_min_corr"].setValue(0.25)
+        form._editors["delay_prefit_margin_samples"].setValue(4)
+        form._editors["delay_prefit_min_span_samples"].setValue(3)
+        out = form.apply_to(SolverParams())
+        assert out.delay_search_mode == "fixed"
+        assert out.delay_prefit_max_seconds == pytest.approx(0.12)
+        assert out.delay_prefit_windows == 5
+        assert out.delay_prefit_min_corr == pytest.approx(0.25)
+        assert out.delay_prefit_margin_samples == 4
+        assert out.delay_prefit_min_span_samples == 3
+    finally:
+        form.deleteLater()
+        app.processEvents()
+
+
 def test_adaptive_filter_picker_lists_three_strategies():
     from PySide6.QtWidgets import QApplication
 

@@ -34,6 +34,9 @@ def _build_params(args: argparse.Namespace) -> SolverParams:
         "fs_target", "max_order", "calib_time", "motion_th_scale",
         "spec_penalty_weight", "spec_penalty_width", "smooth_win_len", "time_bias",
         "adaptive_filter",
+        "delay_search_mode", "delay_prefit_max_seconds",
+        "delay_prefit_windows", "delay_prefit_min_corr",
+        "delay_prefit_margin_samples", "delay_prefit_min_span_samples",
         "klms_step_size", "klms_sigma", "klms_epsilon",
         "volterra_max_order_vol",
     ):
@@ -79,6 +82,10 @@ def cmd_solve(args: argparse.Namespace) -> int:
     for name, row in zip(rows, stats, strict=True):
         print(f"  {name:<14s} {row[0]:>8.3f} {row[1]:>8.3f} {row[2]:>8.3f}")
     print(f"\nMotion threshold (calib): {res.motion_threshold[0]:.4f}")
+    if res.delay_profile is not None:
+        print()
+        for line in res.delay_profile.summary_lines():
+            print(line)
     return 0
 
 
@@ -130,7 +137,7 @@ def _jsonable(obj):
         return str(obj)
     if isinstance(obj, dict):
         return {k: _jsonable(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
+    if isinstance(obj, list | tuple):
         return [_jsonable(v) for v in obj]
     return obj
 
@@ -159,6 +166,39 @@ def _add_common_io_args(p: argparse.ArgumentParser) -> None:
             "Adaptive filtering strategy used in the HF and ACC cascades. "
             "Default: 'lms' (Normalized LMS, existing behaviour)."
         ),
+    )
+    p.add_argument(
+        "--delay-search-mode", dest="delay_search_mode",
+        choices=("adaptive", "fixed"), default=None,
+        help=(
+            "Delay-search range strategy. 'adaptive' prefits a per-dataset "
+            "HF/ACC lag range; 'fixed' preserves the original +/-0.2 s scan."
+        ),
+    )
+    p.add_argument(
+        "--delay-prefit-max-seconds", dest="delay_prefit_max_seconds",
+        type=float, default=None,
+        help="Maximum absolute lag in seconds used during adaptive delay prefit.",
+    )
+    p.add_argument(
+        "--delay-prefit-windows", dest="delay_prefit_windows",
+        type=int, default=None,
+        help="Maximum number of representative windows used for delay prefit.",
+    )
+    p.add_argument(
+        "--delay-prefit-min-corr", dest="delay_prefit_min_corr",
+        type=float, default=None,
+        help="Minimum absolute correlation required for a prefit lag sample.",
+    )
+    p.add_argument(
+        "--delay-prefit-margin-samples", dest="delay_prefit_margin_samples",
+        type=int, default=None,
+        help="Extra lag samples added around adaptive delay quartile bounds.",
+    )
+    p.add_argument(
+        "--delay-prefit-min-span-samples", dest="delay_prefit_min_span_samples",
+        type=int, default=None,
+        help="Minimum adaptive lag span in samples after aggregation.",
     )
     p.add_argument(
         "--klms-step-size", dest="klms_step_size", type=float, default=None,

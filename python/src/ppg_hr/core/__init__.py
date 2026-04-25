@@ -2,6 +2,12 @@
 
 from .adaptive_filter import AdaptiveStrategy, apply_adaptive_cascade
 from .choose_delay import choose_delay
+from .delay_profile import (
+    DelayBounds,
+    DelayGroupProfile,
+    DelaySearchProfile,
+    estimate_delay_search_profile,
+)
 from .fft_peaks import fft_peaks
 from .find_maxpeak import find_maxpeak
 from .find_near_biggest import find_near_biggest
@@ -16,6 +22,10 @@ __all__ = [
     "AdaptiveStrategy",
     "apply_adaptive_cascade",
     "choose_delay",
+    "DelayBounds",
+    "DelayGroupProfile",
+    "DelaySearchProfile",
+    "estimate_delay_search_profile",
     "fft_peaks",
     "find_maxpeak",
     "find_near_biggest",

@@ -150,6 +150,41 @@ def test_render_defaults_to_base_strategy_when_report_lacks_field(
     assert seen == ["volterra", "volterra"]
 
 
+def test_render_honours_report_delay_search(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    seen_modes: list[str] = []
+
+    def _fake_solve(params):
+        seen_modes.append(params.delay_search_mode)
+        import numpy as np
+        res = type("R", (), {})()
+        res.err_stats = np.zeros((5, 3))
+        res.HR = np.zeros((1, 9))
+        res.T_Pred = np.zeros((1,))
+        res.HR_Ref_Interp = np.zeros((1,))
+        res.motion_threshold = (0.0, 0.0)
+        res.delay_profile = None
+        return res
+
+    monkeypatch.setattr("ppg_hr.visualization.result_viewer.solve", _fake_solve)
+    report = {
+        "min_err_hf": 1.0,
+        "min_err_acc": 1.0,
+        "best_para_hf": {},
+        "best_para_acc": {},
+        "delay_search": {"delay_search_mode": "fixed"},
+        "importance_hf": None,
+        "search_space": {},
+    }
+    report_path = tmp_path / "delay.json"
+    report_path.write_text(json.dumps(report), encoding="utf-8")
+    base = SolverParams(file_name=tmp_path / "x.csv")
+    render(report_path, base, out_dir=tmp_path / "out", show=False)
+    assert seen_modes == ["fixed", "fixed"]
+
+
 def test_render_emits_figure_and_csvs(
     base_params: SolverParams,
     fake_json_report: Path,

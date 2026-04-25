@@ -38,3 +38,26 @@ def test_to_dict_includes_new_fields() -> None:
     assert "klms_sigma" in data
     assert "klms_epsilon" in data
     assert "volterra_max_order_vol" in data
+
+
+def test_delay_search_defaults() -> None:
+    p = SolverParams()
+    assert p.delay_search_mode == "adaptive"
+    assert p.delay_prefit_max_seconds == pytest.approx(0.2)
+    assert p.delay_prefit_windows == 8
+    assert p.delay_prefit_min_corr == pytest.approx(0.15)
+    assert p.delay_prefit_margin_samples == 2
+    assert p.delay_prefit_min_span_samples == 2
+
+
+def test_to_dict_includes_delay_search_fields() -> None:
+    data = SolverParams().to_dict()
+    for name in (
+        "delay_search_mode",
+        "delay_prefit_max_seconds",
+        "delay_prefit_windows",
+        "delay_prefit_min_corr",
+        "delay_prefit_margin_samples",
+        "delay_prefit_min_span_samples",
+    ):
+        assert name in data

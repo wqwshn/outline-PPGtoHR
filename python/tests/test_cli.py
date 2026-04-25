@@ -145,3 +145,39 @@ def test_inspect_defaults_exposes_adaptive_filter(
     assert "klms_sigma" in parsed
     assert "klms_epsilon" in parsed
     assert "volterra_max_order_vol" in parsed
+
+
+def test_build_params_delay_search_overrides() -> None:
+    parser = cli.build_parser()
+    args = parser.parse_args([
+        "solve", "dummy.csv",
+        "--delay-search-mode", "fixed",
+        "--delay-prefit-max-seconds", "0.12",
+        "--delay-prefit-windows", "5",
+        "--delay-prefit-min-corr", "0.33",
+        "--delay-prefit-margin-samples", "4",
+        "--delay-prefit-min-span-samples", "3",
+    ])
+    params = cli._build_params(args)
+    assert params.delay_search_mode == "fixed"
+    assert params.delay_prefit_max_seconds == pytest.approx(0.12)
+    assert params.delay_prefit_windows == 5
+    assert params.delay_prefit_min_corr == pytest.approx(0.33)
+    assert params.delay_prefit_margin_samples == 4
+    assert params.delay_prefit_min_span_samples == 3
+
+
+def test_parser_rejects_invalid_delay_search_mode() -> None:
+    parser = cli.build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["solve", "dummy.csv", "--delay-search-mode", "wide"])
+
+
+def test_inspect_defaults_exposes_delay_search_fields(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    rc = cli.main(["inspect-defaults"])
+    assert rc == 0
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["delay_search_mode"] == "adaptive"
+    assert "delay_prefit_windows" in parsed

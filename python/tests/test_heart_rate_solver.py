@@ -60,6 +60,34 @@ def test_motion_flag_consistency(result: SolverResult) -> None:
     np.testing.assert_array_equal(result.HR[:, 7], result.HR[:, 8])
 
 
+def test_solver_result_contains_delay_profile() -> None:
+    from ppg_hr.core.heart_rate_solver import solve_from_arrays
+
+    raw, ref = _make_synthetic_raw()
+    params = SolverParams(fs_target=100, calib_time=5.0, time_buffer=2.0)
+    res = solve_from_arrays(raw, ref, params)
+    assert res.delay_profile is not None
+    assert res.delay_profile.mode == "adaptive"
+    assert res.delay_profile.default_bounds.as_tuple() == (-20, 20)
+
+
+def test_fixed_delay_mode_uses_fixed_profile() -> None:
+    from ppg_hr.core.heart_rate_solver import solve_from_arrays
+
+    raw, ref = _make_synthetic_raw()
+    params = SolverParams(
+        fs_target=100,
+        calib_time=5.0,
+        time_buffer=2.0,
+        delay_search_mode="fixed",
+    )
+    res = solve_from_arrays(raw, ref, params)
+    assert res.delay_profile is not None
+    assert res.delay_profile.mode == "fixed"
+    assert res.delay_profile.hf.bounds.as_tuple() == (-20, 20)
+    assert res.delay_profile.acc.bounds.as_tuple() == (-20, 20)
+
+
 def test_ref_csv_must_exist(tmp_path: Path) -> None:
     fake_csv = tmp_path / "fake.csv"
     fake_csv.write_text("Time(s)\n0\n")
@@ -86,7 +114,7 @@ def test_matches_golden_e2e(dataset_dir: Path, golden_dir: Path) -> None:
         expected_HR = np.asarray(expected_struct["HR"], dtype=float)
         expected_err = np.asarray(expected_struct["err_stats"], dtype=float)
 
-    res = solve(SolverParams(file_name=sensor, ref_file=gt))
+    res = solve(SolverParams(file_name=sensor, ref_file=gt, delay_search_mode="fixed"))
     assert res.HR.shape == expected_HR.shape, "HR matrix shape mismatch"
     assert_array_close(res.HR, expected_HR, atol=1e-3, rtol=1e-3, err_msg="HR matrix")
     assert_array_close(

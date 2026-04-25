@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ppg_hr"
-version = "0.2.0"
+version = "0.3.0"
 description = "PPG heart-rate estimation algorithm — Python port of the MATLAB outline-PPGtoHR project"
 readme = "README.md"
 requires-python = ">=3.10"

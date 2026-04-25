@@ -66,6 +66,47 @@ def test_lag_recovered() -> None:
     assert td_a == 3
 
 
+def test_lag_bounds_constrain_acc_and_hf_independently() -> None:
+    fs = 100
+    n = 30 * fs
+    rng = np.random.default_rng(33)
+    ppg = rng.normal(size=n)
+    acc = _shifted_signal(ppg, 8)
+    hf = _shifted_signal(ppg, -5)
+
+    _mh, _ma, td_h, td_a = choose_delay(
+        fs,
+        5.0,
+        ppg,
+        [acc],
+        [hf],
+        lag_bounds_acc=(6, 10),
+        lag_bounds_hf=(-7, -3),
+    )
+
+    assert 6 <= td_a <= 10
+    assert -7 <= td_h <= -3
+
+
+def test_invalid_lag_bounds_fall_back_to_default_range() -> None:
+    fs = 100
+    n = 30 * fs
+    rng = np.random.default_rng(34)
+    ppg = rng.normal(size=n)
+    acc = _shifted_signal(ppg, 3)
+
+    _mh, _ma, _td_h, td_a = choose_delay(
+        fs,
+        5.0,
+        ppg,
+        [acc],
+        [acc],
+        lag_bounds_acc=(10, 2),
+    )
+
+    assert td_a == 3
+
+
 def test_lagged_segment_correlations_match_slow_reference() -> None:
     rng = np.random.default_rng(12)
     ppg_seg = rng.normal(size=80)

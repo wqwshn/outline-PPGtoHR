@@ -123,6 +123,7 @@ class BayesResult:
     search_space: dict[str, list[Any]] = field(default_factory=dict)
     adaptive_filter: str = "lms"
     ppg_mode: str = "green"
+    delay_search: dict[str, Any] = field(default_factory=dict)
 
     def save(self, path: str | Path) -> Path:
         path = Path(path)
@@ -130,6 +131,7 @@ class BayesResult:
         payload = {
             "adaptive_filter": self.adaptive_filter,
             "ppg_mode": self.ppg_mode,
+            "delay_search": _jsonify(self.delay_search),
             "min_err_hf": float(self.min_err_hf),
             "best_para_hf": _jsonify(self.best_para_hf),
             "min_err_acc": float(self.min_err_acc),
@@ -156,6 +158,17 @@ def _jsonify(obj: Any) -> Any:
     if isinstance(obj, Path):
         return str(obj)
     return obj
+
+
+def _delay_search_config(base: SolverParams) -> dict[str, Any]:
+    return {
+        "delay_search_mode": base.delay_search_mode,
+        "delay_prefit_max_seconds": base.delay_prefit_max_seconds,
+        "delay_prefit_windows": base.delay_prefit_windows,
+        "delay_prefit_min_corr": base.delay_prefit_min_corr,
+        "delay_prefit_margin_samples": base.delay_prefit_margin_samples,
+        "delay_prefit_min_span_samples": base.delay_prefit_min_span_samples,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -682,6 +695,7 @@ def optimise(
         search_space={n: space.options(n) for n in space.names()},
         adaptive_filter=base.adaptive_filter,
         ppg_mode=base.ppg_mode,
+        delay_search=_delay_search_config(base),
     )
 
     if out_path is None and base.file_name:

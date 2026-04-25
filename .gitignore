@@ -9,6 +9,7 @@ html/
 
 # 编辑器/IDE 与 Claude/Cursor 工作区缓存
 .claude/
+.codex-home/
 .cursor/
 .vscode/
 .idea/

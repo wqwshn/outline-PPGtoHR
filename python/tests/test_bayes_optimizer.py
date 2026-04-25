@@ -239,6 +239,19 @@ def test_bayes_result_save_includes_strategy(tmp_path: Path) -> None:
     assert payload["adaptive_filter"] == "klms"
 
 
+def test_bayes_result_save_includes_delay_search(tmp_path: Path) -> None:
+    res = BayesResult(
+        min_err_hf=1.0, best_para_hf={"fs_target": 100},
+        min_err_acc=2.0, best_para_acc={"fs_target": 100},
+        importance_hf=None,
+        delay_search={"delay_search_mode": "fixed", "delay_prefit_windows": 5},
+    )
+    p = res.save(tmp_path / "out.json")
+    payload = json.loads(p.read_text(encoding="utf-8"))
+    assert payload["delay_search"]["delay_search_mode"] == "fixed"
+    assert payload["delay_search"]["delay_prefit_windows"] == 5
+
+
 def test_bayes_result_default_strategy_is_lms(tmp_path: Path) -> None:
     res = BayesResult(
         min_err_hf=1.0, best_para_hf={}, min_err_acc=2.0, best_para_acc={},

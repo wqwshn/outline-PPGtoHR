@@ -40,6 +40,7 @@ from ..preprocess.data_loader import load_dataset
 from ..preprocess.utils import filloutliers_mean_previous, smoothdata_movmedian
 from .adaptive_filter import apply_adaptive_cascade
 from .choose_delay import choose_delay
+from .delay_profile import DelaySearchProfile, estimate_delay_search_profile
 from .fft_peaks import fft_peaks
 from .find_maxpeak import find_maxpeak
 from .find_near_biggest import find_near_biggest
@@ -68,6 +69,7 @@ class SolverResult:
     motion_threshold: tuple[float, float]
     HR_Ref_Interp: np.ndarray  # shape (T,)
     err_fus_hf: float
+    delay_profile: DelaySearchProfile | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -77,6 +79,11 @@ class SolverResult:
             "Motion_Threshold": self.motion_threshold,
             "HR_Ref_Interp": self.HR_Ref_Interp,
             "Err_Fus_HF": self.err_fus_hf,
+            "Delay_Profile": (
+                self.delay_profile.as_dict()
+                if self.delay_profile is not None
+                else None
+            ),
         }
 
 
@@ -254,14 +261,23 @@ def solve_from_arrays(
     acc_baseline_std = float(np.std(acc_mag[:calib_len], ddof=1))
     motion_threshold = params.motion_th_scale * acc_baseline_std
 
+    sig_h_full = [hotf1, hotf2]
+    sig_a_full = [accx, accy, accz]
+    delay_profile = estimate_delay_search_profile(
+        fs=fs,
+        ppg=ppg,
+        acc_signals=sig_a_full,
+        hf_signals=sig_h_full,
+        acc_mag=acc_mag,
+        motion_threshold=motion_threshold,
+        params=params,
+    )
+
     # ---- main loop ------------------------------------------------------
     win_len_s = 8
     win_step_s = 1
     time_end = len(ppg_ori) / fs - params.time_buffer
     rows: list[list[float]] = []
-
-    sig_h_full = [hotf1, hotf2]
-    sig_a_full = [accx, accy, accz]
 
     time_1 = float(params.time_start)
     times_idx = 0
@@ -302,8 +318,14 @@ def solve_from_arrays(
             times_hf = 0 if rest_to_motion else times_idx
             times_acc = 0 if rest_to_motion else times_idx
 
+            lag_kwargs: dict[str, tuple[int, int]] = {}
+            if str(params.delay_search_mode).lower() == "adaptive":
+                lag_kwargs = {
+                    "lag_bounds_hf": delay_profile.hf.bounds.as_tuple(),
+                    "lag_bounds_acc": delay_profile.acc.bounds.as_tuple(),
+                }
             mh_arr, ma_arr, td_h, td_a = choose_delay(
-                fs, time_1, ppg, sig_a_full, sig_h_full
+                fs, time_1, ppg, sig_a_full, sig_h_full, **lag_kwargs
             )
 
             # Path A: HF cascade NLMS
@@ -380,7 +402,8 @@ def solve_from_arrays(
     if not rows:
         empty = np.zeros((0, 9))
         return SolverResult(empty, np.full((5, 3), np.nan), np.array([]),
-                            (motion_threshold, motion_threshold), np.array([]), float("nan"))
+                            (motion_threshold, motion_threshold), np.array([]),
+                            float("nan"), delay_profile)
     HR = np.asarray(rows, dtype=float)
 
     # ---- post-processing ------------------------------------------------
@@ -423,6 +446,7 @@ def solve_from_arrays(
         motion_threshold=(motion_threshold, motion_threshold),
         HR_Ref_Interp=hr_ref_interp,
         err_fus_hf=float(err_stats[3, 0]),
+        delay_profile=delay_profile,
     )
 
 

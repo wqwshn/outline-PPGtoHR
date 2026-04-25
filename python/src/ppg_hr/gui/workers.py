@@ -24,6 +24,7 @@ from ..core.heart_rate_solver import SolverResult, solve
 from ..optimization import BayesConfig, default_search_space, optimise_mode
 from ..optimization.bayes_optimizer import (
     BayesResult,
+    _delay_search_config,
     _importance_from_study,
 )
 from ..params import SolverParams
@@ -81,6 +82,9 @@ class SolveWorker(QObject):
         try:
             self.log.emit(f"开始求解：{Path(self._params.file_name).name}")
             res: SolverResult = solve(self._params)
+            if res.delay_profile is not None:
+                for line in res.delay_profile.summary_lines():
+                    self.log.emit(line)
             self.log.emit(
                 f"完成：{res.HR.shape[0]} 个时间窗，"
                 f"运动阈值 ≈ {res.motion_threshold[0]:.4f}"
@@ -198,6 +202,9 @@ class OptimiseWorker(QObject):
                 best_para_acc=best_acc,
                 importance_hf=importance,
                 search_space={n: space.options(n) for n in space.names()},
+                adaptive_filter=self._params.adaptive_filter,
+                ppg_mode=self._params.ppg_mode,
+                delay_search=_delay_search_config(self._params),
             )
 
             if self._out_path is not None:

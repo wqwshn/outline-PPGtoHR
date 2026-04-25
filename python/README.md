@@ -7,6 +7,8 @@
 - PPG 心率算法主求解器（重采样 → 带通 → 运动判定 → 级联 NLMS / 纯 FFT → 融合 →结果平滑）
 - **可选的非线性自适应滤波**：归一化 LMS（默认）、QKLMS（量化核 LMS）、二阶
 Volterra LMS，三种算法共用同一套 HF/ACC 级联流水线，可在 CLI / GUI 里切换
+- **自适应时延搜索**：正式求解前先对当前数据预扫描若干代表窗口，分别收窄
+PPG-vs-HF 与 PPG-vs-ACC 的 lag 搜索范围，降低过宽 `±0.2s` 搜索带来的错位风险
 - 11 维参数空间的多重启贝叶斯优化（Optuna TPE，含随机森林参数重要性），
 每种自适应滤波算法自带独立搜索空间
 - 优化结果的双子图可视化（HF / ACC 两路融合曲线 + 误差表 + 参数表）
@@ -158,6 +160,8 @@ ppg-hr solve <input.csv> [--ref REF] [--out OUT.csv]
               [--calib-time T] [--motion-th-scale S]
               [--spec-penalty-weight W] [--spec-penalty-width W]
               [--smooth-win-len N] [--time-bias T]
+              [--delay-search-mode {adaptive,fixed}]
+              [--delay-prefit-windows N]
 ```
 
 
@@ -170,6 +174,11 @@ ppg-hr solve <input.csv> [--ref REF] [--out OUT.csv]
 | `--max-order`                                          | LMS 最大阶数（12 / 16 / 20）                                   |
 | `--time-bias`                                          | 预测时间相对参考的偏移（秒）                                           |
 | `--adaptive-filter`                                    | 自适应滤波算法：`lms`（默认）/ `klms` / `volterra`                   |
+| `--delay-search-mode`                                  | 时延搜索模式：`adaptive`（默认，自适应预扫描）/ `fixed`（旧版固定 `±0.2s`） |
+| `--delay-prefit-max-seconds`                           | adaptive 预扫描使用的最大时延秒数，默认 `0.2`，不会超过旧版物理上限 |
+| `--delay-prefit-windows`                               | adaptive 预扫描最多抽取的代表窗口数，默认 `8` |
+| `--delay-prefit-min-corr`                              | 纳入时延聚合的最低绝对相关性，默认 `0.15` |
+| `--delay-prefit-margin-samples` / `--delay-prefit-min-span-samples` | 自适应 lag 区间的边界余量与最小跨度保护 |
 | `--klms-step-size` / `--klms-sigma` / `--klms-epsilon` | QKLMS 专属参数（仅 `--adaptive-filter=klms` 时生效）               |
 | `--volterra-max-order-vol`                             | 二阶 Volterra 滤波器长度 M₂（仅 `--adaptive-filter=volterra` 时生效） |
 | 其他 `--*`                                               | 与 `SolverParams` 字段一一对应（不传则用默认值）                         |
@@ -256,6 +265,30 @@ python -m ppg_hr optimise \
     --adaptive-filter volterra \
     --out reports/volterra_tiaosheng1.json
 ```
+
+### 自适应时延搜索（`--delay-search-mode`）
+
+默认 `--delay-search-mode adaptive` 会在主循环前选取若干个运动信息较强的 8s
+窗口，先用旧版最大范围 `±0.2s` 计算 PPG 与 HF / ACC 的相关性峰值，再用高置信
+lag 的分位数区间分别生成 HF 和 ACC 的搜索范围。正式逐窗求解时，`choose_delay`
+只在这两个收窄范围内找最大相关点，从而减少不同运动状态下过宽 lag 搜索导致的
+信号错位。
+
+如果需要与旧 MATLAB 金标严格对齐，或排查新旧行为差异，使用
+`--delay-search-mode fixed`。该模式保持旧版固定 `±0.2s` 搜索，不使用预扫描
+收窄范围。
+
+`solve` 完成后 CLI 会打印时延画像摘要；GUI 的「求解」页日志也会显示同样信息，
+例如：
+
+```text
+Delay search: adaptive, scanned=8, default=[-20,+20]
+  HF: bounds=[-6,+4], median=-2.0, corr median=0.420, n=6
+  ACC: bounds=[-9,+3], median=-4.0, corr median=0.380, n=6
+```
+
+优化报告 JSON 会记录 delay search 配置，`view` / GUI「可视化」页重跑时会自动
+读回，保证最优参数复现时使用同一套时延搜索策略。
 
 ---
 
@@ -442,6 +475,7 @@ python/
       lms_filter.py        # 归一化 LMS（默认）
       klms_filter.py       # 量化核 LMS (QKLMS)
       volterra_filter.py   # 二阶 Volterra LMS
+      delay_profile.py     # 数据级自适应时延搜索预扫描与诊断摘要
       fft_peaks.py         # FFT 峰值提取
       find_maxpeak.py
       find_real_hr.py

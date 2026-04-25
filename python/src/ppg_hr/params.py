@@ -56,6 +56,15 @@ class SolverParams:
     adaptive_filter: str = "lms"  # one of: "lms", "klms", "volterra"
     ppg_mode: str = "green"  # one of: "green", "red", "ir"
 
+    # Delay-search prefit controls. ``adaptive`` narrows the PPG-vs-motion
+    # lag search per dataset; ``fixed`` preserves the original +/-0.2 s scan.
+    delay_search_mode: str = "adaptive"  # one of: "adaptive", "fixed"
+    delay_prefit_max_seconds: float = 0.2
+    delay_prefit_windows: int = 8
+    delay_prefit_min_corr: float = 0.15
+    delay_prefit_margin_samples: int = 2
+    delay_prefit_min_span_samples: int = 2
+
     # KLMS-specific parameters (only used when adaptive_filter == "klms")
     klms_step_size: float = 0.1
     klms_sigma: float = 1.0

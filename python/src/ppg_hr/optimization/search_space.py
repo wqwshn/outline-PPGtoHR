@@ -102,7 +102,7 @@ def decode(space: SearchSpace, idx_map: dict[str, int]) -> dict[str, Any]:
         if not (0 <= idx < len(options)):
             raise IndexError(f"Index {idx} out of range for parameter {name}")
         value = options[idx]
-        if isinstance(value, (np.integer, np.floating)):
+        if isinstance(value, np.integer | np.floating):
             value = value.item()
         out[name] = value
     return out
