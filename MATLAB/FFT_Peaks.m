@@ -50,7 +50,7 @@ function [Fre, Famp] = FFT_Peaks(Signal, Fs, percent)
     Frequence1 = Fs*((0:(Len/2)-1))/Len;
 
     % 定义有效频率范围 (通常为 1~4 Hz)
-    free_low = 1 * Len/Fs + 1;
+    free_low = 0.7 * Len/Fs + 1;
     free_high = 4 * Len/Fs; 
     
     [pks, locs] = findpeaks(FFTAmp1); 

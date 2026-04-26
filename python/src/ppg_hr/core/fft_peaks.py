@@ -40,7 +40,7 @@ def fft_peaks(
         return np.array([]), np.array([])
 
     locs_1based = peaks_idx + 1
-    free_low = 1.0 * _FFT_LEN / fs + 1.0
+    free_low = 0.7 * _FFT_LEN / fs + 1.0
     free_high = 4.0 * _FFT_LEN / fs
 
     valid_mask = (locs_1based < free_high) & (locs_1based > free_low)

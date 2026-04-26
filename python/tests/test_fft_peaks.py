@@ -25,13 +25,23 @@ def test_pure_tone_inside_band() -> None:
     assert any(abs(f - 2.0) < 0.05 for f in fre)
 
 
+def test_sub_1hz_cardiac_tone_inside_band() -> None:
+    fs = 100.0
+    t = np.arange(0, 12, 1.0 / fs)
+    sig = np.sin(2 * np.pi * 0.8 * t)  # 48 BPM, below the old 1 Hz cutoff.
+    fre, amp = fft_peaks(sig, fs, 0.3)
+    assert fre.size >= 1
+    assert amp.size == fre.size
+    assert any(abs(f - 0.8) < 0.05 for f in fre)
+
+
 def test_high_freq_outside_band_filtered() -> None:
     fs = 100.0
     t = np.arange(0, 8, 1.0 / fs)
     sig = np.sin(2 * np.pi * 8.0 * t)  # 8 Hz, above 4 Hz upper bound
     fre, _ = fft_peaks(sig, fs, 0.3)
-    # All returned peaks must lie strictly inside the 1-4 Hz cardiac band
-    assert fre.size == 0 or np.all((fre > 1.0) & (fre < 4.0))
+    # All returned peaks must lie strictly inside the 0.7-4 Hz cardiac band.
+    assert fre.size == 0 or np.all((fre > 0.7) & (fre < 4.0))
 
 
 def test_threshold_filters_small_peaks() -> None:
