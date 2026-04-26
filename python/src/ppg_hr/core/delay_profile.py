@@ -1,8 +1,9 @@
 """Dataset-level adaptive delay-search prefit.
 
 The main solver calls this once after filtering and motion-threshold
-calibration. It scans a small set of representative windows with the legacy
-wide lag range, then narrows the later per-window ``choose_delay`` search.
+calibration.  It scans representative windows in expanding tiers
+(+-0.2s -> +-0.4s -> +-0.6s -> +-0.8s) and stops as soon as both
+HF and ACC groups reach an acceptable state.
 """
 
 from __future__ import annotations
@@ -24,7 +25,14 @@ __all__ = [
 
 _WINDOW_SECONDS = 8.0
 _STEP_SECONDS = 1.0
-_LEGACY_MAX_SECONDS = 0.2
+
+# Tiered prefit levels: (max_seconds, max_windows)
+_PREFIT_LEVELS: tuple[tuple[float, int], ...] = (
+    (0.2, 5),
+    (0.4, 10),
+    (0.6, 15),
+    (0.8, 20),
+)
 
 
 @dataclass(frozen=True)
@@ -127,16 +135,19 @@ def estimate_delay_search_profile(
 ) -> DelaySearchProfile:
     """Estimate HF/ACC lag bounds for one dataset."""
     fs = int(fs)
-    max_seconds = min(_LEGACY_MAX_SECONDS, max(0.0, float(params.delay_prefit_max_seconds)))
-    default_min, default_max = default_delay_bounds(fs, max_seconds)
-    default_bounds = DelayBounds(default_min, default_max)
+    final_max_seconds = min(
+        _PREFIT_LEVELS[-1][0],
+        max(0.0, float(params.delay_prefit_max_seconds)),
+    )
+    final_min, final_max = default_delay_bounds(fs, final_max_seconds)
+    final_bounds = DelayBounds(final_min, final_max)
 
     if str(params.delay_search_mode).lower() == "fixed":
-        fixed = _fallback_group(default_bounds, "fixed mode", fallback=False)
+        fixed = _fallback_group(final_bounds, "fixed mode", fallback=False)
         return DelaySearchProfile(
             mode="fixed",
             fs=fs,
-            default_bounds=default_bounds,
+            default_bounds=final_bounds,
             scanned_windows=0,
             hf=fixed,
             acc=fixed,
@@ -147,66 +158,118 @@ def estimate_delay_search_profile(
     hf = [np.asarray(s, dtype=float).ravel() for s in hf_signals]
     acc_mag = np.asarray(acc_mag, dtype=float).ravel()
 
-    times = _select_prefit_times(
-        fs=fs,
-        n_samples=ppg.size,
-        acc_mag=acc_mag,
-        motion_threshold=float(motion_threshold),
-        params=params,
-    )
-    if not times:
-        group = _fallback_group(default_bounds, "insufficient candidate windows")
-        return DelaySearchProfile(
+    final_profile: DelaySearchProfile | None = None
+    for max_seconds, max_windows in _iter_levels(params):
+        level_bounds_min, level_bounds_max = default_delay_bounds(fs, max_seconds)
+        level_bounds = DelayBounds(level_bounds_min, level_bounds_max)
+
+        times = _select_prefit_times(
+            fs=fs,
+            n_samples=ppg.size,
+            acc_mag=acc_mag,
+            motion_threshold=float(motion_threshold),
+            max_windows=max_windows,
+            params=params,
+        )
+        if not times:
+            group = _fallback_group(level_bounds, "insufficient candidate windows")
+            profile = DelaySearchProfile(
+                mode="adaptive",
+                fs=fs,
+                default_bounds=level_bounds,
+                scanned_windows=0,
+                hf=group,
+                acc=group,
+            )
+            final_profile = profile
+            continue
+
+        hf_lags: list[int] = []
+        hf_corrs: list[float] = []
+        acc_lags: list[int] = []
+        acc_corrs: list[float] = []
+        bounds_tuple = level_bounds.as_tuple()
+        for time_1 in times:
+            mh, ma, td_h, td_a = choose_delay(
+                fs,
+                time_1,
+                ppg,
+                acc,
+                hf,
+                lag_bounds_acc=bounds_tuple,
+                lag_bounds_hf=bounds_tuple,
+                max_delay_seconds=max_seconds,
+            )
+            if mh.size:
+                hf_lags.append(int(td_h))
+                hf_corrs.append(float(np.max(np.abs(mh))))
+            if ma.size:
+                acc_lags.append(int(td_a))
+                acc_corrs.append(float(np.max(np.abs(ma))))
+
+        hf_profile = _aggregate_group(
+            lags=hf_lags,
+            corrs=hf_corrs,
+            default_bounds=level_bounds,
+            params=params,
+        )
+        acc_profile = _aggregate_group(
+            lags=acc_lags,
+            corrs=acc_corrs,
+            default_bounds=level_bounds,
+            params=params,
+        )
+        profile = DelaySearchProfile(
             mode="adaptive",
             fs=fs,
-            default_bounds=default_bounds,
-            scanned_windows=0,
-            hf=group,
-            acc=group,
+            default_bounds=level_bounds,
+            scanned_windows=len(times),
+            hf=hf_profile,
+            acc=acc_profile,
         )
+        final_profile = profile
 
-    hf_lags: list[int] = []
-    hf_corrs: list[float] = []
-    acc_lags: list[int] = []
-    acc_corrs: list[float] = []
-    bounds_tuple = default_bounds.as_tuple()
-    for time_1 in times:
-        mh, ma, td_h, td_a = choose_delay(
-            fs,
-            time_1,
-            ppg,
-            acc,
-            hf,
-            lag_bounds_acc=bounds_tuple,
-            lag_bounds_hf=bounds_tuple,
-        )
-        if mh.size:
-            hf_lags.append(int(td_h))
-            hf_corrs.append(float(np.max(np.abs(mh))))
-        if ma.size:
-            acc_lags.append(int(td_a))
-            acc_corrs.append(float(np.max(np.abs(ma))))
+        if _group_is_acceptable(
+            hf_profile, level_bounds, params
+        ) and _group_is_acceptable(acc_profile, level_bounds, params):
+            return profile
 
-    hf_profile = _aggregate_group(
-        lags=hf_lags,
-        corrs=hf_corrs,
-        default_bounds=default_bounds,
-        params=params,
-    )
-    acc_profile = _aggregate_group(
-        lags=acc_lags,
-        corrs=acc_corrs,
-        default_bounds=default_bounds,
-        params=params,
-    )
-    return DelaySearchProfile(
-        mode="adaptive",
-        fs=fs,
-        default_bounds=default_bounds,
-        scanned_windows=len(times),
-        hf=hf_profile,
-        acc=acc_profile,
-    )
+    assert final_profile is not None
+    return final_profile
+
+
+def _iter_levels(params: SolverParams) -> tuple[tuple[float, int], ...]:
+    """Return prefit levels, clipped to the user-configured max seconds."""
+    cap = max(0.0, float(params.delay_prefit_max_seconds))
+    levels: list[tuple[float, int]] = []
+    for sec, win in _PREFIT_LEVELS:
+        if sec <= cap + 1e-9:
+            levels.append((sec, win))
+    if not levels:
+        levels.append(_PREFIT_LEVELS[0])
+    return tuple(levels)
+
+
+def _group_is_acceptable(
+    group: DelayGroupProfile, default_bounds: DelayBounds, params: SolverParams
+) -> bool:
+    """Check whether a delay group has converged sufficiently."""
+    if group.fallback:
+        return False
+    if len(group.selected_lags) < 2:
+        return False
+    min_span = max(0, int(params.delay_prefit_min_span_samples))
+    if group.bounds.width < min_span:
+        return False
+    if group.bounds.min_lag == default_bounds.min_lag:
+        return False
+    if group.bounds.max_lag == default_bounds.max_lag:
+        return False
+    if default_bounds.width > 0:
+        ratio = group.bounds.width / default_bounds.width
+        if ratio > 0.7:
+            return False
+    return True
 
 
 def _select_prefit_times(
@@ -215,6 +278,7 @@ def _select_prefit_times(
     n_samples: int,
     acc_mag: np.ndarray,
     motion_threshold: float,
+    max_windows: int,
     params: SolverParams,
 ) -> list[float]:
     win_len = int(round(_WINDOW_SECONDS * fs))
@@ -239,7 +303,7 @@ def _select_prefit_times(
     if not candidates:
         return []
 
-    limit = max(1, int(params.delay_prefit_windows))
+    limit = max(1, min(max_windows, int(params.delay_prefit_windows)))
     motion = [c for c in candidates if c[2]]
     source = motion if len(motion) >= 2 else candidates
     ranked = sorted(source, key=lambda item: item[1], reverse=True)

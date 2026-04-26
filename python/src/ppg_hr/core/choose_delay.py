@@ -118,6 +118,7 @@ def choose_delay(
     *,
     lag_bounds_acc: tuple[int, int] | None = None,
     lag_bounds_hf: tuple[int, int] | None = None,
+    max_delay_seconds: float = _DELAY_TIME_SECONDS,
 ) -> tuple[np.ndarray, np.ndarray, int, int]:
     """See module docstring."""
     ppg = np.asarray(ppg, dtype=float).ravel()
@@ -126,8 +127,12 @@ def choose_delay(
 
     num_acc = len(acc)
     num_hf = len(hf)
-    acc_min, acc_max = _sanitize_lag_bounds(fs, lag_bounds_acc)
-    hf_min, hf_max = _sanitize_lag_bounds(fs, lag_bounds_hf)
+    acc_min, acc_max = _sanitize_lag_bounds(
+        fs, lag_bounds_acc, max_seconds=max_delay_seconds
+    )
+    hf_min, hf_max = _sanitize_lag_bounds(
+        fs, lag_bounds_hf, max_seconds=max_delay_seconds
+    )
     lags_a = np.arange(acc_min, acc_max + 1, dtype=int)
     lags_h = np.arange(hf_min, hf_max + 1, dtype=int)
 

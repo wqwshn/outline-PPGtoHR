@@ -100,7 +100,7 @@ def test_solver_result_contains_delay_profile() -> None:
     res = solve_from_arrays(raw, ref, params)
     assert res.delay_profile is not None
     assert res.delay_profile.mode == "adaptive"
-    assert res.delay_profile.default_bounds.as_tuple() == (-20, 20)
+    assert res.delay_profile.default_bounds.as_tuple() == (-80, 80)
 
 
 def test_fixed_delay_mode_uses_fixed_profile() -> None:
@@ -116,8 +116,8 @@ def test_fixed_delay_mode_uses_fixed_profile() -> None:
     res = solve_from_arrays(raw, ref, params)
     assert res.delay_profile is not None
     assert res.delay_profile.mode == "fixed"
-    assert res.delay_profile.hf.bounds.as_tuple() == (-20, 20)
-    assert res.delay_profile.acc.bounds.as_tuple() == (-20, 20)
+    assert res.delay_profile.hf.bounds.as_tuple() == (-80, 80)
+    assert res.delay_profile.acc.bounds.as_tuple() == (-80, 80)
 
 
 def test_ref_csv_must_exist(tmp_path: Path) -> None:
