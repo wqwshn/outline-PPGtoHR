@@ -18,6 +18,7 @@ from ppg_hr.optimization import (
     BayesConfig,
     BayesResult,
     SearchSpace,
+    bayes_optimizer,
     decode,
     default_search_space,
     optimise,
@@ -52,6 +53,56 @@ def test_search_space_rejects_out_of_range() -> None:
     bad["fs_target"] = 99
     with pytest.raises(IndexError):
         decode(space, bad)
+
+
+def test_cost_fn_uses_motion_aae_when_analysis_scope_is_motion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    err_stats = np.zeros((5, 3), dtype=float)
+    err_stats[3, :] = [3.0, 13.0, 33.0]
+
+    def fake_solve(params):
+        res = type("R", (), {})()
+        res.err_stats = err_stats
+        return res
+
+    class FakeTrial:
+        def suggest_int(self, name, low, high):
+            return 0
+
+        def set_user_attr(self, name, value):
+            pass
+
+    monkeypatch.setattr(bayes_optimizer, "solve", fake_solve)
+    space = SearchSpace(
+        fs_target=[100],
+        max_order=None,
+        spec_penalty_width=None,
+        hr_range_hz=None,
+        slew_limit_bpm=None,
+        slew_step_bpm=None,
+        hr_range_rest=None,
+        slew_limit_rest=None,
+        slew_step_rest=None,
+        smooth_win_len=None,
+        time_bias=None,
+    )
+
+    full_cost = bayes_optimizer._build_cost_fn(
+        SolverParams(file_name="dummy.csv", analysis_scope="full"),
+        space,
+        "HF",
+        penalty_value=999.0,
+    )
+    motion_cost = bayes_optimizer._build_cost_fn(
+        SolverParams(file_name="dummy.csv", analysis_scope="motion"),
+        space,
+        "HF",
+        penalty_value=999.0,
+    )
+
+    assert full_cost(FakeTrial()) == pytest.approx(3.0)
+    assert motion_cost(FakeTrial()) == pytest.approx(33.0)
 
 
 def test_search_space_is_customisable() -> None:

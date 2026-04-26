@@ -184,6 +184,10 @@ def _delay_search_config(base: SolverParams) -> dict[str, Any]:
 _MODE_ROW: dict[str, int] = {"HF": 3, "ACC": 4}
 
 
+def _objective_col(base: SolverParams) -> int:
+    return 2 if str(base.analysis_scope).lower() == "motion" else 0
+
+
 def _build_cost_fn(
     base: SolverParams,
     space: SearchSpace,
@@ -194,6 +198,7 @@ def _build_cost_fn(
 ) -> Callable[[optuna.trial.Trial], float]:
     """Build the Optuna objective. If arrays are provided, skip file I/O."""
     row = _MODE_ROW[mode]
+    col = _objective_col(base)
     use_arrays = raw_data is not None and ref_data is not None
 
     def _cost(trial: optuna.trial.Trial) -> float:
@@ -209,7 +214,7 @@ def _build_cost_fn(
                 res = solve_from_arrays(raw_data, ref_data, params)
             else:
                 res = solve(params)
-            err = float(res.err_stats[row, 0])
+            err = float(res.err_stats[row, col])
             if not np.isfinite(err):
                 return penalty_value
             return err
