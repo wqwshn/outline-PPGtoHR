@@ -95,7 +95,7 @@ def apply_publication_style(
     styles.append(style_path)
     plt.style.use(styles)
 
-    colors = COLOR_CYCLES.get(color_cycle, color_cycle)
+    colors = COLOR_CYCLES.get(color_cycle, color_cycle) if isinstance(color_cycle, str) else color_cycle
     mpl.rcParams["axes.prop_cycle"] = cycler(color=list(colors))
 
 

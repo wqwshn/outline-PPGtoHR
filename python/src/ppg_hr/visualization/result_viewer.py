@@ -15,6 +15,7 @@ The default console output mirrors MATLAB's formatted tables.
 from __future__ import annotations
 
 import csv
+import importlib.util
 import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -37,6 +38,24 @@ __all__ = [
 
 _COL_INDICES = [2, 3, 4, 5, 6]  # Python 0-based → MATLAB cols 3..7
 _COL_NAMES = ["LMS(HF)", "LMS(Acc)", "Pure FFT", "Fusion(HF)", "Fusion(Acc)"]
+
+_PLOT_COLS = {
+    "hf_lms": 2,
+    "acc_lms": 3,
+    "fft": 4,
+    "hf_fusion": 5,
+    "acc_fusion": 6,
+}
+
+_PLOT_COLORS = {
+    "reference": "#111111",
+    "hf_lms": "#C51B7D",
+    "acc_lms": "#2C7FB8",
+    "fft": "#737373",
+    "hf_fusion": "#7A0177",
+    "acc_fusion": "#1D91C0",
+    "motion": "#D9D9D9",
+}
 
 
 @dataclass
@@ -238,34 +257,166 @@ def write_param_csv(
 def _plot_panel(ax, res: SolverResult, label: str, min_err: float) -> None:
     HR = res.HR
     t_pred = res.T_Pred
-    motion_area = HR[:, 7] * 220.0
+    motion_flag = HR[:, 7] > 0.5
     ax.fill_between(
-        t_pred, 0, motion_area,
-        color=(0.94, 0.94, 0.96), edgecolor="none", label="Motion (ACC flag)",
+        t_pred,
+        0,
+        1,
+        where=motion_flag,
+        transform=ax.get_xaxis_transform(),
+        color=_PLOT_COLORS["motion"],
+        alpha=0.28,
+        edgecolor="none",
+        label="Motion",
     )
-    ax.plot(t_pred, HR[:, 4] * 60.0,
-            color=(0.6, 0.6, 0.6), linewidth=1.2, label="Pure FFT")
-    ax.plot(t_pred, HR[:, 3] * 60.0,
-            color="b", linestyle=":", linewidth=1.5, label="LMS-Acc")
-    ax.plot(t_pred, HR[:, 2] * 60.0,
-            color="m", linestyle=":", linewidth=1.5, label="LMS-HF")
-    ax.plot(HR[:, 0], HR[:, 1] * 60.0,
-            color="k", linewidth=2.5, label="Reference")
-    ax.plot(t_pred, HR[:, 6] * 60.0,
-            color="b", marker=".", linestyle="-", linewidth=1.5, label="Fusion-Acc")
-    ax.plot(t_pred, HR[:, 5] * 60.0,
-            color="m", marker=".", linestyle="-", linewidth=1.5, label="Fusion-HF")
+    ax.plot(
+        HR[:, 0],
+        HR[:, 1] * 60.0,
+        color=_PLOT_COLORS["reference"],
+        linewidth=1.6,
+        label="Reference",
+        zorder=5,
+    )
+    ax.plot(
+        t_pred,
+        HR[:, _PLOT_COLS["hf_lms"]] * 60.0,
+        color=_PLOT_COLORS["hf_lms"],
+        linewidth=1.9,
+        label=_method_error_label("HF-LMS", res.err_stats[0, 0]),
+        zorder=4,
+    )
+    ax.plot(
+        t_pred,
+        HR[:, _PLOT_COLS["acc_lms"]] * 60.0,
+        color=_PLOT_COLORS["acc_lms"],
+        linestyle=(0, (3, 1.6)),
+        linewidth=1.25,
+        label=_method_error_label("ACC-LMS", res.err_stats[1, 0]),
+        zorder=3,
+    )
+    ax.plot(
+        t_pred,
+        HR[:, _PLOT_COLS["fft"]] * 60.0,
+        color=_PLOT_COLORS["fft"],
+        linestyle=(0, (1.2, 1.4)),
+        linewidth=1.15,
+        label=_method_error_label("FFT", res.err_stats[2, 0]),
+        zorder=2,
+    )
+    ax.plot(
+        t_pred,
+        HR[:, _PLOT_COLS["hf_fusion"]] * 60.0,
+        color=_PLOT_COLORS["hf_fusion"],
+        marker=".",
+        markersize=3.0,
+        linestyle="-",
+        linewidth=1.35,
+        label=_method_error_label("HF fusion", res.err_stats[3, 0]),
+        zorder=4,
+    )
+    ax.plot(
+        t_pred,
+        HR[:, _PLOT_COLS["acc_fusion"]] * 60.0,
+        color=_PLOT_COLORS["acc_fusion"],
+        marker=".",
+        markersize=3.0,
+        linestyle="-",
+        linewidth=1.25,
+        label=_method_error_label("ACC fusion", res.err_stats[4, 0]),
+        zorder=3,
+    )
 
     e_fus_hf = res.err_stats[3, 0]
     e_fus_acc = res.err_stats[4, 0]
     ax.set_title(
-        f"{label}  target={min_err:.3f}  Fus-HF total={e_fus_hf:.3f}  "
-        f"Fus-ACC total={e_fus_acc:.3f}"
+        f"{label}  target={min_err:.3f} BPM  "
+        f"HF fusion={e_fus_hf:.3f} BPM  ACC fusion={e_fus_acc:.3f} BPM",
+        loc="left",
     )
-    ax.set_ylabel("Heart Rate (BPM)")
+    ax.set_ylabel("Heart rate (BPM)")
     ax.set_ylim(50, 200)
-    ax.grid(True, alpha=0.3)
-    ax.legend(loc="upper right", fontsize=8, ncol=2)
+    ax.grid(True, axis="y", alpha=0.18, linewidth=0.6)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.legend(loc="upper right", fontsize=7, ncol=2, frameon=False)
+
+
+def _method_error_label(name: str, total_aae: float) -> str:
+    return f"{name} (AAE={float(total_aae):.2f} BPM)"
+
+
+def _load_publication_script(module_name: str):
+    root = Path(__file__).resolve().parents[4]
+    script = root / "skills" / "publication-plotting" / "scripts" / f"{module_name}.py"
+    if not script.is_file():
+        return None
+    spec = importlib.util.spec_from_file_location(
+        f"_ppg_hr_publication_plotting_{module_name}",
+        script,
+    )
+    if spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _apply_publication_style() -> None:
+    plot_style = _load_publication_script("plot_style")
+    if plot_style is not None:
+        plot_style.apply_publication_style(
+            "nature_single_column",
+            color_cycle=[
+                _PLOT_COLORS["hf_lms"],
+                _PLOT_COLORS["acc_lms"],
+                _PLOT_COLORS["fft"],
+                _PLOT_COLORS["hf_fusion"],
+                _PLOT_COLORS["acc_fusion"],
+            ],
+        )
+        return
+
+    import matplotlib as mpl
+
+    mpl.rcParams.update({
+        "font.family": "sans-serif",
+        "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans"],
+        "font.size": 8,
+        "axes.labelsize": 8,
+        "axes.titlesize": 8,
+        "xtick.labelsize": 7,
+        "ytick.labelsize": 7,
+        "legend.fontsize": 7,
+        "axes.linewidth": 0.75,
+        "lines.linewidth": 1.2,
+        "pdf.fonttype": 42,
+        "ps.fonttype": 42,
+        "svg.fonttype": "none",
+    })
+
+
+def _export_publication_figure(fig, output_base: Path) -> list[Path]:
+    export_module = _load_publication_script("export_figure")
+    if export_module is not None:
+        return export_module.export_figure(
+            fig,
+            output_base,
+            formats=("pdf", "svg", "png"),
+            dpi=600,
+        )
+
+    output_base.parent.mkdir(parents=True, exist_ok=True)
+    paths = [
+        output_base.with_suffix(".pdf"),
+        output_base.with_suffix(".svg"),
+        output_base.with_suffix(".png"),
+    ]
+    for path in paths:
+        kwargs = {"bbox_inches": "tight", "pad_inches": 0.02}
+        if path.suffix.lower() == ".png":
+            kwargs["dpi"] = 600
+        fig.savefig(path, **kwargs)
+    return paths
 
 
 def render(
@@ -299,6 +450,7 @@ def render(
     if not show:
         matplotlib.use("Agg", force=False)  # safe no-op if already Agg
     import matplotlib.pyplot as plt
+    _apply_publication_style()
 
     report = load_report(report_path)
     out_dir = Path(out_dir) if out_dir is not None else Path(report_path).parent
@@ -326,20 +478,22 @@ def render(
 
     res_hf = solve(best_hf)
     res_acc = solve(best_acc)
+    _align_motion_mask(res_hf, res_acc)
     _print_delay_profile("HF best", res_hf)
     _print_delay_profile("ACC best", res_acc)
 
     min_err_hf = float(report.get("min_err_hf", res_hf.err_stats[3, 0]))
     min_err_acc = float(report.get("min_err_acc", res_acc.err_stats[4, 0]))
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 9), sharex=True)
-    _plot_panel(ax1, res_hf, "(1) Fusion(HF) best", min_err_hf)
-    _plot_panel(ax2, res_acc, "(2) Fusion(ACC) best", min_err_acc)
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(7.2, 5.0), sharex=True)
+    _plot_panel(ax1, res_hf, "A  HF fusion best", min_err_hf)
+    _plot_panel(ax2, res_acc, "B  ACC fusion best", min_err_acc)
     ax2.set_xlabel("Time (s)")
     fig.tight_layout()
 
-    fig_path = out_dir / _viewer_name("figure.png", output_prefix)
-    fig.savefig(fig_path, dpi=150)
+    fig_base = out_dir / _viewer_name("figure", output_prefix)
+    figure_paths = _export_publication_figure(fig, fig_base)
+    fig_path = fig_base.with_suffix(".png")
     if show:
         plt.show()
     plt.close(fig)
@@ -358,6 +512,10 @@ def render(
         figure=fig_path,
         error_csv=error_csv,
         param_csv=param_csv,
+        extras={
+            f"figure_{path.suffix.lower().lstrip('.')}": path
+            for path in figure_paths
+        },
     )
 
 
@@ -365,6 +523,43 @@ def _viewer_name(base_name: str, output_prefix: str | None) -> str:
     if not output_prefix:
         return base_name
     return f"{output_prefix}-{base_name}"
+
+
+def _align_motion_mask(source: SolverResult, target: SolverResult) -> None:
+    """Use one canonical motion mask for both viewer panels.
+
+    HF-best and ACC-best reports can differ in fs_target or tracking knobs.
+    Their heart-rate estimates may legitimately differ, but the shaded motion
+    area should describe the same source recording.  The first solve is the
+    canonical mask; the second result is trimmed to the same visible time span
+    and receives nearest-neighbour motion flags from that mask.
+    """
+    if source.HR.size == 0 or target.HR.size == 0:
+        return
+    source_t = np.asarray(source.HR[:, 0], dtype=float)
+    target_t = np.asarray(target.HR[:, 0], dtype=float)
+    if source_t.size == 0 or target_t.size == 0:
+        return
+
+    visible = (target_t >= source_t[0] - 1e-9) & (target_t <= source_t[-1] + 1e-9)
+    if visible.any() and not visible.all():
+        target.HR = target.HR[visible].copy()
+        if len(target.T_Pred) == len(visible):
+            target.T_Pred = target.T_Pred[visible]
+        if len(target.HR_Ref_Interp) == len(visible):
+            target.HR_Ref_Interp = target.HR_Ref_Interp[visible]
+        target_t = np.asarray(target.HR[:, 0], dtype=float)
+    else:
+        target.HR = target.HR.copy()
+
+    idx_right = np.searchsorted(source_t, target_t, side="left")
+    idx_right = np.clip(idx_right, 0, source_t.size - 1)
+    idx_left = np.clip(idx_right - 1, 0, source_t.size - 1)
+    choose_left = np.abs(target_t - source_t[idx_left]) <= np.abs(target_t - source_t[idx_right])
+    nearest = np.where(choose_left, idx_left, idx_right)
+    flags = source.HR[nearest, 7]
+    target.HR[:, 7] = flags
+    target.HR[:, 8] = flags
 
 
 def _print_delay_profile(label: str, res: SolverResult) -> None:

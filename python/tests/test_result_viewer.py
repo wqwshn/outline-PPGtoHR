@@ -10,6 +10,7 @@ import pytest
 
 from ppg_hr.params import SolverParams
 from ppg_hr.visualization import load_report, render
+from ppg_hr.visualization import result_viewer
 
 SCENARIO = "multi_tiaosheng1"
 
@@ -185,6 +186,100 @@ def test_render_honours_report_delay_search(
     assert seen_modes == ["fixed", "fixed"]
 
 
+def test_render_uses_one_motion_mask_for_both_panels(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import numpy as np
+
+    report = {
+        "min_err_hf": 1.0,
+        "min_err_acc": 1.0,
+        "best_para_hf": {"fs_target": 50},
+        "best_para_acc": {"fs_target": 100},
+    }
+    report_path = tmp_path / "report.json"
+    report_path.write_text(json.dumps(report), encoding="utf-8")
+
+    hf = type("R", (), {})()
+    hf.err_stats = np.zeros((5, 3))
+    hf.HR = np.zeros((5, 9), dtype=float)
+    hf.HR[:, 0] = np.arange(5, dtype=float)
+    hf.HR[:, 7] = [0, 1, 1, 0, 0]
+    hf.HR[:, 8] = hf.HR[:, 7]
+    hf.T_Pred = hf.HR[:, 0]
+    hf.HR_Ref_Interp = np.zeros((5,))
+    hf.delay_profile = None
+
+    acc = type("R", (), {})()
+    acc.err_stats = np.zeros((5, 3))
+    acc.HR = np.zeros((5, 9), dtype=float)
+    acc.HR[:, 0] = np.arange(5, dtype=float)
+    acc.HR[:, 7] = [0, 0, 1, 1, 1]
+    acc.HR[:, 8] = acc.HR[:, 7]
+    acc.T_Pred = acc.HR[:, 0]
+    acc.HR_Ref_Interp = np.zeros((5,))
+    acc.delay_profile = None
+
+    results = [hf, acc]
+    plotted_masks: list[list[float]] = []
+
+    def _fake_solve(params):
+        return results.pop(0)
+
+    def _fake_plot_panel(ax, res, label, min_err):
+        plotted_masks.append(res.HR[:, 7].tolist())
+
+    monkeypatch.setattr("ppg_hr.visualization.result_viewer.solve", _fake_solve)
+    monkeypatch.setattr("ppg_hr.visualization.result_viewer._plot_panel", _fake_plot_panel)
+
+    render(
+        report_path,
+        SolverParams(file_name=tmp_path / "multi.csv"),
+        out_dir=tmp_path / "out",
+        show=False,
+    )
+
+    assert plotted_masks == [[0, 1, 1, 0, 0], [0, 1, 1, 0, 0]]
+
+
+def test_plot_panel_labels_core_methods_with_errors() -> None:
+    import matplotlib
+    matplotlib.use("Agg", force=True)
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    res = type("R", (), {})()
+    res.err_stats = np.array([
+        [2.345, 0.0, 0.0],
+        [4.567, 0.0, 0.0],
+        [6.789, 0.0, 0.0],
+        [1.111, 0.0, 0.0],
+        [1.222, 0.0, 0.0],
+    ])
+    res.HR = np.array([
+        [0.0, 1.30, 1.31, 1.32, 1.33, 1.30, 1.31, 0.0, 0.0],
+        [1.0, 1.40, 1.41, 1.42, 1.43, 1.40, 1.41, 1.0, 1.0],
+        [2.0, 1.50, 1.51, 1.52, 1.53, 1.50, 1.51, 0.0, 0.0],
+    ])
+    res.T_Pred = res.HR[:, 0]
+
+    fig, ax = plt.subplots()
+    result_viewer._plot_panel(ax, res, "HF best", 1.111)
+
+    labels = ax.get_legend_handles_labels()[1]
+    assert "HF-LMS (AAE=2.35 BPM)" in labels
+    assert "ACC-LMS (AAE=4.57 BPM)" in labels
+    assert "FFT (AAE=6.79 BPM)" in labels
+
+    lines = {line.get_label(): line for line in ax.lines}
+    hf_line = lines["HF-LMS (AAE=2.35 BPM)"]
+    acc_line = lines["ACC-LMS (AAE=4.57 BPM)"]
+    assert hf_line.get_color().lower() == "#c51b7d"
+    assert hf_line.get_linewidth() > acc_line.get_linewidth()
+    plt.close(fig)
+
+
 def test_render_emits_figure_and_csvs(
     base_params: SolverParams,
     fake_json_report: Path,
@@ -249,3 +344,50 @@ def test_render_can_prefix_output_files(
     assert artefacts.figure == tmp_path / "viewer_out" / "multi_bobi1" / "multi_bobi1-figure.png"
     assert artefacts.error_csv == tmp_path / "viewer_out" / "multi_bobi1" / "multi_bobi1-error_table.csv"
     assert artefacts.param_csv == tmp_path / "viewer_out" / "multi_bobi1" / "multi_bobi1-param_table.csv"
+
+
+def test_render_exports_publication_figure_formats(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def _fake_solve(params):
+        import numpy as np
+        res = type("R", (), {})()
+        res.err_stats = np.ones((5, 3))
+        res.HR = np.array([
+            [0.0, 1.30, 1.31, 1.32, 1.33, 1.30, 1.31, 0.0, 0.0],
+            [1.0, 1.40, 1.41, 1.42, 1.43, 1.40, 1.41, 1.0, 1.0],
+            [2.0, 1.50, 1.51, 1.52, 1.53, 1.50, 1.51, 0.0, 0.0],
+        ])
+        res.T_Pred = res.HR[:, 0]
+        res.HR_Ref_Interp = res.HR[:, 1]
+        res.motion_threshold = (0.0, 0.0)
+        res.delay_profile = None
+        return res
+
+    monkeypatch.setattr("ppg_hr.visualization.result_viewer.solve", _fake_solve)
+    report = tmp_path / "report.json"
+    report.write_text(
+        json.dumps({
+            "min_err_hf": 1.0,
+            "min_err_acc": 1.0,
+            "best_para_hf": {},
+            "best_para_acc": {},
+        }),
+        encoding="utf-8",
+    )
+
+    artefacts = render(
+        report,
+        SolverParams(file_name=tmp_path / "multi_bobi1.csv"),
+        out_dir=tmp_path / "viewer_out",
+        output_prefix="multi_bobi1",
+        show=False,
+    )
+
+    assert artefacts.figure == tmp_path / "viewer_out" / "multi_bobi1-figure.png"
+    assert artefacts.extras["figure_pdf"] == tmp_path / "viewer_out" / "multi_bobi1-figure.pdf"
+    assert artefacts.extras["figure_svg"] == tmp_path / "viewer_out" / "multi_bobi1-figure.svg"
+    assert artefacts.extras["figure_png"] == artefacts.figure
+    assert artefacts.extras["figure_pdf"].is_file()
+    assert artefacts.extras["figure_svg"].is_file()

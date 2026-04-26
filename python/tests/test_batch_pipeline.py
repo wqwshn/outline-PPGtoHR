@@ -65,12 +65,25 @@ def test_run_batch_pipeline_reports_fine_grained_stages_and_interleaves_render(
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         figure = out_dir / "figure.png"
+        figure_pdf = out_dir / "figure.pdf"
+        figure_svg = out_dir / "figure.svg"
         error_csv = out_dir / "error_table.csv"
         param_csv = out_dir / "param_table.csv"
         figure.write_text("fig", encoding="utf-8")
+        figure_pdf.write_text("pdf", encoding="utf-8")
+        figure_svg.write_text("svg", encoding="utf-8")
         error_csv.write_text("err", encoding="utf-8")
         param_csv.write_text("par", encoding="utf-8")
-        return ViewerArtefacts(figure=figure, error_csv=error_csv, param_csv=param_csv)
+        return ViewerArtefacts(
+            figure=figure,
+            error_csv=error_csv,
+            param_csv=param_csv,
+            extras={
+                "figure_png": figure,
+                "figure_pdf": figure_pdf,
+                "figure_svg": figure_svg,
+            },
+        )
 
     monkeypatch.setattr("ppg_hr.batch_pipeline.quality_scan", fake_quality_scan)
     monkeypatch.setattr("ppg_hr.batch_pipeline.save_motion_segment_plot", fake_plot)
@@ -111,6 +124,8 @@ def test_run_batch_pipeline_reports_fine_grained_stages_and_interleaves_render(
         run_dir = run_root / prefix
         assert (run_dir / f"{prefix}-best_params.json").is_file()
         assert (run_dir / f"{prefix}-figure.png").is_file()
+        assert (run_dir / f"{prefix}-figure.pdf").is_file()
+        assert (run_dir / f"{prefix}-figure.svg").is_file()
         assert (run_dir / f"{prefix}-error_table.csv").is_file()
         assert (run_dir / f"{prefix}-param_table.csv").is_file()
     rec_by_mode = {r.mode: r for r in records}
@@ -188,6 +203,82 @@ def test_run_batch_pipeline_runs_bad_quality_rows_with_reference(
     assert len(payload["good_rows"]) == 1
     assert len(payload["bad_rows"]) == 1
     assert len(payload["records"]) == 2
+
+
+def test_run_batch_pipeline_writes_one_bom_encoded_qc_table(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    good_sample = input_dir / "good01.csv"
+    bad_sample = input_dir / "bad01.csv"
+    good_sample.write_text("dummy\n", encoding="utf-8")
+    bad_sample.write_text("dummy\n", encoding="utf-8")
+    good_sample.with_name("good01_ref.csv").write_text("dummy\n", encoding="utf-8")
+    bad_sample.with_name("bad01_ref.csv").write_text("dummy\n", encoding="utf-8")
+
+    def fake_quality_scan(input_dir, thresholds, *, on_file_scanned=None):
+        return (
+            [QcRow(good_sample.name, "好采样", "无", good_sample)],
+            [QcRow(bad_sample.name, "坏采样", "STD过大", bad_sample)],
+        )
+
+    def fake_plot(file_path, out_path, *, fs=100.0):
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text("png", encoding="utf-8")
+
+    def fake_optimise(base, *, config, out_path, verbose, on_trial_step=None):
+        Path(out_path).write_text("{}", encoding="utf-8")
+        return BayesResult(
+            min_err_hf=1.0,
+            best_para_hf={"fs_target": 100},
+            min_err_acc=2.0,
+            best_para_acc={"fs_target": 100},
+            importance_hf=None,
+            ppg_mode=base.ppg_mode,
+        )
+
+    def fake_render(report_path, base_params, *, out_dir, show):
+        out_dir = Path(out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        figure = out_dir / "figure.png"
+        error_csv = out_dir / "error_table.csv"
+        param_csv = out_dir / "param_table.csv"
+        figure.write_text("fig", encoding="utf-8")
+        error_csv.write_text("err", encoding="utf-8")
+        param_csv.write_text("par", encoding="utf-8")
+        return ViewerArtefacts(figure=figure, error_csv=error_csv, param_csv=param_csv)
+
+    monkeypatch.setattr("ppg_hr.batch_pipeline.quality_scan", fake_quality_scan)
+    monkeypatch.setattr("ppg_hr.batch_pipeline.save_motion_segment_plot", fake_plot)
+    monkeypatch.setattr("ppg_hr.batch_pipeline.optimise", fake_optimise)
+    monkeypatch.setattr("ppg_hr.batch_pipeline.render", fake_render)
+
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    for legacy_name in ("good_samples.csv", "bad_samples.csv", "qc_summary.csv"):
+        (out_dir / legacy_name).write_text("stale\n", encoding="utf-8")
+
+    run_batch_pipeline(
+        input_dir=input_dir,
+        output_dir=out_dir,
+        modes=["green"],
+        adaptive_filter="lms",
+        bayes_cfg=BayesConfig(max_iterations=2, num_seed_points=1, num_repeats=1),
+        thresholds=QcThresholds(),
+    )
+
+    qc_path = out_dir / "qc_samples.csv"
+    assert qc_path.is_file()
+    assert not (out_dir / "good_samples.csv").exists()
+    assert not (out_dir / "bad_samples.csv").exists()
+    assert not (out_dir / "qc_summary.csv").exists()
+    assert qc_path.read_bytes().startswith(b"\xef\xbb\xbf")
+    text = qc_path.read_text(encoding="utf-8-sig")
+    assert "文件名,状态,原因,文件路径" in text
+    assert "good01.csv,好采样,无" in text
+    assert "bad01.csv,坏采样,STD过大" in text
 
 
 def test_qc_threshold_defaults_are_relaxed() -> None:

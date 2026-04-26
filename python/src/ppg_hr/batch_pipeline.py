@@ -390,7 +390,7 @@ def run_batch_pipeline(
                         "mode": mode,
                         "run_idx": run_idx,
                         "run_total": total_runs,
-                        "detail": "重跑最优参数并生成 PNG / CSV",
+                        "detail": "重跑最优参数并生成 PDF / SVG / PNG / CSV",
                     }
                 )
             arte = render(report_path, base, out_dir=run_dir, show=False)
@@ -410,7 +410,7 @@ def run_batch_pipeline(
                         "mode": mode,
                         "run_idx": run_idx,
                         "run_total": total_runs,
-                        "detail": "PNG / error_table / param_table 已生成",
+                        "detail": "PDF / SVG / PNG / error_table / param_table 已生成",
                     }
                 )
             records.append(
@@ -470,32 +470,46 @@ def _rename_viewer_artefacts(
             renamed[attr] = new_path
         except OSError:
             renamed[attr] = Path(current)
+    extras: dict[str, Path] = {}
+    for key, current in arte.extras.items():
+        if current is None:
+            continue
+        current_path = Path(current)
+        if not current_path.is_file():
+            extras[key] = current_path
+            continue
+        if key.startswith("figure_") and current_path.suffix.lower() in {".pdf", ".svg", ".png"}:
+            new_path = run_dir / f"{prefix}-figure{current_path.suffix.lower()}"
+            if new_path == renamed.get("figure"):
+                extras[key] = new_path
+                continue
+            try:
+                current_path.replace(new_path)
+                extras[key] = new_path
+            except OSError:
+                extras[key] = current_path
+        else:
+            extras[key] = current_path
     return ViewerArtefacts(
         figure=renamed["figure"],
         error_csv=renamed["error_csv"],
         param_csv=renamed["param_csv"],
-        extras=dict(arte.extras),
+        extras=extras,
     )
 
 
 def _write_qc_tables(output_dir: Path, good_rows: list[QcRow], bad_rows: list[QcRow]) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
-    with (output_dir / "good_samples.csv").open("w", encoding="utf-8", newline="") as f:
+    for legacy_name in ("good_samples.csv", "bad_samples.csv", "qc_summary.csv"):
+        try:
+            (output_dir / legacy_name).unlink()
+        except FileNotFoundError:
+            pass
+    with (output_dir / "qc_samples.csv").open("w", encoding="utf-8-sig", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["文件名", "状态", "失败原因", "文件路径"])
-        for r in good_rows:
+        w.writerow(["文件名", "状态", "原因", "文件路径"])
+        for r in [*good_rows, *bad_rows]:
             w.writerow([r.file_name, r.status, r.reason, str(r.file_path or "")])
-
-    with (output_dir / "bad_samples.csv").open("w", encoding="utf-8", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["文件名", "状态", "失败原因", "文件路径"])
-        for r in bad_rows:
-            w.writerow([r.file_name, r.status, r.reason, str(r.file_path or "")])
-
-    with (output_dir / "qc_summary.csv").open("w", encoding="utf-8", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["好采样数量", "坏采样数量"])
-        w.writerow([len(good_rows), len(bad_rows)])
 
 
 def _write_run_summary(output_dir: Path, records: list[BatchRunRecord]) -> Path:
