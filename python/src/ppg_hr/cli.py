@@ -20,7 +20,7 @@ from pathlib import Path
 
 from .core.heart_rate_solver import solve
 from .optimization import BayesConfig, default_search_space, optimise
-from .params import SolverParams
+from .params import SolverParams, analysis_scope_suffix
 from .visualization import render
 
 # ---------------------------------------------------------------------------
@@ -34,6 +34,7 @@ def _build_params(args: argparse.Namespace) -> SolverParams:
         "fs_target", "max_order", "calib_time", "motion_th_scale",
         "spec_penalty_weight", "spec_penalty_width", "smooth_win_len", "time_bias",
         "adaptive_filter",
+        "analysis_scope",
         "delay_search_mode", "delay_prefit_max_seconds",
         "delay_prefit_windows", "delay_prefit_min_corr",
         "delay_prefit_margin_samples", "delay_prefit_min_span_samples",
@@ -115,12 +116,14 @@ def cmd_optimise(args: argparse.Namespace) -> int:
 def cmd_view(args: argparse.Namespace) -> int:
     params = _build_params(args)
     data_stem = Path(params.file_name).stem
-    out_dir = (Path(args.out_dir) / data_stem) if args.out_dir is not None else None
+    suffix = analysis_scope_suffix(params.analysis_scope)
+    output_prefix = f"{data_stem}-{suffix}"
+    out_dir = (Path(args.out_dir) / output_prefix) if args.out_dir is not None else None
     artefacts = render(
         args.report,
         params,
         out_dir=out_dir,
-        output_prefix=data_stem,
+        output_prefix=output_prefix,
         show=args.show,
     )
     print(f"figure    → {artefacts.figure}")
@@ -161,6 +164,14 @@ def _add_common_io_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--spec-penalty-width", dest="spec_penalty_width", type=float, default=None)
     p.add_argument("--smooth-win-len", dest="smooth_win_len", type=int, default=None)
     p.add_argument("--time-bias", dest="time_bias", type=float, default=None)
+    p.add_argument(
+        "--analysis-scope", dest="analysis_scope",
+        choices=("full", "motion"), default=None,
+        help=(
+            "Data analysis range. 'full' uses the whole recording; 'motion' "
+            "uses 30 s before the longest motion segment through that segment."
+        ),
+    )
 
     p.add_argument(
         "--adaptive-filter", dest="adaptive_filter",

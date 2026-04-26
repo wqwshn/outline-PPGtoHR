@@ -35,7 +35,7 @@ from scipy.io import loadmat
 from scipy.signal import butter, filtfilt, resample_poly
 from scipy.signal.windows import hamming
 
-from ..params import SolverParams
+from ..params import SolverParams, normalise_analysis_scope
 from ..preprocess.data_loader import load_dataset
 from ..preprocess.utils import filloutliers_mean_previous, smoothdata_movmedian
 from .adaptive_filter import apply_adaptive_cascade
@@ -156,6 +156,90 @@ _load_raw_data = load_raw_data
 # ----------------------------------------------------------------------------
 
 
+def _motion_detector_from_raw_acc(
+    accx_raw: np.ndarray,
+    accy_raw: np.ndarray,
+    accz_raw: np.ndarray,
+    params: SolverParams,
+    fs_origin: int,
+) -> tuple[np.ndarray, float]:
+    """Return source-rate ACC magnitude and threshold for motion flags."""
+    nyq = fs_origin / 2.0
+    b, a = butter(
+        params.bp_order,
+        [params.bp_low_hz / nyq, params.bp_high_hz / nyq],
+        btype="bandpass",
+    )
+    accx = filtfilt(b, a, accx_raw)
+    accy = filtfilt(b, a, accy_raw)
+    accz = filtfilt(b, a, accz_raw)
+    acc_mag = np.sqrt(accx**2 + accy**2 + accz**2)
+    calib_len = min(int(round(params.calib_time * fs_origin)), len(acc_mag))
+    baseline = acc_mag[:calib_len]
+    baseline_std = float(np.std(baseline, ddof=1)) if baseline.size > 1 else 0.0
+    return acc_mag, params.motion_th_scale * baseline_std
+
+
+def _is_motion_window(acc_mag_window: np.ndarray, motion_threshold: float) -> bool:
+    if acc_mag_window.size <= 1:
+        return False
+    return bool(np.std(acc_mag_window, ddof=1) > motion_threshold)
+
+
+def _longest_motion_run(HR: np.ndarray) -> tuple[int, int] | None:
+    if HR.size == 0:
+        return None
+    flags = np.asarray(HR[:, 7] == 1, dtype=bool)
+    if not flags.any():
+        return None
+
+    best: tuple[int, int] | None = None
+    best_len = -1
+    i = 0
+    while i < flags.size:
+        if not flags[i]:
+            i += 1
+            continue
+        start = i
+        while i + 1 < flags.size and flags[i + 1]:
+            i += 1
+        end = i
+        run_len = end - start + 1
+        if run_len > best_len:
+            best = (start, end)
+            best_len = run_len
+        i += 1
+    return best
+
+
+def _apply_analysis_scope(
+    HR: np.ndarray,
+    scope: str,
+    pre_motion_seconds: float = 30.0,
+) -> np.ndarray:
+    """Optionally keep 30 s before the longest motion run through its end."""
+    if normalise_analysis_scope(scope) == "full" or HR.size == 0:
+        return HR
+
+    run = _longest_motion_run(HR)
+    if run is None:
+        return HR
+    motion_start_idx, motion_end_idx = run
+    start = max(float(HR[0, 0]), float(HR[motion_start_idx, 0]) - pre_motion_seconds)
+    end = float(HR[motion_end_idx, 0])
+    mask = (HR[:, 0] >= start - 1e-9) & (HR[:, 0] <= end + 1e-9)
+    cropped = HR[mask].copy()
+    if cropped.size:
+        selected_motion = (
+            (cropped[:, 0] >= float(HR[motion_start_idx, 0]) - 1e-9)
+            & (cropped[:, 0] <= end + 1e-9)
+            & (cropped[:, 7] == 1)
+        )
+        cropped[:, 7] = selected_motion.astype(float)
+        cropped[:, 8] = cropped[:, 7]
+    return cropped if cropped.size else HR
+
+
 def _process_spectrum(
     sig_in: np.ndarray,
     sig_penalty_ref: np.ndarray,
@@ -256,10 +340,13 @@ def solve_from_arrays(
     accz = filtfilt(b, a, accz_ori)
 
     # ---- motion threshold calibration -----------------------------------
-    calib_len = min(int(round(params.calib_time * fs)), len(ppg))
+    # Motion segmentation is a property of the source recording, not of a
+    # Bayesian trial.  Derive it on the original 100 Hz ACC stream so changing
+    # fs_target / tracking parameters cannot move the motion bands.
+    acc_mag_motion, motion_threshold = _motion_detector_from_raw_acc(
+        accx_raw, accy_raw, accz_raw, params, fs_origin
+    )
     acc_mag = np.sqrt(accx**2 + accy**2 + accz**2)
-    acc_baseline_std = float(np.std(acc_mag[:calib_len], ddof=1))
-    motion_threshold = params.motion_th_scale * acc_baseline_std
 
     sig_h_full = [hotf1, hotf2]
     sig_a_full = [accx, accy, accz]
@@ -292,14 +379,16 @@ def solve_from_arrays(
         sig_p = ppg[idx_s:idx_e]
         sig_h = [hotf1[idx_s:idx_e], hotf2[idx_s:idx_e]]
         sig_a = [accx[idx_s:idx_e], accy[idx_s:idx_e], accz[idx_s:idx_e]]
-        sig_acc_mag = acc_mag[idx_s:idx_e]
+        idx_s_motion = int(round(time_1 * fs_origin))
+        idx_e_motion = int(round(time_2 * fs_origin))
+        sig_acc_mag_motion = acc_mag_motion[idx_s_motion:idx_e_motion]
 
         # Pre-allocate this row (9 columns: time, ref, A, B, C, fHF, fACC, motion_acc, motion_hf)
         row = [0.0] * 9
         row[0] = time_1
         row[1] = find_real_hr("dummy", time_1, ref_data)
 
-        is_motion_flag = float(np.std(sig_acc_mag, ddof=1) > motion_threshold)
+        is_motion_flag = float(_is_motion_window(sig_acc_mag_motion, motion_threshold))
         row[7] = is_motion_flag
         row[8] = is_motion_flag
 
@@ -404,7 +493,7 @@ def solve_from_arrays(
         return SolverResult(empty, np.full((5, 3), np.nan), np.array([]),
                             (motion_threshold, motion_threshold), np.array([]),
                             float("nan"), delay_profile)
-    HR = np.asarray(rows, dtype=float)
+    HR = _apply_analysis_scope(np.asarray(rows, dtype=float), params.analysis_scope)
 
     # ---- post-processing ------------------------------------------------
     for c in (2, 3, 4):  # MATLAB cols 3, 4, 5 (1-based) -> Python 2, 3, 4

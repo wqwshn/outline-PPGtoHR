@@ -60,6 +60,38 @@ def test_motion_flag_consistency(result: SolverResult) -> None:
     np.testing.assert_array_equal(result.HR[:, 7], result.HR[:, 8])
 
 
+def test_solver_analysis_scope_defaults_to_full_recording() -> None:
+    from ppg_hr.core.heart_rate_solver import solve_from_arrays
+
+    raw, ref = _make_rest_then_motion_raw()
+    res = solve_from_arrays(
+        raw,
+        ref,
+        SolverParams(fs_target=100, calib_time=10.0, time_buffer=2.0),
+    )
+
+    assert res.HR[0, 0] == pytest.approx(1.0)
+    assert res.HR[-1, 0] == pytest.approx(92.0)
+
+
+def test_solver_motion_analysis_scope_keeps_longest_motion_with_30s_rest() -> None:
+    from ppg_hr.core.heart_rate_solver import _apply_analysis_scope
+
+    HR = np.zeros((100, 9), dtype=float)
+    HR[:, 0] = np.arange(1.0, 101.0)
+    HR[17:22, 7] = 1.0
+    HR[49:75, 7] = 1.0
+    HR[:, 8] = HR[:, 7]
+
+    cropped = _apply_analysis_scope(HR, "motion")
+
+    motion_times = cropped[cropped[:, 7] == 1, 0]
+    assert cropped[0, 0] == pytest.approx(20.0)
+    assert cropped[-1, 0] == pytest.approx(75.0)
+    assert motion_times[0] == pytest.approx(50.0)
+    assert motion_times[-1] == pytest.approx(75.0)
+
+
 def test_solver_result_contains_delay_profile() -> None:
     from ppg_hr.core.heart_rate_solver import solve_from_arrays
 
@@ -154,6 +186,46 @@ def _make_synthetic_raw(
     raw[:, 8] = accx   # Col_Acc[0]=9 → 8
     raw[:, 9] = accy   # Col_Acc[1]=10 → 9
     raw[:, 10] = accz  # Col_Acc[2]=11 → 10
+    ref_time = np.arange(n_sec, dtype=float)
+    ref = np.column_stack([ref_time, np.full(n_sec, hr_hz * 60.0)])
+    return raw, ref
+
+
+def _make_rest_then_motion_raw(
+    n_sec: int = 100, fs: int = 100, seed: int = 123
+) -> tuple[np.ndarray, np.ndarray]:
+    return _make_motion_segments_raw(
+        n_sec=n_sec,
+        fs=fs,
+        seed=seed,
+        segments=((50.0, 75.0),),
+    )
+
+
+def _make_motion_segments_raw(
+    n_sec: int = 100,
+    fs: int = 100,
+    seed: int = 123,
+    segments: tuple[tuple[float, float], ...] = ((50.0, 75.0),),
+) -> tuple[np.ndarray, np.ndarray]:
+    rng = np.random.default_rng(seed)
+    n = n_sec * fs
+    t = np.arange(n) / fs
+    hr_hz = 1.3
+    ppg = np.sin(2 * np.pi * hr_hz * t) + 0.02 * rng.normal(size=n)
+    motion = np.zeros(n)
+    for start, end in segments:
+        motion_mask = (t >= start) & (t <= end)
+        motion[motion_mask] = 2.0 * np.sin(2 * np.pi * 2.1 * t[motion_mask])
+    motion += 0.005 * rng.normal(size=n)
+
+    raw = np.zeros((n, 11))
+    raw[:, 5] = ppg
+    raw[:, 3] = 0.7 * motion + 0.01 * rng.normal(size=n)
+    raw[:, 4] = 0.6 * motion + 0.01 * rng.normal(size=n)
+    raw[:, 8] = motion + 0.01 * rng.normal(size=n)
+    raw[:, 9] = motion + 0.01 * rng.normal(size=n)
+    raw[:, 10] = motion + 0.01 * rng.normal(size=n)
     ref_time = np.arange(n_sec, dtype=float)
     ref = np.column_stack([ref_time, np.full(n_sec, hr_hz * 60.0)])
     return raw, ref

@@ -83,7 +83,7 @@ def test_view_passes_data_stem_output_dir_and_prefix(
         seen["output_prefix"] = output_prefix
         seen["show"] = show
         return ViewerArtefacts(
-            figure=Path(out_dir) / f"{output_prefix}-figure.png",
+            figure=Path(out_dir) / f"{output_prefix}-hf-best.png",
             error_csv=Path(out_dir) / f"{output_prefix}-error_table.csv",
             param_csv=Path(out_dir) / f"{output_prefix}-param_table.csv",
         )
@@ -100,8 +100,15 @@ def test_view_passes_data_stem_output_dir_and_prefix(
     ])
 
     assert rc == 0
-    assert seen["out_dir"] == output_root / "multi_bobi1"
-    assert seen["output_prefix"] == "multi_bobi1"
+    assert seen["out_dir"] == output_root / "multi_bobi1-full"
+    assert seen["output_prefix"] == "multi_bobi1-full"
+
+
+def test_build_params_analysis_scope_flag() -> None:
+    parser = cli.build_parser()
+    args = parser.parse_args(["solve", "dummy.csv", "--analysis-scope", "motion"])
+    params = cli._build_params(args)
+    assert params.analysis_scope == "motion"
 
 
 # ---------------------------------------------------------------------------

@@ -16,7 +16,7 @@ Pipeline
    b. Keep the overall best objective and the decoded parameter dict.
 3. After the HF round, train a random-forest regressor on the cleaned
    (objective < penalty threshold) trial history to rank parameter importance.
-4. Persist everything to ``<out_dir>/Best_Params_Result_<stem>.json``.
+4. Persist everything to ``<out_dir>/Best_Params_Result_<stem>-<scope>.json``.
 
 Acceleration
 ------------
@@ -123,6 +123,7 @@ class BayesResult:
     search_space: dict[str, list[Any]] = field(default_factory=dict)
     adaptive_filter: str = "lms"
     ppg_mode: str = "green"
+    analysis_scope: str = "full"
     delay_search: dict[str, Any] = field(default_factory=dict)
 
     def save(self, path: str | Path) -> Path:
@@ -131,6 +132,7 @@ class BayesResult:
         payload = {
             "adaptive_filter": self.adaptive_filter,
             "ppg_mode": self.ppg_mode,
+            "analysis_scope": self.analysis_scope,
             "delay_search": _jsonify(self.delay_search),
             "min_err_hf": float(self.min_err_hf),
             "best_para_hf": _jsonify(self.best_para_hf),
@@ -647,7 +649,7 @@ def optimise(
     config:
         Search budget and reproducibility knobs.
     out_path:
-        Optional destination for ``Best_Params_Result_<stem>.json``. If ``None``
+        Optional destination for ``Best_Params_Result_<stem>-<scope>.json``. If ``None``
         the report is written next to ``base.file_name`` using the MATLAB
         naming convention.
     verbose:
@@ -695,12 +697,15 @@ def optimise(
         search_space={n: space.options(n) for n in space.names()},
         adaptive_filter=base.adaptive_filter,
         ppg_mode=base.ppg_mode,
+        analysis_scope=base.analysis_scope,
         delay_search=_delay_search_config(base),
     )
 
     if out_path is None and base.file_name:
         data_path = Path(base.file_name)
-        out_path = data_path.with_name(f"Best_Params_Result_{data_path.stem}.json")
+        out_path = data_path.with_name(
+            f"Best_Params_Result_{data_path.stem}-{base.analysis_scope}.json"
+        )
     if out_path is not None:
         saved = result.save(out_path)
         if verbose:

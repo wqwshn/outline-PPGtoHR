@@ -226,6 +226,7 @@ def run_batch_pipeline(
     adaptive_filter: str,
     bayes_cfg: BayesConfig,
     thresholds: QcThresholds,
+    analysis_scope: str = "full",
     on_log: Callable[[str], None] | None = None,
     on_progress: Callable[[dict], None] | None = None,
 ) -> dict[str, object]:
@@ -296,7 +297,7 @@ def run_batch_pipeline(
         sample_stem = row.file_path.stem
         for mode in modes:
             run_idx += 1
-            prefix = f"{sample_stem}-{mode}-{adaptive_filter}"
+            prefix = f"{sample_stem}-{mode}-{adaptive_filter}-{analysis_scope}"
             run_dir = output_dir / "batch_runs" / prefix
             run_dir.mkdir(parents=True, exist_ok=True)
             report_path = run_dir / f"{prefix}-best_params.json"
@@ -306,6 +307,7 @@ def run_batch_pipeline(
                 ref_file=ref_path,
                 adaptive_filter=adaptive_filter,
                 ppg_mode=mode,
+                analysis_scope=analysis_scope,
             )
             total_trials = int(bayes_cfg.num_repeats) * int(bayes_cfg.max_iterations) * 2
             _log(
@@ -390,13 +392,16 @@ def run_batch_pipeline(
                         "mode": mode,
                         "run_idx": run_idx,
                         "run_total": total_runs,
-                        "detail": "重跑最优参数并生成 PDF / SVG / PNG / CSV",
+                        "detail": "重跑最优参数并生成 PNG / CSV",
                     }
                 )
-            arte = render(report_path, base, out_dir=run_dir, show=False)
-            # Rename render's generic outputs to include sample / mode / filter so
-            # files remain unambiguous when users drag them out of the folder.
-            arte = _rename_viewer_artefacts(arte, run_dir, prefix)
+            arte = render(
+                report_path,
+                base,
+                out_dir=run_dir,
+                output_prefix=prefix,
+                show=False,
+            )
             if on_progress is not None:
                 on_progress(
                     {
@@ -410,7 +415,7 @@ def run_batch_pipeline(
                         "mode": mode,
                         "run_idx": run_idx,
                         "run_total": total_runs,
-                        "detail": "PDF / SVG / PNG / error_table / param_table 已生成",
+                        "detail": "PNG / error_table / param_table 已生成",
                     }
                 )
             records.append(
@@ -449,7 +454,7 @@ def _rename_viewer_artefacts(
 ) -> ViewerArtefacts:
     """Rename ``render``'s fixed outputs to dash-prefixed, unambiguous names.
 
-    ``visualization.render`` writes ``figure.png`` / ``error_table.csv`` /
+    ``visualization.render`` writes ``hf-best.png`` / ``acc-best.png`` / ``error_table.csv`` /
     ``param_table.csv`` at fixed paths inside ``out_dir``. The batch pipeline
     runs many (sample × channel × filter) combinations into ``batch_runs/``,
     so we tag each artefact with ``{sample_stem}-{mode}-{filter}-…`` to keep
@@ -457,7 +462,7 @@ def _rename_viewer_artefacts(
     """
     renamed: dict[str, Path | None] = {"figure": None, "error_csv": None, "param_csv": None}
     mapping = {
-        "figure": (arte.figure, f"{prefix}-figure.png"),
+        "figure": (arte.figure, f"{prefix}-hf-best.png"),
         "error_csv": (arte.error_csv, f"{prefix}-error_table.csv"),
         "param_csv": (arte.param_csv, f"{prefix}-param_table.csv"),
     }

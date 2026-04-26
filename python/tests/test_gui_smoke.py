@@ -107,7 +107,7 @@ def test_default_optimise_report_path_uses_matlab_style_name():
     csv_path = Path(r"D:\data\PPG_HeartRate\Algorithm\outline-PPGtoHR\20260418test_python\multi_tiaosheng1.csv")
 
     assert default_optimise_report_path(csv_path) == csv_path.with_name(
-        "Best_Params_Result_multi_tiaosheng1.json"
+        "Best_Params_Result_multi_tiaosheng1-full.json"
     )
 
 
@@ -314,7 +314,7 @@ def test_optimise_page_autofills_and_preserves_custom_output_path(tmp_path):
         app.processEvents()
         assert page._out_pick is not None
         assert page._out_pick.path() == data_path.with_name(
-            "Best_Params_Result_multi_tiaosheng1.json"
+            "Best_Params_Result_multi_tiaosheng1-full.json"
         )
 
         custom_out = tmp_path / "manual" / "my-report.json"
@@ -374,7 +374,7 @@ def test_view_page_default_output_dir_uses_data_stem(tmp_path):
         data_path = tmp_path / "multi_bobi1.csv"
         data_path.write_text("dummy\n", encoding="utf-8")
 
-        assert page._default_output_dir(data_path) == tmp_path / "viewer_out" / "multi_bobi1"
+        assert page._default_output_dir(data_path) == tmp_path / "viewer_out" / "multi_bobi1-full"
     finally:
         page.close()
         page.deleteLater()

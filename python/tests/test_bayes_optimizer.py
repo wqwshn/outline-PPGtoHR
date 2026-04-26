@@ -252,6 +252,18 @@ def test_bayes_result_save_includes_delay_search(tmp_path: Path) -> None:
     assert payload["delay_search"]["delay_prefit_windows"] == 5
 
 
+def test_bayes_result_save_includes_analysis_scope(tmp_path: Path) -> None:
+    res = BayesResult(
+        min_err_hf=1.0, best_para_hf={},
+        min_err_acc=2.0, best_para_acc={},
+        importance_hf=None,
+        analysis_scope="motion",
+    )
+    p = res.save(tmp_path / "out.json")
+    payload = json.loads(p.read_text(encoding="utf-8"))
+    assert payload["analysis_scope"] == "motion"
+
+
 def test_bayes_result_default_strategy_is_lms(tmp_path: Path) -> None:
     res = BayesResult(
         min_err_hf=1.0, best_para_hf={}, min_err_acc=2.0, best_para_acc={},

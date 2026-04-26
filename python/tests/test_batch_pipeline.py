@@ -60,18 +60,16 @@ def test_run_batch_pipeline_reports_fine_grained_stages_and_interleaves_render(
             ppg_mode=base.ppg_mode,
         )
 
-    def fake_render(report_path, base_params, *, out_dir, show):
+    def fake_render(report_path, base_params, *, out_dir, output_prefix, show):
         call_order.append(f"render:{base_params.ppg_mode}")
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
-        figure = out_dir / "figure.png"
-        figure_pdf = out_dir / "figure.pdf"
-        figure_svg = out_dir / "figure.svg"
-        error_csv = out_dir / "error_table.csv"
-        param_csv = out_dir / "param_table.csv"
+        figure = out_dir / f"{output_prefix}-hf-best.png"
+        figure_acc = out_dir / f"{output_prefix}-acc-best.png"
+        error_csv = out_dir / f"{output_prefix}-error_table.csv"
+        param_csv = out_dir / f"{output_prefix}-param_table.csv"
         figure.write_text("fig", encoding="utf-8")
-        figure_pdf.write_text("pdf", encoding="utf-8")
-        figure_svg.write_text("svg", encoding="utf-8")
+        figure_acc.write_text("fig", encoding="utf-8")
         error_csv.write_text("err", encoding="utf-8")
         param_csv.write_text("par", encoding="utf-8")
         return ViewerArtefacts(
@@ -79,9 +77,8 @@ def test_run_batch_pipeline_reports_fine_grained_stages_and_interleaves_render(
             error_csv=error_csv,
             param_csv=param_csv,
             extras={
-                "figure_png": figure,
-                "figure_pdf": figure_pdf,
-                "figure_svg": figure_svg,
+                "figure_hf": figure,
+                "figure_acc": figure_acc,
             },
         )
 
@@ -120,21 +117,20 @@ def test_run_batch_pipeline_reports_fine_grained_stages_and_interleaves_render(
     # artefact stays unambiguous when users drag it outside the folder.
     run_root = payload["output_dir"] / "batch_runs"
     for mode in ("green", "red", "ir"):
-        prefix = f"sample01-{mode}-lms"
+        prefix = f"sample01-{mode}-lms-full"
         run_dir = run_root / prefix
         assert (run_dir / f"{prefix}-best_params.json").is_file()
-        assert (run_dir / f"{prefix}-figure.png").is_file()
-        assert (run_dir / f"{prefix}-figure.pdf").is_file()
-        assert (run_dir / f"{prefix}-figure.svg").is_file()
+        assert (run_dir / f"{prefix}-hf-best.png").is_file()
+        assert (run_dir / f"{prefix}-acc-best.png").is_file()
         assert (run_dir / f"{prefix}-error_table.csv").is_file()
         assert (run_dir / f"{prefix}-param_table.csv").is_file()
     rec_by_mode = {r.mode: r for r in records}
     for mode in ("green", "red", "ir"):
         rec = rec_by_mode[mode]
-        assert rec.figure_path is not None and rec.figure_path.name == f"sample01-{mode}-lms-figure.png"
-        assert rec.error_csv is not None and rec.error_csv.name == f"sample01-{mode}-lms-error_table.csv"
-        assert rec.param_csv is not None and rec.param_csv.name == f"sample01-{mode}-lms-param_table.csv"
-        assert rec.report_path.name == f"sample01-{mode}-lms-best_params.json"
+        assert rec.figure_path is not None and rec.figure_path.name == f"sample01-{mode}-lms-full-hf-best.png"
+        assert rec.error_csv is not None and rec.error_csv.name == f"sample01-{mode}-lms-full-error_table.csv"
+        assert rec.param_csv is not None and rec.param_csv.name == f"sample01-{mode}-lms-full-param_table.csv"
+        assert rec.report_path.name == f"sample01-{mode}-lms-full-best_params.json"
 
 
 def test_run_batch_pipeline_runs_bad_quality_rows_with_reference(
@@ -174,12 +170,12 @@ def test_run_batch_pipeline_runs_bad_quality_rows_with_reference(
             ppg_mode=base.ppg_mode,
         )
 
-    def fake_render(report_path, base_params, *, out_dir, show):
+    def fake_render(report_path, base_params, *, out_dir, output_prefix, show):
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
-        figure = out_dir / "figure.png"
-        error_csv = out_dir / "error_table.csv"
-        param_csv = out_dir / "param_table.csv"
+        figure = out_dir / f"{output_prefix}-hf-best.png"
+        error_csv = out_dir / f"{output_prefix}-error_table.csv"
+        param_csv = out_dir / f"{output_prefix}-param_table.csv"
         figure.write_text("fig", encoding="utf-8")
         error_csv.write_text("err", encoding="utf-8")
         param_csv.write_text("par", encoding="utf-8")
@@ -239,12 +235,12 @@ def test_run_batch_pipeline_writes_one_bom_encoded_qc_table(
             ppg_mode=base.ppg_mode,
         )
 
-    def fake_render(report_path, base_params, *, out_dir, show):
+    def fake_render(report_path, base_params, *, out_dir, output_prefix, show):
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
-        figure = out_dir / "figure.png"
-        error_csv = out_dir / "error_table.csv"
-        param_csv = out_dir / "param_table.csv"
+        figure = out_dir / f"{output_prefix}-hf-best.png"
+        error_csv = out_dir / f"{output_prefix}-error_table.csv"
+        param_csv = out_dir / f"{output_prefix}-param_table.csv"
         figure.write_text("fig", encoding="utf-8")
         error_csv.write_text("err", encoding="utf-8")
         param_csv.write_text("par", encoding="utf-8")

@@ -204,6 +204,7 @@ class OptimiseWorker(QObject):
                 search_space={n: space.options(n) for n in space.names()},
                 adaptive_filter=self._params.adaptive_filter,
                 ppg_mode=self._params.ppg_mode,
+                analysis_scope=self._params.analysis_scope,
                 delay_search=_delay_search_config(self._params),
             )
 
@@ -242,7 +243,10 @@ class ViewWorker(QObject):
                     self._report,
                     self._params,
                     out_dir=self._out_dir,
-                    output_prefix=Path(self._params.file_name).stem,
+                    output_prefix=(
+                        f"{Path(self._params.file_name).stem}-"
+                        f"{self._params.analysis_scope}"
+                    ),
                     show=False,
                 )
             self.log.emit(buf.getvalue().rstrip())
@@ -345,6 +349,7 @@ class BatchPipelineWorker(QObject):
         output_dir: Path,
         modes: list[str],
         adaptive_filter: str,
+        analysis_scope: str,
         bayes_cfg: BayesConfig,
     ):
         super().__init__()
@@ -352,6 +357,7 @@ class BatchPipelineWorker(QObject):
         self._output_dir = output_dir
         self._modes = modes
         self._adaptive_filter = adaptive_filter
+        self._analysis_scope = analysis_scope
         self._bayes_cfg = bayes_cfg
 
     def run(self) -> None:
@@ -362,6 +368,7 @@ class BatchPipelineWorker(QObject):
                 "运行配置: "
                 f"modes={','.join(self._modes)} | "
                 f"adaptive_filter={self._adaptive_filter} | "
+                f"analysis_scope={self._analysis_scope} | "
                 f"max_iterations={self._bayes_cfg.max_iterations}, "
                 f"num_seed_points={self._bayes_cfg.num_seed_points}, "
                 f"num_repeats={self._bayes_cfg.num_repeats}, "
@@ -424,6 +431,7 @@ class BatchPipelineWorker(QObject):
                 output_dir=self._output_dir,
                 modes=self._modes,
                 adaptive_filter=self._adaptive_filter,
+                analysis_scope=self._analysis_scope,
                 bayes_cfg=self._bayes_cfg,
                 thresholds=QcThresholds(),
                 on_log=self.log.emit,

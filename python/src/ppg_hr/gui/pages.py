@@ -156,15 +156,16 @@ def _dataset_card(
     return card, input_pick, ref_pick, out_pick
 
 
-def default_optimise_report_path(input_path: Path) -> Path:
+def default_optimise_report_path(input_path: Path, scope: str = "full") -> Path:
     """Return the default JSON report path for an optimisation input file."""
-    return input_path.with_name(f"Best_Params_Result_{input_path.stem}.json")
+    return input_path.with_name(f"Best_Params_Result_{input_path.stem}-{scope}.json")
 
 
 # Parameter groups shown per page. Each tuple is (title, [field_names], group_id).
 # ``group_id`` is optional — groups tagged as ``"klms"`` / ``"volterra"`` are
 # hidden unless the matching ``adaptive_filter`` strategy is selected.
 _PARAM_GROUPS: list[tuple[str, list[str], str]] = [
+    ("分析范围", ["analysis_scope"], "analysis"),
     ("自适应滤波算法", ["adaptive_filter"], "adaptive"),
     (
         "时延搜索",
@@ -209,6 +210,8 @@ _PARAM_META: dict[str, dict[str, Any]] = {
     # Adaptive filter strategy + algo-specific parameters (2026-04)
     "adaptive_filter": dict(label="算法", kind="choice",
                             options=["lms", "klms", "volterra"]),
+    "analysis_scope": dict(label="分析范围", kind="choice",
+                           options=["full", "motion"]),
     "delay_search_mode": dict(label="时延模式", kind="choice",
                               options=["adaptive", "fixed"]),
     "delay_prefit_max_seconds": dict(label="预扫描最大时延 (s)",
@@ -274,6 +277,37 @@ class AdaptiveFilterPicker(QWidget):
 
     def apply_to(self, params: SolverParams) -> SolverParams:
         return params.replace(adaptive_filter=self.current_strategy())
+
+
+class AnalysisScopePicker(QWidget):
+    """Picker for the solver analysis range."""
+
+    _OPTIONS: tuple[tuple[str, str], ...] = (
+        ("整段数据", "full"),
+        ("静息30s + 最长运动段", "motion"),
+    )
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        layout = QFormLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setHorizontalSpacing(14)
+        layout.setVerticalSpacing(8)
+
+        self._combo = QComboBox()
+        for label, value in self._OPTIONS:
+            self._combo.addItem(label, userData=value)
+        default = SolverParams().analysis_scope
+        idx = self._combo.findData(default)
+        self._combo.setCurrentIndex(idx if idx >= 0 else 0)
+        self._combo.setFixedWidth(260)
+        layout.addRow("分析范围", self._combo)
+
+    def current_scope(self) -> str:
+        return str(self._combo.currentData())
+
+    def apply_to(self, params: SolverParams) -> SolverParams:
+        return params.replace(analysis_scope=self.current_scope())
 
 
 class ParamForm(QWidget):
@@ -597,6 +631,11 @@ class OptimisePage(_PageBase):
         algo_card.add(self._algo_picker)
         self.body().addWidget(algo_card)
 
+        scope_card = SectionCard("分析范围", "默认整段数据；可切换为静息30s加最长运动段")
+        self._analysis_scope_picker = AnalysisScopePicker()
+        scope_card.add(self._analysis_scope_picker)
+        self.body().addWidget(scope_card)
+
         action_row = QHBoxLayout()
         action_row.setSpacing(12)
         action_row.addStretch(1)
@@ -642,6 +681,7 @@ class OptimisePage(_PageBase):
 
         params = SolverParams(file_name=in_path, ref_file=self._ref_pick.path())
         params = self._algo_picker.apply_to(params)
+        params = self._analysis_scope_picker.apply_to(params)
         cfg = BayesConfig(
             max_iterations=int(self._max_iter.value()),
             num_seed_points=int(self._seed_pts.value()),
@@ -849,6 +889,13 @@ class BatchPipelinePage(_PageBase):
         self._adaptive_combo.setFixedWidth(220)
         run_form.addRow("自适应滤波", self._adaptive_combo)
 
+        self._analysis_scope_combo = QComboBox()
+        self._analysis_scope_combo.addItem("整段数据", userData="full")
+        self._analysis_scope_combo.addItem("静息30s + 最长运动段", userData="motion")
+        self._analysis_scope_combo.setCurrentIndex(0)
+        self._analysis_scope_combo.setFixedWidth(260)
+        run_form.addRow("分析范围", self._analysis_scope_combo)
+
         # Bayes budget
         self._max_iter = QSpinBox()
         self._max_iter.setRange(5, 1000)
@@ -966,6 +1013,7 @@ class BatchPipelinePage(_PageBase):
             random_state=int(self._seed.value()),
         )
         adaptive_filter = str(self._adaptive_combo.currentData())
+        analysis_scope = str(self._analysis_scope_combo.currentData())
 
         self._btn.setEnabled(False)
         self._overall_progress.setValue(0)
@@ -980,12 +1028,14 @@ class BatchPipelinePage(_PageBase):
         self._log.info(f"输出目录: {out_dir}")
         self._log.info(f"模式: {','.join(modes)}")
         self._log.info(f"算法: {adaptive_filter}")
+        self._log.info(f"分析范围: {analysis_scope}")
 
         worker = BatchPipelineWorker(
             input_dir=input_dir,
             output_dir=out_dir,
             modes=modes,
             adaptive_filter=adaptive_filter,
+            analysis_scope=analysis_scope,
             bayes_cfg=cfg,
         )
         worker.log.connect(self._log.info)
@@ -1077,6 +1127,11 @@ class ViewPage(_PageBase):
         rc.add(rf)
         self.body().addWidget(rc)
 
+        scope_card = SectionCard("分析范围", "默认整段数据；可切换为静息30s加最长运动段")
+        self._analysis_scope_picker = AnalysisScopePicker()
+        scope_card.add(self._analysis_scope_picker)
+        self.body().addWidget(scope_card)
+
         # action
         action_row = QHBoxLayout()
         action_row.addStretch(1)
@@ -1118,9 +1173,11 @@ class ViewPage(_PageBase):
         if report is None or not report.is_file():
             self._log.error("请选择一个有效的报告文件")
             return
-        out_dir = self._out_dir.path() or self._default_output_dir(in_path)
+        scope = self._analysis_scope_picker.current_scope()
+        out_dir = self._out_dir.path() or self._default_output_dir(in_path, scope)
 
         params = SolverParams(file_name=in_path, ref_file=self._ref_pick.path())
+        params = self._analysis_scope_picker.apply_to(params)
 
         self._btn.setEnabled(False)
         self._log.info("—" * 40)
@@ -1135,8 +1192,8 @@ class ViewPage(_PageBase):
         self._worker_holder = holder
         holder.start()
 
-    def _default_output_dir(self, input_path: Path) -> Path:
-        return input_path.parent / "viewer_out" / input_path.stem
+    def _default_output_dir(self, input_path: Path, scope: str = "full") -> Path:
+        return input_path.parent / "viewer_out" / f"{input_path.stem}-{scope}"
 
     def _on_done(self, arte: ViewerArtefacts) -> None:
         if arte.figure and Path(arte.figure).is_file():

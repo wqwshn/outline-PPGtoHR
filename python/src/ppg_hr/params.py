@@ -6,7 +6,23 @@ from dataclasses import dataclass, field, fields, replace
 from pathlib import Path
 from typing import Any
 
-__all__ = ["SolverParams"]
+__all__ = ["SolverParams", "analysis_scope_suffix", "normalise_analysis_scope"]
+
+
+_ANALYSIS_SCOPES = ("full", "motion")
+
+
+def normalise_analysis_scope(scope: str) -> str:
+    value = str(scope).strip().lower()
+    if value not in _ANALYSIS_SCOPES:
+        raise ValueError(
+            f"Unsupported analysis_scope {scope!r}; expected one of {_ANALYSIS_SCOPES}"
+        )
+    return value
+
+
+def analysis_scope_suffix(scope: str) -> str:
+    return normalise_analysis_scope(scope)
 
 
 @dataclass
@@ -55,6 +71,7 @@ class SolverParams:
     # Adaptive filter selection (new in 2026-04)
     adaptive_filter: str = "lms"  # one of: "lms", "klms", "volterra"
     ppg_mode: str = "green"  # one of: "green", "red", "ir"
+    analysis_scope: str = "full"  # one of: "full", "motion"
 
     # Delay-search prefit controls. ``adaptive`` narrows the PPG-vs-motion
     # lag search per dataset; ``fixed`` preserves the original +/-0.2 s scan.
