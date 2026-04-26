@@ -43,11 +43,11 @@ def test_to_dict_includes_new_fields() -> None:
 def test_delay_search_defaults() -> None:
     p = SolverParams()
     assert p.delay_search_mode == "adaptive"
-    assert p.delay_prefit_max_seconds == pytest.approx(0.2)
-    assert p.delay_prefit_windows == 8
+    assert p.delay_prefit_max_seconds == pytest.approx(0.8)
+    assert p.delay_prefit_windows == 20
     assert p.delay_prefit_min_corr == pytest.approx(0.15)
     assert p.delay_prefit_margin_samples == 2
-    assert p.delay_prefit_min_span_samples == 2
+    assert p.delay_prefit_min_span_samples == 6
 
 
 def test_to_dict_includes_delay_search_fields() -> None:
