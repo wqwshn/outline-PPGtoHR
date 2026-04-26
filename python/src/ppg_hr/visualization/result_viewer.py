@@ -17,6 +17,8 @@ from __future__ import annotations
 import csv
 import importlib.util
 import json
+import os
+import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -28,9 +30,11 @@ from ..core.heart_rate_solver import SolverResult, solve
 from ..params import SolverParams, analysis_scope_suffix
 
 __all__ = [
+    "BatchViewerRecord",
     "ViewerArtefacts",
     "load_report",
     "render",
+    "render_report_tree",
     "write_error_csv",
     "write_param_csv",
 ]
@@ -48,10 +52,10 @@ _PLOT_COLS = {
 }
 
 _PLOT_COLORS = {
-    "reference": "#243447",
-    "hf_lms": "#E07A8A",
-    "acc_lms": "#5BA8C8",
-    "fft": "#7C8794",
+    "reference": "#222222",
+    "hf_lms": "#D55E00",
+    "acc_lms": "#0072B2",
+    "fft": "#7A7A7A",
     "motion": "#D9DDE3",
 }
 
@@ -64,6 +68,18 @@ class ViewerArtefacts:
     error_csv: Path | None = None
     param_csv: Path | None = None
     extras: dict[str, Path] = field(default_factory=dict)
+
+
+@dataclass
+class BatchViewerRecord:
+    """One recursive batch-render outcome."""
+
+    report_path: Path
+    data_path: Path | None
+    ref_path: Path | None
+    status: str
+    message: str
+    artefacts: ViewerArtefacts | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -97,6 +113,196 @@ def load_report(path: str | Path) -> dict[str, Any]:
         }
 
     raise ValueError(f"Unsupported report extension: {path.suffix}")
+
+
+def render_report_tree(
+    root: str | Path,
+    *,
+    out_dir: str | Path = "figures",
+    show: bool = False,
+) -> list[BatchViewerRecord]:
+    """Recursively render JSON reports under ``root`` without overwriting output.
+
+    Each report is paired with a same-stem sensor CSV and ``*_ref.csv`` found
+    under ``root``. Existing visual outputs are preserved by appending
+    ``-1``, ``-2`` ... to the output prefix.
+    """
+    root_path = Path(root).resolve()
+    output_dir = Path(out_dir).resolve()
+    records: list[BatchViewerRecord] = []
+
+    for report_path in _iter_json_reports(root_path):
+        try:
+            report = load_report(report_path)
+        except Exception as exc:
+            records.append(BatchViewerRecord(
+                report_path=report_path,
+                data_path=None,
+                ref_path=None,
+                status="skipped",
+                message=f"not a valid report: {exc}",
+            ))
+            continue
+        if "best_para_hf" not in report or "best_para_acc" not in report:
+            records.append(BatchViewerRecord(
+                report_path=report_path,
+                data_path=None,
+                ref_path=None,
+                status="skipped",
+                message="not a Bayesian result report",
+            ))
+            continue
+
+        data_path = _find_report_data_file(root_path, report_path, report)
+        ref_path = data_path.with_name(f"{data_path.stem}_ref.csv") if data_path else None
+        if data_path is None or ref_path is None or not ref_path.is_file():
+            records.append(BatchViewerRecord(
+                report_path=report_path,
+                data_path=data_path,
+                ref_path=ref_path,
+                status="missing_data",
+                message=_missing_data_message(data_path, ref_path),
+            ))
+            continue
+
+        params = SolverParams(
+            file_name=data_path,
+            ref_file=ref_path,
+            adaptive_filter=str(report.get("adaptive_filter", "lms")),
+            ppg_mode=str(report.get("ppg_mode", "green")),
+            analysis_scope=str(report.get("analysis_scope", "full")),
+        )
+        base_prefix = _infer_report_output_prefix(report_path, report, data_path.stem)
+        scoped_prefix = _scope_output_prefix(base_prefix, params.analysis_scope) or base_prefix
+        output_prefix = _unique_viewer_output_prefix(output_dir, scoped_prefix)
+        artefacts = render(
+            report_path,
+            params,
+            out_dir=output_dir,
+            output_prefix=output_prefix,
+            show=show,
+        )
+        records.append(BatchViewerRecord(
+            report_path=report_path,
+            data_path=data_path,
+            ref_path=ref_path,
+            status="rendered",
+            message="ok",
+            artefacts=artefacts,
+        ))
+    return records
+
+
+def _iter_json_reports(root: Path):
+    def _on_error(error: OSError) -> None:
+        return None
+
+    for dirpath, dirnames, filenames in os.walk(root, onerror=_on_error):
+        dirnames[:] = [
+            name for name in dirnames
+            if name not in {".git", ".pytest_cache", ".ruff_cache", "__pycache__"}
+        ]
+        for filename in sorted(filenames):
+            if filename.lower().endswith(".json"):
+                yield Path(dirpath) / filename
+
+
+def _missing_data_message(data_path: Path | None, ref_path: Path | None) -> str:
+    missing: list[str] = []
+    if data_path is None:
+        missing.append("sensor csv")
+    if ref_path is None or not ref_path.is_file():
+        missing.append("reference csv")
+    return "missing " + " and ".join(missing)
+
+
+def _find_report_data_file(root: Path, report_path: Path, report: dict[str, Any]) -> Path | None:
+    candidate_stems = _candidate_data_stems(report_path, report)
+    for stem in candidate_stems:
+        for parent in [report_path.parent, *report_path.parents]:
+            if root not in [parent, *parent.parents] and parent != root:
+                continue
+            candidate = parent / f"{stem}.csv"
+            if candidate.is_file():
+                return candidate
+        found = _find_named_csv(root, stem)
+        if found is not None:
+            return found
+    return None
+
+
+def _candidate_data_stems(report_path: Path, report: dict[str, Any]) -> list[str]:
+    raw = report_path.stem
+    for suffix in ("-best_params", "_best_params", "-report", "_report"):
+        if raw.endswith(suffix):
+            raw = raw[: -len(suffix)]
+            break
+
+    stems = [raw]
+    ppg_mode = str(report.get("ppg_mode", ""))
+    if ppg_mode and f"-{ppg_mode}-" in raw:
+        stems.append(raw.split(f"-{ppg_mode}-", 1)[0])
+    if ppg_mode and raw.endswith(f"-{ppg_mode}"):
+        stems.append(raw[: -(len(ppg_mode) + 1)])
+    for known in ("green", "red", "ir"):
+        if f"-{known}-" in raw:
+            stems.append(raw.split(f"-{known}-", 1)[0])
+        if raw.endswith(f"-{known}"):
+            stems.append(raw[: -(len(known) + 1)])
+    return list(dict.fromkeys(stem for stem in stems if stem))
+
+
+def _find_named_csv(root: Path, stem: str) -> Path | None:
+    target = f"{stem}.csv".lower()
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [
+            name for name in dirnames
+            if name not in {".git", ".pytest_cache", ".ruff_cache", "__pycache__"}
+        ]
+        for filename in filenames:
+            if filename.lower() == target:
+                return Path(dirpath) / filename
+    return None
+
+
+def _infer_report_output_prefix(report_path: Path, report: dict[str, Any], data_stem: str) -> str:
+    stem = report_path.stem
+    for suffix in ("-best_params", "_best_params", "-report", "_report"):
+        if stem.endswith(suffix):
+            stem = stem[: -len(suffix)]
+            break
+    if stem and stem != "report":
+        return stem
+    mode = str(report.get("ppg_mode", "")).strip()
+    strategy = str(report.get("adaptive_filter", "")).strip()
+    parts = [data_stem]
+    if mode:
+        parts.append(mode)
+    if strategy:
+        parts.append(strategy)
+    return "-".join(parts)
+
+
+def _unique_viewer_output_prefix(out_dir: Path, scoped_prefix: str) -> str:
+    candidate = scoped_prefix
+    idx = 1
+    while any(path.exists() for path in _expected_viewer_outputs(out_dir, candidate)):
+        candidate = f"{scoped_prefix}-{idx}"
+        idx += 1
+    return candidate
+
+
+def _expected_viewer_outputs(out_dir: Path, scoped_prefix: str) -> list[Path]:
+    return [
+        out_dir / f"{scoped_prefix}-hf-best{suffix}"
+        for suffix in (".pdf", ".svg", ".png")
+    ] + [
+        out_dir / f"{scoped_prefix}-acc-best{suffix}"
+        for suffix in (".pdf", ".svg", ".png")
+    ] + [
+        out_dir / f"{scoped_prefix}-error_table.csv",
+        out_dir / f"{scoped_prefix}-param_table.csv",
+    ]
 
 
 def _unwrap_struct(obj: Any) -> dict[str, Any]:
@@ -270,9 +476,20 @@ def _plot_panel(
         where=motion_flag,
         transform=ax.get_xaxis_transform(),
         color=_PLOT_COLORS["motion"],
-        alpha=0.28,
+        alpha=0.16,
         edgecolor="none",
     )
+    if np.any(motion_flag):
+        ax.text(
+            0.035,
+            0.93,
+            "Motion period",
+            transform=ax.transAxes,
+            ha="left",
+            va="top",
+            fontsize=6,
+            color="#666666",
+        )
     ref_t = np.asarray(HR[:, 0], dtype=float)
     ref_y = np.asarray(HR[:, 1], dtype=float) * 60.0
     if (
@@ -295,49 +512,68 @@ def _plot_panel(
         t_pred,
         HR[:, _PLOT_COLS["fft"]] * 60.0,
         color=_PLOT_COLORS["fft"],
-        linestyle=(0, (1.2, 1.4)),
-        linewidth=1.15,
-        label=_method_error_label("Pure FFT", res.err_stats[2, 0]),
+        linestyle=(0, (2.0, 1.4)),
+        linewidth=1.2,
+        label="FFT",
         zorder=2,
     )
     ax.plot(
         t_pred,
         HR[:, _PLOT_COLS["hf_fusion"]] * 60.0,
         color=_PLOT_COLORS["hf_lms"],
-        marker=".",
-        markersize=3.0,
         linestyle="-",
-        linewidth=1.9,
-        label=_method_error_label("HF-LMS", res.err_stats[3, 0]),
+        linewidth=1.5,
+        label="HF-LMS",
         zorder=4,
     )
     ax.plot(
         t_pred,
         HR[:, _PLOT_COLS["acc_fusion"]] * 60.0,
         color=_PLOT_COLORS["acc_lms"],
-        marker=".",
-        markersize=3.0,
         linestyle="-",
-        linewidth=1.25,
-        label=_method_error_label("ACC-LMS", res.err_stats[4, 0]),
+        linewidth=1.4,
+        label="ACC-LMS",
         zorder=3,
     )
 
-    e_fft = float(res.err_stats[2, 2])
-    e_hf = float(res.err_stats[3, 2])
-    e_acc = float(res.err_stats[4, 2])
-    improvement = _relative_improvement(e_hf, e_acc)
-    ax.set_title(
-        f"{label}  Motion MAE: HF {e_hf:.2f} / ACC {e_acc:.2f} / FFT {e_fft:.2f} BPM "
-        f"({improvement})",
-        loc="left",
+    annotation = (
+        "AAE (BPM)\n"
+        f"FFT {float(res.err_stats[2, 0]):.2f}\n"
+        f"HF-LMS {float(res.err_stats[3, 0]):.2f}\n"
+        f"ACC-LMS {float(res.err_stats[4, 0]):.2f}"
+    )
+    ax.text(
+        0.98,
+        0.06,
+        annotation,
+        transform=ax.transAxes,
+        ha="right",
+        va="bottom",
+        fontsize=6,
+        linespacing=1.15,
+        bbox={
+            "boxstyle": "round,pad=0.25",
+            "facecolor": "white",
+            "edgecolor": "#C8C8C8",
+            "linewidth": 0.4,
+            "alpha": 0.86,
+        },
     )
     ax.set_ylabel("Heart rate (BPM)")
-    ax.set_ylim(50, 200)
-    ax.grid(True, axis="y", alpha=0.18, linewidth=0.6)
+    ax.set_xlim(50, 160)
+    ax.set_ylim(55, 150)
+    ax.grid(True, axis="y", alpha=0.16, linewidth=0.45)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    ax.legend(loc="upper right", fontsize=7, ncol=2, frameon=False)
+    ax.legend(
+        loc="lower center",
+        bbox_to_anchor=(0.5, 1.02),
+        fontsize=6,
+        ncol=4,
+        frameon=False,
+        handlelength=2.2,
+        columnspacing=1.2,
+    )
 
 
 def _method_error_label(name: str, total_aae: float) -> str:
@@ -378,21 +614,20 @@ def _apply_publication_style() -> None:
                 _PLOT_COLORS["fft"],
             ],
         )
-        return
-
     import matplotlib as mpl
 
     mpl.rcParams.update({
         "font.family": "sans-serif",
         "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans"],
-        "font.size": 8,
-        "axes.labelsize": 8,
-        "axes.titlesize": 8,
-        "xtick.labelsize": 7,
-        "ytick.labelsize": 7,
-        "legend.fontsize": 7,
+        "font.size": 7,
+        "axes.labelsize": 7,
+        "axes.titlesize": 7,
+        "xtick.labelsize": 6,
+        "ytick.labelsize": 6,
+        "legend.fontsize": 6,
         "axes.linewidth": 0.75,
         "lines.linewidth": 1.2,
+        "figure.figsize": [7.1, 3.25],
         "pdf.fonttype": 42,
         "ps.fonttype": 42,
         "svg.fonttype": "none",
@@ -405,12 +640,16 @@ def _export_publication_figure(fig, output_base: Path) -> list[Path]:
         return export_module.export_figure(
             fig,
             output_base,
-            formats=("png",),
+            formats=("pdf", "svg", "png"),
             dpi=600,
         )
 
     output_base.parent.mkdir(parents=True, exist_ok=True)
-    paths = [output_base.with_suffix(".png")]
+    paths = [
+        output_base.with_suffix(".pdf"),
+        output_base.with_suffix(".svg"),
+        output_base.with_suffix(".png"),
+    ]
     for path in paths:
         kwargs = {"bbox_inches": "tight", "pad_inches": 0.02}
         if path.suffix.lower() == ".png":
@@ -488,7 +727,7 @@ def render(
     output_prefix = _scope_output_prefix(output_prefix, base_params.analysis_scope)
     fill_ref = analysis_scope_suffix(base_params.analysis_scope) == "motion"
 
-    fig_hf, ax_hf = plt.subplots(figsize=(7.2, 2.8))
+    fig_hf, ax_hf = plt.subplots(figsize=(7.1, 3.25))
     _plot_panel(
         ax_hf,
         res_hf,
@@ -497,7 +736,7 @@ def render(
         fill_reference_to_t_pred_end=fill_ref,
     )
     ax_hf.set_xlabel("Time (s)")
-    fig_hf.tight_layout()
+    fig_hf.tight_layout(rect=(0, 0, 1, 0.92))
     hf_base = out_dir / _viewer_name("hf-best", output_prefix)
     hf_paths = _export_publication_figure(fig_hf, hf_base)
     hf_path = hf_base.with_suffix(".png")
@@ -505,7 +744,7 @@ def render(
         plt.show()
     plt.close(fig_hf)
 
-    fig_acc, ax_acc = plt.subplots(figsize=(7.2, 2.8))
+    fig_acc, ax_acc = plt.subplots(figsize=(7.1, 3.25))
     _plot_panel(
         ax_acc,
         res_acc,
@@ -514,7 +753,7 @@ def render(
         fill_reference_to_t_pred_end=fill_ref,
     )
     ax_acc.set_xlabel("Time (s)")
-    fig_acc.tight_layout()
+    fig_acc.tight_layout(rect=(0, 0, 1, 0.92))
     acc_base = out_dir / _viewer_name("acc-best", output_prefix)
     acc_paths = _export_publication_figure(fig_acc, acc_base)
     acc_path = acc_base.with_suffix(".png")
@@ -561,9 +800,8 @@ def _scope_output_prefix(output_prefix: str | None, analysis_scope: str) -> str 
     suffix = analysis_scope_suffix(analysis_scope)
     if not output_prefix:
         return suffix
-    for known in ("full", "motion"):
-        if output_prefix.endswith(f"-{known}"):
-            return output_prefix
+    if re.search(r"-(full|motion)(-\d+)?$", output_prefix):
+        return output_prefix
     return f"{output_prefix}-{suffix}"
 
 

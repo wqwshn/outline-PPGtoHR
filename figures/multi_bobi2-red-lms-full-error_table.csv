@@ -1,0 +1,11 @@
+case,method,total_aae,rest_aae,motion_aae
+HF_best,LMS(HF),17.1440,3.7142,47.0734
+HF_best,LMS(Acc),14.1119,3.7330,37.2420
+HF_best,Pure FFT,21.8396,3.7283,62.2020
+HF_best,Fusion(HF),17.1501,3.7277,47.0629
+HF_best,Fusion(Acc),14.0985,3.7277,37.2106
+ACC_best,LMS(HF),27.3703,18.9152,46.2131
+ACC_best,LMS(Acc),20.3556,18.9269,23.5394
+ACC_best,Pure FFT,33.1479,18.9575,64.7724
+ACC_best,Fusion(HF),27.3944,18.9477,46.2183
+ACC_best,Fusion(Acc),20.3715,18.9501,23.5394

@@ -243,7 +243,7 @@ def test_render_uses_one_motion_mask_for_both_panels(
     assert plotted_masks == [[0, 1, 1, 0, 0], [0, 1, 1, 0, 0]]
 
 
-def test_plot_panel_labels_core_methods_with_errors() -> None:
+def test_plot_panel_uses_nature_method_labels_and_annotation() -> None:
     import matplotlib
     matplotlib.use("Agg", force=True)
     import matplotlib.pyplot as plt
@@ -268,19 +268,19 @@ def test_plot_panel_labels_core_methods_with_errors() -> None:
     result_viewer._plot_panel(ax, res, "HF best", 1.111)
 
     labels = ax.get_legend_handles_labels()[1]
-    assert labels == [
-        "Reference",
-        "Pure FFT (AAE=6.79 BPM)",
-        "HF-LMS (AAE=1.11 BPM)",
-        "ACC-LMS (AAE=1.22 BPM)",
-    ]
+    assert labels == ["Reference", "FFT", "HF-LMS", "ACC-LMS"]
 
     lines = {line.get_label(): line for line in ax.lines}
-    hf_line = lines["HF-LMS (AAE=1.11 BPM)"]
-    acc_line = lines["ACC-LMS (AAE=1.22 BPM)"]
-    assert hf_line.get_color().lower() == "#e07a8a"
-    assert hf_line.get_linewidth() > acc_line.get_linewidth()
-    assert "Motion MAE:" in ax.get_title(loc="left")
+    assert lines["Reference"].get_color().lower() == "#222222"
+    assert lines["FFT"].get_color().lower() == "#7a7a7a"
+    assert lines["HF-LMS"].get_color().lower() == "#d55e00"
+    assert lines["ACC-LMS"].get_color().lower() == "#0072b2"
+    assert lines["HF-LMS"].get_marker() in {"None", "none", ""}
+    assert lines["ACC-LMS"].get_marker() in {"None", "none", ""}
+    assert ax.get_title(loc="left") == ""
+    assert ax.get_ylim() == (55.0, 150.0)
+    assert ax.get_xlim() == (50.0, 160.0)
+    assert "AAE" in ax.texts[-1].get_text()
     plt.close(fig)
 
 
@@ -353,7 +353,7 @@ def test_render_can_prefix_output_files(
     assert artefacts.param_csv == out_dir / "multi_bobi1-full-param_table.csv"
 
 
-def test_render_exports_two_png_figures_only(
+def test_render_exports_pdf_svg_and_600dpi_png_figures(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -395,10 +395,69 @@ def test_render_exports_two_png_figures_only(
     assert artefacts.figure == tmp_path / "viewer_out" / "multi_bobi1-motion-hf-best.png"
     assert artefacts.extras["figure_hf"] == artefacts.figure
     assert artefacts.extras["figure_acc"] == tmp_path / "viewer_out" / "multi_bobi1-motion-acc-best.png"
-    assert artefacts.extras["figure_hf"].is_file()
-    assert artefacts.extras["figure_acc"].is_file()
-    assert not list((tmp_path / "viewer_out").glob("*.pdf"))
-    assert not list((tmp_path / "viewer_out").glob("*.svg"))
+    for key in (
+        "figure_hf_png",
+        "figure_hf_pdf",
+        "figure_hf_svg",
+        "figure_acc_png",
+        "figure_acc_pdf",
+        "figure_acc_svg",
+    ):
+        assert artefacts.extras[key].is_file()
+
+
+def test_render_report_tree_recurses_warns_and_uses_unique_names(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "root"
+    report_dir = root / "batch_outputs" / "batch_runs" / "sample01-green-lms"
+    report_dir.mkdir(parents=True)
+    report = report_dir / "sample01-green-lms-best_params.json"
+    report.write_text(
+        json.dumps({
+            "adaptive_filter": "lms",
+            "ppg_mode": "green",
+            "best_para_hf": {},
+            "best_para_acc": {},
+        }),
+        encoding="utf-8",
+    )
+    missing = report_dir / "missing-green-lms-best_params.json"
+    missing.write_text(report.read_text(encoding="utf-8"), encoding="utf-8")
+    sensor = root / "sample01.csv"
+    ref = root / "sample01_ref.csv"
+    sensor.write_text("sensor\n", encoding="utf-8")
+    ref.write_text("ref\n", encoding="utf-8")
+
+    out_dir = tmp_path / "figures"
+    existing = out_dir / "sample01-green-lms-full-hf-best.png"
+    existing.parent.mkdir()
+    existing.write_text("old\n", encoding="utf-8")
+    rendered_prefixes: list[str] = []
+
+    def fake_render(report_path, base_params, *, out_dir, output_prefix, show):
+        rendered_prefixes.append(output_prefix)
+        out_dir = Path(out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        figure = out_dir / f"{output_prefix}-hf-best.png"
+        figure.write_text("new\n", encoding="utf-8")
+        return result_viewer.ViewerArtefacts(
+            figure=figure,
+            error_csv=out_dir / f"{output_prefix}-error_table.csv",
+            param_csv=out_dir / f"{output_prefix}-param_table.csv",
+        )
+
+    monkeypatch.setattr(result_viewer, "render", fake_render)
+
+    records = result_viewer.render_report_tree(root, out_dir=out_dir, show=False)
+
+    by_status = {r.status: r for r in records}
+    assert set(by_status) == {"rendered", "missing_data"}
+    assert rendered_prefixes == ["sample01-green-lms-full-1"]
+    assert existing.read_text(encoding="utf-8") == "old\n"
+    assert (out_dir / "sample01-green-lms-full-1-hf-best.png").is_file()
+    assert "missing" in by_status["missing_data"].message.lower()
 
 
 def test_viewer_accepts_legacy_report_with_fs_target(

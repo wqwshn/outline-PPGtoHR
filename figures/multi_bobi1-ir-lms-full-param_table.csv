@@ -1,0 +1,16 @@
+metric,hf_best_case,acc_best_case
+target_aae,14.2745,14.7120
+motion_aae,14.4425,16.2667
+rest_aae,20.0813,20.7553
+--- config ---,,
+fs_target,100,100
+max_order,12,16
+spec_penalty_width,0.2,0.2
+hr_range_hz,0.4166666666666667,0.25
+slew_limit_bpm,9,11
+slew_step_bpm,7,7
+hr_range_rest,0.8333333333333334,0.8333333333333334
+slew_limit_rest,7,8
+slew_step_rest,5,4
+smooth_win_len,9,5
+time_bias,5,5
