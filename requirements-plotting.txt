@@ -1,0 +1,12 @@
+numpy
+pandas
+matplotlib
+SciencePlots
+seaborn
+colorcet
+cmasher
+cmcrameri
+pillow
+scipy
+openpyxl
+h5py

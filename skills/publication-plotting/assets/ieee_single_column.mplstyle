@@ -1,0 +1,25 @@
+figure.figsize: 3.5, 2.35
+figure.dpi: 120
+savefig.dpi: 600
+savefig.bbox: tight
+savefig.pad_inches: 0.02
+font.family: sans-serif
+font.sans-serif: Arial, DejaVu Sans, Liberation Sans
+font.size: 7
+axes.labelsize: 7
+axes.titlesize: 7
+xtick.labelsize: 6
+ytick.labelsize: 6
+legend.fontsize: 6
+axes.linewidth: 0.7
+lines.linewidth: 1.1
+lines.markersize: 3.0
+xtick.major.width: 0.7
+ytick.major.width: 0.7
+xtick.major.size: 3
+ytick.major.size: 3
+legend.frameon: false
+axes.grid: false
+pdf.fonttype: 42
+ps.fonttype: 42
+svg.fonttype: none

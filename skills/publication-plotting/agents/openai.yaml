@@ -1,0 +1,4 @@
+interface:
+  display_name: "Publication Plotting"
+  short_description: "Create publication-ready scientific plots"
+  default_prompt: "Use publication-plotting to create a journal-ready figure from my data."
