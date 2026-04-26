@@ -26,7 +26,7 @@ def test_inspect_defaults(capsys: pytest.CaptureFixture[str]) -> None:
     assert rc == 0
     out = capsys.readouterr().out
     parsed = json.loads(out)
-    assert parsed["fs_target"] == 100
+    assert parsed["fs_target"] == 25
     assert parsed["spec_penalty_enable"] is True
 
 
@@ -65,6 +65,12 @@ def test_parser_rejects_unknown_command() -> None:
     parser = cli.build_parser()
     with pytest.raises(SystemExit):
         parser.parse_args(["does-not-exist"])
+
+
+def test_parser_no_longer_accepts_fs_target() -> None:
+    parser = cli.build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["solve", "dummy.csv", "--fs-target", "100"])
 
 
 def test_view_passes_data_stem_output_dir_and_prefix(

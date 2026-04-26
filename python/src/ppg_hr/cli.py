@@ -31,7 +31,7 @@ from .visualization import render
 def _build_params(args: argparse.Namespace) -> SolverParams:
     overrides: dict = {}
     for name in (
-        "fs_target", "max_order", "calib_time", "motion_th_scale",
+        "max_order", "calib_time", "motion_th_scale",
         "spec_penalty_weight", "spec_penalty_width", "smooth_win_len", "time_bias",
         "adaptive_filter",
         "analysis_scope",
@@ -156,7 +156,6 @@ def _jsonable(obj):
 def _add_common_io_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("input", type=Path, help="Path to sensor CSV or processed .mat")
     p.add_argument("--ref", type=Path, default=None, help="Reference HR CSV (optional)")
-    p.add_argument("--fs-target", dest="fs_target", type=int, default=None)
     p.add_argument("--max-order", dest="max_order", type=int, default=None)
     p.add_argument("--calib-time", dest="calib_time", type=float, default=None)
     p.add_argument("--motion-th-scale", dest="motion_th_scale", type=float, default=None)

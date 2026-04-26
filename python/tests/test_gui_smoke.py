@@ -190,6 +190,20 @@ def test_param_form_apply_to_writes_adaptive_filter_fields():
         app.processEvents()
 
 
+def test_param_form_does_not_expose_fs_target():
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.pages import ParamForm
+
+    app = QApplication.instance() or QApplication([])
+    form = ParamForm()
+    try:
+        assert "fs_target" not in form._editors
+    finally:
+        form.deleteLater()
+        app.processEvents()
+
+
 def test_param_form_apply_to_writes_delay_search_fields():
     from PySide6.QtWidgets import QApplication
 

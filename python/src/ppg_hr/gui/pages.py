@@ -181,7 +181,7 @@ _PARAM_GROUPS: list[tuple[str, list[str], str]] = [
     ),
     ("KLMS 参数", ["klms_step_size", "klms_sigma", "klms_epsilon"], "klms"),
     ("Volterra 参数", ["volterra_max_order_vol"], "volterra"),
-    ("重采样 & 滤波", ["fs_target", "max_order"], "misc"),
+    ("重采样 & 滤波", ["max_order"], "misc"),
     ("窗口 & 校准", ["time_start", "time_buffer", "calib_time", "motion_th_scale"], "misc"),
     ("频谱惩罚", ["spec_penalty_enable", "spec_penalty_weight", "spec_penalty_width"], "misc"),
     ("HR 约束（运动路）", ["hr_range_hz", "slew_limit_bpm", "slew_step_bpm"], "misc"),
@@ -190,7 +190,6 @@ _PARAM_GROUPS: list[tuple[str, list[str], str]] = [
 ]
 
 _PARAM_META: dict[str, dict[str, Any]] = {
-    "fs_target": dict(label="目标采样率 (Hz)", kind="int",  lo=10,   hi=500,   step=5),
     "max_order": dict(label="LMS 最大阶数",    kind="int",  lo=1,    hi=64,    step=1),
     "time_start": dict(label="起始时间 (s)",   kind="float", lo=0,   hi=120,   step=0.5, decimals=2),
     "time_buffer": dict(label="末尾缓冲 (s)",  kind="float", lo=0,   hi=60,    step=1,   decimals=1),
