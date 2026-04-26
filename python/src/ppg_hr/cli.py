@@ -21,7 +21,7 @@ from pathlib import Path
 from .core.heart_rate_solver import solve
 from .optimization import BayesConfig, default_search_space, optimise
 from .params import SolverParams, analysis_scope_suffix
-from .visualization import render, render_report_tree
+from .visualization import render
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -135,18 +135,6 @@ def cmd_view(args: argparse.Namespace) -> int:
 def cmd_inspect(args: argparse.Namespace) -> int:
     """Dump default SolverParams as JSON — useful for scripting overrides."""
     print(json.dumps(_jsonable(asdict(SolverParams())), indent=2))
-    return 0
-
-
-def cmd_batch_view(args: argparse.Namespace) -> int:
-    records = render_report_tree(args.root, out_dir=args.out_dir, show=args.show)
-    for record in records:
-        figure = record.artefacts.figure if record.artefacts is not None else ""
-        print(f"{record.status:<12s} {record.report_path} {record.message} {figure}")
-    rendered = sum(1 for record in records if record.status == "rendered")
-    missing = sum(1 for record in records if record.status == "missing_data")
-    skipped = sum(1 for record in records if record.status == "skipped")
-    print(f"summary: rendered={rendered} missing_data={missing} skipped={skipped}")
     return 0
 
 
@@ -286,20 +274,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_view.add_argument("--out-dir", type=Path, default=None)
     p_view.add_argument("--show", action="store_true")
     p_view.set_defaults(func=cmd_view)
-
-    p_batch_view = sub.add_parser(
-        "batch-view",
-        help="Recursively render existing JSON reports without overwriting figures.",
-    )
-    p_batch_view.add_argument("root", type=Path, help="Directory containing JSON reports.")
-    p_batch_view.add_argument(
-        "--out-dir",
-        type=Path,
-        default=Path("figures"),
-        help="Output directory for PDF/SVG/PNG figures and CSV tables.",
-    )
-    p_batch_view.add_argument("--show", action="store_true")
-    p_batch_view.set_defaults(func=cmd_batch_view)
 
     p_inspect = sub.add_parser("inspect-defaults",
                                help="Print default SolverParams as JSON.")

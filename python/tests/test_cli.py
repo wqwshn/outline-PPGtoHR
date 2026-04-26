@@ -110,43 +110,6 @@ def test_view_passes_data_stem_output_dir_and_prefix(
     assert seen["output_prefix"] == "multi_bobi1-full"
 
 
-def test_batch_view_passes_report_root_and_output_dir(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    report_root = tmp_path / "reports"
-    report_root.mkdir()
-    output_root = tmp_path / "figures"
-    seen: dict[str, object] = {}
-
-    def fake_render_report_tree(root, *, out_dir, show):
-        seen["root"] = root
-        seen["out_dir"] = out_dir
-        seen["show"] = show
-        record = type("Record", (), {})()
-        record.report_path = root / "sample-best_params.json"
-        record.data_path = root / "sample.csv"
-        record.ref_path = root / "sample_ref.csv"
-        record.status = "rendered"
-        record.message = "ok"
-        record.artefacts = ViewerArtefacts(figure=out_dir / "sample-hf-best.png")
-        return [record]
-
-    monkeypatch.setattr(cli, "render_report_tree", fake_render_report_tree)
-
-    rc = cli.main([
-        "batch-view",
-        str(report_root),
-        "--out-dir",
-        str(output_root),
-    ])
-
-    assert rc == 0
-    assert seen == {"root": report_root, "out_dir": output_root, "show": False}
-    assert "rendered" in capsys.readouterr().out
-
-
 def test_build_params_analysis_scope_flag() -> None:
     parser = cli.build_parser()
     args = parser.parse_args(["solve", "dummy.csv", "--analysis-scope", "motion"])
