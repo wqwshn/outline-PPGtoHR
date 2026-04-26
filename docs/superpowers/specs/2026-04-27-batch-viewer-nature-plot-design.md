@@ -117,7 +117,10 @@
    - 使用现有测试数据和 JSON 报告运行一次 `render()`。
    - 确认 `figures/*.png` 成功生成。
    - 使用 `skills/publication-plotting/scripts/figure_check.py` 检查 PNG 可读、非空、尺寸合理。
-3. 回归测试：
+3. 人工审阅检查点：
+   - 完成 Nature 单栏图优化后，先生成一张示例 PNG 供用户审阅。
+   - 用户确认图面满足要求后，再继续完成批量 GUI 收尾；若用户提出新增视觉要求，先调整绘图实现和测试。
+4. 回归测试：
    - 如时间允许，运行 `conda run -n ppg-hr python -m pytest -q python/tests`。
 
 ## 风险与处理
@@ -137,4 +140,5 @@
 5. 图中 HF-LMS 是视觉重点，整体配色明亮、柔和、低饱和。
 6. 图例仅包含 `Reference`、`FFT`、`HF-LMS`、`ACC-LMS`。
 7. 图面无长标题，保留全段、静息段、运动段 MAE 简表。
-8. 相关测试通过，或明确记录无法运行的原因。
+8. Nature 单栏图优化完成后，已生成示例 PNG 并经过用户审阅。
+9. 相关测试通过，或明确记录无法运行的原因。
