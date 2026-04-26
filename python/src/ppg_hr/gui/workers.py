@@ -473,7 +473,7 @@ def _build_params(best: dict, base: dict, csv: Path, ref: Path) -> SolverParams:
         motion_th_scale=float(base.get("Motion_Th_Scale", 2.5)),
         spec_penalty_enable=bool(base.get("Spec_Penalty_Enable", 1)),
         spec_penalty_weight=float(base.get("Spec_Penalty_Weight", 0.2)),
-        fs_target=int(best["Fs_Target"]),
+        fs_target=int(best.get("Fs_Target", 25)),
         max_order=int(best["Max_Order"]),
         spec_penalty_width=float(best["Spec_Penalty_Width"]),
         hr_range_hz=float(best["HR_Range_Hz"]),

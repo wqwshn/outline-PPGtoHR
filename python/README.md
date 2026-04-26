@@ -171,13 +171,12 @@ ppg-hr solve <input.csv> [--ref REF] [--out OUT.csv]
 | `input`                                                | 传感器 CSV 路径，或预处理 `.mat` 路径                                |
 | `--ref`                                                | 参考心率 CSV；若同目录存在 `*_ref.csv` 可省略                          |
 | `--out`                                                | 可选；写出 HR 矩阵 CSV                                          |
-| `--fs-target`                                          | 重采样目标采样率（25 / 50 / 100）                                  |
 | `--max-order`                                          | LMS 最大阶数（12 / 16 / 20）                                   |
 | `--time-bias`                                          | 预测时间相对参考的偏移（秒）                                           |
 | `--adaptive-filter`                                    | 自适应滤波算法：`lms`（默认）/ `klms` / `volterra`                   |
-| `--delay-search-mode`                                  | 时延搜索模式：`adaptive`（默认，自适应预扫描）/ `fixed`（旧版固定 `±0.2s`） |
-| `--delay-prefit-max-seconds`                           | adaptive 预扫描使用的最大时延秒数，默认 `0.2`，不会超过旧版物理上限 |
-| `--delay-prefit-windows`                               | adaptive 预扫描最多抽取的代表窗口数，默认 `8` |
+| `--delay-search-mode`                                  | 时延搜索模式：`adaptive`（默认，分级预扫描）/ `fixed`（固定 `±0.8s`） |
+| `--delay-prefit-max-seconds`                           | 分级预扫描最大时延秒数，默认 `0.8`（±0.8s），分级扩窗从 ±0.2s 逐级扩展 |
+| `--delay-prefit-windows`                               | 最高档预扫描最多抽取的代表窗口数，默认 `20` |
 | `--delay-prefit-min-corr`                              | 纳入时延聚合的最低绝对相关性，默认 `0.15` |
 | `--delay-prefit-margin-samples` / `--delay-prefit-min-span-samples` | 自适应 lag 区间的边界余量与最小跨度保护 |
 | `--klms-step-size` / `--klms-sigma` / `--klms-epsilon` | QKLMS 专属参数（仅 `--adaptive-filter=klms` 时生效）               |
@@ -305,7 +304,7 @@ from ppg_hr.core.heart_rate_solver import solve
 params = SolverParams(
     file_name=Path("20260418test_python/multi_tiaosheng1.csv"),
     ref_file=Path("20260418test_python/multi_tiaosheng1_ref.csv"),
-    fs_target=25,        # 与 MATLAB 最优一致
+    fs_target=25,        # 固定 25Hz（默认值，无需显式指定）
     max_order=16,
     smooth_win_len=9,
     time_bias=6.0,

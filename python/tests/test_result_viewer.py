@@ -399,3 +399,67 @@ def test_render_exports_two_png_figures_only(
     assert artefacts.extras["figure_acc"].is_file()
     assert not list((tmp_path / "viewer_out").glob("*.pdf"))
     assert not list((tmp_path / "viewer_out").glob("*.svg"))
+
+
+def test_viewer_accepts_legacy_report_with_fs_target(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Legacy reports with fs_target should replay correctly."""
+    seen_targets: list[int] = []
+
+    def _fake_solve(params):
+        seen_targets.append(params.fs_target)
+        import numpy as np
+        res = type("R", (), {})()
+        res.err_stats = np.zeros((5, 3))
+        res.HR = np.zeros((1, 9))
+        res.T_Pred = np.zeros((1,))
+        res.HR_Ref_Interp = np.zeros((1,))
+        res.motion_threshold = (0.0, 0.0)
+        res.delay_profile = None
+        return res
+
+    monkeypatch.setattr("ppg_hr.visualization.result_viewer.solve", _fake_solve)
+    legacy_report = {
+        "min_err_hf": 1.0,
+        "min_err_acc": 1.0,
+        "best_para_hf": {"fs_target": 100, "max_order": 16},
+        "best_para_acc": {"fs_target": 100, "max_order": 16},
+    }
+    path = tmp_path / "legacy.json"
+    path.write_text(json.dumps(legacy_report), encoding="utf-8")
+    render(path, SolverParams(file_name=tmp_path / "x.csv"), out_dir=tmp_path / "out", show=False)
+    assert seen_targets == [100, 100]
+
+
+def test_viewer_accepts_new_report_without_fs_target(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """New reports without fs_target should use default 25."""
+    seen_targets: list[int] = []
+
+    def _fake_solve(params):
+        seen_targets.append(params.fs_target)
+        import numpy as np
+        res = type("R", (), {})()
+        res.err_stats = np.zeros((5, 3))
+        res.HR = np.zeros((1, 9))
+        res.T_Pred = np.zeros((1,))
+        res.HR_Ref_Interp = np.zeros((1,))
+        res.motion_threshold = (0.0, 0.0)
+        res.delay_profile = None
+        return res
+
+    monkeypatch.setattr("ppg_hr.visualization.result_viewer.solve", _fake_solve)
+    new_report = {
+        "min_err_hf": 1.0,
+        "min_err_acc": 1.0,
+        "best_para_hf": {"max_order": 16},
+        "best_para_acc": {"max_order": 16},
+    }
+    path = tmp_path / "new.json"
+    path.write_text(json.dumps(new_report), encoding="utf-8")
+    render(path, SolverParams(file_name=tmp_path / "x.csv"), out_dir=tmp_path / "out", show=False)
+    assert seen_targets == [25, 25]
