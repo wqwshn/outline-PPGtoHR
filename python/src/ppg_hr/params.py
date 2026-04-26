@@ -35,7 +35,7 @@ class SolverParams:
 
     file_name: str | Path = ""
     ref_file: str | Path | None = None  # required when file_name is a CSV
-    fs_target: int = 100
+    fs_target: int = 25
     max_order: int = 16
 
     time_start: float = 1.0
@@ -76,11 +76,11 @@ class SolverParams:
     # Delay-search prefit controls. ``adaptive`` narrows the PPG-vs-motion
     # lag search per dataset; ``fixed`` preserves the original +/-0.2 s scan.
     delay_search_mode: str = "adaptive"  # one of: "adaptive", "fixed"
-    delay_prefit_max_seconds: float = 0.2
-    delay_prefit_windows: int = 8
+    delay_prefit_max_seconds: float = 0.8
+    delay_prefit_windows: int = 20
     delay_prefit_min_corr: float = 0.15
     delay_prefit_margin_samples: int = 2
-    delay_prefit_min_span_samples: int = 2
+    delay_prefit_min_span_samples: int = 6
 
     # KLMS-specific parameters (only used when adaptive_filter == "klms")
     klms_step_size: float = 0.1

@@ -34,7 +34,6 @@ class SearchSpace:
     strategy.
     """
 
-    fs_target: list[int] | None = field(default_factory=lambda: [25, 50, 100])
     max_order: list[int] | None = field(default_factory=lambda: [12, 16, 20])
     spec_penalty_width: list[float] | None = field(default_factory=lambda: [0.1, 0.2, 0.3])
 

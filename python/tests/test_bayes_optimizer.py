@@ -42,7 +42,7 @@ def test_search_space_decodes_real_values() -> None:
     space = default_search_space()
     idx_map = {name: 0 for name in space.names()}
     decoded = decode(space, idx_map)
-    assert decoded["fs_target"] == 25
+    assert "fs_target" not in decoded
     assert decoded["max_order"] == 12
     assert np.isclose(decoded["hr_range_hz"], 15 / 60.0)
 
@@ -50,7 +50,7 @@ def test_search_space_decodes_real_values() -> None:
 def test_search_space_rejects_out_of_range() -> None:
     space = default_search_space()
     bad = {name: 0 for name in space.names()}
-    bad["fs_target"] = 99
+    bad["max_order"] = 99
     with pytest.raises(IndexError):
         decode(space, bad)
 
@@ -75,7 +75,6 @@ def test_cost_fn_uses_motion_aae_when_analysis_scope_is_motion(
 
     monkeypatch.setattr(bayes_optimizer, "solve", fake_solve)
     space = SearchSpace(
-        fs_target=[100],
         max_order=None,
         spec_penalty_width=None,
         hr_range_hz=None,
@@ -106,8 +105,7 @@ def test_cost_fn_uses_motion_aae_when_analysis_scope_is_motion(
 
 
 def test_search_space_is_customisable() -> None:
-    space = SearchSpace(fs_target=[100], max_order=[16])
-    assert space.options("fs_target") == [100]
+    space = SearchSpace(max_order=[16])
     assert space.options("max_order") == [16]
 
 
@@ -120,7 +118,6 @@ def test_optimise_mode_parallel_matches_serial(base_params: SolverParams) -> Non
     best objective and on the decoded best parameters.
     """
     space = SearchSpace(
-        fs_target=[100],
         max_order=[12, 16],
         spec_penalty_width=[0.2],
         hr_range_hz=[25 / 60],
@@ -152,7 +149,6 @@ def test_optimise_mode_parallel_matches_serial(base_params: SolverParams) -> Non
 
 def test_optimise_mode_returns_valid_result(base_params: SolverParams) -> None:
     space = SearchSpace(
-        fs_target=[100],
         max_order=[16],
         spec_penalty_width=[0.2],
         hr_range_hz=[25 / 60],
@@ -168,13 +164,13 @@ def test_optimise_mode_returns_valid_result(base_params: SolverParams) -> None:
     best_err, best_params, study = optimise_mode(base_params, space, "HF", cfg)
     assert np.isfinite(best_err)
     assert 0 < best_err < 25, f"unreasonable AAE: {best_err}"
-    assert best_params["fs_target"] == 100
+    assert "fs_target" not in best_params
     assert best_params["smooth_win_len"] == 7
     assert len(study.trials) == 2
 
 
 def test_optimise_mode_rejects_unknown_mode(base_params: SolverParams) -> None:
-    space = SearchSpace(fs_target=[100])
+    space = SearchSpace(max_order=[16])
     cfg = BayesConfig(max_iterations=1, num_seed_points=1, num_repeats=1)
     with pytest.raises(ValueError):
         optimise_mode(base_params, space, "XYZ", cfg)
@@ -183,7 +179,6 @@ def test_optimise_mode_rejects_unknown_mode(base_params: SolverParams) -> None:
 def test_optimise_end_to_end(base_params: SolverParams, tmp_path: Path) -> None:
     # Minimal 2-option grid on two knobs, 4 trials per mode — finishes in seconds.
     space = SearchSpace(
-        fs_target=[100],
         max_order=[16],
         spec_penalty_width=[0.2],
         hr_range_hz=[25 / 60],
@@ -247,7 +242,7 @@ def test_default_search_space_lms_unchanged() -> None:
     names = space.names()
     assert "klms_sigma" not in names
     assert "volterra_max_order_vol" not in names
-    assert "fs_target" in names
+    assert "fs_target" not in names
     assert "max_order" in names
 
 
@@ -279,21 +274,23 @@ def test_default_search_space_unknown_raises() -> None:
 
 def test_bayes_result_save_includes_strategy(tmp_path: Path) -> None:
     res = BayesResult(
-        min_err_hf=1.0, best_para_hf={"fs_target": 100},
-        min_err_acc=2.0, best_para_acc={"fs_target": 100},
+        min_err_hf=1.0, best_para_hf={"max_order": 16},
+        min_err_acc=2.0, best_para_acc={"max_order": 16},
         importance_hf=None,
-        search_space={"fs_target": [100]},
+        search_space={"max_order": [12, 16, 20]},
         adaptive_filter="klms",
     )
     p = res.save(tmp_path / "out.json")
     payload = json.loads(p.read_text(encoding="utf-8"))
     assert payload["adaptive_filter"] == "klms"
+    assert "fs_target" not in payload["best_para_hf"]
+    assert "fs_target" not in payload["search_space"]
 
 
 def test_bayes_result_save_includes_delay_search(tmp_path: Path) -> None:
     res = BayesResult(
-        min_err_hf=1.0, best_para_hf={"fs_target": 100},
-        min_err_acc=2.0, best_para_acc={"fs_target": 100},
+        min_err_hf=1.0, best_para_hf={"max_order": 16},
+        min_err_acc=2.0, best_para_acc={"max_order": 16},
         importance_hf=None,
         delay_search={"delay_search_mode": "fixed", "delay_prefit_windows": 5},
     )
