@@ -123,11 +123,12 @@ python -m ppg_hr view \
     --out-dir viewer_out/
 ```
 
-`viewer_out/<数据文件名>/` 下会生成：
+`viewer_out/<数据文件名>-full/` 下会生成：
 
-- `<数据文件名>-figure.png`：上下两个子图（HF 融合 vs 参考、ACC 融合 vs 参考）
-- `<数据文件名>-error_table.csv`：每个时间窗的预测心率与误差
-- `<数据文件名>-param_table.csv`：HF / ACC 最优参数对比表
+- `<数据文件名>-full-hf-best.png`：HF 最优参数重跑图
+- `<数据文件名>-full-acc-best.png`：ACC 最优参数重跑图
+- `<数据文件名>-full-error_table.csv`：误差统计表
+- `<数据文件名>-full-param_table.csv`：HF / ACC 最优参数对比表
 
 ### Step 4 — 与 MATLAB 结果对照（可选）
 
@@ -409,9 +410,9 @@ python -m ppg_hr.gui        # 作为模块启动
 - **对照页补全**：在「MATLAB 对照」页选完 `Best_Params_Result_<scenario>_processed.mat`
 后，会自动把 `<scenario>.csv` 与 `<scenario>_ref.csv` 填到数据区。
 - **图表嵌入 + 落盘**：可视化页既在右侧直接显示渲染好的 PNG，也把
-`<数据文件名>-figure.png` / `<数据文件名>-error_table.csv` /
-`<数据文件名>-param_table.csv` 写到输出目录（留空则放到数据文件旁边的
-`viewer_out/<数据文件名>/`）。
+`<数据文件名>-<分析范围>-hf-best.png` / `<数据文件名>-<分析范围>-acc-best.png` /
+`<数据文件名>-<分析范围>-error_table.csv` / `<数据文件名>-<分析范围>-param_table.csv`
+写到输出目录（留空则放到数据文件旁边的 `viewer_out/<数据文件名>-<分析范围>/`）。
 - **离线测试**：`tests/test_gui_smoke.py` 使用 `QT_QPA_PLATFORM=offscreen`
 做纯构建冒烟测试，CI / 无显示器环境也能跑。
 - **中文字体**：GUI 的所有嵌入图表（Best Err 轨迹、参数重要性柱状图、心率

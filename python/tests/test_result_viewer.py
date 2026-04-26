@@ -227,7 +227,7 @@ def test_render_uses_one_motion_mask_for_both_panels(
     def _fake_solve(params):
         return results.pop(0)
 
-    def _fake_plot_panel(ax, res, label, min_err):
+    def _fake_plot_panel(ax, res, label, min_err, **kwargs):
         plotted_masks.append(res.HR[:, 7].tolist())
 
     monkeypatch.setattr("ppg_hr.visualization.result_viewer.solve", _fake_solve)
@@ -268,15 +268,19 @@ def test_plot_panel_labels_core_methods_with_errors() -> None:
     result_viewer._plot_panel(ax, res, "HF best", 1.111)
 
     labels = ax.get_legend_handles_labels()[1]
-    assert "HF-LMS (AAE=2.35 BPM)" in labels
-    assert "ACC-LMS (AAE=4.57 BPM)" in labels
-    assert "FFT (AAE=6.79 BPM)" in labels
+    assert labels == [
+        "Reference",
+        "Pure FFT (AAE=6.79 BPM)",
+        "HF-LMS (AAE=1.11 BPM)",
+        "ACC-LMS (AAE=1.22 BPM)",
+    ]
 
     lines = {line.get_label(): line for line in ax.lines}
-    hf_line = lines["HF-LMS (AAE=2.35 BPM)"]
-    acc_line = lines["ACC-LMS (AAE=4.57 BPM)"]
-    assert hf_line.get_color().lower() == "#c51b7d"
+    hf_line = lines["HF-LMS (AAE=1.11 BPM)"]
+    acc_line = lines["ACC-LMS (AAE=1.22 BPM)"]
+    assert hf_line.get_color().lower() == "#e07a8a"
     assert hf_line.get_linewidth() > acc_line.get_linewidth()
+    assert "Motion MAE:" in ax.get_title(loc="left")
     plt.close(fig)
 
 
@@ -341,12 +345,15 @@ def test_render_can_prefix_output_files(
         show=False,
     )
 
-    assert artefacts.figure == tmp_path / "viewer_out" / "multi_bobi1" / "multi_bobi1-figure.png"
-    assert artefacts.error_csv == tmp_path / "viewer_out" / "multi_bobi1" / "multi_bobi1-error_table.csv"
-    assert artefacts.param_csv == tmp_path / "viewer_out" / "multi_bobi1" / "multi_bobi1-param_table.csv"
+    out_dir = tmp_path / "viewer_out" / "multi_bobi1"
+    assert artefacts.figure == out_dir / "multi_bobi1-full-hf-best.png"
+    assert artefacts.extras["figure_hf"] == out_dir / "multi_bobi1-full-hf-best.png"
+    assert artefacts.extras["figure_acc"] == out_dir / "multi_bobi1-full-acc-best.png"
+    assert artefacts.error_csv == out_dir / "multi_bobi1-full-error_table.csv"
+    assert artefacts.param_csv == out_dir / "multi_bobi1-full-param_table.csv"
 
 
-def test_render_exports_publication_figure_formats(
+def test_render_exports_two_png_figures_only(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -379,15 +386,16 @@ def test_render_exports_publication_figure_formats(
 
     artefacts = render(
         report,
-        SolverParams(file_name=tmp_path / "multi_bobi1.csv"),
+        SolverParams(file_name=tmp_path / "multi_bobi1.csv", analysis_scope="motion"),
         out_dir=tmp_path / "viewer_out",
         output_prefix="multi_bobi1",
         show=False,
     )
 
-    assert artefacts.figure == tmp_path / "viewer_out" / "multi_bobi1-figure.png"
-    assert artefacts.extras["figure_pdf"] == tmp_path / "viewer_out" / "multi_bobi1-figure.pdf"
-    assert artefacts.extras["figure_svg"] == tmp_path / "viewer_out" / "multi_bobi1-figure.svg"
-    assert artefacts.extras["figure_png"] == artefacts.figure
-    assert artefacts.extras["figure_pdf"].is_file()
-    assert artefacts.extras["figure_svg"].is_file()
+    assert artefacts.figure == tmp_path / "viewer_out" / "multi_bobi1-motion-hf-best.png"
+    assert artefacts.extras["figure_hf"] == artefacts.figure
+    assert artefacts.extras["figure_acc"] == tmp_path / "viewer_out" / "multi_bobi1-motion-acc-best.png"
+    assert artefacts.extras["figure_hf"].is_file()
+    assert artefacts.extras["figure_acc"].is_file()
+    assert not list((tmp_path / "viewer_out").glob("*.pdf"))
+    assert not list((tmp_path / "viewer_out").glob("*.svg"))

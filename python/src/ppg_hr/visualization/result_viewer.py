@@ -5,7 +5,7 @@ Loads a Bayesian-optimisation report (JSON produced by
 ``.mat``), re-runs the solver with the HF-best and ACC-best parameters, and
 produces:
 
-* a two-panel PNG figure matching the MATLAB subplot layout;
+* separate HF-best and ACC-best PNG figures;
 * a CSV detailed-error table (per path × all/rest/motion AAE);
 * a CSV parameter-comparison table (HF-best vs ACC-best).
 
@@ -25,7 +25,7 @@ import numpy as np
 from scipy.io import loadmat
 
 from ..core.heart_rate_solver import SolverResult, solve
-from ..params import SolverParams
+from ..params import SolverParams, analysis_scope_suffix
 
 __all__ = [
     "ViewerArtefacts",
@@ -48,13 +48,11 @@ _PLOT_COLS = {
 }
 
 _PLOT_COLORS = {
-    "reference": "#111111",
-    "hf_lms": "#C51B7D",
-    "acc_lms": "#2C7FB8",
-    "fft": "#737373",
-    "hf_fusion": "#7A0177",
-    "acc_fusion": "#1D91C0",
-    "motion": "#D9D9D9",
+    "reference": "#243447",
+    "hf_lms": "#E07A8A",
+    "acc_lms": "#5BA8C8",
+    "fft": "#7C8794",
+    "motion": "#D9DDE3",
 }
 
 
@@ -254,7 +252,14 @@ def write_param_csv(
 # ---------------------------------------------------------------------------
 
 
-def _plot_panel(ax, res: SolverResult, label: str, min_err: float) -> None:
+def _plot_panel(
+    ax,
+    res: SolverResult,
+    label: str,
+    min_err: float,
+    *,
+    fill_reference_to_t_pred_end: bool = False,
+) -> None:
     HR = res.HR
     t_pred = res.T_Pred
     motion_flag = HR[:, 7] > 0.5
@@ -267,11 +272,20 @@ def _plot_panel(ax, res: SolverResult, label: str, min_err: float) -> None:
         color=_PLOT_COLORS["motion"],
         alpha=0.28,
         edgecolor="none",
-        label="Motion",
     )
+    ref_t = np.asarray(HR[:, 0], dtype=float)
+    ref_y = np.asarray(HR[:, 1], dtype=float) * 60.0
+    if (
+        fill_reference_to_t_pred_end
+        and ref_t.size
+        and t_pred.size
+        and float(t_pred[-1]) > float(ref_t[-1])
+    ):
+        ref_t = np.append(ref_t, float(t_pred[-1]))
+        ref_y = np.append(ref_y, float(ref_y[-1]))
     ax.plot(
-        HR[:, 0],
-        HR[:, 1] * 60.0,
+        ref_t,
+        ref_y,
         color=_PLOT_COLORS["reference"],
         linewidth=1.6,
         label="Reference",
@@ -279,58 +293,43 @@ def _plot_panel(ax, res: SolverResult, label: str, min_err: float) -> None:
     )
     ax.plot(
         t_pred,
-        HR[:, _PLOT_COLS["hf_lms"]] * 60.0,
-        color=_PLOT_COLORS["hf_lms"],
-        linewidth=1.9,
-        label=_method_error_label("HF-LMS", res.err_stats[0, 0]),
-        zorder=4,
-    )
-    ax.plot(
-        t_pred,
-        HR[:, _PLOT_COLS["acc_lms"]] * 60.0,
-        color=_PLOT_COLORS["acc_lms"],
-        linestyle=(0, (3, 1.6)),
-        linewidth=1.25,
-        label=_method_error_label("ACC-LMS", res.err_stats[1, 0]),
-        zorder=3,
-    )
-    ax.plot(
-        t_pred,
         HR[:, _PLOT_COLS["fft"]] * 60.0,
         color=_PLOT_COLORS["fft"],
         linestyle=(0, (1.2, 1.4)),
         linewidth=1.15,
-        label=_method_error_label("FFT", res.err_stats[2, 0]),
+        label=_method_error_label("Pure FFT", res.err_stats[2, 0]),
         zorder=2,
     )
     ax.plot(
         t_pred,
         HR[:, _PLOT_COLS["hf_fusion"]] * 60.0,
-        color=_PLOT_COLORS["hf_fusion"],
+        color=_PLOT_COLORS["hf_lms"],
         marker=".",
         markersize=3.0,
         linestyle="-",
-        linewidth=1.35,
-        label=_method_error_label("HF fusion", res.err_stats[3, 0]),
+        linewidth=1.9,
+        label=_method_error_label("HF-LMS", res.err_stats[3, 0]),
         zorder=4,
     )
     ax.plot(
         t_pred,
         HR[:, _PLOT_COLS["acc_fusion"]] * 60.0,
-        color=_PLOT_COLORS["acc_fusion"],
+        color=_PLOT_COLORS["acc_lms"],
         marker=".",
         markersize=3.0,
         linestyle="-",
         linewidth=1.25,
-        label=_method_error_label("ACC fusion", res.err_stats[4, 0]),
+        label=_method_error_label("ACC-LMS", res.err_stats[4, 0]),
         zorder=3,
     )
 
-    e_fus_hf = res.err_stats[3, 0]
-    e_fus_acc = res.err_stats[4, 0]
+    e_fft = float(res.err_stats[2, 2])
+    e_hf = float(res.err_stats[3, 2])
+    e_acc = float(res.err_stats[4, 2])
+    improvement = _relative_improvement(e_hf, e_acc)
     ax.set_title(
-        f"{label}  target={min_err:.3f} BPM  "
-        f"HF fusion={e_fus_hf:.3f} BPM  ACC fusion={e_fus_acc:.3f} BPM",
+        f"{label}  Motion MAE: HF {e_hf:.2f} / ACC {e_acc:.2f} / FFT {e_fft:.2f} BPM "
+        f"({improvement})",
         loc="left",
     )
     ax.set_ylabel("Heart rate (BPM)")
@@ -343,6 +342,13 @@ def _plot_panel(ax, res: SolverResult, label: str, min_err: float) -> None:
 
 def _method_error_label(name: str, total_aae: float) -> str:
     return f"{name} (AAE={float(total_aae):.2f} BPM)"
+
+
+def _relative_improvement(hf_motion_aae: float, acc_motion_aae: float) -> str:
+    if not np.isfinite(hf_motion_aae) or not np.isfinite(acc_motion_aae) or acc_motion_aae <= 0:
+        return "HF vs ACC n/a"
+    pct = 100.0 * (acc_motion_aae - hf_motion_aae) / acc_motion_aae
+    return f"HF {pct:+.1f}% vs ACC"
 
 
 def _load_publication_script(module_name: str):
@@ -370,8 +376,6 @@ def _apply_publication_style() -> None:
                 _PLOT_COLORS["hf_lms"],
                 _PLOT_COLORS["acc_lms"],
                 _PLOT_COLORS["fft"],
-                _PLOT_COLORS["hf_fusion"],
-                _PLOT_COLORS["acc_fusion"],
             ],
         )
         return
@@ -401,16 +405,12 @@ def _export_publication_figure(fig, output_base: Path) -> list[Path]:
         return export_module.export_figure(
             fig,
             output_base,
-            formats=("pdf", "svg", "png"),
+            formats=("png",),
             dpi=600,
         )
 
     output_base.parent.mkdir(parents=True, exist_ok=True)
-    paths = [
-        output_base.with_suffix(".pdf"),
-        output_base.with_suffix(".svg"),
-        output_base.with_suffix(".png"),
-    ]
+    paths = [output_base.with_suffix(".png")]
     for path in paths:
         kwargs = {"bbox_inches": "tight", "pad_inches": 0.02}
         if path.suffix.lower() == ".png":
@@ -438,11 +438,11 @@ def render(
         are applied as overrides (``file_name``, ``ref_file`` and LMS/bandpass
         defaults are inherited from ``base_params``).
     out_dir:
-        Target directory for ``figure.png``, ``error_table.csv`` and
+        Target directory for ``hf-best.png``, ``acc-best.png``, ``error_table.csv`` and
         ``param_table.csv``. Defaults to the report's directory.
     output_prefix:
         Optional dash-style prefix for all emitted files, e.g.
-        ``multi_bobi1`` writes ``multi_bobi1-figure.png``.
+        ``multi_bobi1`` writes ``multi_bobi1-full-hf-best.png``.
     show:
         When ``True`` and a display is available, calls ``plt.show()``.
     """
@@ -485,18 +485,42 @@ def render(
     min_err_hf = float(report.get("min_err_hf", res_hf.err_stats[3, 0]))
     min_err_acc = float(report.get("min_err_acc", res_acc.err_stats[4, 0]))
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(7.2, 5.0), sharex=True)
-    _plot_panel(ax1, res_hf, "A  HF fusion best", min_err_hf)
-    _plot_panel(ax2, res_acc, "B  ACC fusion best", min_err_acc)
-    ax2.set_xlabel("Time (s)")
-    fig.tight_layout()
+    output_prefix = _scope_output_prefix(output_prefix, base_params.analysis_scope)
+    fill_ref = analysis_scope_suffix(base_params.analysis_scope) == "motion"
 
-    fig_base = out_dir / _viewer_name("figure", output_prefix)
-    figure_paths = _export_publication_figure(fig, fig_base)
-    fig_path = fig_base.with_suffix(".png")
+    fig_hf, ax_hf = plt.subplots(figsize=(7.2, 2.8))
+    _plot_panel(
+        ax_hf,
+        res_hf,
+        "HF best",
+        min_err_hf,
+        fill_reference_to_t_pred_end=fill_ref,
+    )
+    ax_hf.set_xlabel("Time (s)")
+    fig_hf.tight_layout()
+    hf_base = out_dir / _viewer_name("hf-best", output_prefix)
+    hf_paths = _export_publication_figure(fig_hf, hf_base)
+    hf_path = hf_base.with_suffix(".png")
     if show:
         plt.show()
-    plt.close(fig)
+    plt.close(fig_hf)
+
+    fig_acc, ax_acc = plt.subplots(figsize=(7.2, 2.8))
+    _plot_panel(
+        ax_acc,
+        res_acc,
+        "ACC best",
+        min_err_acc,
+        fill_reference_to_t_pred_end=fill_ref,
+    )
+    ax_acc.set_xlabel("Time (s)")
+    fig_acc.tight_layout()
+    acc_base = out_dir / _viewer_name("acc-best", output_prefix)
+    acc_paths = _export_publication_figure(fig_acc, acc_base)
+    acc_path = acc_base.with_suffix(".png")
+    if show:
+        plt.show()
+    plt.close(fig_acc)
 
     error_csv = write_error_csv(
         out_dir / _viewer_name("error_table.csv", output_prefix),
@@ -509,12 +533,20 @@ def render(
     )
 
     return ViewerArtefacts(
-        figure=fig_path,
+        figure=hf_path,
         error_csv=error_csv,
         param_csv=param_csv,
         extras={
-            f"figure_{path.suffix.lower().lstrip('.')}": path
-            for path in figure_paths
+            "figure_hf": hf_path,
+            "figure_acc": acc_path,
+            **{
+                f"figure_hf_{path.suffix.lower().lstrip('.')}": path
+                for path in hf_paths
+            },
+            **{
+                f"figure_acc_{path.suffix.lower().lstrip('.')}": path
+                for path in acc_paths
+            },
         },
     )
 
@@ -523,6 +555,16 @@ def _viewer_name(base_name: str, output_prefix: str | None) -> str:
     if not output_prefix:
         return base_name
     return f"{output_prefix}-{base_name}"
+
+
+def _scope_output_prefix(output_prefix: str | None, analysis_scope: str) -> str | None:
+    suffix = analysis_scope_suffix(analysis_scope)
+    if not output_prefix:
+        return suffix
+    for known in ("full", "motion"):
+        if output_prefix.endswith(f"-{known}"):
+            return output_prefix
+    return f"{output_prefix}-{suffix}"
 
 
 def _align_motion_mask(source: SolverResult, target: SolverResult) -> None:
