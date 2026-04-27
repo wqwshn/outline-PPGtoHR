@@ -182,6 +182,7 @@ ppg-hr solve <input.csv> [--ref REF] [--out OUT.csv]
 | `--max-order`                                          | LMS 最大阶数（12 / 16 / 20）                                   |
 | `--time-bias`                                          | 预测时间相对参考的偏移（秒）                                           |
 | `--adaptive-filter`                                    | 自适应滤波算法：`lms`（默认）/ `klms` / `volterra`                   |
+| `--num-cascade-hf`                                     | HF 热膜级联通道数：`2`（默认，`Ut1/Ut2`）/ `4`（`Ut1/Ut2/Uc1/Uc2`） |
 | `--delay-search-mode`                                  | 时延搜索模式：`adaptive`（默认，分级预扫描）/ `fixed`（固定 `±0.8s`） |
 | `--delay-prefit-max-seconds`                           | 分级预扫描最大时延秒数，默认 `0.8`（±0.8s），分级扩窗从 ±0.2s 逐级扩展 |
 | `--delay-prefit-windows`                               | 最高档预扫描最多抽取的代表窗口数，默认 `20` |
@@ -272,6 +273,25 @@ python -m ppg_hr optimise \
     --ref 20260418test_python/multi_tiaosheng1_ref.csv \
     --adaptive-filter volterra \
     --out reports/volterra_tiaosheng1.json
+```
+
+### HF 级联通道数（`--num-cascade-hf`）
+
+热膜 HF 自适应滤波支持两种级联通道组合：
+
+| 设置 | 信号 | 适用场景 |
+| --- | --- | --- |
+| `2` | `Ut1/Ut2` 桥顶信号 | 默认设置，兼容历史结果和旧 JSON 报告 |
+| `4` | `Ut1/Ut2/Uc1/Uc2` 桥顶+桥中信号 | 新热膜 4 路级联方案 |
+
+GUI 的单次求解、贝叶斯优化、批量全流程和报告复跑页面均提供“HF级联通道数”选项。旧 JSON 报告没有 `num_cascade_hf` 字段时按 `2` 路解释，不需要重新优化；新报告会写入 `num_cascade_hf`，复跑时自动使用对应通道数。
+
+CLI 示例：
+
+```bash
+python -m ppg_hr solve sample.csv --ref sample_ref.csv --num-cascade-hf 4
+python -m ppg_hr optimise sample.csv --ref sample_ref.csv --num-cascade-hf 4 --out sample-hf4.json
+python -m ppg_hr view sample.csv --ref sample_ref.csv --report sample-hf4.json
 ```
 
 ### 自适应时延搜索（`--delay-search-mode`）
