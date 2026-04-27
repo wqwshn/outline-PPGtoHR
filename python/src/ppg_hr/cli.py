@@ -4,7 +4,7 @@ Three sub-commands mirror the three MATLAB scripts kept after the refactor:
 
 * ``solve``     — run the heart-rate solver on one sensor CSV.
 * ``optimise``  — multi-restart Bayesian search over the solver parameters.
-* ``view``      — re-run solver on the HF/ACC optima and emit figure + CSVs.
+* ``view``      — re-run solver on the HF/ACC optima and emit result-analysis files.
 
 All three read their sensor/ground-truth paths from a simple pair:
 ``<file>.csv`` and either an explicit ``--ref`` or a sibling ``<file>_ref.csv``.
@@ -130,6 +130,7 @@ def cmd_view(args: argparse.Namespace) -> int:
     print(f"figure    → {artefacts.figure}")
     print(f"error csv → {artefacts.error_csv}")
     print(f"param csv → {artefacts.param_csv}")
+    print(f"hr csv    → {artefacts.hr_csv}")
     return 0
 
 
@@ -279,7 +280,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_opt.add_argument("--quiet", action="store_true")
     p_opt.set_defaults(func=cmd_optimise)
 
-    p_view = sub.add_parser("view", help="Re-run + visualise a Bayes report.")
+    p_view = sub.add_parser("view", help="Run result analysis for a Bayes report.")
     _add_common_io_args(p_view)
     p_view.add_argument("--report", type=Path, required=True,
                         help="Path to JSON or .mat report.")

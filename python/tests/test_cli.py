@@ -76,6 +76,7 @@ def test_parser_no_longer_accepts_fs_target() -> None:
 def test_view_passes_data_stem_output_dir_and_prefix(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     report = tmp_path / "report.json"
     report.write_text("{}", encoding="utf-8")
@@ -92,6 +93,7 @@ def test_view_passes_data_stem_output_dir_and_prefix(
             figure=Path(out_dir) / f"{output_prefix}-hf-best.png",
             error_csv=Path(out_dir) / f"{output_prefix}-error_table.csv",
             param_csv=Path(out_dir) / f"{output_prefix}-param_table.csv",
+            hr_csv=Path(out_dir) / f"{output_prefix}-hr_results.csv",
         )
 
     monkeypatch.setattr(cli, "render", fake_render)
@@ -108,6 +110,7 @@ def test_view_passes_data_stem_output_dir_and_prefix(
     assert rc == 0
     assert seen["out_dir"] == output_root / "multi_bobi1-full"
     assert seen["output_prefix"] == "multi_bobi1-full"
+    assert "hr csv" in capsys.readouterr().out
 
 
 def test_build_params_analysis_scope_flag() -> None:
