@@ -57,6 +57,12 @@ _PLOT_COLORS = {
 
 _FIG_SIZE_NATURE_SINGLE = (3.54, 2.60)
 
+_ALGO_SHORT: dict[str, str] = {
+    "lms": "LMS",
+    "klms": "KLMS",
+    "volterra": "VLMS",
+}
+
 
 @dataclass
 class ViewerArtefacts:
@@ -262,7 +268,12 @@ def _plot_panel(
     *,
     fill_reference_to_t_pred_end: bool = False,
     legend_loc: str = "upper right",
+    adaptive_filter: str = "lms",
 ) -> None:
+    short = _ALGO_SHORT.get(adaptive_filter, "LMS")
+    hf_label = f"HF-{short}"
+    acc_label = f"ACC-{short}"
+
     HR = res.HR
     t_pred = res.T_Pred
     motion_flag = HR[:, 7] > 0.5
@@ -311,7 +322,7 @@ def _plot_panel(
         markersize=2.0,
         linestyle="-",
         linewidth=1.45,
-        label="HF-LMS",
+        label=hf_label,
         zorder=4,
     )
     ax.plot(
@@ -322,28 +333,11 @@ def _plot_panel(
         markersize=2.0,
         linestyle="-",
         linewidth=1.05,
-        label="ACC-LMS",
+        label=acc_label,
         zorder=3,
     )
 
-    ax.text(
-        0.02,
-        0.97,
-        _mae_table_text(res.err_stats),
-        transform=ax.transAxes,
-        ha="left",
-        va="top",
-        fontsize=6,
-        family="Arial",
-        color="#333333",
-        bbox={
-            "boxstyle": "round,pad=0.18",
-            "facecolor": "white",
-            "edgecolor": "#D6D6D6",
-            "linewidth": 0.35,
-            "alpha": 0.84,
-        },
-    )
+    _draw_mae_table(ax, res.err_stats, adaptive_filter=adaptive_filter)
     ax.set_title("")
     ax.set_ylabel("Heart rate (BPM)")
     ax.set_ylim(
@@ -366,22 +360,59 @@ def _plot_panel(
     )
 
 
-def _mae_table_text(err_stats: np.ndarray) -> str:
-    name_w = len("MAE (BPM)")
-    col_w = 7
-    rows = (
-        ("HF-LMS", err_stats[3]),
-        ("ACC-LMS", err_stats[4]),
+def _draw_mae_table(
+    ax,
+    err_stats: np.ndarray,
+    *,
+    adaptive_filter: str = "lms",
+) -> None:
+    """Draw MAE table as individually positioned text cells for true center alignment."""
+    short = _ALGO_SHORT.get(adaptive_filter, "LMS")
+    rows = [
+        (f"HF-{short}", err_stats[3]),
+        (f"ACC-{short}", err_stats[4]),
         ("FFT", err_stats[2]),
+    ]
+    # Column x-centres and top-left origin in axes coordinates.
+    x0 = 0.02
+    x_cols = [0.10, 0.22, 0.32]
+    y_top = 0.97
+    line_h = 0.045
+    _kw = dict(
+        transform=ax.transAxes,
+        fontsize=6,
+        family="Arial",
+        color="#333333",
+        va="top",
     )
-    lines = [f"{'MAE (BPM)':<{name_w}} {'all':^{col_w}} {'motion':^{col_w}}"]
-    for name, values in rows:
-        all_val = float(values[0])
-        motion_val = float(values[2])
-        lines.append(
-            f"{name:<{name_w}} {all_val:^{col_w}.1f} {motion_val:^{col_w}.1f}"
-        )
-    return "\n".join(lines)
+    # Background box
+    ax.text(
+        x0,
+        y_top,
+        "",
+        transform=ax.transAxes,
+        fontsize=1,
+        va="top",
+        bbox={
+            "boxstyle": f"round,pad=0.18",
+            "facecolor": "white",
+            "edgecolor": "#D6D6D6",
+            "linewidth": 0.35,
+            "alpha": 0.84,
+        },
+    )
+    # Header row
+    y = y_top - 0.012
+    for x, txt in zip(x_cols, ["MAE (BPM)", "all", "motion"]):
+        ax.text(x, y, txt, ha="center", fontweight="bold", **_kw)
+    # Data rows
+    for row_idx, (name, values) in enumerate(rows, start=1):
+        y = y_top - 0.012 - row_idx * line_h
+        for x, txt in zip(
+            x_cols,
+            [name, f"{float(values[0]):.1f}", f"{float(values[2]):.1f}"],
+        ):
+            ax.text(x, y, txt, ha="center", **_kw)
 
 
 def _heart_rate_ylim(*series: np.ndarray) -> tuple[float, float]:
@@ -573,6 +604,7 @@ def render(
         res_hf,
         fill_reference_to_t_pred_end=fill_ref,
         legend_loc=legend_loc,
+        adaptive_filter=strategy,
     )
     ax_hf.set_xlabel("Time (s)")
     fig_hf.tight_layout(pad=0.35)
@@ -588,6 +620,7 @@ def render(
         res_acc,
         fill_reference_to_t_pred_end=fill_ref,
         legend_loc=legend_loc,
+        adaptive_filter=strategy,
     )
     ax_acc.set_xlabel("Time (s)")
     fig_acc.tight_layout(pad=0.35)

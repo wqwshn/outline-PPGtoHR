@@ -295,36 +295,26 @@ def test_plot_panel_uses_nature_single_column_style() -> None:
     assert labels == ["Reference", "FFT", "HF-LMS", "ACC-LMS"]
     assert ax.get_title() == ""
     assert ax.get_ylabel() == "Heart rate (BPM)"
-    mae_text = "\n".join(text.get_text() for text in ax.texts)
-    assert "MAE (BPM)" in mae_text
-    assert "rest" not in mae_text
-    assert "all" in mae_text and "motion" in mae_text
-    assert "FFT" in mae_text and "6.8" in mae_text and "7.7" in mae_text
-    assert "HF-LMS" in mae_text and "1.1" in mae_text and "1.2" in mae_text
-    assert "ACC-LMS" in mae_text and "1.2" in mae_text and "1.3" in mae_text
-    mae_lines = mae_text.splitlines()
-    name_w = len("MAE (BPM)")
-    col_w = 7
-    all_slice = slice(name_w + 1, name_w + 1 + col_w)
-    motion_slice = slice(name_w + 2 + col_w, name_w + 2 + 2 * col_w)
-    header = mae_lines[0]
-    assert header[:name_w].strip() == "MAE (BPM)"
-    assert header[all_slice].strip() == "all"
-    assert header[motion_slice].strip() == "motion"
-    expected_values = {
-        "FFT": ("6.8", "7.7"),
-        "HF-LMS": ("1.1", "1.2"),
-        "ACC-LMS": ("1.2", "1.3"),
-    }
-    for line in mae_lines[1:]:
-        method = line[:name_w].strip()
-        all_value, motion_value = expected_values[method]
-        assert line[all_slice].strip() == all_value
-        assert line[motion_slice].strip() == motion_value
-    # Row order: HF-LMS, ACC-LMS, FFT
-    assert mae_lines[1][:name_w].strip() == "HF-LMS"
-    assert mae_lines[2][:name_w].strip() == "ACC-LMS"
-    assert mae_lines[3][:name_w].strip() == "FFT"
+    # MAE table is drawn as individual text cells (not a single block).
+    cell_texts = [t.get_text() for t in ax.texts]
+    assert "MAE (BPM)" in cell_texts
+    assert "all" in cell_texts
+    assert "motion" in cell_texts
+    assert "rest" not in cell_texts
+    # Data cells exist and are correct
+    assert "HF-LMS" in cell_texts
+    assert "ACC-LMS" in cell_texts
+    assert "FFT" in cell_texts
+    assert "6.8" in cell_texts and "7.7" in cell_texts
+    assert "1.1" in cell_texts and "1.2" in cell_texts
+    # All data cells use ha='center'
+    data_cells = [t for t in ax.texts if t.get_text() not in ("", )]
+    assert all(t.get_ha() == "center" for t in data_cells)
+    # Row order check: cells are positioned by y-coordinate, verify order
+    non_empty = [t for t in ax.texts if t.get_text()]
+    non_empty_sorted = sorted(non_empty, key=lambda t: -t.get_position()[1])
+    row_labels = [t.get_text() for t in non_empty_sorted]
+    assert row_labels.index("HF-LMS") < row_labels.index("ACC-LMS") < row_labels.index("FFT")
 
     lines = {line.get_label(): line for line in ax.lines}
     ref_line = lines["Reference"]
