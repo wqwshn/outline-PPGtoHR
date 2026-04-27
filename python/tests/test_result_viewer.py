@@ -223,12 +223,14 @@ def test_render_uses_one_motion_mask_for_both_panels(
 
     results = [hf, acc]
     plotted_masks: list[list[float]] = []
+    legend_locs: list[str] = []
 
     def _fake_solve(params):
         return results.pop(0)
 
     def _fake_plot_panel(ax, res, **kwargs):
         plotted_masks.append(res.HR[:, 7].tolist())
+        legend_locs.append(kwargs["legend_loc"])
 
     monkeypatch.setattr("ppg_hr.visualization.result_viewer.solve", _fake_solve)
     monkeypatch.setattr("ppg_hr.visualization.result_viewer._plot_panel", _fake_plot_panel)
@@ -241,6 +243,19 @@ def test_render_uses_one_motion_mask_for_both_panels(
     )
 
     assert plotted_masks == [[0, 1, 1, 0, 0], [0, 1, 1, 0, 0]]
+    assert legend_locs == ["upper right", "upper right"]
+
+    plotted_masks.clear()
+    legend_locs.clear()
+    results = [hf, acc]
+    render(
+        report_path,
+        SolverParams(file_name=tmp_path / "multi.csv", analysis_scope="motion"),
+        out_dir=tmp_path / "out-motion",
+        show=False,
+    )
+    assert plotted_masks == [[0, 1, 1, 0, 0], [0, 1, 1, 0, 0]]
+    assert legend_locs == ["lower right", "lower right"]
 
 
 def test_plot_panel_uses_nature_single_column_style() -> None:
@@ -269,7 +284,12 @@ def test_plot_panel_uses_nature_single_column_style() -> None:
     res.T_Pred = res.HR[:, 0]
 
     fig, ax = plt.subplots()
-    result_viewer._plot_panel(ax, res, fill_reference_to_t_pred_end=False)
+    result_viewer._plot_panel(
+        ax,
+        res,
+        fill_reference_to_t_pred_end=False,
+        legend_loc="lower right",
+    )
 
     labels = ax.get_legend_handles_labels()[1]
     assert labels == ["Reference", "FFT", "HF-LMS", "ACC-LMS"]
@@ -277,10 +297,30 @@ def test_plot_panel_uses_nature_single_column_style() -> None:
     assert ax.get_ylabel() == "Heart rate (BPM)"
     mae_text = "\n".join(text.get_text() for text in ax.texts)
     assert "MAE (BPM)" in mae_text
-    assert "all" in mae_text and "rest" in mae_text and "motion" in mae_text
-    assert "FFT" in mae_text and "6.8" in mae_text and "5.4" in mae_text and "7.7" in mae_text
-    assert "HF-LMS" in mae_text and "1.1" in mae_text and "1.0" in mae_text and "1.2" in mae_text
-    assert "ACC-LMS" in mae_text and "1.2" in mae_text and "1.1" in mae_text and "1.3" in mae_text
+    assert "rest" not in mae_text
+    assert "all" in mae_text and "motion" in mae_text
+    assert "FFT" in mae_text and "6.8" in mae_text and "7.7" in mae_text
+    assert "HF-LMS" in mae_text and "1.1" in mae_text and "1.2" in mae_text
+    assert "ACC-LMS" in mae_text and "1.2" in mae_text and "1.3" in mae_text
+    mae_lines = mae_text.splitlines()
+    name_w = len("MAE (BPM)")
+    col_w = 7
+    all_slice = slice(name_w + 1, name_w + 1 + col_w)
+    motion_slice = slice(name_w + 2 + col_w, name_w + 2 + 2 * col_w)
+    header = mae_lines[0]
+    assert header[:name_w].strip() == "MAE (BPM)"
+    assert header[all_slice].strip() == "all"
+    assert header[motion_slice].strip() == "motion"
+    expected_values = {
+        "FFT": ("6.8", "7.7"),
+        "HF-LMS": ("1.1", "1.2"),
+        "ACC-LMS": ("1.2", "1.3"),
+    }
+    for line in mae_lines[1:]:
+        method = line[:name_w].strip()
+        all_value, motion_value = expected_values[method]
+        assert line[all_slice].strip() == all_value
+        assert line[motion_slice].strip() == motion_value
 
     lines = {line.get_label(): line for line in ax.lines}
     ref_line = lines["Reference"]
@@ -297,8 +337,12 @@ def test_plot_panel_uses_nature_single_column_style() -> None:
     assert acc_line.get_color().lower() == "#5da9c9"
     assert fft_line.get_color().lower() == "#a8adb3"
     assert fft_line.get_linestyle() != "-"
+    legend = ax.get_legend()
+    assert legend is not None
+    assert legend._loc == 4  # lower right
+    assert legend._ncols == 1
     assert ax.collections
-    assert ax.collections[0].get_alpha() == pytest.approx(0.16)
+    assert ax.collections[0].get_alpha() == pytest.approx(0.24)
     y_gridlines = ax.get_ygridlines()
     x_gridlines = ax.get_xgridlines()
     assert y_gridlines

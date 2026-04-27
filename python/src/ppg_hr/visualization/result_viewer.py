@@ -261,6 +261,7 @@ def _plot_panel(
     res: SolverResult,
     *,
     fill_reference_to_t_pred_end: bool = False,
+    legend_loc: str = "upper right",
 ) -> None:
     HR = res.HR
     t_pred = res.T_Pred
@@ -272,7 +273,7 @@ def _plot_panel(
         where=motion_flag,
         transform=ax.get_xaxis_transform(),
         color=_PLOT_COLORS["motion"],
-        alpha=0.16,
+        alpha=0.24,
         edgecolor="none",
     )
     ref_t = np.asarray(HR[:, 0], dtype=float)
@@ -357,19 +358,23 @@ def _plot_panel(
     ax.grid(True, axis="y", alpha=0.12, linewidth=0.45)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    ax.legend(loc="upper right", fontsize=6, ncol=2, frameon=False)
+    ax.legend(loc=legend_loc, fontsize=6, ncol=1, frameon=False)
 
 
 def _mae_table_text(err_stats: np.ndarray) -> str:
+    name_w = len("MAE (BPM)")
+    col_w = 7
     rows = (
         ("FFT", err_stats[2]),
         ("HF-LMS", err_stats[3]),
         ("ACC-LMS", err_stats[4]),
     )
-    lines = ["MAE (BPM)", "          all  rest motion"]
+    lines = [f"{'MAE (BPM)':<{name_w}} {'all':^{col_w}} {'motion':^{col_w}}"]
     for name, values in rows:
+        all_val = float(values[0])
+        motion_val = float(values[2])
         lines.append(
-            f"{name:<7} {float(values[0]):>4.1f} {float(values[1]):>5.1f} {float(values[2]):>6.1f}"
+            f"{name:<{name_w}} {all_val:^{col_w}.1f} {motion_val:^{col_w}.1f}"
         )
     return "\n".join(lines)
 
@@ -555,12 +560,14 @@ def render(
 
     output_prefix = _scope_output_prefix(output_prefix, base_params.analysis_scope)
     fill_ref = analysis_scope_suffix(base_params.analysis_scope) == "motion"
+    legend_loc = "lower right" if fill_ref else "upper right"
 
     fig_hf, ax_hf = _plt_subplots(figsize=_FIG_SIZE_NATURE_SINGLE)
     _plot_panel(
         ax_hf,
         res_hf,
         fill_reference_to_t_pred_end=fill_ref,
+        legend_loc=legend_loc,
     )
     ax_hf.set_xlabel("Time (s)")
     fig_hf.tight_layout(pad=0.35)
@@ -575,6 +582,7 @@ def render(
         ax_acc,
         res_acc,
         fill_reference_to_t_pred_end=fill_ref,
+        legend_loc=legend_loc,
     )
     ax_acc.set_xlabel("Time (s)")
     fig_acc.tight_layout(pad=0.35)

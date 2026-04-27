@@ -1,34 +1,34 @@
-# Batch Viewer Nature Plot Implementation Plan
+﻿# Batch Viewer Nature Plot Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 为 Python GUI 增加递归批量可视化，并把心率估计对比图改成 Nature 单栏 PNG 论文图。
-
-**Architecture:** 保持 `render()` 作为唯一重跑 solver 和出图入口；`result_viewer.py` 负责单报告渲染、论文风格和不覆盖命名；新增 `batch_viewer.py` 负责批量扫描、报告到数据文件匹配和逐项结果汇总；GUI `ViewPage` 只增加“单次 / 批量”Tab 和后台 worker。完成绘图优化后先生成示例 PNG，等待用户审阅，再继续批量 GUI 收尾。
-
-**Tech Stack:** Python 3.10+、Matplotlib、SciencePlots/no-latex fallback、PySide6、pytest、项目内 `skills/publication-plotting`。
-
+**Goal:** 涓?Python GUI 澧炲姞閫掑綊鎵归噺鍙鍖栵紝骞舵妸蹇冪巼浼拌瀵规瘮鍥炬敼鎴?Nature 鍗曟爮 PNG 璁烘枃鍥俱€?
+**Architecture:** 淇濇寔 `render()` 浣滀负鍞竴閲嶈窇 solver 鍜屽嚭鍥惧叆鍙ｏ紱`result_viewer.py` 璐熻矗鍗曟姤鍛婃覆鏌撱€佽鏂囬鏍煎拰涓嶈鐩栧懡鍚嶏紱鏂板 `batch_viewer.py` 璐熻矗鎵归噺鎵弿銆佹姤鍛婂埌鏁版嵁鏂囦欢鍖归厤鍜岄€愰」缁撴灉姹囨€伙紱GUI `ViewPage` 鍙鍔犫€滃崟娆?/ 鎵归噺鈥漈ab 鍜屽悗鍙?worker銆傚畬鎴愮粯鍥句紭鍖栧悗鍏堢敓鎴愮ず渚?PNG锛岀瓑寰呯敤鎴峰闃咃紝鍐嶇户缁壒閲?GUI 鏀跺熬銆?
+**Tech Stack:** Python 3.10+銆丮atplotlib銆丼ciencePlots/no-latex fallback銆丳ySide6銆乸ytest銆侀」鐩唴 `skills/publication-plotting`銆?
 ---
+
+## User Feedback Update 2026-04-27
+
+This section overrides older references in the plan that mention `figures/` as the default output directory.
+
+- Default visualization output is the directory containing the selected `.json` report.
+- `figures/` is allowed only for the manual review example when explicitly passed with `--out-dir figures`.
+- Batch GUI default output should autofill to the selected report root directory, not `figures/`.
+- The MAE table should show only `all` and `motion`, not `rest`.
+- The motion background should be more visible than the first sample.
+- The legend should be one vertical column. Use upper right for `full` analysis scope and lower right for `motion` analysis scope.
 
 ## File Structure
 
 - Modify: `python/src/ppg_hr/visualization/result_viewer.py`
-  - Nature 单栏样式、图例、误差矩阵、y 轴范围、PNG-only 600 dpi 导出、不覆盖命名。
-- Create: `python/src/ppg_hr/visualization/batch_viewer.py`
-  - `BatchViewItem`、`BatchViewResult`、`discover_report_jobs()`、`render_report_batch()`。
-- Modify: `python/src/ppg_hr/visualization/__init__.py`
-  - 导出批量可视化 API。
-- Modify: `python/src/ppg_hr/gui/workers.py`
-  - 增加 `BatchViewWorker`，串行调用批量 API，发出日志/进度/结果。
-- Modify: `python/src/ppg_hr/gui/pages.py`
-  - `ViewPage` 增加 `QTabWidget`，保留单次 Tab，新增批量 Tab。
-- Modify: `python/tests/test_result_viewer.py`
-  - 覆盖 Nature 单栏绘图、不覆盖命名、PNG-only 导出。
-- Create: `python/tests/test_batch_viewer.py`
-  - 覆盖 JSON 发现、数据匹配、缺失提示、不覆盖批量调用。
-- Modify: `python/tests/test_gui_smoke.py`
-  - 覆盖 ViewPage 批量 Tab 默认值、自动填充和控件存在。
-
+  - Nature 鍗曟爮鏍峰紡銆佸浘渚嬨€佽宸煩闃点€亂 杞磋寖鍥淬€丳NG-only 600 dpi 瀵煎嚭銆佷笉瑕嗙洊鍛藉悕銆?- Create: `python/src/ppg_hr/visualization/batch_viewer.py`
+  - `BatchViewItem`銆乣BatchViewResult`銆乣discover_report_jobs()`銆乣render_report_batch()`銆?- Modify: `python/src/ppg_hr/visualization/__init__.py`
+  - 瀵煎嚭鎵归噺鍙鍖?API銆?- Modify: `python/src/ppg_hr/gui/workers.py`
+  - 澧炲姞 `BatchViewWorker`锛屼覆琛岃皟鐢ㄦ壒閲?API锛屽彂鍑烘棩蹇?杩涘害/缁撴灉銆?- Modify: `python/src/ppg_hr/gui/pages.py`
+  - `ViewPage` 澧炲姞 `QTabWidget`锛屼繚鐣欏崟娆?Tab锛屾柊澧炴壒閲?Tab銆?- Modify: `python/tests/test_result_viewer.py`
+  - 瑕嗙洊 Nature 鍗曟爮缁樺浘銆佷笉瑕嗙洊鍛藉悕銆丳NG-only 瀵煎嚭銆?- Create: `python/tests/test_batch_viewer.py`
+  - 瑕嗙洊 JSON 鍙戠幇銆佹暟鎹尮閰嶃€佺己澶辨彁绀恒€佷笉瑕嗙洊鎵归噺璋冪敤銆?- Modify: `python/tests/test_gui_smoke.py`
+  - 瑕嗙洊 ViewPage 鎵归噺 Tab 榛樿鍊笺€佽嚜鍔ㄥ～鍏呭拰鎺т欢瀛樺湪銆?
 ---
 
 ### Task 1: Result Viewer Tests For Nature Plot And Unique Output
@@ -273,10 +273,12 @@ def _mae_table_text(res: SolverResult) -> str:
         ("HF-LMS", res.err_stats[3]),
         ("ACC-LMS", res.err_stats[4]),
     ]
-    lines = ["MAE (BPM)       all  rest  motion"]
+    name_w = len("MAE (BPM)")
+    col_w = 7
+    lines = [f"{'MAE (BPM)':<{name_w}} {'all':^{col_w}} {'motion':^{col_w}}"]
     for name, vals in rows:
         lines.append(
-            f"{name:<8s} {float(vals[0]):>5.2f} {float(vals[1]):>5.2f} {float(vals[2]):>6.2f}"
+            f"{name:<{name_w}} {float(vals[0]):^{col_w}.1f} {float(vals[2]):^{col_w}.1f}"
         )
     return "\n".join(lines)
 
@@ -378,7 +380,7 @@ Commit:
 
 ```powershell
 git add -- python/src/ppg_hr/visualization/result_viewer.py python/tests/test_result_viewer.py
-git commit -m "feat: 优化心率对比图为Nature单栏PNG"
+git commit -m "feat: 浼樺寲蹇冪巼瀵规瘮鍥句负Nature鍗曟爮PNG"
 ```
 
 ---
@@ -399,7 +401,7 @@ Get-ChildItem -Recurse -Filter 'Best_Params_Result_*.json' | Select-Object -Firs
 
 Expected: at least one existing JSON report. If none exists, use a test fixture or create a minimal report from `python/tests/test_result_viewer.py` fake JSON and existing dataset.
 
-- [ ] **Step 2: Generate one example PNG into `figures/`**
+- [ ] **Step 2: Generate one example PNG into `figures/` for review only**
 
 Use the real report/data pair. Example command pattern:
 
@@ -411,14 +413,14 @@ conda run -n ppg-hr python -m ppg_hr.cli view `
   --out-dir figures
 ```
 
-Expected: command logs `figure => ...png`, `error csv => ...csv`, `param csv => ...csv`; no PDF/SVG generated.
+Expected: command logs `figure => ...png`, `error csv => ...csv`, `param csv => ...csv`; no PDF/SVG generated. This explicit `--out-dir figures` is only for the manual review example; default GUI/batch output remains next to the `.json` report.
 
 - [ ] **Step 3: Check the PNG with publication plotting checker**
 
 Run:
 
 ```powershell
-conda run -n ppg-hr python -c "import sys; from pathlib import Path; sys.path.insert(0, 'skills/publication-plotting/scripts'); from figure_check import assert_figure_set; assert_figure_set([Path('figures').glob('*.png').__next__()], min_bytes=1024); print('figure ok')"
+conda run -n ppg-hr python -c "import sys; from pathlib import Path; sys.path.insert(0, 'skills/publication-plotting/scripts'); from figure_check import assert_figure_set; p=Path('figures/multi_bobi1-full/multi_bobi1-full-hf-best.png'); assert_figure_set([p], min_bytes=1024); print('figure ok')"
 ```
 
 Expected: `figure ok`.
@@ -428,9 +430,8 @@ Expected: `figure ok`.
 Send the user the generated PNG path and summarize what to inspect:
 
 ```text
-示例图已生成：figures/<name>.png
-请重点看：单栏尺寸、HF-LMS 是否突出、配色是否足够柔和、MAE 小表是否遮挡曲线。
-```
+绀轰緥鍥惧凡鐢熸垚锛歠igures/<name>.png
+璇烽噸鐐圭湅锛氬崟鏍忓昂瀵搞€丠F-LMS 鏄惁绐佸嚭銆侀厤鑹叉槸鍚﹁冻澶熸煍鍜屻€丮AE 灏忚〃鏄惁閬尅鏇茬嚎銆?```
 
 Do not start Task 3 until the user confirms the example figure is acceptable or provides visual changes.
 
@@ -603,12 +604,12 @@ def render_report_batch(
     jobs = discover_report_jobs(root, analysis_scope=analysis_scope)
     items: list[BatchViewItem] = []
     total = len(jobs)
-    _log(on_log, f"发现 {total} 个 JSON 报告")
+    _log(on_log, f"鍙戠幇 {total} 涓?JSON 鎶ュ憡")
     for idx, job in enumerate(jobs, start=1):
         if on_progress is not None:
             on_progress({"current": idx - 1, "total": total, "report": str(job.report_path)})
         if job.error or job.data_path is None or job.ref_path is None:
-            _log(on_log, f"跳过 {job.report_path}: {job.error}")
+            _log(on_log, f"璺宠繃 {job.report_path}: {job.error}")
             items.append(job)
             continue
         try:
@@ -629,10 +630,10 @@ def render_report_batch(
                 error_csv=arte.error_csv,
                 param_csv=arte.param_csv,
             )
-            _log(on_log, f"完成 {job.report_path} -> {item.figure_hf}")
+            _log(on_log, f"瀹屾垚 {job.report_path} -> {item.figure_hf}")
             items.append(item)
         except Exception as exc:
-            _log(on_log, f"失败 {job.report_path}: {exc}")
+            _log(on_log, f"澶辫触 {job.report_path}: {exc}")
             items.append(BatchViewItem(
                 report_path=job.report_path,
                 data_path=job.data_path,
@@ -743,7 +744,7 @@ Commit:
 
 ```powershell
 git add -- python/src/ppg_hr/visualization/__init__.py python/src/ppg_hr/visualization/batch_viewer.py python/tests/test_batch_viewer.py
-git commit -m "feat: 增加批量报告可视化核心流程"
+git commit -m "feat: 澧炲姞鎵归噺鎶ュ憡鍙鍖栨牳蹇冩祦绋?
 ```
 
 ---
@@ -812,7 +813,7 @@ class BatchViewWorker(QObject):
             self.finished.emit(result)
         except Exception as exc:  # pragma: no cover - GUI surface
             tb = traceback.format_exc()
-            self.failed.emit(f"批量可视化失败：{exc}\n\n{tb}")
+            self.failed.emit(f"鎵归噺鍙鍖栧け璐ワ細{exc}\n\n{tb}")
 ```
 
 - [ ] **Step 4: Run worker test and commit Task 4**
@@ -829,7 +830,7 @@ Commit:
 
 ```powershell
 git add -- python/src/ppg_hr/gui/workers.py python/tests/test_gui_smoke.py
-git commit -m "feat: 增加GUI批量可视化后台任务"
+git commit -m "feat: 澧炲姞GUI鎵归噺鍙鍖栧悗鍙颁换鍔?
 ```
 
 ---
@@ -861,8 +862,8 @@ def test_view_page_batch_tab_defaults(tmp_path):
         assert page._view_mode_tabs.count() == 2
         assert page._view_mode_tabs.tabText(0)
         assert page._view_mode_tabs.tabText(1)
-        assert page._batch_default_output_dir(root) == Path("figures")
-        assert page._batch_out_dir.path() == Path("figures")
+        assert page._batch_default_output_dir(root) == root
+        assert page._batch_out_dir.path() == root
     finally:
         page.close()
         page.deleteLater()
@@ -912,8 +913,8 @@ self._batch_tab = QWidget()
 self._batch_layout = QVBoxLayout(self._batch_tab)
 self._batch_layout.setContentsMargins(0, 0, 0, 0)
 self._batch_layout.setSpacing(14)
-self._view_mode_tabs.addTab(self._single_tab, "单次可视化")
-self._view_mode_tabs.addTab(self._batch_tab, "批量可视化")
+self._view_mode_tabs.addTab(self._single_tab, "鍗曟鍙鍖?)
+self._view_mode_tabs.addTab(self._batch_tab, "鎵归噺鍙鍖?)
 self.body().addWidget(self._view_mode_tabs)
 ```
 
@@ -922,44 +923,44 @@ Move existing cards/actions/results into `self._single_layout.addWidget(...)` or
 Add batch tab widgets:
 
 ```python
-batch_in = SectionCard("批量输入", "递归扫描目录中的 Best_Params_Result_*.json")
+batch_in = SectionCard("鎵归噺杈撳叆", "閫掑綊鎵弿鐩綍涓殑 Best_Params_Result_*.json")
 batch_form = QFormLayout()
 self._batch_root_pick = FilePicker(
-    placeholder="选择包含 JSON 报告的目录",
+    placeholder="閫夋嫨鍖呭惈 JSON 鎶ュ憡鐨勭洰褰?,
     filter_str="",
     mode="dir",
 )
 self._batch_out_dir = FilePicker(
-    placeholder="默认保存到 figures/",
+    placeholder="默认保存到 JSON 报告所在目录",
     filter_str="",
     mode="dir",
 )
-self._batch_out_dir.setPath(Path("figures"))
-batch_form.addRow("报告根目录", self._batch_root_pick)
-batch_form.addRow("输出目录", self._batch_out_dir)
+self._batch_root_pick.changed.connect(self._autofill_batch_output_dir)
+batch_form.addRow("鎶ュ憡鏍圭洰褰?, self._batch_root_pick)
+batch_form.addRow("杈撳嚭鐩綍", self._batch_out_dir)
 batch_in.add(batch_form)
 self._batch_layout.addWidget(batch_in)
 
-batch_scope = SectionCard("分析范围", "批量渲染时应用到每个报告")
+batch_scope = SectionCard("鍒嗘瀽鑼冨洿", "鎵归噺娓叉煋鏃跺簲鐢ㄥ埌姣忎釜鎶ュ憡")
 self._batch_analysis_scope_picker = AnalysisScopePicker()
 batch_scope.add(self._batch_analysis_scope_picker)
 self._batch_layout.addWidget(batch_scope)
 
 batch_actions = QHBoxLayout()
 batch_actions.addStretch(1)
-self._batch_btn = QPushButton("批量渲染")
+self._batch_btn = QPushButton("鎵归噺娓叉煋")
 self._batch_btn.setObjectName("primary")
 self._batch_btn.setMinimumWidth(140)
 self._batch_btn.clicked.connect(self._run_batch)
 batch_actions.addWidget(self._batch_btn)
 self._batch_layout.addLayout(batch_actions)
 
-batch_result = SectionCard("批量结果", "逐项显示匹配状态、输出文件和错误信息")
+batch_result = SectionCard("鎵归噺缁撴灉", "閫愰」鏄剧ず鍖归厤鐘舵€併€佽緭鍑烘枃浠跺拰閿欒淇℃伅")
 batch_tabs = QTabWidget()
-self._batch_table = AAETable(["报告", "数据", "参考", "状态", "HF PNG", "ACC PNG", "错误"])
+self._batch_table = AAETable(["鎶ュ憡", "鏁版嵁", "鍙傝€?, "鐘舵€?, "HF PNG", "ACC PNG", "閿欒"])
 self._batch_log = LogPanel()
-batch_tabs.addTab(self._batch_table, "文件")
-batch_tabs.addTab(self._batch_log, "日志")
+batch_tabs.addTab(self._batch_table, "鏂囦欢")
+batch_tabs.addTab(self._batch_log, "鏃ュ織")
 batch_result.add(batch_tabs)
 self._batch_layout.addWidget(batch_result)
 self._batch_layout.addStretch(1)
@@ -971,12 +972,19 @@ Add methods:
 
 ```python
 def _batch_default_output_dir(self, root_dir: Path) -> Path:
-    return Path("figures")
+    return root_dir
+
+def _autofill_batch_output_dir(self, text: str) -> None:
+    if not text:
+        return
+    root = Path(text)
+    if root.is_dir():
+        self._batch_out_dir.setPath(self._batch_default_output_dir(root))
 
 def _run_batch(self) -> None:
     root = self._batch_root_pick.path()
     if root is None or not root.is_dir():
-        self._batch_log.error("请选择有效的报告根目录")
+        self._batch_log.error("璇烽€夋嫨鏈夋晥鐨勬姤鍛婃牴鐩綍")
         return
     out_dir = self._batch_out_dir.path() or self._batch_default_output_dir(root)
     scope = self._batch_analysis_scope_picker.current_scope()
@@ -984,9 +992,9 @@ def _run_batch(self) -> None:
     self._batch_btn.setEnabled(False)
     self._batch_table.set_rows([])
     self._batch_log.info("=" * 40)
-    self._batch_log.info(f"报告根目录: {root}")
-    self._batch_log.info(f"输出目录: {out_dir}")
-    self._batch_log.info(f"分析范围: {scope}")
+    self._batch_log.info(f"鎶ュ憡鏍圭洰褰? {root}")
+    self._batch_log.info(f"杈撳嚭鐩綍: {out_dir}")
+    self._batch_log.info(f"鍒嗘瀽鑼冨洿: {scope}")
 
     worker = BatchViewWorker(root, out_dir, scope)
     worker.log.connect(self._batch_log.info)
@@ -1003,7 +1011,7 @@ def _on_batch_progress(self, info: dict) -> None:
     current = int(info.get("current", 0))
     total = int(info.get("total", 0))
     report = info.get("report", "")
-    self._batch_log.info(f"进度 {current}/{total}: {report}")
+    self._batch_log.info(f"杩涘害 {current}/{total}: {report}")
 
 def _on_batch_done(self, result) -> None:
     rows = []
@@ -1019,7 +1027,7 @@ def _on_batch_done(self, result) -> None:
         ])
     self._batch_table.set_rows(rows)
     ok_count = sum(1 for item in result.items if item.status == "ok")
-    self._batch_log.success(f"批量可视化完成：成功 {ok_count}/{len(result.items)}")
+    self._batch_log.success(f"鎵归噺鍙鍖栧畬鎴愶細鎴愬姛 {ok_count}/{len(result.items)}")
 
 def _on_batch_failed(self, msg: str) -> None:
     self._batch_log.error(msg)
@@ -1039,7 +1047,7 @@ Commit:
 
 ```powershell
 git add -- python/src/ppg_hr/gui/pages.py python/tests/test_gui_smoke.py
-git commit -m "feat: 在可视化页增加批量渲染Tab"
+git commit -m "feat: 鍦ㄥ彲瑙嗗寲椤靛鍔犳壒閲忔覆鏌揟ab"
 ```
 
 ---
@@ -1086,7 +1094,7 @@ If any verification fix was needed:
 
 ```powershell
 git add -- <changed files>
-git commit -m "fix: 完善批量可视化验证问题"
+git commit -m "fix: 瀹屽杽鎵归噺鍙鍖栭獙璇侀棶棰?
 ```
 
 If no fix was needed, do not create an empty commit.
@@ -1096,13 +1104,12 @@ If no fix was needed, do not create an empty commit.
 ## Self-Review
 
 Spec coverage:
-- GUI 批量入口：Task 5。
-- 递归 JSON 扫描、数据匹配、缺失提示：Task 3。
-- 不覆盖输出：Task 1。
-- Nature 单栏论文图、SciencePlots/no-latex、Arial/Helvetica、字号、图例、MAE 简表、HF-LMS 重点、低饱和配色、弱化背景和网格：Task 1。
-- 只导出 600 dpi PNG 到 `figures/`：Task 1 and Task 2/6 verification。
-- 示例图审阅检查点：Task 2。
-
+- GUI batch entry: Task 5.
+- Recursive JSON scan, data matching, and missing-file reporting: Task 3.
+- Non-overwriting output naming: Task 1.
+- Nature single-column paper figure, SciencePlots/no-latex, Arial/Helvetica, font sizes, legend, MAE table, HF-LMS emphasis, low-saturation palette, clearer motion background, and weak grid: Task 1.
+- 600 dpi PNG-only output with default output next to the `.json` report: Task 1, Task 3, Task 5, and Task 6 verification.
+- Manual example-figure review checkpoint using explicit `--out-dir figures`: Task 2.
 Placeholder scan:
 - No `TBD`, `TODO`, or deferred implementation placeholders are intended in this plan.
 
@@ -1110,3 +1117,4 @@ Type consistency:
 - `BatchViewItem.status` values are `pending`, `missing`, `ok`, and `error`.
 - GUI worker emits `BatchViewResult`, and `ViewPage._on_batch_done()` consumes `.items`.
 - `ViewerArtefacts.extras["figure_hf"]` and `["figure_acc"]` remain compatible with existing code.
+
