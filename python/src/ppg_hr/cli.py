@@ -34,6 +34,7 @@ def _build_params(args: argparse.Namespace) -> SolverParams:
         "max_order", "calib_time", "motion_th_scale",
         "spec_penalty_weight", "spec_penalty_width", "smooth_win_len", "time_bias",
         "adaptive_filter",
+        "num_cascade_hf",
         "analysis_scope",
         "delay_search_mode", "delay_prefit_max_seconds",
         "delay_prefit_windows", "delay_prefit_min_corr",
@@ -178,6 +179,17 @@ def _add_common_io_args(p: argparse.ArgumentParser) -> None:
         help=(
             "Adaptive filtering strategy used in the HF and ACC cascades. "
             "Default: 'lms' (Normalized LMS, existing behaviour)."
+        ),
+    )
+    p.add_argument(
+        "--num-cascade-hf",
+        dest="num_cascade_hf",
+        type=int,
+        choices=(2, 4),
+        default=None,
+        help=(
+            "HF cascade signal count. 2 uses bridge-top Ut1/Ut2; "
+            "4 uses Ut1/Ut2 plus bridge-middle Uc1/Uc2. Default: 2."
         ),
     )
     p.add_argument(

@@ -117,6 +117,19 @@ def test_build_params_analysis_scope_flag() -> None:
     assert params.analysis_scope == "motion"
 
 
+def test_build_params_accepts_num_cascade_hf() -> None:
+    parser = cli.build_parser()
+    args = parser.parse_args(["solve", "dummy.csv", "--num-cascade-hf", "4"])
+    params = cli._build_params(args)
+    assert params.num_cascade_hf == 4
+
+
+def test_parser_rejects_invalid_num_cascade_hf() -> None:
+    parser = cli.build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["solve", "dummy.csv", "--num-cascade-hf", "3"])
+
+
 # ---------------------------------------------------------------------------
 # Adaptive filter strategy flags (2026-04)
 # ---------------------------------------------------------------------------
