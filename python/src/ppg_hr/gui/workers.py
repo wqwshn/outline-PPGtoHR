@@ -255,10 +255,11 @@ class ViewWorker(QObject):
             self.log.emit(f"figure  → {arte.figure}")
             self.log.emit(f"err csv → {arte.error_csv}")
             self.log.emit(f"par csv → {arte.param_csv}")
+            self.log.emit(f"hr csv  → {arte.hr_csv}")
             self.finished.emit(arte)
         except Exception as exc:  # pragma: no cover
             tb = traceback.format_exc()
-            self.failed.emit(f"渲染失败：{exc}\n\n{tb}")
+            self.failed.emit(f"结果分析失败：{exc}\n\n{tb}")
 
 
 class BatchViewWorker(QObject):
@@ -293,7 +294,7 @@ class BatchViewWorker(QObject):
             self.finished.emit(result)
         except Exception as exc:  # pragma: no cover
             tb = traceback.format_exc()
-            self.failed.emit(f"批量可视化失败：{exc}\n\n{tb}")
+            self.failed.emit(f"批量结果分析失败：{exc}\n\n{tb}")
 
 
 # ---------------------------------------------------------------------------

@@ -883,7 +883,7 @@ class BatchPipelinePage(_PageBase):
     def __init__(self):
         super().__init__(
             "批量全流程",
-            "批量执行：质量评估 → 运动段取样图 → 贝叶斯优化 → 结果可视化。"
+            "批量执行：质量评估 → 运动段取样图 → 贝叶斯优化 → 结果分析。"
             "每条数据会按勾选的 PPG 通道各自完整跑一遍，结果一一对应保存。",
         )
 
@@ -1086,7 +1086,7 @@ class BatchPipelinePage(_PageBase):
         self._stage_progress.setValue(0)
         self._stage_progress.setFormat("阶段进度 0%")
         self._progress_title.setText("启动中…")
-        self._progress_meta.setText("准备执行质量评估、取样图、优化和可视化")
+        self._progress_meta.setText("准备执行质量评估、取样图、优化和结果分析")
         self._summary.set_rows([])
         self._log.info("—" * 40)
         self._log.info(f"输入目录: {input_dir}")
@@ -1174,8 +1174,8 @@ class BatchPipelinePage(_PageBase):
 class ViewPage(_PageBase):
     def __init__(self):
         super().__init__(
-            "可视化报告",
-            "读取 optimise 输出的 JSON 或 MATLAB 报告 .mat，重跑并生成双子图 PNG + 误差 / 参数 CSV。",
+            "结果分析",
+            "读取 optimise 输出的 JSON 或 MATLAB 报告 .mat，重跑并生成双子图 PNG + 误差 / 参数 / 心率结果 CSV。",
         )
 
         # -- Tab widget: single / batch --
@@ -1219,7 +1219,7 @@ class ViewPage(_PageBase):
         # action
         action_row = QHBoxLayout()
         action_row.addStretch(1)
-        self._btn = QPushButton("渲染")
+        self._btn = QPushButton("分析")
         self._btn.setObjectName("primary")
         self._btn.setMinimumWidth(140)
         self._btn.clicked.connect(self._run)
@@ -1227,9 +1227,9 @@ class ViewPage(_PageBase):
         single_layout.addLayout(action_row)
 
         # result
-        rr = SectionCard("渲染结果", "双子图 PNG · 误差 CSV · 参数 CSV · 日志")
+        rr = SectionCard("分析结果", "双子图 PNG · 误差 CSV · 参数 CSV · 心率结果 CSV · 日志")
         tabs = QTabWidget()
-        self._image_label = QLabel("渲染后在此显示 PNG")
+        self._image_label = QLabel("分析后在此显示 PNG")
         self._image_label.setAlignment(Qt.AlignCenter)
         self._image_label.setMinimumHeight(360)
         self._image_label.setStyleSheet(
@@ -1270,7 +1270,7 @@ class ViewPage(_PageBase):
         batch_in.add(batch_form)
         batch_layout.addWidget(batch_in)
 
-        batch_scope = SectionCard("分析范围", "批量渲染时应用到每一个报告")
+        batch_scope = SectionCard("分析范围", "批量分析时应用到每一个报告")
         self._batch_analysis_scope_picker = AnalysisScopePicker()
         batch_scope.add(self._batch_analysis_scope_picker)
         batch_layout.addWidget(batch_scope)
@@ -1285,7 +1285,7 @@ class ViewPage(_PageBase):
 
         batch_action_row = QHBoxLayout()
         batch_action_row.addStretch(1)
-        self._batch_btn = QPushButton("批量渲染")
+        self._batch_btn = QPushButton("批量分析")
         self._batch_btn.setObjectName("primary")
         self._batch_btn.setMinimumWidth(140)
         self._batch_btn.clicked.connect(self._run_batch)
@@ -1294,7 +1294,7 @@ class ViewPage(_PageBase):
 
         batch_result = SectionCard("批量结果", "逐项显示匹配状态、输出文件和错误信息")
         batch_tabs = QTabWidget()
-        self._batch_table = AAETable(["报告", "数据", "参考", "状态", "HF PNG", "ACC PNG", "错误"])
+        self._batch_table = AAETable(["报告", "数据", "参考", "状态", "HF PNG", "ACC PNG", "HR CSV", "错误"])
         self._batch_log = LogPanel()
         batch_tabs.addTab(self._batch_table, "文件")
         batch_tabs.addTab(self._batch_log, "日志")
@@ -1303,8 +1303,8 @@ class ViewPage(_PageBase):
         batch_layout.addStretch(1)
 
         # -- Assemble tabs --
-        self._view_mode_tabs.addTab(single_tab, "单次可视化")
-        self._view_mode_tabs.addTab(batch_tab, "批量可视化")
+        self._view_mode_tabs.addTab(single_tab, "单次分析")
+        self._view_mode_tabs.addTab(batch_tab, "批量分析")
         self.body().addWidget(self._view_mode_tabs)
 
         self._worker_holder: WorkerThread | None = None
@@ -1391,11 +1391,12 @@ class ViewPage(_PageBase):
                 item.status,
                 "" if item.figure_hf is None else str(item.figure_hf),
                 "" if item.figure_acc is None else str(item.figure_acc),
+                "" if item.hr_csv is None else str(item.hr_csv),
                 "" if item.error is None else item.error,
             ])
         self._batch_table.set_rows(rows)
         ok_count = sum(1 for item in result.items if item.status == "ok")
-        self._batch_log.success(f"批量可视化完成：成功 {ok_count}/{len(result.items)}")
+        self._batch_log.success(f"批量结果分析完成：成功 {ok_count}/{len(result.items)}")
 
     def _on_batch_failed(self, msg: str) -> None:
         self._batch_log.error(msg)
@@ -1416,10 +1417,12 @@ class ViewPage(_PageBase):
             rows.append([Path(arte.error_csv).name, str(arte.error_csv)])
         if arte.param_csv:
             rows.append([Path(arte.param_csv).name, str(arte.param_csv)])
+        if arte.hr_csv:
+            rows.append([Path(arte.hr_csv).name, str(arte.hr_csv)])
         for name, p in arte.extras.items():
             rows.append([name, str(p)])
         self._art_table.set_rows(rows)
-        self._log.success(f"渲染完成，共产出 {len(rows)} 个文件。")
+        self._log.success(f"结果分析完成，共产出 {len(rows)} 个文件。")
 
     def _on_failed(self, msg: str) -> None:
         self._log.error(msg)

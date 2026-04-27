@@ -38,6 +38,23 @@ def test_main_window_builds():
         app.processEvents()
 
 
+def test_main_window_uses_result_analysis_label():
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.app import MainWindow
+
+    app = QApplication.instance() or QApplication([])
+    win = MainWindow()
+    try:
+        labels = [win._nav.item(i).text().strip() for i in range(win._nav.count())]
+        assert "结果分析" in labels
+        assert "可视化" not in labels
+    finally:
+        win.close()
+        win.deleteLater()
+        app.processEvents()
+
+
 def test_theme_stylesheet_nonempty():
     from ppg_hr.gui.theme import STYLESHEET
 
@@ -505,6 +522,66 @@ def test_view_page_batch_tab_defaults_to_json_directory(tmp_path):
         assert page._view_mode_tabs.count() == 2
         assert page._batch_default_output_dir(root) is None
         assert page._batch_out_dir.path() is None
+    finally:
+        page.close()
+        page.deleteLater()
+        app.processEvents()
+
+
+def test_view_page_file_table_includes_hr_csv(tmp_path):
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.pages import ViewPage
+    from ppg_hr.visualization.result_viewer import ViewerArtefacts
+
+    app = QApplication.instance() or QApplication([])
+    page = ViewPage()
+    try:
+        hr_csv = tmp_path / "sample-full-hr_results.csv"
+        page._on_done(ViewerArtefacts(hr_csv=hr_csv))
+
+        names = [
+            page._art_table.item(row, 0).text()
+            for row in range(page._art_table.rowCount())
+        ]
+        assert "sample-full-hr_results.csv" in names
+    finally:
+        page.close()
+        page.deleteLater()
+        app.processEvents()
+
+
+def test_view_page_batch_table_includes_hr_csv(tmp_path):
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.pages import ViewPage
+    from ppg_hr.visualization.batch_viewer import BatchViewItem, BatchViewResult
+
+    app = QApplication.instance() or QApplication([])
+    page = ViewPage()
+    try:
+        hr_csv = tmp_path / "sample-full-hr_results.csv"
+        result = BatchViewResult(
+            root_dir=tmp_path,
+            out_dir=tmp_path,
+            items=[
+                BatchViewItem(
+                    report_path=tmp_path / "report.json",
+                    data_path=tmp_path / "sample.csv",
+                    ref_path=tmp_path / "sample_ref.csv",
+                    status="ok",
+                    hr_csv=hr_csv,
+                )
+            ],
+        )
+        page._on_batch_done(result)
+
+        headers = [
+            page._batch_table.horizontalHeaderItem(col).text()
+            for col in range(page._batch_table.columnCount())
+        ]
+        assert "HR CSV" in headers
+        assert page._batch_table.item(0, headers.index("HR CSV")).text() == str(hr_csv)
     finally:
         page.close()
         page.deleteLater()

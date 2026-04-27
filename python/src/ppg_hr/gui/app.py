@@ -42,8 +42,8 @@ def _dot_icon(color: str, size: int = 10) -> QIcon:
 _NAV_ITEMS = [
     ("求解",     "单次跑求解器",   SolvePage,    Palette.primary),
     ("优化",     "贝叶斯搜索",      OptimisePage, Palette.success),
-    ("批量全流程", "质检+优化+可视化", BatchPipelinePage, "#8B5CF6"),
-    ("可视化",   "渲染 Bayes 报告", ViewPage,     Palette.warning),
+    ("批量全流程", "质检+优化+结果分析", BatchPipelinePage, "#8B5CF6"),
+    ("结果分析",   "分析 Bayes 报告", ViewPage,     Palette.warning),
     ("MATLAB 对照", "对齐验证",     ComparePage,  Palette.danger),
 ]
 
