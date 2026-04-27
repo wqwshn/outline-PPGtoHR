@@ -572,6 +572,8 @@ def render(
     strategy = str(report.get("adaptive_filter", base_params.adaptive_filter))
     ppg_mode = str(report.get("ppg_mode", base_params.ppg_mode))
     base_params = base_params.replace(adaptive_filter=strategy, ppg_mode=ppg_mode)
+    if "num_cascade_hf" in report:
+        base_params = base_params.replace(num_cascade_hf=int(report["num_cascade_hf"]))
     delay_search = report.get("delay_search", {})
     if isinstance(delay_search, dict):
         delay_overrides = {

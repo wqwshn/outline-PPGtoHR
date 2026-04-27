@@ -6,6 +6,7 @@ import csv
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from ppg_hr.params import SolverParams
@@ -67,6 +68,85 @@ def test_load_report_unknown_extension(tmp_path: Path) -> None:
 def test_load_report_missing(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         load_report(tmp_path / "nope.json")
+
+
+def _minimal_solver_result():
+    res = type("R", (), {})()
+    res.err_stats = np.zeros((5, 3))
+    res.HR = np.zeros((3, 9), dtype=float)
+    res.HR[:, 0] = [1.0, 2.0, 3.0]
+    res.HR[:, 1] = 1.2
+    res.HR[:, 2:7] = 1.2
+    res.T_Pred = res.HR[:, 0]
+    res.HR_Ref_Interp = np.full(3, 1.2)
+    res.motion_threshold = (0.0, 0.0)
+    res.delay_profile = None
+    return res
+
+
+def test_render_old_json_defaults_num_cascade_hf_to_base(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[int] = []
+
+    def fake_solve(params: SolverParams):
+        seen.append(int(params.num_cascade_hf))
+        return _minimal_solver_result()
+
+    report = tmp_path / "old.json"
+    report.write_text(
+        json.dumps({
+            "min_err_hf": 1.0,
+            "best_para_hf": {},
+            "min_err_acc": 2.0,
+            "best_para_acc": {},
+        }),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(result_viewer, "solve", fake_solve)
+
+    render(
+        report,
+        SolverParams(file_name=tmp_path / "x.csv"),
+        out_dir=tmp_path / "out",
+        show=False,
+    )
+
+    assert seen == [2, 2]
+
+
+def test_render_new_json_uses_report_num_cascade_hf(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[int] = []
+
+    def fake_solve(params: SolverParams):
+        seen.append(int(params.num_cascade_hf))
+        return _minimal_solver_result()
+
+    report = tmp_path / "new.json"
+    report.write_text(
+        json.dumps({
+            "num_cascade_hf": 4,
+            "min_err_hf": 1.0,
+            "best_para_hf": {},
+            "min_err_acc": 2.0,
+            "best_para_acc": {},
+        }),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(result_viewer, "solve", fake_solve)
+
+    render(
+        report,
+        SolverParams(file_name=tmp_path / "x.csv"),
+        out_dir=tmp_path / "out",
+        show=False,
+    )
+
+    assert seen == [4, 4]
 
 
 def _make_strategy_report(tmp_path: Path, strategy: str) -> Path:

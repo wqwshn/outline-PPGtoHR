@@ -124,6 +124,7 @@ class BayesResult:
     adaptive_filter: str = "lms"
     ppg_mode: str = "green"
     analysis_scope: str = "full"
+    num_cascade_hf: int = 2
     delay_search: dict[str, Any] = field(default_factory=dict)
 
     def save(self, path: str | Path) -> Path:
@@ -133,6 +134,7 @@ class BayesResult:
             "adaptive_filter": self.adaptive_filter,
             "ppg_mode": self.ppg_mode,
             "analysis_scope": self.analysis_scope,
+            "num_cascade_hf": int(self.num_cascade_hf),
             "delay_search": _jsonify(self.delay_search),
             "min_err_hf": float(self.min_err_hf),
             "best_para_hf": _jsonify(self.best_para_hf),
@@ -703,6 +705,7 @@ def optimise(
         adaptive_filter=base.adaptive_filter,
         ppg_mode=base.ppg_mode,
         analysis_scope=base.analysis_scope,
+        num_cascade_hf=int(base.num_cascade_hf),
         delay_search=_delay_search_config(base),
     )
 
