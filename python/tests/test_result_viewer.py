@@ -321,6 +321,10 @@ def test_plot_panel_uses_nature_single_column_style() -> None:
         all_value, motion_value = expected_values[method]
         assert line[all_slice].strip() == all_value
         assert line[motion_slice].strip() == motion_value
+    # Row order: HF-LMS, ACC-LMS, FFT
+    assert mae_lines[1][:name_w].strip() == "HF-LMS"
+    assert mae_lines[2][:name_w].strip() == "ACC-LMS"
+    assert mae_lines[3][:name_w].strip() == "FFT"
 
     lines = {line.get_label(): line for line in ax.lines}
     ref_line = lines["Reference"]
@@ -332,14 +336,12 @@ def test_plot_panel_uses_nature_single_column_style() -> None:
     assert hf_line.get_color().lower() == "#e68653"
     assert hf_line.get_linewidth() > acc_line.get_linewidth()
     assert hf_line.get_marker() == "o"
-    assert hf_line.get_markevery() is not None
-    assert hf_line.get_markevery() > 1
     assert acc_line.get_color().lower() == "#5da9c9"
     assert fft_line.get_color().lower() == "#a8adb3"
     assert fft_line.get_linestyle() != "-"
     legend = ax.get_legend()
     assert legend is not None
-    assert legend._loc == 4  # lower right
+    assert legend._loc == 2  # upper left
     assert legend._ncols == 1
     assert ax.collections
     assert ax.collections[0].get_alpha() == pytest.approx(0.24)

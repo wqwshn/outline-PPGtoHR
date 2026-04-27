@@ -308,7 +308,6 @@ def _plot_panel(
         HR[:, _PLOT_COLS["hf_fusion"]] * 60.0,
         color=_PLOT_COLORS["hf_lms"],
         marker="o",
-        markevery=max(1, len(t_pred) // 14),
         markersize=2.0,
         linestyle="-",
         linewidth=1.45,
@@ -358,16 +357,22 @@ def _plot_panel(
     ax.grid(True, axis="y", alpha=0.12, linewidth=0.45)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    ax.legend(loc=legend_loc, fontsize=6, ncol=1, frameon=False)
+    ax.legend(
+        loc="upper left",
+        bbox_to_anchor=(0.0, 0.77),
+        fontsize=5.4,
+        ncol=1,
+        frameon=False,
+    )
 
 
 def _mae_table_text(err_stats: np.ndarray) -> str:
     name_w = len("MAE (BPM)")
     col_w = 7
     rows = (
-        ("FFT", err_stats[2]),
         ("HF-LMS", err_stats[3]),
         ("ACC-LMS", err_stats[4]),
+        ("FFT", err_stats[2]),
     )
     lines = [f"{'MAE (BPM)':<{name_w}} {'all':^{col_w}} {'motion':^{col_w}}"]
     for name, values in rows:
