@@ -7,11 +7,21 @@ from .result_viewer import (
     write_error_csv,
     write_param_csv,
 )
+from .batch_viewer import (
+    BatchViewItem,
+    BatchViewResult,
+    discover_report_jobs,
+    render_report_batch,
+)
 
 __all__ = [
+    "BatchViewItem",
+    "BatchViewResult",
     "ViewerArtefacts",
+    "discover_report_jobs",
     "load_report",
     "render",
+    "render_report_batch",
     "write_error_csv",
     "write_param_csv",
 ]
