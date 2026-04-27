@@ -142,6 +142,29 @@ def test_write_hr_results_csv_exports_curve_data(tmp_path: Path) -> None:
     assert float(rows[1][4]) == pytest.approx(73.0)
 
 
+def test_detailed_stats_includes_5bpm_hit_rates() -> None:
+    from ppg_hr.visualization.result_viewer import _detailed_stats
+
+    res = _minimal_solver_result_for_analysis()
+    res.HR[2, 5] = 96.1 / 60.0
+    rows = _detailed_stats(res)
+    fusion_hf = next(r for r in rows if r["method"] == "Fusion(HF)")
+
+    assert fusion_hf["total_hit_rate_5bpm"] == pytest.approx(2 / 3)
+    assert fusion_hf["rest_hit_rate_5bpm"] == pytest.approx(1.0)
+    assert fusion_hf["motion_hit_rate_5bpm"] == pytest.approx(0.5)
+
+
+def test_5bpm_hit_rate_treats_exactly_5_as_success() -> None:
+    from ppg_hr.visualization.result_viewer import _hit_rate_5bpm
+
+    pred = np.array([70.0, 75.0, 75.1])
+    truth = np.array([70.0, 70.0, 70.0])
+    mask = np.array([True, True, True])
+
+    assert _hit_rate_5bpm(pred, truth, mask) == pytest.approx(2 / 3)
+
+
 def test_render_old_json_defaults_num_cascade_hf_to_base(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -505,7 +528,16 @@ def test_render_emits_figure_and_csvs(
     with artefacts.error_csv.open(encoding="utf-8") as f:
         rows = list(csv.reader(f))
     header = rows[0]
-    assert header == ["case", "method", "total_aae", "rest_aae", "motion_aae"]
+    assert header == [
+        "case",
+        "method",
+        "total_aae",
+        "rest_aae",
+        "motion_aae",
+        "total_hit_rate_5bpm",
+        "rest_hit_rate_5bpm",
+        "motion_hit_rate_5bpm",
+    ]
     assert len(rows) == 1 + 2 * 5  # header + 5 methods × 2 cases
 
     with artefacts.param_csv.open(encoding="utf-8") as f:

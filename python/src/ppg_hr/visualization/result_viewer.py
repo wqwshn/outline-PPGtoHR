@@ -156,14 +156,31 @@ def _matlab_keys_to_python(d: dict[str, Any]) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _hit_rate_5bpm(
+    pred_bpm: np.ndarray,
+    truth_bpm: np.ndarray,
+    mask: np.ndarray,
+) -> float:
+    pred = np.asarray(pred_bpm, dtype=float)
+    truth = np.asarray(truth_bpm, dtype=float)
+    valid_mask = np.asarray(mask, dtype=bool) & np.isfinite(pred) & np.isfinite(truth)
+    if not valid_mask.any():
+        return float("nan")
+    hit = np.abs(pred[valid_mask] - truth[valid_mask]) <= 5.0
+    return float(np.mean(hit.astype(float)))
+
+
 def _detailed_stats(res: SolverResult) -> list[dict[str, float | str]]:
     HR = res.HR
     ref = res.HR_Ref_Interp
     mask_motion = HR[:, 7] == 1
     mask_rest = HR[:, 7] == 0
+    all_mask = np.ones(HR.shape[0], dtype=bool)
+    truth_bpm = ref * 60.0
     rows: list[dict[str, float | str]] = []
     for col, name in zip(_COL_INDICES, _COL_NAMES, strict=True):
-        abs_err = np.abs(HR[:, col] - ref) * 60.0
+        pred_bpm = HR[:, col] * 60.0
+        abs_err = np.abs(pred_bpm - truth_bpm)
         rows.append(
             {
                 "method": name,
@@ -174,6 +191,9 @@ def _detailed_stats(res: SolverResult) -> list[dict[str, float | str]]:
                 "motion_aae": (
                     float(np.mean(abs_err[mask_motion])) if mask_motion.any() else float("nan")
                 ),
+                "total_hit_rate_5bpm": _hit_rate_5bpm(pred_bpm, truth_bpm, all_mask),
+                "rest_hit_rate_5bpm": _hit_rate_5bpm(pred_bpm, truth_bpm, mask_rest),
+                "motion_hit_rate_5bpm": _hit_rate_5bpm(pred_bpm, truth_bpm, mask_motion),
             }
         )
     return rows
@@ -192,8 +212,14 @@ def write_error_csv(
         w = csv.writer(f)
         w.writerow(
             [
-                "case", "method",
-                "total_aae", "rest_aae", "motion_aae",
+                "case",
+                "method",
+                "total_aae",
+                "rest_aae",
+                "motion_aae",
+                "total_hit_rate_5bpm",
+                "rest_hit_rate_5bpm",
+                "motion_hit_rate_5bpm",
             ]
         )
         for case_name, rows in (("HF_best", rows_hf), ("ACC_best", rows_acc)):
@@ -201,6 +227,9 @@ def write_error_csv(
                 w.writerow([
                     case_name, r["method"],
                     f"{r['total_aae']:.4f}", f"{r['rest_aae']:.4f}", f"{r['motion_aae']:.4f}",
+                    f"{r['total_hit_rate_5bpm']:.6f}",
+                    f"{r['rest_hit_rate_5bpm']:.6f}",
+                    f"{r['motion_hit_rate_5bpm']:.6f}",
                 ])
     return path
 
