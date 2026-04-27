@@ -48,12 +48,14 @@ _PLOT_COLS = {
 }
 
 _PLOT_COLORS = {
-    "reference": "#243447",
-    "hf_lms": "#E07A8A",
-    "acc_lms": "#5BA8C8",
-    "fft": "#7C8794",
+    "reference": "#2B2B2B",
+    "hf_lms": "#E68653",
+    "acc_lms": "#5DA9C9",
+    "fft": "#A8ADB3",
     "motion": "#D9DDE3",
 }
+
+_FIG_SIZE_NATURE_SINGLE = (3.54, 2.60)
 
 
 @dataclass
@@ -174,6 +176,7 @@ def write_error_csv(
     res_hf: SolverResult,
     res_acc: SolverResult,
 ) -> Path:
+    path = unique_path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     rows_hf = _detailed_stats(res_hf)
     rows_acc = _detailed_stats(res_acc)
@@ -220,6 +223,7 @@ def write_param_csv(
     stats_hf: np.ndarray,
     stats_acc: np.ndarray,
 ) -> Path:
+    path = unique_path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
@@ -255,8 +259,6 @@ def write_param_csv(
 def _plot_panel(
     ax,
     res: SolverResult,
-    label: str,
-    min_err: float,
     *,
     fill_reference_to_t_pred_end: bool = False,
 ) -> None:
@@ -270,7 +272,7 @@ def _plot_panel(
         where=motion_flag,
         transform=ax.get_xaxis_transform(),
         color=_PLOT_COLORS["motion"],
-        alpha=0.28,
+        alpha=0.16,
         edgecolor="none",
     )
     ref_t = np.asarray(HR[:, 0], dtype=float)
@@ -287,7 +289,7 @@ def _plot_panel(
         ref_t,
         ref_y,
         color=_PLOT_COLORS["reference"],
-        linewidth=1.6,
+        linewidth=1.05,
         label="Reference",
         zorder=5,
     )
@@ -295,20 +297,21 @@ def _plot_panel(
         t_pred,
         HR[:, _PLOT_COLS["fft"]] * 60.0,
         color=_PLOT_COLORS["fft"],
-        linestyle=(0, (1.2, 1.4)),
-        linewidth=1.15,
-        label=_method_error_label("Pure FFT", res.err_stats[2, 0]),
+        linestyle=(0, (2.0, 1.6)),
+        linewidth=0.9,
+        label="FFT",
         zorder=2,
     )
     ax.plot(
         t_pred,
         HR[:, _PLOT_COLS["hf_fusion"]] * 60.0,
         color=_PLOT_COLORS["hf_lms"],
-        marker=".",
-        markersize=3.0,
+        marker="o",
+        markevery=max(1, len(t_pred) // 14),
+        markersize=2.0,
         linestyle="-",
-        linewidth=1.9,
-        label=_method_error_label("HF-LMS", res.err_stats[3, 0]),
+        linewidth=1.45,
+        label="HF-LMS",
         zorder=4,
     )
     ax.plot(
@@ -316,28 +319,73 @@ def _plot_panel(
         HR[:, _PLOT_COLS["acc_fusion"]] * 60.0,
         color=_PLOT_COLORS["acc_lms"],
         marker=".",
-        markersize=3.0,
+        markersize=2.0,
         linestyle="-",
-        linewidth=1.25,
-        label=_method_error_label("ACC-LMS", res.err_stats[4, 0]),
+        linewidth=1.05,
+        label="ACC-LMS",
         zorder=3,
     )
 
-    e_fft = float(res.err_stats[2, 2])
-    e_hf = float(res.err_stats[3, 2])
-    e_acc = float(res.err_stats[4, 2])
-    improvement = _relative_improvement(e_hf, e_acc)
-    ax.set_title(
-        f"{label}  Motion MAE: HF {e_hf:.2f} / ACC {e_acc:.2f} / FFT {e_fft:.2f} BPM "
-        f"({improvement})",
-        loc="left",
+    ax.text(
+        0.02,
+        0.97,
+        _mae_table_text(res.err_stats),
+        transform=ax.transAxes,
+        ha="left",
+        va="top",
+        fontsize=5.4,
+        family="monospace",
+        color="#333333",
+        bbox={
+            "boxstyle": "round,pad=0.18",
+            "facecolor": "white",
+            "edgecolor": "#D6D6D6",
+            "linewidth": 0.35,
+            "alpha": 0.84,
+        },
     )
+    ax.set_title("")
     ax.set_ylabel("Heart rate (BPM)")
-    ax.set_ylim(50, 200)
-    ax.grid(True, axis="y", alpha=0.18, linewidth=0.6)
+    ax.set_ylim(
+        *_heart_rate_ylim(
+            ref_y,
+            HR[:, _PLOT_COLS["fft"]] * 60.0,
+            HR[:, _PLOT_COLS["hf_fusion"]] * 60.0,
+            HR[:, _PLOT_COLS["acc_fusion"]] * 60.0,
+        )
+    )
+    ax.grid(True, axis="y", alpha=0.12, linewidth=0.45)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    ax.legend(loc="upper right", fontsize=7, ncol=2, frameon=False)
+    ax.legend(loc="upper right", fontsize=6, ncol=2, frameon=False)
+
+
+def _mae_table_text(err_stats: np.ndarray) -> str:
+    rows = (
+        ("FFT", err_stats[2]),
+        ("HF-LMS", err_stats[3]),
+        ("ACC-LMS", err_stats[4]),
+    )
+    lines = ["MAE (BPM)", "          all  rest motion"]
+    for name, values in rows:
+        lines.append(
+            f"{name:<7} {float(values[0]):>4.1f} {float(values[1]):>5.1f} {float(values[2]):>6.1f}"
+        )
+    return "\n".join(lines)
+
+
+def _heart_rate_ylim(*series: np.ndarray) -> tuple[float, float]:
+    values = np.concatenate([np.asarray(s, dtype=float).ravel() for s in series])
+    values = values[np.isfinite(values)]
+    if values.size == 0:
+        return 55.0, 150.0
+    ymin = 55.0
+    ymax = 150.0
+    if values.min() < ymin:
+        ymin = float(np.floor((values.min() - 3.0) / 5.0) * 5.0)
+    if values.max() > ymax:
+        ymax = float(np.ceil((values.max() + 3.0) / 5.0) * 5.0)
+    return ymin, ymax
 
 
 def _method_error_label(name: str, total_aae: float) -> str:
@@ -378,6 +426,16 @@ def _apply_publication_style() -> None:
                 _PLOT_COLORS["fft"],
             ],
         )
+        import matplotlib as mpl
+
+        mpl.rcParams.update({
+            "font.family": "sans-serif",
+            "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans"],
+            "axes.labelsize": 7,
+            "xtick.labelsize": 6,
+            "ytick.labelsize": 6,
+            "legend.fontsize": 6,
+        })
         return
 
     import matplotlib as mpl
@@ -385,12 +443,12 @@ def _apply_publication_style() -> None:
     mpl.rcParams.update({
         "font.family": "sans-serif",
         "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans"],
-        "font.size": 8,
-        "axes.labelsize": 8,
-        "axes.titlesize": 8,
-        "xtick.labelsize": 7,
-        "ytick.labelsize": 7,
-        "legend.fontsize": 7,
+        "font.size": 7,
+        "axes.labelsize": 7,
+        "axes.titlesize": 7,
+        "xtick.labelsize": 6,
+        "ytick.labelsize": 6,
+        "legend.fontsize": 6,
         "axes.linewidth": 0.75,
         "lines.linewidth": 1.2,
         "pdf.fonttype": 42,
@@ -399,24 +457,34 @@ def _apply_publication_style() -> None:
     })
 
 
-def _export_publication_figure(fig, output_base: Path) -> list[Path]:
-    export_module = _load_publication_script("export_figure")
-    if export_module is not None:
-        return export_module.export_figure(
-            fig,
-            output_base,
-            formats=("png",),
-            dpi=600,
-        )
+def unique_path(path: Path) -> Path:
+    if not path.exists():
+        return path
+    for idx in range(2, 10000):
+        candidate = path.with_name(f"{path.stem}-{idx}{path.suffix}")
+        if not candidate.exists():
+            return candidate
+    raise RuntimeError(f"Could not allocate unique output path for {path}")
+
+
+def _export_publication_figure(fig, output_base: Path) -> Path:
+    import matplotlib as mpl
 
     output_base.parent.mkdir(parents=True, exist_ok=True)
-    paths = [output_base.with_suffix(".png")]
-    for path in paths:
-        kwargs = {"bbox_inches": "tight", "pad_inches": 0.02}
-        if path.suffix.lower() == ".png":
-            kwargs["dpi"] = 600
-        fig.savefig(path, **kwargs)
-    return paths
+    path = unique_path(output_base.with_suffix(".png"))
+    with mpl.rc_context({"savefig.bbox": None}):
+        fig.savefig(path, dpi=600, bbox_inches=None, pad_inches=0.02)
+    return path
+
+
+def _plt_subplots(*args, **kwargs):
+    import matplotlib.pyplot as plt
+
+    return plt.subplots(*args, **kwargs)
+
+
+def plt_subplots_for_test():
+    return _plt_subplots
 
 
 def render(
@@ -488,36 +556,30 @@ def render(
     output_prefix = _scope_output_prefix(output_prefix, base_params.analysis_scope)
     fill_ref = analysis_scope_suffix(base_params.analysis_scope) == "motion"
 
-    fig_hf, ax_hf = plt.subplots(figsize=(7.2, 2.8))
+    fig_hf, ax_hf = _plt_subplots(figsize=_FIG_SIZE_NATURE_SINGLE)
     _plot_panel(
         ax_hf,
         res_hf,
-        "HF best",
-        min_err_hf,
         fill_reference_to_t_pred_end=fill_ref,
     )
     ax_hf.set_xlabel("Time (s)")
-    fig_hf.tight_layout()
+    fig_hf.tight_layout(pad=0.35)
     hf_base = out_dir / _viewer_name("hf-best", output_prefix)
-    hf_paths = _export_publication_figure(fig_hf, hf_base)
-    hf_path = hf_base.with_suffix(".png")
+    hf_path = _export_publication_figure(fig_hf, hf_base)
     if show:
         plt.show()
     plt.close(fig_hf)
 
-    fig_acc, ax_acc = plt.subplots(figsize=(7.2, 2.8))
+    fig_acc, ax_acc = _plt_subplots(figsize=_FIG_SIZE_NATURE_SINGLE)
     _plot_panel(
         ax_acc,
         res_acc,
-        "ACC best",
-        min_err_acc,
         fill_reference_to_t_pred_end=fill_ref,
     )
     ax_acc.set_xlabel("Time (s)")
-    fig_acc.tight_layout()
+    fig_acc.tight_layout(pad=0.35)
     acc_base = out_dir / _viewer_name("acc-best", output_prefix)
-    acc_paths = _export_publication_figure(fig_acc, acc_base)
-    acc_path = acc_base.with_suffix(".png")
+    acc_path = _export_publication_figure(fig_acc, acc_base)
     if show:
         plt.show()
     plt.close(fig_acc)
@@ -539,14 +601,8 @@ def render(
         extras={
             "figure_hf": hf_path,
             "figure_acc": acc_path,
-            **{
-                f"figure_hf_{path.suffix.lower().lstrip('.')}": path
-                for path in hf_paths
-            },
-            **{
-                f"figure_acc_{path.suffix.lower().lstrip('.')}": path
-                for path in acc_paths
-            },
+            f"figure_hf_{hf_path.suffix.lower().lstrip('.')}": hf_path,
+            f"figure_acc_{acc_path.suffix.lower().lstrip('.')}": acc_path,
         },
     )
 

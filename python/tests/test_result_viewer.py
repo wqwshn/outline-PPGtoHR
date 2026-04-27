@@ -227,7 +227,7 @@ def test_render_uses_one_motion_mask_for_both_panels(
     def _fake_solve(params):
         return results.pop(0)
 
-    def _fake_plot_panel(ax, res, label, min_err, **kwargs):
+    def _fake_plot_panel(ax, res, **kwargs):
         plotted_masks.append(res.HR[:, 7].tolist())
 
     monkeypatch.setattr("ppg_hr.visualization.result_viewer.solve", _fake_solve)
@@ -243,7 +243,7 @@ def test_render_uses_one_motion_mask_for_both_panels(
     assert plotted_masks == [[0, 1, 1, 0, 0], [0, 1, 1, 0, 0]]
 
 
-def test_plot_panel_labels_core_methods_with_errors() -> None:
+def test_plot_panel_uses_nature_single_column_style() -> None:
     import matplotlib
     matplotlib.use("Agg", force=True)
     import matplotlib.pyplot as plt
@@ -253,34 +253,64 @@ def test_plot_panel_labels_core_methods_with_errors() -> None:
     res.err_stats = np.array([
         [2.345, 0.0, 0.0],
         [4.567, 0.0, 0.0],
-        [6.789, 0.0, 0.0],
-        [1.111, 0.0, 0.0],
-        [1.222, 0.0, 0.0],
+        [6.789, 5.432, 7.654],
+        [1.111, 0.987, 1.234],
+        [1.222, 1.111, 1.333],
     ])
-    res.HR = np.array([
-        [0.0, 1.30, 1.31, 1.32, 1.33, 1.30, 1.31, 0.0, 0.0],
-        [1.0, 1.40, 1.41, 1.42, 1.43, 1.40, 1.41, 1.0, 1.0],
-        [2.0, 1.50, 1.51, 1.52, 1.53, 1.50, 1.51, 0.0, 0.0],
-    ])
+    t = np.arange(30, dtype=float)
+    res.HR = np.zeros((30, 9), dtype=float)
+    res.HR[:, 0] = t
+    res.HR[:, 1] = np.linspace(56.0, 148.0, 30) / 60.0
+    res.HR[:, 4] = np.linspace(57.0, 149.0, 30) / 60.0
+    res.HR[:, 5] = np.linspace(56.5, 149.0, 30) / 60.0
+    res.HR[:, 6] = np.linspace(56.2, 148.5, 30) / 60.0
+    res.HR[10:15, 7] = 1.0
+    res.HR[:, 8] = res.HR[:, 7]
     res.T_Pred = res.HR[:, 0]
 
     fig, ax = plt.subplots()
-    result_viewer._plot_panel(ax, res, "HF best", 1.111)
+    result_viewer._plot_panel(ax, res, fill_reference_to_t_pred_end=False)
 
     labels = ax.get_legend_handles_labels()[1]
-    assert labels == [
-        "Reference",
-        "Pure FFT (AAE=6.79 BPM)",
-        "HF-LMS (AAE=1.11 BPM)",
-        "ACC-LMS (AAE=1.22 BPM)",
-    ]
+    assert labels == ["Reference", "FFT", "HF-LMS", "ACC-LMS"]
+    assert ax.get_title() == ""
+    assert ax.get_ylabel() == "Heart rate (BPM)"
+    mae_text = "\n".join(text.get_text() for text in ax.texts)
+    assert "MAE (BPM)" in mae_text
+    assert "all" in mae_text and "rest" in mae_text and "motion" in mae_text
+    assert "FFT" in mae_text and "6.8" in mae_text and "5.4" in mae_text and "7.7" in mae_text
+    assert "HF-LMS" in mae_text and "1.1" in mae_text and "1.0" in mae_text and "1.2" in mae_text
+    assert "ACC-LMS" in mae_text and "1.2" in mae_text and "1.1" in mae_text and "1.3" in mae_text
 
     lines = {line.get_label(): line for line in ax.lines}
-    hf_line = lines["HF-LMS (AAE=1.11 BPM)"]
-    acc_line = lines["ACC-LMS (AAE=1.22 BPM)"]
-    assert hf_line.get_color().lower() == "#e07a8a"
+    ref_line = lines["Reference"]
+    hf_line = lines["HF-LMS"]
+    acc_line = lines["ACC-LMS"]
+    fft_line = lines["FFT"]
+    assert ref_line.get_color().lower() == "#2b2b2b"
+    assert ref_line.get_linestyle() == "-"
+    assert hf_line.get_color().lower() == "#e68653"
     assert hf_line.get_linewidth() > acc_line.get_linewidth()
-    assert "Motion MAE:" in ax.get_title(loc="left")
+    assert hf_line.get_marker() == "o"
+    assert hf_line.get_markevery() is not None
+    assert hf_line.get_markevery() > 1
+    assert acc_line.get_color().lower() == "#5da9c9"
+    assert fft_line.get_color().lower() == "#a8adb3"
+    assert fft_line.get_linestyle() != "-"
+    assert ax.collections
+    assert ax.collections[0].get_alpha() == pytest.approx(0.16)
+    y_gridlines = ax.get_ygridlines()
+    x_gridlines = ax.get_xgridlines()
+    assert y_gridlines
+    assert any(line.get_visible() for line in y_gridlines)
+    assert all(line.get_alpha() == pytest.approx(0.12) for line in y_gridlines)
+    assert all(line.get_linewidth() == pytest.approx(0.45) for line in y_gridlines)
+    assert not any(line.get_visible() for line in x_gridlines)
+    assert not ax.spines["top"].get_visible()
+    assert not ax.spines["right"].get_visible()
+    ymin, ymax = ax.get_ylim()
+    assert ymin == 55
+    assert ymax == 150
     plt.close(fig)
 
 
@@ -353,7 +383,7 @@ def test_render_can_prefix_output_files(
     assert artefacts.param_csv == out_dir / "multi_bobi1-full-param_table.csv"
 
 
-def test_render_exports_two_png_figures_only(
+def test_render_exports_unique_nature_single_column_pngs_only(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -373,6 +403,25 @@ def test_render_exports_two_png_figures_only(
         return res
 
     monkeypatch.setattr("ppg_hr.visualization.result_viewer.solve", _fake_solve)
+    seen_figsizes: list[tuple[float, float]] = []
+    savefig_kwargs: list[dict[str, object]] = []
+    real_subplots = result_viewer.plt_subplots_for_test()
+
+    def _spy_subplots(*args, **kwargs):
+        seen_figsizes.append(tuple(kwargs.get("figsize")))
+        fig, ax = real_subplots(*args, **kwargs)
+        real_savefig = fig.savefig
+
+        def _spy_savefig(*save_args, **save_kwargs):
+            savefig_kwargs.append(dict(save_kwargs))
+            return real_savefig(*save_args, **save_kwargs)
+
+        fig.savefig = _spy_savefig
+        import matplotlib as mpl
+        mpl.rcParams["savefig.bbox"] = "tight"
+        return fig, ax
+
+    monkeypatch.setattr("ppg_hr.visualization.result_viewer._plt_subplots", _spy_subplots)
     report = tmp_path / "report.json"
     report.write_text(
         json.dumps({
@@ -383,22 +432,37 @@ def test_render_exports_two_png_figures_only(
         }),
         encoding="utf-8",
     )
+    out_dir = tmp_path / "viewer_out"
+    out_dir.mkdir()
+    (out_dir / "multi_bobi1-full-hf-best.png").write_bytes(b"existing")
+    (out_dir / "multi_bobi1-full-acc-best.png").write_bytes(b"existing")
+    (out_dir / "multi_bobi1-full-error_table.csv").write_text("existing", encoding="utf-8")
+    (out_dir / "multi_bobi1-full-param_table.csv").write_text("existing", encoding="utf-8")
 
     artefacts = render(
         report,
-        SolverParams(file_name=tmp_path / "multi_bobi1.csv", analysis_scope="motion"),
-        out_dir=tmp_path / "viewer_out",
+        SolverParams(file_name=tmp_path / "multi_bobi1.csv"),
+        out_dir=out_dir,
         output_prefix="multi_bobi1",
         show=False,
     )
 
-    assert artefacts.figure == tmp_path / "viewer_out" / "multi_bobi1-motion-hf-best.png"
+    assert seen_figsizes == [(3.54, 2.6), (3.54, 2.6)]
+    assert [kwargs.get("dpi") for kwargs in savefig_kwargs] == [600, 600]
+    assert all("bbox_inches" in kwargs for kwargs in savefig_kwargs)
+    assert [kwargs["bbox_inches"] for kwargs in savefig_kwargs] == [None, None]
+    assert artefacts.figure == out_dir / "multi_bobi1-full-hf-best-2.png"
     assert artefacts.extras["figure_hf"] == artefacts.figure
-    assert artefacts.extras["figure_acc"] == tmp_path / "viewer_out" / "multi_bobi1-motion-acc-best.png"
+    assert artefacts.extras["figure_acc"] == out_dir / "multi_bobi1-full-acc-best-2.png"
+    assert artefacts.error_csv == out_dir / "multi_bobi1-full-error_table-2.csv"
+    assert artefacts.param_csv == out_dir / "multi_bobi1-full-param_table-2.csv"
     assert artefacts.extras["figure_hf"].is_file()
     assert artefacts.extras["figure_acc"].is_file()
-    assert not list((tmp_path / "viewer_out").glob("*.pdf"))
-    assert not list((tmp_path / "viewer_out").glob("*.svg"))
+    import matplotlib.image as mpimg
+    assert mpimg.imread(artefacts.extras["figure_hf"]).shape[:2] == (1560, 2124)
+    assert mpimg.imread(artefacts.extras["figure_acc"]).shape[:2] == (1560, 2124)
+    assert not list(out_dir.glob("*.pdf"))
+    assert not list(out_dir.glob("*.svg"))
 
 
 def test_viewer_accepts_legacy_report_with_fs_target(
