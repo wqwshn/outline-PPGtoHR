@@ -333,8 +333,8 @@ def _plot_panel(
         transform=ax.transAxes,
         ha="left",
         va="top",
-        fontsize=5.4,
-        family="monospace",
+        fontsize=6,
+        family="Arial",
         color="#333333",
         bbox={
             "boxstyle": "round,pad=0.18",
@@ -360,7 +360,7 @@ def _plot_panel(
     ax.legend(
         loc="upper left",
         bbox_to_anchor=(0.0, 0.77),
-        fontsize=5.4,
+        fontsize=6,
         ncol=1,
         frameon=False,
     )
