@@ -34,8 +34,8 @@ python -m ppg_hr solve \
 ppg-hr-gui
 ```
 
-详细的环境准备、CLI 参数、Python API、GUI 使用说明、贝叶斯优化加速原理与
-FAQ 全部集中在 [python/README.md](python/README.md)。
+详细的环境准备、CLI 参数、Python API、GUI 使用说明、绘图参数调整指南、
+贝叶斯优化加速原理与 FAQ 全部集中在 [python/README.md](python/README.md)。
 
 ## 功能亮点
 
@@ -44,11 +44,20 @@ FAQ 全部集中在 [python/README.md](python/README.md)。
 MATLAB 偏差 ≤ 0.07 BPM。
 - **贝叶斯优化加速**：默认开启"数据缓存 + `num_repeats` 多进程并行"，与
 MATLAB `parpool` 等价，合计 ≈ 3× 加速，且数值与串行 bit-for-bit 一致。
-- **桌面 GUI**：PySide6 浅色主题，四个页面对应 `solve` / `optimise` /
-`view` / `compare-with-matlab`，所有耗时任务后台线程，不卡界面；嵌入
-matplotlib 图表已支持中文字体自动选择。
-- **完备测试**：79 个单元 + 端到端 + CLI + GUI smoke 测试；专门的
-"串行 vs 并行数值等价"回归用例。
+- **自适应滤波策略**：内置归一化 LMS（默认）、QKLMS（量化核 LMS）、
+二阶 Volterra LMS 三种算法，共用 HF/ACC 级联流水线，CLI/GUI 一键切换，
+贝叶斯优化会自动按所选算法切换搜索空间。
+- **分级时延搜索**：默认在主求解前对代表窗口做 PPG-HF/ACC 相关性预扫描，
+从 ±0.2s 逐级扩窗到 ±0.8s，自适应收窄搜索范围，降低错位风险。
+- **论文级可视化**：Nature 单栏 3.54" × 2.60" 高分辨率 600 dpi PNG，
+低饱和度配色、HF 路径视觉突出、单列图例、内嵌 MAE 表，不覆盖同名输出文件。
+- **批量可视化**：GUI 内置"批量渲染"Tab，递归扫描目录中的优化报告 JSON，
+自动匹配数据/参考文件，逐项渲染并汇总状态；CLI 同样支持 `view` 命令批处理。
+- **桌面 GUI**：PySide6 浅色主题，五个页面对应 `solve` / `optimise` /
+`batch` / `view` / `compare-with-matlab`，所有耗时任务后台线程，不卡界面；
+嵌入 matplotlib 图表已支持中文字体自动选择。
+- **完备测试**：覆盖逐函数单元、端到端、CLI、GUI smoke、批量可视化匹配与渲染；
+专门的"串行 vs 并行数值等价"回归用例。
 
 ## 许可证
 

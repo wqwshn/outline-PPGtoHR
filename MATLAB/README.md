@@ -2,6 +2,10 @@
 
 基于 PPG (光电容积脉搏波) 信号的心率估计算法，使用 MATLAB 实现。支持**标准模式**和**专家模式**两种运行方式。
 
+> **推荐**：Python 移植版已完整覆盖本文档中的全部功能，并额外提供自适应滤波策略
+> 切换（LMS / QKLMS / Volterra）、分级时延搜索、Nature 单栏论文图输出、批量可视化
+> 等 MATLAB 版未包含的能力。详见 [python/README.md](../python/README.md)。
+
 ## 算法概述
 
 采用 LMS 自适应滤波与 FFT 频谱分析融合策略，针对运动干扰场景进行降噪处理。
@@ -303,3 +307,20 @@ Result = HeartRateSolver_cas_chengfa(para);
 | 8 | 运动标记 ACC (0/1) | |
 | 9 | 运动标记 HF (0/1) | 与 Col8 同步 |
 | 10-12 | 分类器概率 | arm_curl, jump_rope, push_up (仅专家模式) |
+
+## Python 端增强功能对照
+
+MATLAB 版是算法金标和数值基准，功能稳定。以下为 Python 移植版在 MATLAB 基础上新增的能力：
+
+| 功能 | MATLAB 版 | Python 版 | 说明 |
+|------|-----------|-----------|------|
+| 自适应滤波策略 | 仅 LMS | LMS / QKLMS / Volterra | Python 端可通过 `--adaptive-filter` 切换，贝叶斯优化自动适配搜索空间 |
+| 时延搜索 | 固定 ±0.2s | 默认分级自适应（±0.2→±0.4→±0.6→±0.8s） | Python 端用 `--delay-search-mode fixed` 可回退到 MATLAB 行为 |
+| 采样率 | `Fs_Target` 可配置 | 固定 25 Hz | Python 端已将采样率从优化空间中移除，与 MATLAB 默认值一致 |
+| 可视化 | MATLAB 原生图表 | Nature 单栏 600 dpi PNG | Python 端输出论文级图片，低饱和度配色，内嵌 MAE 表 |
+| 批量可视化 | 单报告逐个运行 | 递归扫描目录，自动匹配数据/参考文件 | Python GUI「批量」Tab 一键处理多份报告 |
+| 报告格式 | `.mat` | `.json`（兼容 `.mat`） | Python 端优先 JSON，`view` 命令可读取 MATLAB `.mat` 报告 |
+
+如果需要在 MATLAB 和 Python 之间共享优化结果：
+- Python `view` 命令和 GUI「可视化」页可直接读取 MATLAB 生成的 `Best_Params_Result_*.mat`
+- Python 生成的 JSON 报告包含 `adaptive_filter`、`ppg_mode`、`delay_search` 等字段，MATLAB 端不会读取这些额外信息，不影响兼容性
