@@ -84,6 +84,64 @@ def _minimal_solver_result():
     return res
 
 
+def _minimal_solver_result_for_analysis(offset_bpm: float = 0.0):
+    from ppg_hr.core.heart_rate_solver import SolverResult
+
+    hr = np.array(
+        [
+            [0.0, 72 / 60, 72 / 60, 75 / 60, 70 / 60, 73 / 60, 74 / 60, 0.0, 0.0],
+            [1.0, 80 / 60, 80 / 60, 85 / 60, 79 / 60, 86 / 60, 78 / 60, 1.0, 1.0],
+            [2.0, 90 / 60, 90 / 60, 95 / 60, 88 / 60, 96 / 60, 91 / 60, 1.0, 1.0],
+        ],
+        dtype=float,
+    )
+    hr[:, 2:7] += offset_bpm / 60.0
+    t_pred = np.array([5.0, 6.0, 7.0], dtype=float)
+    ref_aligned = np.array([73 / 60, 81 / 60, 91 / 60], dtype=float)
+    err_stats = np.zeros((5, 3), dtype=float)
+    return SolverResult(
+        HR=hr,
+        err_stats=err_stats,
+        T_Pred=t_pred,
+        motion_threshold=(0.0, 0.0),
+        HR_Ref_Interp=ref_aligned,
+        err_fus_hf=0.0,
+        delay_profile=None,
+    )
+
+
+def test_write_hr_results_csv_exports_curve_data(tmp_path: Path) -> None:
+    from ppg_hr.visualization.result_viewer import write_hr_results_csv
+
+    res_hf = _minimal_solver_result_for_analysis()
+    res_acc = _minimal_solver_result_for_analysis(offset_bpm=1.0)
+
+    path = write_hr_results_csv(tmp_path / "hr_results.csv", res_hf, res_acc)
+
+    with path.open(encoding="utf-8") as f:
+        rows = list(csv.reader(f))
+
+    assert rows[0] == [
+        "case",
+        "t_center_s",
+        "t_pred_s",
+        "ref_hr_center_bpm",
+        "ref_hr_aligned_bpm",
+        "lms_hf_bpm",
+        "lms_acc_bpm",
+        "pure_fft_bpm",
+        "fusion_hf_bpm",
+        "fusion_acc_bpm",
+        "motion_acc",
+        "motion_hf",
+    ]
+    assert len(rows) == 1 + 2 * 3
+    assert rows[1][0] == "HF_best"
+    assert rows[4][0] == "ACC_best"
+    assert float(rows[1][3]) == pytest.approx(72.0)
+    assert float(rows[1][4]) == pytest.approx(73.0)
+
+
 def test_render_old_json_defaults_num_cascade_hf_to_base(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -441,6 +499,8 @@ def test_render_emits_figure_and_csvs(
     assert artefacts.figure is not None and artefacts.figure.is_file()
     assert artefacts.error_csv is not None and artefacts.error_csv.is_file()
     assert artefacts.param_csv is not None and artefacts.param_csv.is_file()
+    assert artefacts.hr_csv is not None and artefacts.hr_csv.is_file()
+    assert artefacts.extras["hr_csv"] == artefacts.hr_csv
 
     with artefacts.error_csv.open(encoding="utf-8") as f:
         rows = list(csv.reader(f))
@@ -497,6 +557,7 @@ def test_render_can_prefix_output_files(
     assert artefacts.extras["figure_acc"] == out_dir / "multi_bobi1-full-acc-best.png"
     assert artefacts.error_csv == out_dir / "multi_bobi1-full-error_table.csv"
     assert artefacts.param_csv == out_dir / "multi_bobi1-full-param_table.csv"
+    assert artefacts.hr_csv == out_dir / "multi_bobi1-full-hr_results.csv"
 
 
 def test_render_exports_unique_nature_single_column_pngs_only(
@@ -554,6 +615,7 @@ def test_render_exports_unique_nature_single_column_pngs_only(
     (out_dir / "multi_bobi1-full-acc-best.png").write_bytes(b"existing")
     (out_dir / "multi_bobi1-full-error_table.csv").write_text("existing", encoding="utf-8")
     (out_dir / "multi_bobi1-full-param_table.csv").write_text("existing", encoding="utf-8")
+    (out_dir / "multi_bobi1-full-hr_results.csv").write_text("existing", encoding="utf-8")
 
     artefacts = render(
         report,
@@ -572,6 +634,7 @@ def test_render_exports_unique_nature_single_column_pngs_only(
     assert artefacts.extras["figure_acc"] == out_dir / "multi_bobi1-full-acc-best-2.png"
     assert artefacts.error_csv == out_dir / "multi_bobi1-full-error_table-2.csv"
     assert artefacts.param_csv == out_dir / "multi_bobi1-full-param_table-2.csv"
+    assert artefacts.hr_csv == out_dir / "multi_bobi1-full-hr_results-2.csv"
     assert artefacts.extras["figure_hf"].is_file()
     assert artefacts.extras["figure_acc"].is_file()
     import matplotlib.image as mpimg

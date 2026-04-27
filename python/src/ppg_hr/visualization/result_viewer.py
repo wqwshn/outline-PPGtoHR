@@ -32,6 +32,7 @@ __all__ = [
     "load_report",
     "render",
     "write_error_csv",
+    "write_hr_results_csv",
     "write_param_csv",
 ]
 
@@ -71,6 +72,7 @@ class ViewerArtefacts:
     figure: Path | None = None
     error_csv: Path | None = None
     param_csv: Path | None = None
+    hr_csv: Path | None = None
     extras: dict[str, Path] = field(default_factory=dict)
 
 
@@ -200,6 +202,55 @@ def write_error_csv(
                     case_name, r["method"],
                     f"{r['total_aae']:.4f}", f"{r['rest_aae']:.4f}", f"{r['motion_aae']:.4f}",
                 ])
+    return path
+
+
+def write_hr_results_csv(
+    path: Path,
+    res_hf: SolverResult,
+    res_acc: SolverResult,
+) -> Path:
+    path = unique_path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(
+            [
+                "case",
+                "t_center_s",
+                "t_pred_s",
+                "ref_hr_center_bpm",
+                "ref_hr_aligned_bpm",
+                "lms_hf_bpm",
+                "lms_acc_bpm",
+                "pure_fft_bpm",
+                "fusion_hf_bpm",
+                "fusion_acc_bpm",
+                "motion_acc",
+                "motion_hf",
+            ]
+        )
+        for case_name, res in (("HF_best", res_hf), ("ACC_best", res_acc)):
+            HR = np.asarray(res.HR, dtype=float)
+            t_pred = np.asarray(res.T_Pred, dtype=float)
+            ref_aligned = np.asarray(res.HR_Ref_Interp, dtype=float)
+            for i in range(HR.shape[0]):
+                w.writerow(
+                    [
+                        case_name,
+                        f"{float(HR[i, 0]):.6f}",
+                        f"{float(t_pred[i]):.6f}",
+                        f"{float(HR[i, 1] * 60.0):.6f}",
+                        f"{float(ref_aligned[i] * 60.0):.6f}",
+                        f"{float(HR[i, 2] * 60.0):.6f}",
+                        f"{float(HR[i, 3] * 60.0):.6f}",
+                        f"{float(HR[i, 4] * 60.0):.6f}",
+                        f"{float(HR[i, 5] * 60.0):.6f}",
+                        f"{float(HR[i, 6] * 60.0):.6f}",
+                        int(HR[i, 7]),
+                        int(HR[i, 8]),
+                    ]
+                )
     return path
 
 
@@ -641,14 +692,21 @@ def render(
         out_dir / _viewer_name("param_table.csv", output_prefix), best_hf, best_acc,
         min_err_hf, min_err_acc, res_hf.err_stats, res_acc.err_stats,
     )
+    hr_csv = write_hr_results_csv(
+        out_dir / _viewer_name("hr_results.csv", output_prefix),
+        res_hf,
+        res_acc,
+    )
 
     return ViewerArtefacts(
         figure=hf_path,
         error_csv=error_csv,
         param_csv=param_csv,
+        hr_csv=hr_csv,
         extras={
             "figure_hf": hf_path,
             "figure_acc": acc_path,
+            "hr_csv": hr_csv,
             f"figure_hf_{hf_path.suffix.lower().lstrip('.')}": hf_path,
             f"figure_acc_{acc_path.suffix.lower().lstrip('.')}": acc_path,
         },
