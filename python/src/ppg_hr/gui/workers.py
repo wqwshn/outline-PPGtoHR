@@ -28,12 +28,13 @@ from ..optimization.bayes_optimizer import (
     _importance_from_study,
 )
 from ..params import SolverParams
-from ..visualization import render
+from ..visualization import render, render_report_batch
 
 __all__ = [
     "CompareResult",
     "CompareWorker",
     "OptimiseWorker",
+    "BatchViewWorker",
     "BatchPipelineWorker",
     "SolveWorker",
     "ViewWorker",
@@ -257,6 +258,33 @@ class ViewWorker(QObject):
         except Exception as exc:  # pragma: no cover
             tb = traceback.format_exc()
             self.failed.emit(f"渲染失败：{exc}\n\n{tb}")
+
+
+class BatchViewWorker(QObject):
+    finished = Signal(object)  # BatchViewResult
+    failed = Signal(str)
+    log = Signal(str)
+    progress = Signal(dict)
+
+    def __init__(self, root_dir: Path, out_dir: Path | None, analysis_scope: str):
+        super().__init__()
+        self._root_dir = root_dir
+        self._out_dir = out_dir
+        self._analysis_scope = analysis_scope
+
+    def run(self) -> None:
+        try:
+            result = render_report_batch(
+                self._root_dir,
+                out_dir=self._out_dir,
+                analysis_scope=self._analysis_scope,
+                on_log=self.log.emit,
+                on_progress=self.progress.emit,
+            )
+            self.finished.emit(result)
+        except Exception as exc:  # pragma: no cover
+            tb = traceback.format_exc()
+            self.failed.emit(f"批量可视化失败：{exc}\n\n{tb}")
 
 
 # ---------------------------------------------------------------------------

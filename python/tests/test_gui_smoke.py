@@ -395,6 +395,12 @@ def test_view_page_default_output_dir_uses_data_stem(tmp_path):
         app.processEvents()
 
 
+def test_batch_view_worker_is_exported():
+    from ppg_hr.gui.workers import BatchViewWorker
+
+    assert BatchViewWorker is not None
+
+
 def test_select_ppg_signal_rejects_tri_mode():
     """The averaged ``tri`` mode was removed — batch users run each channel
     independently so results line up with the Optimise page.
