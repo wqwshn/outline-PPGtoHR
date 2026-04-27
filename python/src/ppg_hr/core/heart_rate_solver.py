@@ -54,6 +54,8 @@ __all__ = ["SolverResult", "load_raw_data", "solve", "solve_from_arrays"]
 _COL_PPG_GREEN = 6
 _COL_PPG_RED = 7
 _COL_PPG_IR = 8
+_COL_HF_MID1 = 2
+_COL_HF_MID2 = 3
 _COL_HF1 = 4
 _COL_HF2 = 5
 _COL_ACC = (9, 10, 11)
@@ -313,6 +315,8 @@ def solve_from_arrays(
         ppg_ir_raw,
         params.ppg_mode,
     )
+    hfc1_raw = raw_data[:, _COL_HF_MID1 - 1]
+    hfc2_raw = raw_data[:, _COL_HF_MID2 - 1]
     hf1_raw = raw_data[:, _COL_HF1 - 1]
     hf2_raw = raw_data[:, _COL_HF2 - 1]
     accx_raw = raw_data[:, _COL_ACC[0] - 1]
@@ -320,6 +324,8 @@ def solve_from_arrays(
     accz_raw = raw_data[:, _COL_ACC[2] - 1]
 
     ppg_ori = resample_poly(filloutliers_mean_previous(ppg_raw), fs, fs_origin)
+    hotc1_ori = resample_poly(hfc1_raw, fs, fs_origin)
+    hotc2_ori = resample_poly(hfc2_raw, fs, fs_origin)
     hotf1_ori = resample_poly(hf1_raw, fs, fs_origin)
     hotf2_ori = resample_poly(hf2_raw, fs, fs_origin)
     accx_ori = resample_poly(accx_raw, fs, fs_origin)
@@ -333,6 +339,8 @@ def solve_from_arrays(
         btype="bandpass",
     )
     ppg = filtfilt(b, a, ppg_ori)
+    hotc1 = filtfilt(b, a, hotc1_ori)
+    hotc2 = filtfilt(b, a, hotc2_ori)
     hotf1 = filtfilt(b, a, hotf1_ori)
     hotf2 = filtfilt(b, a, hotf2_ori)
     accx = filtfilt(b, a, accx_ori)
@@ -348,7 +356,7 @@ def solve_from_arrays(
     )
     acc_mag = np.sqrt(accx**2 + accy**2 + accz**2)
 
-    sig_h_full = [hotf1, hotf2]
+    sig_h_full = _select_hf_signals(params, hotf1, hotf2, hotc1, hotc2)
     sig_a_full = [accx, accy, accz]
     delay_profile = estimate_delay_search_profile(
         fs=fs,
@@ -377,7 +385,7 @@ def solve_from_arrays(
             break
 
         sig_p = ppg[idx_s:idx_e]
-        sig_h = [hotf1[idx_s:idx_e], hotf2[idx_s:idx_e]]
+        sig_h = [sig[idx_s:idx_e] for sig in sig_h_full]
         sig_a = [accx[idx_s:idx_e], accy[idx_s:idx_e], accz[idx_s:idx_e]]
         idx_s_motion = int(round(time_1 * fs_origin))
         idx_e_motion = int(round(time_2 * fs_origin))
@@ -560,4 +568,21 @@ def _select_ppg_signal(
         return ppg_ir
     raise ValueError(
         f"Unsupported ppg_mode={mode!r}; expected one of 'green' / 'red' / 'ir'."
+    )
+
+
+def _select_hf_signals(
+    params: SolverParams,
+    hotf1: np.ndarray,
+    hotf2: np.ndarray,
+    hotc1: np.ndarray,
+    hotc2: np.ndarray,
+) -> list[np.ndarray]:
+    count = int(params.num_cascade_hf)
+    if count == 2:
+        return [hotf1, hotf2]
+    if count == 4:
+        return [hotf1, hotf2, hotc1, hotc2]
+    raise ValueError(
+        f"Unsupported num_cascade_hf={params.num_cascade_hf!r}; expected 2 or 4."
     )

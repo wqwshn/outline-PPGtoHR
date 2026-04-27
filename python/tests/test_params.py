@@ -12,6 +12,10 @@ def test_default_adaptive_filter_is_lms() -> None:
     assert p.adaptive_filter == "lms"
 
 
+def test_num_cascade_hf_default_is_two() -> None:
+    assert SolverParams().num_cascade_hf == 2
+
+
 def test_klms_defaults() -> None:
     p = SolverParams()
     assert p.klms_step_size == pytest.approx(0.1)

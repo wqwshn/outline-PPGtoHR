@@ -120,6 +120,49 @@ def test_fixed_delay_mode_uses_fixed_profile() -> None:
     assert res.delay_profile.acc.bounds.as_tuple() == (-80, 80)
 
 
+def test_num_cascade_hf_rejects_unsupported_value() -> None:
+    from ppg_hr.core.heart_rate_solver import solve_from_arrays
+
+    raw, ref = _make_synthetic_raw()
+    params = SolverParams(
+        fs_target=100,
+        calib_time=5.0,
+        time_buffer=2.0,
+        num_cascade_hf=3,
+    )
+
+    with pytest.raises(ValueError, match="num_cascade_hf"):
+        solve_from_arrays(raw, ref, params)
+
+
+def test_num_cascade_hf_four_uses_bridge_middle_channels(monkeypatch) -> None:
+    from ppg_hr.core import heart_rate_solver as solver
+
+    raw, ref = _make_synthetic_raw()
+    raw[:, 1] = 5.0
+    raw[:, 2] = 7.0
+
+    seen_lengths: list[int] = []
+    original_choose_delay = solver.choose_delay
+
+    def spy_choose_delay(fs, time_1, ppg, sig_a_full, sig_h_full, **kwargs):
+        seen_lengths.append(len(sig_h_full))
+        return original_choose_delay(fs, time_1, ppg, sig_a_full, sig_h_full, **kwargs)
+
+    monkeypatch.setattr(solver, "choose_delay", spy_choose_delay)
+    monkeypatch.setattr(solver, "_is_motion_window", lambda *_args: True)
+    params = SolverParams(
+        fs_target=100,
+        calib_time=5.0,
+        time_buffer=2.0,
+        num_cascade_hf=4,
+    )
+    solver.solve_from_arrays(raw, ref, params)
+
+    assert seen_lengths
+    assert set(seen_lengths) == {4}
+
+
 def test_ref_csv_must_exist(tmp_path: Path) -> None:
     fake_csv = tmp_path / "fake.csv"
     fake_csv.write_text("Time(s)\n0\n")
