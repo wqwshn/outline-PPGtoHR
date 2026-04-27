@@ -58,7 +58,14 @@ try:  # optional: used only by OptimisePage for config typing
 except ImportError:  # pragma: no cover
     BayesConfig = None  # type: ignore
 
-__all__ = ["SolvePage", "OptimisePage", "BatchPipelinePage", "ViewPage", "ComparePage"]
+__all__ = [
+    "SolvePage",
+    "OptimisePage",
+    "BatchPipelinePage",
+    "ViewPage",
+    "ComparePage",
+    "HFCascadeChannelPicker",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +175,7 @@ def default_optimise_report_path(input_path: Path, scope: str = "full") -> Path:
 _PARAM_GROUPS: list[tuple[str, list[str], str]] = [
     ("分析范围", ["analysis_scope"], "analysis"),
     ("自适应滤波算法", ["adaptive_filter"], "adaptive"),
+    ("HF 级联通道", ["num_cascade_hf"], "adaptive"),
     (
         "时延搜索",
         [
@@ -210,6 +218,7 @@ _PARAM_META: dict[str, dict[str, Any]] = {
     # Adaptive filter strategy + algo-specific parameters (2026-04)
     "adaptive_filter": dict(label="算法", kind="choice",
                             options=["lms", "klms", "volterra"]),
+    "num_cascade_hf": dict(label="HF 级联通道数", kind="choice", options=[2, 4]),
     "analysis_scope": dict(label="分析范围", kind="choice",
                            options=["full", "motion"]),
     "delay_search_mode": dict(label="时延模式", kind="choice",
@@ -308,6 +317,42 @@ class AnalysisScopePicker(QWidget):
 
     def apply_to(self, params: SolverParams) -> SolverParams:
         return params.replace(analysis_scope=self.current_scope())
+
+
+class HFCascadeChannelPicker(QWidget):
+    """Picker for :attr:`SolverParams.num_cascade_hf`."""
+
+    _OPTIONS: tuple[tuple[str, int], ...] = (
+        ("2路桥顶信号", 2),
+        ("4路桥顶+桥中信号", 4),
+    )
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        layout = QFormLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setHorizontalSpacing(14)
+        layout.setVerticalSpacing(8)
+
+        self._combo = QComboBox()
+        for label, value in self._OPTIONS:
+            self._combo.addItem(label, userData=value)
+        default = int(SolverParams().num_cascade_hf)
+        idx = self._combo.findData(default)
+        self._combo.setCurrentIndex(idx if idx >= 0 else 0)
+        self._combo.setFixedWidth(220)
+        layout.addRow("HF级联通道数", self._combo)
+
+    def current_count(self) -> int:
+        return int(self._combo.currentData())
+
+    def set_count(self, count: int) -> None:
+        idx = self._combo.findData(int(count))
+        if idx >= 0:
+            self._combo.setCurrentIndex(idx)
+
+    def apply_to(self, params: SolverParams) -> SolverParams:
+        return params.replace(num_cascade_hf=self.current_count())
 
 
 class ParamForm(QWidget):
@@ -423,7 +468,10 @@ class ParamForm(QWidget):
             elif isinstance(w, QCheckBox):
                 overrides[name] = bool(w.isChecked())
             elif isinstance(w, QComboBox):
-                overrides[name] = w.currentText()
+                if name == "num_cascade_hf":
+                    overrides[name] = int(w.currentText())
+                else:
+                    overrides[name] = w.currentText()
         return params.replace(**overrides)
 
     def set_values(self, values: dict[str, Any]) -> None:
@@ -631,6 +679,14 @@ class OptimisePage(_PageBase):
         algo_card.add(self._algo_picker)
         self.body().addWidget(algo_card)
 
+        hf_card = SectionCard(
+            "HF级联通道数",
+            "默认2路桥顶信号；4路会同时纳入桥中信号，适合热膜4路级联方案。",
+        )
+        self._hf_cascade_picker = HFCascadeChannelPicker()
+        hf_card.add(self._hf_cascade_picker)
+        self.body().addWidget(hf_card)
+
         scope_card = SectionCard("分析范围", "默认整段数据；可切换为静息30s加最长运动段")
         self._analysis_scope_picker = AnalysisScopePicker()
         scope_card.add(self._analysis_scope_picker)
@@ -681,6 +737,7 @@ class OptimisePage(_PageBase):
 
         params = SolverParams(file_name=in_path, ref_file=self._ref_pick.path())
         params = self._algo_picker.apply_to(params)
+        params = self._hf_cascade_picker.apply_to(params)
         params = self._analysis_scope_picker.apply_to(params)
         cfg = BayesConfig(
             max_iterations=int(self._max_iter.value()),
@@ -896,6 +953,13 @@ class BatchPipelinePage(_PageBase):
         self._analysis_scope_combo.setFixedWidth(260)
         run_form.addRow("分析范围", self._analysis_scope_combo)
 
+        self._hf_cascade_combo = QComboBox()
+        self._hf_cascade_combo.addItem("2路桥顶信号", userData=2)
+        self._hf_cascade_combo.addItem("4路桥顶+桥中信号", userData=4)
+        self._hf_cascade_combo.setCurrentIndex(0)
+        self._hf_cascade_combo.setFixedWidth(220)
+        run_form.addRow("HF级联通道数", self._hf_cascade_combo)
+
         # Bayes budget
         self._max_iter = QSpinBox()
         self._max_iter.setRange(5, 1000)
@@ -1014,6 +1078,7 @@ class BatchPipelinePage(_PageBase):
         )
         adaptive_filter = str(self._adaptive_combo.currentData())
         analysis_scope = str(self._analysis_scope_combo.currentData())
+        num_cascade_hf = int(self._hf_cascade_combo.currentData())
 
         self._btn.setEnabled(False)
         self._overall_progress.setValue(0)
@@ -1029,6 +1094,7 @@ class BatchPipelinePage(_PageBase):
         self._log.info(f"模式: {','.join(modes)}")
         self._log.info(f"算法: {adaptive_filter}")
         self._log.info(f"分析范围: {analysis_scope}")
+        self._log.info(f"HF级联通道数: {num_cascade_hf}")
 
         worker = BatchPipelineWorker(
             input_dir=input_dir,
@@ -1036,6 +1102,7 @@ class BatchPipelinePage(_PageBase):
             modes=modes,
             adaptive_filter=adaptive_filter,
             analysis_scope=analysis_scope,
+            num_cascade_hf=num_cascade_hf,
             bayes_cfg=cfg,
         )
         worker.log.connect(self._log.info)
@@ -1141,6 +1208,14 @@ class ViewPage(_PageBase):
         scope_card.add(self._analysis_scope_picker)
         single_layout.addWidget(scope_card)
 
+        hf_card = SectionCard(
+            "HF级联通道数",
+            "旧报告缺少该字段时使用此设置；新报告优先使用报告内记录。",
+        )
+        self._hf_cascade_picker = HFCascadeChannelPicker()
+        hf_card.add(self._hf_cascade_picker)
+        single_layout.addWidget(hf_card)
+
         # action
         action_row = QHBoxLayout()
         action_row.addStretch(1)
@@ -1200,6 +1275,14 @@ class ViewPage(_PageBase):
         batch_scope.add(self._batch_analysis_scope_picker)
         batch_layout.addWidget(batch_scope)
 
+        batch_hf = SectionCard(
+            "HF级联通道数",
+            "批量复跑旧报告时使用此缺省设置；新报告优先使用报告内记录。",
+        )
+        self._batch_hf_cascade_picker = HFCascadeChannelPicker()
+        batch_hf.add(self._batch_hf_cascade_picker)
+        batch_layout.addWidget(batch_hf)
+
         batch_action_row = QHBoxLayout()
         batch_action_row.addStretch(1)
         self._batch_btn = QPushButton("批量渲染")
@@ -1241,6 +1324,7 @@ class ViewPage(_PageBase):
 
         params = SolverParams(file_name=in_path, ref_file=self._ref_pick.path())
         params = self._analysis_scope_picker.apply_to(params)
+        params = self._hf_cascade_picker.apply_to(params)
 
         self._btn.setEnabled(False)
         self._log.info("—" * 40)
@@ -1270,6 +1354,7 @@ class ViewPage(_PageBase):
             return
         out_dir = self._batch_out_dir.path()
         scope = self._batch_analysis_scope_picker.current_scope()
+        num_cascade_hf = self._batch_hf_cascade_picker.current_count()
 
         self._batch_btn.setEnabled(False)
         self._batch_table.set_rows([])
@@ -1277,8 +1362,9 @@ class ViewPage(_PageBase):
         self._batch_log.info(f"报告根目录: {root}")
         self._batch_log.info(f"输出目录: {out_dir or '各 JSON 报告所在目录'}")
         self._batch_log.info(f"分析范围: {scope}")
+        self._batch_log.info(f"HF级联通道数: {num_cascade_hf}")
 
-        worker = BatchViewWorker(root, out_dir, scope)
+        worker = BatchViewWorker(root, out_dir, scope, num_cascade_hf)
         worker.log.connect(self._batch_log.info)
         worker.progress.connect(self._on_batch_progress)
         worker.finished.connect(self._on_batch_done)

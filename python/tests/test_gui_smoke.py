@@ -190,6 +190,58 @@ def test_param_form_apply_to_writes_adaptive_filter_fields():
         app.processEvents()
 
 
+def test_hf_cascade_channel_picker_defaults_to_two():
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.pages import HFCascadeChannelPicker
+    from ppg_hr.params import SolverParams
+
+    app = QApplication.instance() or QApplication([])
+    picker = HFCascadeChannelPicker()
+    try:
+        assert picker.current_count() == 2
+        out = picker.apply_to(SolverParams())
+        assert out.num_cascade_hf == 2
+    finally:
+        picker.deleteLater()
+        app.processEvents()
+
+
+def test_hf_cascade_channel_picker_can_select_four():
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.pages import HFCascadeChannelPicker
+    from ppg_hr.params import SolverParams
+
+    app = QApplication.instance() or QApplication([])
+    picker = HFCascadeChannelPicker()
+    try:
+        picker.set_count(4)
+        assert picker.current_count() == 4
+        out = picker.apply_to(SolverParams())
+        assert out.num_cascade_hf == 4
+    finally:
+        picker.deleteLater()
+        app.processEvents()
+
+
+def test_param_form_apply_to_writes_num_cascade_hf():
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.pages import ParamForm
+    from ppg_hr.params import SolverParams
+
+    app = QApplication.instance() or QApplication([])
+    form = ParamForm()
+    try:
+        form._editors["num_cascade_hf"].setCurrentText("4")
+        out = form.apply_to(SolverParams())
+        assert out.num_cascade_hf == 4
+    finally:
+        form.deleteLater()
+        app.processEvents()
+
+
 def test_param_form_does_not_expose_fs_target():
     from PySide6.QtWidgets import QApplication
 
@@ -291,6 +343,26 @@ def test_optimise_page_exposes_adaptive_filter_picker():
         app.processEvents()
 
 
+def test_optimise_page_exposes_hf_cascade_picker():
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.pages import HFCascadeChannelPicker, OptimisePage
+
+    app = QApplication.instance() or QApplication([])
+    page = OptimisePage()
+    try:
+        assert hasattr(page, "_hf_cascade_picker")
+        assert isinstance(page._hf_cascade_picker, HFCascadeChannelPicker)
+        page._hf_cascade_picker.set_count(4)
+        from ppg_hr.params import SolverParams
+        params = page._hf_cascade_picker.apply_to(SolverParams())
+        assert params.num_cascade_hf == 4
+    finally:
+        page.close()
+        page.deleteLater()
+        app.processEvents()
+
+
 def test_param_form_set_values_restores_adaptive_filter():
     from PySide6.QtWidgets import QApplication
 
@@ -359,6 +431,7 @@ def test_batch_pipeline_page_defaults_and_autofill(tmp_path):
         # opt-in for comparison runs.
         assert page._selected_modes() == ["green"]
         assert "tri" not in page._mode_checks
+        assert page._hf_cascade_combo.currentData() == 2
 
         input_dir = tmp_path / "raw_inputs"
         input_dir.mkdir()
@@ -371,6 +444,26 @@ def test_batch_pipeline_page_defaults_and_autofill(tmp_path):
         assert page._selected_modes() == []
         page._set_all_modes(True)
         assert page._selected_modes() == ["green", "red", "ir"]
+    finally:
+        page.close()
+        page.deleteLater()
+        app.processEvents()
+
+
+def test_view_page_exposes_hf_cascade_pickers():
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.pages import HFCascadeChannelPicker, ViewPage
+
+    app = QApplication.instance() or QApplication([])
+    page = ViewPage()
+    try:
+        assert isinstance(page._hf_cascade_picker, HFCascadeChannelPicker)
+        assert isinstance(page._batch_hf_cascade_picker, HFCascadeChannelPicker)
+        page._hf_cascade_picker.set_count(4)
+        page._batch_hf_cascade_picker.set_count(4)
+        assert page._hf_cascade_picker.current_count() == 4
+        assert page._batch_hf_cascade_picker.current_count() == 4
     finally:
         page.close()
         page.deleteLater()

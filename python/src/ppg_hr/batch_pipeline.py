@@ -57,6 +57,7 @@ class BatchRunRecord:
     sample: str
     mode: str
     adaptive_filter: str
+    num_cascade_hf: int
     report_path: Path
     figure_path: Path | None
     error_csv: Path | None
@@ -227,6 +228,7 @@ def run_batch_pipeline(
     bayes_cfg: BayesConfig,
     thresholds: QcThresholds,
     analysis_scope: str = "full",
+    num_cascade_hf: int = 2,
     on_log: Callable[[str], None] | None = None,
     on_progress: Callable[[dict], None] | None = None,
 ) -> dict[str, object]:
@@ -297,7 +299,8 @@ def run_batch_pipeline(
         sample_stem = row.file_path.stem
         for mode in modes:
             run_idx += 1
-            prefix = f"{sample_stem}-{mode}-{adaptive_filter}-{analysis_scope}"
+            hf_suffix = f"hf{int(num_cascade_hf)}"
+            prefix = f"{sample_stem}-{mode}-{adaptive_filter}-{analysis_scope}-{hf_suffix}"
             run_dir = output_dir / "batch_runs" / prefix
             run_dir.mkdir(parents=True, exist_ok=True)
             report_path = run_dir / f"{prefix}-best_params.json"
@@ -308,11 +311,13 @@ def run_batch_pipeline(
                 adaptive_filter=adaptive_filter,
                 ppg_mode=mode,
                 analysis_scope=analysis_scope,
+                num_cascade_hf=int(num_cascade_hf),
             )
             total_trials = int(bayes_cfg.num_repeats) * int(bayes_cfg.max_iterations) * 2
             _log(
                 f"[{run_idx}/{total_runs}] 开始优化：sample={row.file_name} | "
-                f"通道={mode} | 滤波={adaptive_filter} | out={report_path.name}"
+                f"通道={mode} | 滤波={adaptive_filter} | HF级联={num_cascade_hf} | "
+                f"out={report_path.name}"
             )
             if on_progress is not None:
                 on_progress(
@@ -375,7 +380,8 @@ def run_batch_pipeline(
             )
             _log(
                 f"[{run_idx}/{total_runs}] 优化完成：sample={row.file_name} | "
-                f"通道={mode} | HF={result.min_err_hf:.3f} ACC={result.min_err_acc:.3f}"
+                f"通道={mode} | HF级联={num_cascade_hf} | "
+                f"HF={result.min_err_hf:.3f} ACC={result.min_err_acc:.3f}"
             )
 
             _log(f"[{run_idx}/{total_runs}] 开始可视化：{row.file_name} | 通道={mode}")
@@ -423,6 +429,7 @@ def run_batch_pipeline(
                     sample=row.file_name,
                     mode=mode,
                     adaptive_filter=adaptive_filter,
+                    num_cascade_hf=int(num_cascade_hf),
                     report_path=report_path,
                     figure_path=arte.figure,
                     error_csv=arte.error_csv,
@@ -526,6 +533,7 @@ def _write_run_summary(output_dir: Path, records: list[BatchRunRecord]) -> Path:
                 "sample",
                 "mode",
                 "adaptive_filter",
+                "num_cascade_hf",
                 "min_err_hf",
                 "min_err_acc",
                 "report_path",
@@ -540,6 +548,7 @@ def _write_run_summary(output_dir: Path, records: list[BatchRunRecord]) -> Path:
                     r.sample,
                     r.mode,
                     r.adaptive_filter,
+                    str(r.num_cascade_hf),
                     f"{r.min_err_hf:.6f}",
                     f"{r.min_err_acc:.6f}",
                     str(r.report_path),

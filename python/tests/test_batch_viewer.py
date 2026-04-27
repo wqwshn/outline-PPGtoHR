@@ -129,3 +129,37 @@ def test_render_report_batch_uses_explicit_output_dir(
     assert result.items[0].report_path == report
     assert result.items[0].figure_hf == out_dir / "sample1-full-hf-best.png"
     assert seen_out_dirs == [out_dir]
+
+
+def test_render_report_batch_passes_num_cascade_hf_fallback(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    data = tmp_path / "sample.csv"
+    ref = tmp_path / "sample_ref.csv"
+    data.write_text("dummy", encoding="utf-8")
+    ref.write_text("dummy", encoding="utf-8")
+    report = _write_report(
+        tmp_path / "sample-best_params.json",
+        file_name=str(data),
+        ref_file=str(ref),
+    )
+
+    seen: list[int] = []
+
+    def fake_render(report_path, params, *, out_dir, output_prefix, show):
+        from ppg_hr.visualization.result_viewer import ViewerArtefacts
+
+        seen.append(int(params.num_cascade_hf))
+        return ViewerArtefacts()
+
+    monkeypatch.setattr("ppg_hr.visualization.batch_viewer.render", fake_render)
+    render_report_batch(
+        tmp_path,
+        out_dir=None,
+        analysis_scope="full",
+        num_cascade_hf=4,
+    )
+
+    assert report.is_file()
+    assert seen == [4]

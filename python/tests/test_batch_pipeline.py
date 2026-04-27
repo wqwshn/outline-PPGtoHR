@@ -19,6 +19,7 @@ def test_run_batch_pipeline_reports_fine_grained_stages_and_interleaves_render(
     ref.write_text("dummy\n", encoding="utf-8")
 
     call_order: list[str] = []
+    seen_hf_counts: list[int] = []
     progress_stages: list[str] = []
 
     def fake_quality_scan(input_dir, thresholds, *, on_file_scanned=None):
@@ -35,6 +36,7 @@ def test_run_batch_pipeline_reports_fine_grained_stages_and_interleaves_render(
 
     def fake_optimise(base, *, config, out_path, verbose, on_trial_step=None):
         call_order.append(f"optimise:{base.ppg_mode}")
+        seen_hf_counts.append(int(base.num_cascade_hf))
         if on_trial_step is not None:
             on_trial_step(
                 {
@@ -58,10 +60,12 @@ def test_run_batch_pipeline_reports_fine_grained_stages_and_interleaves_render(
             best_para_acc={"fs_target": 100},
             importance_hf=None,
             ppg_mode=base.ppg_mode,
+            num_cascade_hf=int(base.num_cascade_hf),
         )
 
     def fake_render(report_path, base_params, *, out_dir, output_prefix, show):
         call_order.append(f"render:{base_params.ppg_mode}")
+        seen_hf_counts.append(int(base_params.num_cascade_hf))
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         figure = out_dir / f"{output_prefix}-hf-best.png"
@@ -94,6 +98,7 @@ def test_run_batch_pipeline_reports_fine_grained_stages_and_interleaves_render(
         adaptive_filter="lms",
         bayes_cfg=BayesConfig(max_iterations=2, num_seed_points=1, num_repeats=1),
         thresholds=QcThresholds(),
+        num_cascade_hf=4,
         on_progress=lambda info: progress_stages.append(str(info["stage"])),
     )
 
@@ -117,7 +122,7 @@ def test_run_batch_pipeline_reports_fine_grained_stages_and_interleaves_render(
     # artefact stays unambiguous when users drag it outside the folder.
     run_root = payload["output_dir"] / "batch_runs"
     for mode in ("green", "red", "ir"):
-        prefix = f"sample01-{mode}-lms-full"
+        prefix = f"sample01-{mode}-lms-full-hf4"
         run_dir = run_root / prefix
         assert (run_dir / f"{prefix}-best_params.json").is_file()
         assert (run_dir / f"{prefix}-hf-best.png").is_file()
@@ -127,10 +132,11 @@ def test_run_batch_pipeline_reports_fine_grained_stages_and_interleaves_render(
     rec_by_mode = {r.mode: r for r in records}
     for mode in ("green", "red", "ir"):
         rec = rec_by_mode[mode]
-        assert rec.figure_path is not None and rec.figure_path.name == f"sample01-{mode}-lms-full-hf-best.png"
-        assert rec.error_csv is not None and rec.error_csv.name == f"sample01-{mode}-lms-full-error_table.csv"
-        assert rec.param_csv is not None and rec.param_csv.name == f"sample01-{mode}-lms-full-param_table.csv"
-        assert rec.report_path.name == f"sample01-{mode}-lms-full-best_params.json"
+        assert rec.figure_path is not None and rec.figure_path.name == f"sample01-{mode}-lms-full-hf4-hf-best.png"
+        assert rec.error_csv is not None and rec.error_csv.name == f"sample01-{mode}-lms-full-hf4-error_table.csv"
+        assert rec.param_csv is not None and rec.param_csv.name == f"sample01-{mode}-lms-full-hf4-param_table.csv"
+        assert rec.report_path.name == f"sample01-{mode}-lms-full-hf4-best_params.json"
+    assert seen_hf_counts == [4, 4, 4, 4, 4, 4]
 
 
 def test_run_batch_pipeline_runs_bad_quality_rows_with_reference(

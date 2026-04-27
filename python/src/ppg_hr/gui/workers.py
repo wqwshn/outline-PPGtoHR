@@ -206,6 +206,7 @@ class OptimiseWorker(QObject):
                 adaptive_filter=self._params.adaptive_filter,
                 ppg_mode=self._params.ppg_mode,
                 analysis_scope=self._params.analysis_scope,
+                num_cascade_hf=int(self._params.num_cascade_hf),
                 delay_search=_delay_search_config(self._params),
             )
 
@@ -266,11 +267,18 @@ class BatchViewWorker(QObject):
     log = Signal(str)
     progress = Signal(dict)
 
-    def __init__(self, root_dir: Path, out_dir: Path | None, analysis_scope: str):
+    def __init__(
+        self,
+        root_dir: Path,
+        out_dir: Path | None,
+        analysis_scope: str,
+        num_cascade_hf: int,
+    ):
         super().__init__()
         self._root_dir = root_dir
         self._out_dir = out_dir
         self._analysis_scope = analysis_scope
+        self._num_cascade_hf = int(num_cascade_hf)
 
     def run(self) -> None:
         try:
@@ -278,6 +286,7 @@ class BatchViewWorker(QObject):
                 self._root_dir,
                 out_dir=self._out_dir,
                 analysis_scope=self._analysis_scope,
+                num_cascade_hf=self._num_cascade_hf,
                 on_log=self.log.emit,
                 on_progress=self.progress.emit,
             )
@@ -378,6 +387,7 @@ class BatchPipelineWorker(QObject):
         modes: list[str],
         adaptive_filter: str,
         analysis_scope: str,
+        num_cascade_hf: int,
         bayes_cfg: BayesConfig,
     ):
         super().__init__()
@@ -386,6 +396,7 @@ class BatchPipelineWorker(QObject):
         self._modes = modes
         self._adaptive_filter = adaptive_filter
         self._analysis_scope = analysis_scope
+        self._num_cascade_hf = int(num_cascade_hf)
         self._bayes_cfg = bayes_cfg
 
     def run(self) -> None:
@@ -397,6 +408,7 @@ class BatchPipelineWorker(QObject):
                 f"modes={','.join(self._modes)} | "
                 f"adaptive_filter={self._adaptive_filter} | "
                 f"analysis_scope={self._analysis_scope} | "
+                f"num_cascade_hf={self._num_cascade_hf} | "
                 f"max_iterations={self._bayes_cfg.max_iterations}, "
                 f"num_seed_points={self._bayes_cfg.num_seed_points}, "
                 f"num_repeats={self._bayes_cfg.num_repeats}, "
@@ -460,6 +472,7 @@ class BatchPipelineWorker(QObject):
                 modes=self._modes,
                 adaptive_filter=self._adaptive_filter,
                 analysis_scope=self._analysis_scope,
+                num_cascade_hf=self._num_cascade_hf,
                 bayes_cfg=self._bayes_cfg,
                 thresholds=QcThresholds(),
                 on_log=self.log.emit,

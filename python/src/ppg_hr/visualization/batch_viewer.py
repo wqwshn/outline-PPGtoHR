@@ -57,6 +57,7 @@ def render_report_batch(
     *,
     out_dir: str | Path | None,
     analysis_scope: str,
+    num_cascade_hf: int = 2,
     on_log: Callable[[str], None] | None = None,
     on_progress: Callable[[dict], None] | None = None,
 ) -> BatchViewResult:
@@ -86,6 +87,7 @@ def render_report_batch(
                 file_name=job.data_path,
                 ref_file=job.ref_path,
                 analysis_scope=analysis_scope,
+                num_cascade_hf=int(num_cascade_hf),
             )
             prefix = f"{job.data_path.stem}-{analysis_scope_suffix(analysis_scope)}"
             arte = render(
@@ -198,6 +200,8 @@ def _candidate_stems(report: Path) -> list[str]:
         "green",
         "red",
         "ir",
+        "hf2",
+        "hf4",
     }:
         parts = parts[:-1]
         if parts:
