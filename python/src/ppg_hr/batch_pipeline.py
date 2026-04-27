@@ -62,6 +62,7 @@ class BatchRunRecord:
     figure_path: Path | None
     error_csv: Path | None
     param_csv: Path | None
+    hr_csv: Path | None
     min_err_hf: float
     min_err_acc: float
 
@@ -384,7 +385,7 @@ def run_batch_pipeline(
                 f"HF={result.min_err_hf:.3f} ACC={result.min_err_acc:.3f}"
             )
 
-            _log(f"[{run_idx}/{total_runs}] 开始可视化：{row.file_name} | 通道={mode}")
+            _log(f"[{run_idx}/{total_runs}] 开始结果分析：{row.file_name} | 通道={mode}")
             if on_progress is not None:
                 on_progress(
                     {
@@ -393,12 +394,12 @@ def run_batch_pipeline(
                         "overall_total": total_runs,
                         "stage_current": 0,
                         "stage_total": 1,
-                        "stage_label": "结果可视化",
+                        "stage_label": "结果分析",
                         "file": row.file_name,
                         "mode": mode,
                         "run_idx": run_idx,
                         "run_total": total_runs,
-                        "detail": "重跑最优参数并生成 PNG / CSV",
+                        "detail": "重跑最优参数并生成 PNG / 结果 CSV",
                     }
                 )
             arte = render(
@@ -416,12 +417,12 @@ def run_batch_pipeline(
                         "overall_total": total_runs,
                         "stage_current": 1,
                         "stage_total": 1,
-                        "stage_label": "结果可视化",
+                        "stage_label": "结果分析",
                         "file": row.file_name,
                         "mode": mode,
                         "run_idx": run_idx,
                         "run_total": total_runs,
-                        "detail": "PNG / error_table / param_table 已生成",
+                        "detail": "PNG / error_table / param_table / hr_results 已生成",
                     }
                 )
             records.append(
@@ -434,6 +435,7 @@ def run_batch_pipeline(
                     figure_path=arte.figure,
                     error_csv=arte.error_csv,
                     param_csv=arte.param_csv,
+                    hr_csv=arte.hr_csv,
                     min_err_hf=float(result.min_err_hf),
                     min_err_acc=float(result.min_err_acc),
                 )
@@ -467,11 +469,12 @@ def _rename_viewer_artefacts(
     so we tag each artefact with ``{sample_stem}-{mode}-{filter}-…`` to keep
     outputs recognisable after they leave the folder.
     """
-    renamed: dict[str, Path | None] = {"figure": None, "error_csv": None, "param_csv": None}
+    renamed: dict[str, Path | None] = {"figure": None, "error_csv": None, "param_csv": None, "hr_csv": None}
     mapping = {
         "figure": (arte.figure, f"{prefix}-hf-best.png"),
         "error_csv": (arte.error_csv, f"{prefix}-error_table.csv"),
         "param_csv": (arte.param_csv, f"{prefix}-param_table.csv"),
+        "hr_csv": (arte.hr_csv, f"{prefix}-hr_results.csv"),
     }
     for attr, (current, new_name) in mapping.items():
         if current is None:
@@ -506,6 +509,7 @@ def _rename_viewer_artefacts(
         figure=renamed["figure"],
         error_csv=renamed["error_csv"],
         param_csv=renamed["param_csv"],
+        hr_csv=renamed["hr_csv"],
         extras=extras,
     )
 
@@ -540,6 +544,7 @@ def _write_run_summary(output_dir: Path, records: list[BatchRunRecord]) -> Path:
                 "figure_path",
                 "error_csv",
                 "param_csv",
+                "hr_csv",
             ]
         )
         for r in records:
@@ -555,6 +560,7 @@ def _write_run_summary(output_dir: Path, records: list[BatchRunRecord]) -> Path:
                     str(r.figure_path or ""),
                     str(r.error_csv or ""),
                     str(r.param_csv or ""),
+                    str(r.hr_csv or ""),
                 ]
             )
     return path

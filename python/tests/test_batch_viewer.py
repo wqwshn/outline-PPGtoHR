@@ -120,7 +120,8 @@ def test_render_report_batch_uses_explicit_output_dir(
 
         seen_out_dirs.append(Path(out_dir))
         figure = Path(out_dir) / f"{output_prefix}-hf-best.png"
-        return ViewerArtefacts(figure=figure, extras={"figure_hf": figure})
+        hr_csv = Path(out_dir) / f"{output_prefix}-hr_results.csv"
+        return ViewerArtefacts(figure=figure, hr_csv=hr_csv, extras={"figure_hf": figure})
 
     monkeypatch.setattr("ppg_hr.visualization.batch_viewer.render", _fake_render)
 
@@ -128,6 +129,7 @@ def test_render_report_batch_uses_explicit_output_dir(
 
     assert result.items[0].report_path == report
     assert result.items[0].figure_hf == out_dir / "sample1-full-hf-best.png"
+    assert result.items[0].hr_csv == out_dir / "sample1-full-hr_results.csv"
     assert seen_out_dirs == [out_dir]
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 
 from ppg_hr.batch_pipeline import BatchRunRecord, QcRow, QcThresholds, run_batch_pipeline
@@ -72,14 +73,17 @@ def test_run_batch_pipeline_reports_fine_grained_stages_and_interleaves_render(
         figure_acc = out_dir / f"{output_prefix}-acc-best.png"
         error_csv = out_dir / f"{output_prefix}-error_table.csv"
         param_csv = out_dir / f"{output_prefix}-param_table.csv"
+        hr_csv = out_dir / f"{output_prefix}-hr_results.csv"
         figure.write_text("fig", encoding="utf-8")
         figure_acc.write_text("fig", encoding="utf-8")
         error_csv.write_text("err", encoding="utf-8")
         param_csv.write_text("par", encoding="utf-8")
+        hr_csv.write_text("hr", encoding="utf-8")
         return ViewerArtefacts(
             figure=figure,
             error_csv=error_csv,
             param_csv=param_csv,
+            hr_csv=hr_csv,
             extras={
                 "figure_hf": figure,
                 "figure_acc": figure_acc,
@@ -129,14 +133,19 @@ def test_run_batch_pipeline_reports_fine_grained_stages_and_interleaves_render(
         assert (run_dir / f"{prefix}-acc-best.png").is_file()
         assert (run_dir / f"{prefix}-error_table.csv").is_file()
         assert (run_dir / f"{prefix}-param_table.csv").is_file()
+        assert (run_dir / f"{prefix}-hr_results.csv").is_file()
     rec_by_mode = {r.mode: r for r in records}
     for mode in ("green", "red", "ir"):
         rec = rec_by_mode[mode]
         assert rec.figure_path is not None and rec.figure_path.name == f"sample01-{mode}-lms-full-hf4-hf-best.png"
         assert rec.error_csv is not None and rec.error_csv.name == f"sample01-{mode}-lms-full-hf4-error_table.csv"
         assert rec.param_csv is not None and rec.param_csv.name == f"sample01-{mode}-lms-full-hf4-param_table.csv"
+        assert rec.hr_csv is not None and rec.hr_csv.name == f"sample01-{mode}-lms-full-hf4-hr_results.csv"
         assert rec.report_path.name == f"sample01-{mode}-lms-full-hf4-best_params.json"
     assert seen_hf_counts == [4, 4, 4, 4, 4, 4]
+    with payload["summary_csv"].open("r", encoding="utf-8-sig", newline="") as f:
+        header = next(csv.reader(f))
+    assert "hr_csv" in header
 
 
 def test_run_batch_pipeline_runs_bad_quality_rows_with_reference(

@@ -21,6 +21,7 @@ class BatchViewItem:
     figure_acc: Path | None = None
     error_csv: Path | None = None
     param_csv: Path | None = None
+    hr_csv: Path | None = None
     error: str | None = None
 
 
@@ -106,6 +107,7 @@ def render_report_batch(
                 figure_acc=arte.extras.get("figure_acc"),
                 error_csv=arte.error_csv,
                 param_csv=arte.param_csv,
+                hr_csv=arte.hr_csv,
             )
             _log(on_log, f"完成 {job.report_path} -> {item.figure_hf}")
             items.append(item)
