@@ -44,6 +44,7 @@ from .theme import Palette
 from .widgets import AAETable, FilePicker, LogPanel, MplCanvas, SectionCard
 from .workers import (
     BatchPipelineWorker,
+    BatchViewWorker,
     CompareResult,
     CompareWorker,
     OptimiseWorker,
@@ -1110,9 +1111,18 @@ class ViewPage(_PageBase):
             "读取 optimise 输出的 JSON 或 MATLAB 报告 .mat，重跑并生成双子图 PNG + 误差 / 参数 CSV。",
         )
 
+        # -- Tab widget: single / batch --
+        self._view_mode_tabs = QTabWidget()
+
+        # === Single-render tab ===
+        single_tab = QWidget()
+        single_layout = QVBoxLayout(single_tab)
+        single_layout.setContentsMargins(0, 0, 0, 0)
+        single_layout.setSpacing(14)
+
         # data
         card, self._in_pick, self._ref_pick, _ = _dataset_card(show_output=False)
-        self.body().addWidget(card)
+        single_layout.addWidget(card)
 
         # report + out dir
         rc = SectionCard("报告与输出目录", "JSON 来自 optimise；.mat 来自 MATLAB")
@@ -1124,12 +1134,12 @@ class ViewPage(_PageBase):
         rf.addRow("报告文件", self._report_pick)
         rf.addRow("输出目录", self._out_dir)
         rc.add(rf)
-        self.body().addWidget(rc)
+        single_layout.addWidget(rc)
 
         scope_card = SectionCard("分析范围", "默认整段数据；可切换为静息30s加最长运动段")
         self._analysis_scope_picker = AnalysisScopePicker()
         scope_card.add(self._analysis_scope_picker)
-        self.body().addWidget(scope_card)
+        single_layout.addWidget(scope_card)
 
         # action
         action_row = QHBoxLayout()
@@ -1139,7 +1149,7 @@ class ViewPage(_PageBase):
         self._btn.setMinimumWidth(140)
         self._btn.clicked.connect(self._run)
         action_row.addWidget(self._btn)
-        self.body().addLayout(action_row)
+        single_layout.addLayout(action_row)
 
         # result
         rr = SectionCard("渲染结果", "双子图 PNG · 误差 CSV · 参数 CSV · 日志")
@@ -1157,8 +1167,62 @@ class ViewPage(_PageBase):
         tabs.addTab(self._art_table, "文件")
         tabs.addTab(self._log, "日志")
         rr.add(tabs)
-        self.body().addWidget(rr)
-        self.body().addStretch(1)
+        single_layout.addWidget(rr)
+        single_layout.addStretch(1)
+
+        # === Batch-render tab ===
+        batch_tab = QWidget()
+        batch_layout = QVBoxLayout(batch_tab)
+        batch_layout.setContentsMargins(0, 0, 0, 0)
+        batch_layout.setSpacing(14)
+
+        batch_in = SectionCard("批量输入", "递归扫描目录中的 Best_Params_Result_*.json")
+        batch_form = QFormLayout()
+        batch_form.setHorizontalSpacing(14)
+        batch_form.setVerticalSpacing(10)
+        self._batch_root_pick = FilePicker(
+            placeholder="选择包含 JSON 报告的目录",
+            filter_str="",
+            mode="dir",
+        )
+        self._batch_out_dir = FilePicker(
+            placeholder="留空则保存到各 JSON 报告所在目录",
+            filter_str="",
+            mode="dir",
+        )
+        batch_form.addRow("报告根目录", self._batch_root_pick)
+        batch_form.addRow("输出目录", self._batch_out_dir)
+        batch_in.add(batch_form)
+        batch_layout.addWidget(batch_in)
+
+        batch_scope = SectionCard("分析范围", "批量渲染时应用到每一个报告")
+        self._batch_analysis_scope_picker = AnalysisScopePicker()
+        batch_scope.add(self._batch_analysis_scope_picker)
+        batch_layout.addWidget(batch_scope)
+
+        batch_action_row = QHBoxLayout()
+        batch_action_row.addStretch(1)
+        self._batch_btn = QPushButton("批量渲染")
+        self._batch_btn.setObjectName("primary")
+        self._batch_btn.setMinimumWidth(140)
+        self._batch_btn.clicked.connect(self._run_batch)
+        batch_action_row.addWidget(self._batch_btn)
+        batch_layout.addLayout(batch_action_row)
+
+        batch_result = SectionCard("批量结果", "逐项显示匹配状态、输出文件和错误信息")
+        batch_tabs = QTabWidget()
+        self._batch_table = AAETable(["报告", "数据", "参考", "状态", "HF PNG", "ACC PNG", "错误"])
+        self._batch_log = LogPanel()
+        batch_tabs.addTab(self._batch_table, "文件")
+        batch_tabs.addTab(self._batch_log, "日志")
+        batch_result.add(batch_tabs)
+        batch_layout.addWidget(batch_result)
+        batch_layout.addStretch(1)
+
+        # -- Assemble tabs --
+        self._view_mode_tabs.addTab(single_tab, "单次可视化")
+        self._view_mode_tabs.addTab(batch_tab, "批量可视化")
+        self.body().addWidget(self._view_mode_tabs)
 
         self._worker_holder: WorkerThread | None = None
 
@@ -1192,7 +1256,63 @@ class ViewPage(_PageBase):
         holder.start()
 
     def _default_output_dir(self, input_path: Path, scope: str = "full") -> Path:
-        return input_path.parent / "viewer_out" / f"{input_path.stem}-{scope}"
+        return input_path.parent
+
+    # -- Batch helpers --
+    def _batch_default_output_dir(self, root_dir: Path) -> None:
+        """Return None to indicate output defaults to each JSON report's directory."""
+        return None
+
+    def _run_batch(self) -> None:
+        root = self._batch_root_pick.path()
+        if root is None or not root.is_dir():
+            self._batch_log.error("请选择有效的报告根目录")
+            return
+        out_dir = self._batch_out_dir.path()
+        scope = self._batch_analysis_scope_picker.current_scope()
+
+        self._batch_btn.setEnabled(False)
+        self._batch_table.set_rows([])
+        self._batch_log.info("-" * 40)
+        self._batch_log.info(f"报告根目录: {root}")
+        self._batch_log.info(f"输出目录: {out_dir or '各 JSON 报告所在目录'}")
+        self._batch_log.info(f"分析范围: {scope}")
+
+        worker = BatchViewWorker(root, out_dir, scope)
+        worker.log.connect(self._batch_log.info)
+        worker.progress.connect(self._on_batch_progress)
+        worker.finished.connect(self._on_batch_done)
+        worker.failed.connect(self._on_batch_failed)
+        holder = WorkerThread(worker)
+        worker.finished.connect(lambda _=None: self._batch_btn.setEnabled(True))
+        worker.failed.connect(lambda _=None: self._batch_btn.setEnabled(True))
+        self._worker_holder = holder
+        holder.start()
+
+    def _on_batch_progress(self, info: dict) -> None:
+        current = int(info.get("current", 0))
+        total = int(info.get("total", 0))
+        report = info.get("report", "")
+        self._batch_log.info(f"进度 {current}/{total}: {report}")
+
+    def _on_batch_done(self, result) -> None:
+        rows = []
+        for item in result.items:
+            rows.append([
+                str(item.report_path),
+                "" if item.data_path is None else str(item.data_path),
+                "" if item.ref_path is None else str(item.ref_path),
+                item.status,
+                "" if item.figure_hf is None else str(item.figure_hf),
+                "" if item.figure_acc is None else str(item.figure_acc),
+                "" if item.error is None else item.error,
+            ])
+        self._batch_table.set_rows(rows)
+        ok_count = sum(1 for item in result.items if item.status == "ok")
+        self._batch_log.success(f"批量可视化完成：成功 {ok_count}/{len(result.items)}")
+
+    def _on_batch_failed(self, msg: str) -> None:
+        self._batch_log.error(msg)
 
     def _on_done(self, arte: ViewerArtefacts) -> None:
         if arte.figure and Path(arte.figure).is_file():

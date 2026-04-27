@@ -377,7 +377,7 @@ def test_batch_pipeline_page_defaults_and_autofill(tmp_path):
         app.processEvents()
 
 
-def test_view_page_default_output_dir_uses_data_stem(tmp_path):
+def test_view_page_default_output_dir_uses_report_dir(tmp_path):
     from PySide6.QtWidgets import QApplication
 
     from ppg_hr.gui.pages import ViewPage
@@ -385,10 +385,33 @@ def test_view_page_default_output_dir_uses_data_stem(tmp_path):
     app = QApplication.instance() or QApplication([])
     page = ViewPage()
     try:
-        data_path = tmp_path / "multi_bobi1.csv"
-        data_path.write_text("dummy\n", encoding="utf-8")
+        report_path = tmp_path / "reports" / "multi_bobi1-full-best_params.json"
+        report_path.parent.mkdir()
+        report_path.write_text("{}", encoding="utf-8")
 
-        assert page._default_output_dir(data_path) == tmp_path / "viewer_out" / "multi_bobi1-full"
+        assert page._default_output_dir(report_path) == report_path.parent
+    finally:
+        page.close()
+        page.deleteLater()
+        app.processEvents()
+
+
+def test_view_page_batch_tab_defaults_to_json_directory(tmp_path):
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.pages import ViewPage
+
+    app = QApplication.instance() or QApplication([])
+    page = ViewPage()
+    try:
+        root = tmp_path / "reports"
+        root.mkdir()
+        page._batch_root_pick.setPath(root)
+        app.processEvents()
+
+        assert page._view_mode_tabs.count() == 2
+        assert page._batch_default_output_dir(root) is None
+        assert page._batch_out_dir.path() is None
     finally:
         page.close()
         page.deleteLater()
