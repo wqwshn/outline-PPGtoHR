@@ -38,6 +38,7 @@ def optimise_v2(
     out_path: str | Path,
     space: V2SearchSpace | None = None,
     on_trial_step: Callable[[dict], None] | None = None,
+    qc: dict | None = None,
 ) -> V2OptimiseResult:
     active_space = space or default_v2_search_space(base.adaptive_filter)
     history: list[dict] = []
@@ -78,6 +79,7 @@ def optimise_v2(
         best_result,
         best_params=best_params,
         history=history,
+        qc=qc,
     )
     return V2OptimiseResult(
         report_path=report,
