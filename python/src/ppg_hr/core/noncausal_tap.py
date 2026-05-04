@@ -18,8 +18,8 @@ def build_noncausal_tap_matrix(
     if n == 0 or n < span:
         return np.zeros((0, span), dtype=float), np.zeros(0, dtype=int)
 
-    start = K
-    stop = n - M + 1
+    start = max(K, M - 1)
+    stop = n - K
     indices = np.arange(start, stop, dtype=int)
     X = np.zeros((indices.size, span), dtype=float)
     for row, idx in enumerate(indices):
