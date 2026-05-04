@@ -55,3 +55,41 @@ def test_run_v2_batch_pipeline_processes_bad_qc_when_ref_exists(
     assert payload["summary_csv"].is_file()
     assert len(payload["records"]) == 1
     assert payload["records"][0].report_path.is_file()
+
+
+def test_run_v2_batch_pipeline_writes_json_png_csv_layout(tmp_path: Path) -> None:
+    _write_pair(tmp_path, "sample")
+    logs: list[str] = []
+    progress: list[dict] = []
+
+    payload = run_v2_batch_pipeline(
+        input_dir=tmp_path,
+        output_dir=tmp_path / "out",
+        ppg_modes=["green"],
+        adaptive_filter="lms",
+        analysis_scope="full",
+        reference_groups_order=("HF",),
+        bayes_cfg=V2BayesConfig(
+            max_iterations=1,
+            num_seed_points=1,
+            num_repeats=2,
+            random_state=1,
+        ),
+        on_log=logs.append,
+        on_progress=progress.append,
+    )
+
+    out = tmp_path / "out"
+    prefix = "sample-green-lms-full-HF"
+    assert (out / "json" / f"{prefix}-v2.json").is_file()
+    assert (out / "png" / f"{prefix}-v2-hr.png").is_file()
+    assert (out / "csv" / f"{prefix}-v2-hr.csv").is_file()
+    assert (out / "csv" / f"{prefix}-v2-error.csv").is_file()
+    assert payload["summary_csv"] == out / "csv" / "v2_batch_summary.csv"
+    assert payload["summary_csv"].is_file()
+    record = payload["records"][0]
+    assert record.figure_png == out / "png" / f"{prefix}-v2-hr.png"
+    assert record.hr_csv == out / "csv" / f"{prefix}-v2-hr.csv"
+    assert any("repeat 1/2" in msg for msg in logs)
+    assert any(item.get("stage") == "optimise" for item in progress)
+    assert any(item.get("stage") == "visualise" for item in progress)
