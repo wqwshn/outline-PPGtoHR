@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -40,7 +39,7 @@ class V2BatchPipelinePage(_PageBase):
             filter_str="",
         )
         self._output_dir_pick = FilePicker(
-            placeholder="留空则自动生成 v2_outputs",
+            placeholder="留空则自动生成 v2_batch_outputs",
             mode="dir",
             filter_str="",
         )
@@ -57,7 +56,7 @@ class V2BatchPipelinePage(_PageBase):
             self._ppg_combo.addItem(label, userData=mode)
 
         self._filter_combo = QComboBox()
-        for value in ("noncausal_lms", "rff_lms"):
+        for value in ("lms", "klms", "volterra", "noncausal_lms", "rff_lms"):
             self._filter_combo.addItem(value, userData=value)
 
         self._scope_combo = QComboBox()
@@ -68,9 +67,10 @@ class V2BatchPipelinePage(_PageBase):
         ref_layout = QHBoxLayout(ref_widget)
         ref_layout.setContentsMargins(0, 0, 0, 0)
         self._reference_checks: dict[str, QCheckBox] = {}
+        self._reference_order: list[str] = ["HF", "CF", "ACC"]
         for group in ("HF", "CF", "ACC"):
             cb = QCheckBox(group)
-            cb.setChecked(True)
+            cb.setChecked(group == "HF")
             self._reference_checks[group] = cb
             ref_layout.addWidget(cb)
 
@@ -80,6 +80,9 @@ class V2BatchPipelinePage(_PageBase):
         self._seed_pts = QSpinBox()
         self._seed_pts.setRange(1, 200)
         self._seed_pts.setValue(10)
+        self._num_repeats = QSpinBox()
+        self._num_repeats.setRange(1, 100)
+        self._num_repeats.setValue(3)
         self._seed = QSpinBox()
         self._seed.setRange(0, 10000)
         self._seed.setValue(42)
@@ -90,6 +93,7 @@ class V2BatchPipelinePage(_PageBase):
         form.addRow("参考信号", ref_widget)
         form.addRow("max_iterations", self._max_iter)
         form.addRow("num_seed_points", self._seed_pts)
+        form.addRow("num_repeats", self._num_repeats)
         form.addRow("random_state", self._seed)
         card.add(form)
         self.body().addWidget(card)
@@ -117,8 +121,29 @@ class V2BatchPipelinePage(_PageBase):
     def selected_reference_order(self) -> tuple[str, ...]:
         return tuple(
             group
-            for group in ("HF", "CF", "ACC")
+            for group in self._reference_order
             if self._reference_checks[group].isChecked()
+        )
+
+    def set_reference_enabled(self, group: str, enabled: bool) -> None:
+        self._reference_checks[group].setChecked(bool(enabled))
+
+    def move_reference_up(self, group: str) -> None:
+        idx = self._reference_order.index(group)
+        if idx <= 0:
+            return
+        self._reference_order[idx - 1], self._reference_order[idx] = (
+            self._reference_order[idx],
+            self._reference_order[idx - 1],
+        )
+
+    def move_reference_down(self, group: str) -> None:
+        idx = self._reference_order.index(group)
+        if idx >= len(self._reference_order) - 1:
+            return
+        self._reference_order[idx + 1], self._reference_order[idx] = (
+            self._reference_order[idx],
+            self._reference_order[idx + 1],
         )
 
     def _refresh(self) -> None:
@@ -130,10 +155,11 @@ class V2BatchPipelinePage(_PageBase):
         if input_dir is None or not input_dir.is_dir():
             self._log.error("请选择有效输入目录")
             return
-        out_dir = self._output_dir_pick.path() or input_dir / "v2_outputs" / datetime.now().strftime("%Y%m%d_%H%M%S")
+        out_dir = self._output_dir_pick.path()
         cfg = V2BayesConfig(
             max_iterations=int(self._max_iter.value()),
             num_seed_points=int(self._seed_pts.value()),
+            num_repeats=int(self._num_repeats.value()),
             random_state=int(self._seed.value()),
         )
         worker = V2BatchPipelineWorker(

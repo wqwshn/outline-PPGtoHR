@@ -389,7 +389,7 @@ class BatchPipelineWorker(QObject):
         self,
         *,
         input_dir: Path,
-        output_dir: Path,
+        output_dir: Path | None,
         modes: list[str],
         adaptive_filter: str,
         analysis_scope: str,
@@ -524,6 +524,69 @@ class V2BatchPipelineWorker(QObject):
 
     def run(self) -> None:
         try:
+            self.log.emit(f"输入目录: {self._input_dir}")
+            self.log.emit(f"输出目录: {self._output_dir or '自动生成'}")
+            self.log.emit(
+                "运行配置: "
+                f"modes={','.join(self._ppg_modes)} | "
+                f"adaptive_filter={self._adaptive_filter} | "
+                f"analysis_scope={self._analysis_scope} | "
+                f"reference_order={'+'.join(self._reference_groups_order) or 'FFT'} | "
+                f"max_iterations={self._bayes_cfg.max_iterations}, "
+                f"num_seed_points={self._bayes_cfg.num_seed_points}, "
+                f"num_repeats={self._bayes_cfg.num_repeats}, "
+                f"random_state={self._bayes_cfg.random_state}"
+            )
+
+            def _on_progress(info: dict) -> None:
+                overall_total = int(
+                    info.get("overall_total", info.get("total", 0)) or 0
+                )
+                overall_current = int(
+                    info.get("overall_current", info.get("current", 0)) or 0
+                )
+                stage_total = int(info.get("stage_total", 0) or 0)
+                stage_current = int(info.get("stage_current", 0) or 0)
+                overall_percent = (
+                    0
+                    if overall_total <= 0
+                    else int(round(100.0 * overall_current / max(1, overall_total)))
+                )
+                stage_percent = (
+                    0
+                    if stage_total <= 0
+                    else int(round(100.0 * stage_current / max(1, stage_total)))
+                )
+                stage = str(info.get("stage", "unknown"))
+                stage_label = str(info.get("stage_label", stage))
+                file_name = info.get("file")
+                mode = info.get("mode")
+                detail = str(info.get("detail", "")).strip()
+
+                title_parts: list[str] = [stage_label]
+                if file_name:
+                    title_parts.append(str(file_name))
+                if mode:
+                    title_parts.append(f"通道={mode}")
+                title = " · ".join(title_parts)
+
+                meta_parts: list[str] = []
+                if detail:
+                    meta_parts.append(detail)
+                if overall_total:
+                    meta_parts.append(f"总进度 {overall_current}/{overall_total}")
+                message = " | ".join(meta_parts) if meta_parts else stage_label
+
+                self.progress.emit(
+                    {
+                        **info,
+                        "overall_percent": max(0, min(100, overall_percent)),
+                        "stage_percent": max(0, min(100, stage_percent)),
+                        "title": title,
+                        "message": message,
+                    }
+                )
+
             payload = run_v2_batch_pipeline(
                 input_dir=self._input_dir,
                 output_dir=self._output_dir,
@@ -533,7 +596,7 @@ class V2BatchPipelineWorker(QObject):
                 reference_groups_order=self._reference_groups_order,
                 bayes_cfg=self._bayes_cfg,
                 on_log=self.log.emit,
-                on_progress=self.progress.emit,
+                on_progress=_on_progress,
             )
             self.finished.emit(payload)
         except Exception as exc:  # pragma: no cover
