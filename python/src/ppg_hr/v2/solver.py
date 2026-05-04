@@ -13,6 +13,8 @@ from scipy.signal.windows import hamming
 
 from ppg_hr.core.adaptive_filter import apply_adaptive_cascade
 from ppg_hr.core.fft_peaks import fft_peaks
+from ppg_hr.core.heart_rate_solver import solve as solve_v1
+from ppg_hr.params import SolverParams
 from ppg_hr.preprocess.utils import smoothdata_movmedian
 
 from .preprocess import filtered_channels, load_v2_dataset
@@ -34,6 +36,8 @@ class V2SolverResult:
 
 def solve_v2(config: V2RunConfig) -> V2SolverResult:
     cfg = _normalise_config(config)
+    if _uses_v1_hf_compat_path(cfg):
+        return _solve_v1_hf_compat(cfg)
     ds = load_v2_dataset(cfg.data_path, cfg.ref_path, fs_origin=cfg.fs_origin)
     frame = filtered_channels(ds.data, ds.fs)
     frame = _resample_frame(frame, ds.fs, cfg.fs_target)
@@ -145,6 +149,90 @@ def _normalise_config(config: V2RunConfig) -> V2RunConfig:
                 config.reference_groups_order
             ),
         }
+    )
+
+
+def _uses_v1_hf_compat_path(cfg: V2RunConfig) -> bool:
+    return cfg.analysis_scope == "full" and cfg.reference_groups_order == ("HF",)
+
+
+def _solve_v1_hf_compat(cfg: V2RunConfig) -> V2SolverResult:
+    params = SolverParams(
+        file_name=cfg.data_path,
+        ref_file=cfg.ref_path,
+        adaptive_filter=cfg.adaptive_filter,
+        ppg_mode=cfg.ppg_mode,
+        analysis_scope=cfg.analysis_scope,
+        fs_target=int(cfg.fs_target),
+        calib_time=float(cfg.calib_time),
+        motion_th_scale=float(cfg.motion_th_scale),
+        lms_mu_base=float(cfg.lms_mu_base),
+        lms_mu_min=float(cfg.lms_mu_min),
+        max_order=int(cfg.max_order),
+        smooth_win_len=int(cfg.smooth_win_len),
+        spec_penalty_enable=bool(cfg.spec_penalty_enable),
+        spec_penalty_weight=float(cfg.spec_penalty_weight),
+        spec_penalty_width=float(cfg.spec_penalty_width),
+        hr_range_hz=float(cfg.hr_range_hz),
+        slew_limit_bpm=float(cfg.slew_limit_bpm),
+        slew_step_bpm=float(cfg.slew_step_bpm),
+        time_bias=float(cfg.time_bias),
+        rff_D=int(cfg.rff_D),
+        rff_sigma=float(cfg.rff_sigma),
+        rff_seed=int(cfg.rff_seed),
+    )
+    result = solve_v1(params)
+    source = np.asarray(result.HR, dtype=float)
+    if source.size:
+        HR = np.column_stack(
+            [
+                source[:, 0],
+                source[:, 1] * 60.0,
+                source[:, 4] * 60.0,
+                source[:, 5] * 60.0,
+                source[:, 8],
+                source[:, 8],
+            ]
+        )
+    else:
+        HR = np.zeros((0, 6), dtype=float)
+    window_table = [
+        {
+            "window_idx": int(idx),
+            "start_s": float(row[0]),
+            "center_s": float(row[0] + cfg.window_seconds / 2.0),
+            "ref_hr_bpm": float(row[1]),
+            "fft_hr_bpm": float(row[2]),
+            "final_hr_bpm": float(row[3]),
+            "in_analysis_scope": True,
+            "is_motion": bool(row[4]),
+            "used_adaptive": bool(row[5]),
+            "adaptive_stages": [],
+        }
+        for idx, row in enumerate(HR)
+    ]
+    metadata = {
+        "schema_version": "v2",
+        "data_path": str(cfg.data_path),
+        "ref_path": str(cfg.ref_path),
+        "ppg_mode": cfg.ppg_mode,
+        "analysis_scope": cfg.analysis_scope,
+        "adaptive_filter": cfg.adaptive_filter,
+        "reference_groups_order": ["HF"],
+        "reference_order_key": "HF",
+        "motion_segment": None,
+        "used_adaptive_windows": int(np.sum(HR[:, 5] > 0)) if HR.size else 0,
+        "fallback_reason": "",
+        "compat_solver": "v1_fusion_hf",
+    }
+    return V2SolverResult(
+        HR=HR,
+        err_stats={
+            "fft_aae_bpm": float(result.err_stats[2, 0]),
+            "final_aae_bpm": float(result.err_stats[3, 0]),
+        },
+        metadata=metadata,
+        window_table=window_table,
     )
 
 
@@ -296,7 +384,7 @@ def _run_reference_cascade(
         ranked = _rank_channels(frame, start, end, channels, current)
         for channel, corr, delay in ranked[: len(channels)]:
             M = max(1, min(int(cfg.max_order), int(abs(delay)) or 1))
-            K = max(0, min(int(cfg.K_max), int(abs(delay)) if delay < 0 else 0))
+            K = _cascade_forward_taps(group, cfg)
             ref = frame[channel].iloc[start:end].to_numpy(dtype=float)
             current = apply_adaptive_cascade(
                 strategy=cfg.adaptive_filter,
@@ -320,6 +408,14 @@ def _run_reference_cascade(
                 }
             )
     return current, stages
+
+
+def _cascade_forward_taps(group: str, cfg: V2RunConfig) -> int:
+    if group in {"HF", "CF"}:
+        return 0
+    if group == "ACC":
+        return max(0, min(int(cfg.K_max), 1))
+    return 0
 
 
 def _rank_channels(
