@@ -19,6 +19,11 @@ def test_default_search_space_has_rff_fields_only_for_rff() -> None:
     assert "rff_sigma" in rff_names
 
 
+def test_v2_bayes_config_defaults_to_three_repeats() -> None:
+    cfg = V2BayesConfig()
+    assert cfg.num_repeats == 3
+
+
 def _write_pair(tmp_path: Path) -> tuple[Path, Path]:
     fs = 100
     n = 45 * fs
@@ -69,3 +74,34 @@ def test_optimise_v2_writes_single_objective_report(tmp_path: Path) -> None:
     assert result.report_path == out
     assert result.best_error >= 0
     assert result.best_params
+
+
+def test_optimise_v2_records_repeat_and_trial_progress(tmp_path: Path) -> None:
+    data, ref = _write_pair(tmp_path)
+    cfg = V2RunConfig(
+        data_path=data,
+        ref_path=ref,
+        adaptive_filter="noncausal_lms",
+        reference_groups_order=(),
+    )
+    progress: list[dict] = []
+
+    result = optimise_v2(
+        cfg,
+        V2BayesConfig(
+            max_iterations=2,
+            num_seed_points=1,
+            num_repeats=2,
+            random_state=3,
+        ),
+        out_path=tmp_path / "repeat.json",
+        on_trial_step=progress.append,
+    )
+
+    assert len(result.history) == 4
+    assert len(progress) == 4
+    assert {row["repeat_idx"] for row in result.history} == {1, 2}
+    assert [row["global_trial"] for row in result.history] == [1, 2, 3, 4]
+    assert all(row["repeat_total"] == 2 for row in progress)
+    assert all(row["trial_total"] == 2 for row in progress)
+    assert result.best_error == min(row["value"] for row in result.history)
