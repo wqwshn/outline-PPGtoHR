@@ -69,3 +69,44 @@ def test_unknown_strategy_raises() -> None:
             strategy="bogus", mu_base=0.01, corr=0.0,
             order=3, K=0, u=u, d=d, params=SolverParams(),
         )
+
+
+def test_noncausal_lms_dispatch_preserves_length() -> None:
+    u, d = _signals()
+    params = SolverParams(adaptive_filter="noncausal_lms")
+
+    out = apply_adaptive_cascade(
+        strategy="noncausal_lms",
+        mu_base=0.01,
+        corr=0.3,
+        order=5,
+        K=2,
+        u=u,
+        d=d,
+        params=params,
+    )
+
+    assert out.shape == d.shape
+
+
+def test_rff_lms_dispatch_preserves_length() -> None:
+    u, d = _signals()
+    params = SolverParams(
+        adaptive_filter="rff_lms",
+        rff_D=32,
+        rff_sigma=1.0,
+        rff_seed=7,
+    )
+
+    out = apply_adaptive_cascade(
+        strategy="rff_lms",
+        mu_base=0.01,
+        corr=0.3,
+        order=5,
+        K=2,
+        u=u,
+        d=d,
+        params=params,
+    )
+
+    assert out.shape == d.shape

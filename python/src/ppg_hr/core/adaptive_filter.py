@@ -12,6 +12,8 @@ Strategies
                 / ``params.klms_epsilon``. Matches the KLMS reference project.
 ``"volterra"``  second-order Volterra LMS; uses ``mu_base - corr/100`` as step
                 size and ``params.volterra_max_order_vol`` as ``M2``.
+``"noncausal_lms"``  noncausal normalized LMS with forward taps.
+``"rff_lms"``        noncausal Random Fourier Feature LMS.
 """
 
 from __future__ import annotations
@@ -23,11 +25,13 @@ import numpy as np
 from ..params import SolverParams
 from .klms_filter import klms_filter
 from .lms_filter import lms_filter
+from .noncausal_lms import noncausal_lms_filter
+from .rff_lms import noncausal_rff_lms_filter
 from .volterra_filter import volterra_filter
 
 __all__ = ["AdaptiveStrategy", "apply_adaptive_cascade"]
 
-AdaptiveStrategy = Literal["lms", "klms", "volterra"]
+AdaptiveStrategy = Literal["lms", "klms", "volterra", "noncausal_lms", "rff_lms"]
 
 
 def apply_adaptive_cascade(
@@ -61,4 +65,24 @@ def apply_adaptive_cascade(
             K, u, d,
         )
         return e
+    if strategy == "noncausal_lms":
+        return noncausal_lms_filter(
+            u,
+            d,
+            M=order,
+            K=K,
+            mu=max(params.lms_mu_min, mu_base - corr / 100.0),
+        )
+    if strategy == "rff_lms":
+        return noncausal_rff_lms_filter(
+            u,
+            d,
+            M=order,
+            K=K,
+            mu=max(params.lms_mu_min, mu_base - corr / 100.0),
+            D=params.rff_D,
+            sigma=params.rff_sigma,
+            rff_seed=params.rff_seed,
+            mu_min=params.lms_mu_min,
+        )
     raise ValueError(f"unknown adaptive filter strategy: {strategy!r}")

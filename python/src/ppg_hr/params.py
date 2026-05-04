@@ -62,6 +62,7 @@ class SolverParams:
     num_cascade_hf: int = 2
     num_cascade_acc: int = 3
     lms_mu_base: float = 0.01
+    lms_mu_min: float = 1e-6
 
     # Bandpass filter
     bp_low_hz: float = 0.5
@@ -89,6 +90,11 @@ class SolverParams:
 
     # Volterra-specific parameters (only used when adaptive_filter == "volterra")
     volterra_max_order_vol: int = 3
+
+    # RFF-LMS-specific parameters (only used when adaptive_filter == "rff_lms")
+    rff_D: int = 100
+    rff_sigma: float = 1.0
+    rff_seed: int = 42
 
     extras: dict[str, Any] = field(default_factory=dict)
 

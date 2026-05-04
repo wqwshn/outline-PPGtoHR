@@ -65,3 +65,11 @@ def test_to_dict_includes_delay_search_fields() -> None:
         "delay_prefit_min_span_samples",
     ):
         assert name in data
+
+
+def test_v2_filter_defaults_exist() -> None:
+    p = SolverParams()
+    assert p.lms_mu_min == pytest.approx(1e-6)
+    assert p.rff_D == 100
+    assert p.rff_sigma == pytest.approx(1.0)
+    assert p.rff_seed == 42
