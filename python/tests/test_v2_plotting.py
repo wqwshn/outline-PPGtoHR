@@ -62,3 +62,24 @@ def test_render_batch_records_reference_order(tmp_path: Path) -> None:
 
     keys = {item.reference_order_key for item in result.items}
     assert keys == {"HF+ACC", "ACC+HF"}
+
+
+def test_render_v2_report_can_split_png_and_csv_outputs(tmp_path: Path) -> None:
+    report = tmp_path / "new.json"
+    _write_report(report, ["HF"])
+
+    arte = render_v2_report(
+        report,
+        out_dir=tmp_path / "png",
+        csv_dir=tmp_path / "csv",
+        output_prefix="sample-green-lms-full-HF",
+    )
+
+    assert arte.figure_png == tmp_path / "png" / "sample-green-lms-full-HF-v2-hr.png"
+    assert arte.hr_csv == tmp_path / "csv" / "sample-green-lms-full-HF-v2-hr.csv"
+    assert arte.error_csv == tmp_path / "csv" / "sample-green-lms-full-HF-v2-error.csv"
+    assert arte.figure_png.is_file()
+    assert arte.hr_csv.is_file()
+    assert arte.error_csv.is_file()
+    assert not arte.figure_png.with_suffix(".pdf").exists()
+    assert not arte.figure_png.with_suffix(".svg").exists()

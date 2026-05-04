@@ -48,19 +48,24 @@ def discover_v2_plot_jobs(root_dir: str | Path) -> list[V2PlotJob]:
 def render_v2_report(
     report_path: str | Path,
     out_dir: str | Path | None = None,
+    *,
+    csv_dir: str | Path | None = None,
+    output_prefix: str | None = None,
 ) -> V2PlotArtefacts:
     report = Path(report_path)
     payload = load_v2_report(report)
     out = Path(out_dir) if out_dir is not None else report.parent
+    csv_out = Path(csv_dir) if csv_dir is not None else out
     out.mkdir(parents=True, exist_ok=True)
+    csv_out.mkdir(parents=True, exist_ok=True)
     order = tuple(payload.get("reference_groups_order", []))
     key = reference_order_key(order)
-    prefix = report.stem
+    prefix = output_prefix or report.stem
     hr = np.asarray(payload.get("hr", []), dtype=float)
     fig_base = out / f"{prefix}-v2-hr"
     fig_path = fig_base.with_suffix(".png")
-    err_path = out / f"{prefix}-v2-error.csv"
-    hr_path = out / f"{prefix}-v2-hr.csv"
+    err_path = csv_out / f"{prefix}-v2-error.csv"
+    hr_path = csv_out / f"{prefix}-v2-hr.csv"
 
     _write_hr_csv(hr_path, hr)
     _write_error_csv(err_path, payload, key)
@@ -286,21 +291,12 @@ def _apply_style() -> None:
 
 
 def _export_figure(fig, output_base: Path) -> None:
-    scripts = _publication_scripts_dir()
-    if scripts is not None:
-        sys.path.insert(0, str(scripts))
-        try:
-            from export_figure import export_figure
-
-            export_figure(fig, output_base, formats=("pdf", "svg", "png"), dpi=600)
-            return
-        except Exception:
-            pass
-    for suffix in (".pdf", ".svg", ".png"):
-        kwargs = {"bbox_inches": "tight", "pad_inches": 0.02}
-        if suffix == ".png":
-            kwargs["dpi"] = 600
-        fig.savefig(output_base.with_suffix(suffix), **kwargs)
+    fig.savefig(
+        output_base.with_suffix(".png"),
+        bbox_inches="tight",
+        pad_inches=0.02,
+        dpi=600,
+    )
 
 
 def _publication_scripts_dir() -> Path | None:
