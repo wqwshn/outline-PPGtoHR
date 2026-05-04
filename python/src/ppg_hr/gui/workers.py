@@ -29,6 +29,9 @@ from ..optimization.bayes_optimizer import (
 )
 from ..params import SolverParams
 from ..visualization import render, render_report_batch
+from ..v2.batch_pipeline import run_v2_batch_pipeline
+from ..v2.optimizer import V2BayesConfig
+from ..v2.plotting import render_v2_report_batch
 
 __all__ = [
     "CompareResult",
@@ -38,6 +41,8 @@ __all__ = [
     "BatchPipelineWorker",
     "SolveWorker",
     "ViewWorker",
+    "V2BatchPipelineWorker",
+    "V2BatchPlotWorker",
     "WorkerThread",
 ]
 
@@ -484,6 +489,75 @@ class BatchPipelineWorker(QObject):
         except Exception as exc:  # pragma: no cover
             tb = traceback.format_exc()
             self.failed.emit(f"批量流程失败：{exc}\n\n{tb}")
+
+
+# ---------------------------------------------------------------------------
+# v2 workers
+# ---------------------------------------------------------------------------
+
+
+class V2BatchPipelineWorker(QObject):
+    finished = Signal(object)
+    failed = Signal(str)
+    log = Signal(str)
+    progress = Signal(dict)
+
+    def __init__(
+        self,
+        *,
+        input_dir: Path,
+        output_dir: Path,
+        ppg_modes: list[str],
+        adaptive_filter: str,
+        analysis_scope: str,
+        reference_groups_order: tuple[str, ...],
+        bayes_cfg: V2BayesConfig,
+    ):
+        super().__init__()
+        self._input_dir = input_dir
+        self._output_dir = output_dir
+        self._ppg_modes = ppg_modes
+        self._adaptive_filter = adaptive_filter
+        self._analysis_scope = analysis_scope
+        self._reference_groups_order = reference_groups_order
+        self._bayes_cfg = bayes_cfg
+
+    def run(self) -> None:
+        try:
+            payload = run_v2_batch_pipeline(
+                input_dir=self._input_dir,
+                output_dir=self._output_dir,
+                ppg_modes=self._ppg_modes,
+                adaptive_filter=self._adaptive_filter,
+                analysis_scope=self._analysis_scope,
+                reference_groups_order=self._reference_groups_order,
+                bayes_cfg=self._bayes_cfg,
+                on_log=self.log.emit,
+                on_progress=self.progress.emit,
+            )
+            self.finished.emit(payload)
+        except Exception as exc:  # pragma: no cover
+            self.failed.emit(f"v2批量全流程失败：{exc}\n\n{traceback.format_exc()}")
+
+
+class V2BatchPlotWorker(QObject):
+    finished = Signal(object)
+    failed = Signal(str)
+    log = Signal(str)
+    progress = Signal(dict)
+
+    def __init__(self, root_dir: Path, out_dir: Path | None):
+        super().__init__()
+        self._root_dir = root_dir
+        self._out_dir = out_dir
+
+    def run(self) -> None:
+        try:
+            self.log.emit(f"v2报告根目录: {self._root_dir}")
+            result = render_v2_report_batch(self._root_dir, self._out_dir)
+            self.finished.emit(result)
+        except Exception as exc:  # pragma: no cover
+            self.failed.emit(f"v2批量绘图失败：{exc}\n\n{traceback.format_exc()}")
 
 
 # ---------------------------------------------------------------------------
