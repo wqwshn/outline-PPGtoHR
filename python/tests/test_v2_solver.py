@@ -122,3 +122,49 @@ def test_solve_v2_non_hf_reference_uses_v1_fusion_kernel(tmp_path: Path) -> None
     assert result.metadata["reference_groups_order"] == ["CF"]
     assert result.metadata["used_adaptive_windows"] > 0
     assert np.isfinite(result.err_stats["final_aae_bpm"])
+
+
+def test_recovery_trigger_gating() -> None:
+    from ppg_hr.v2.solver import _recovery_should_trigger
+
+    source = np.zeros((20, 9), dtype=float)
+    source[:, 2] = 120.0
+    source[:, 4] = 50.0
+    source[10:15, 7] = 1.0
+
+    motion_end_idx = 14
+    assert _recovery_should_trigger(source, motion_end_idx, 20.0)
+    source[:, 4] = 115.0
+    assert not _recovery_should_trigger(source, motion_end_idx, 20.0)
+    source[:, 4] = 50.0
+    source[:, 2] = 50.0
+    assert not _recovery_should_trigger(source, motion_end_idx, 20.0)
+
+
+def test_find_crossover_detects_fft_rise() -> None:
+    from ppg_hr.v2.solver import _find_crossover_idx
+
+    source = np.zeros((30, 9), dtype=float)
+    source[:, 2] = np.linspace(120, 80, 30)
+    source[:, 4] = np.linspace(60, 90, 30)
+    source[10:20, 7] = 1.0
+    motion_end_idx = 19
+
+    cross = _find_crossover_idx(source, motion_end_idx, 30.0, 1.0)
+    assert cross > motion_end_idx
+    assert source[cross, 4] >= source[cross, 2]
+    for idx in range(motion_end_idx + 1, cross):
+        assert source[idx, 4] < source[idx, 2]
+
+
+def test_find_crossover_forces_switch_at_max_recovery() -> None:
+    from ppg_hr.v2.solver import _find_crossover_idx
+
+    source = np.zeros((40, 9), dtype=float)
+    source[:, 2] = 120.0
+    source[:, 4] = 50.0
+    source[10:20, 7] = 1.0
+    motion_end_idx = 19
+
+    cross = _find_crossover_idx(source, motion_end_idx, 10.0, 1.0)
+    assert cross == 29
