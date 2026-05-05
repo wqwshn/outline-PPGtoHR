@@ -73,7 +73,12 @@ def render_v2_report(
     hr_path = csv_out / f"{prefix}-v2-hr.csv"
 
     _write_hr_csv(hr_path, hr, time_bias=time_bias)
-    _write_error_csv(err_path, hr, time_bias, order, adaptive_filter)
+    _write_error_csv(
+        err_path, hr, time_bias, order, adaptive_filter,
+        analysis_scope=str(meta.get("analysis_scope", "full")),
+        motion_segment=meta.get("motion_segment"),
+        pre_motion_context_seconds=float(meta.get("pre_motion_context_seconds", 30.0)),
+    )
     _plot_hr(fig_base, hr, key, order, payload, adaptive_label)
     return V2PlotArtefacts(
         report_path=report,
@@ -235,8 +240,16 @@ def _write_error_csv(
     time_bias: float,
     order: tuple[str, ...],
     adaptive_filter: str,
+    analysis_scope: str = "full",
+    motion_segment: dict | None = None,
+    pre_motion_context_seconds: float = 30.0,
 ) -> None:
-    rows = _detailed_stats_v2(hr, time_bias, order, adaptive_filter)
+    rows = _detailed_stats_v2(
+        hr, time_bias, order, adaptive_filter,
+        analysis_scope=analysis_scope,
+        motion_segment=motion_segment,
+        pre_motion_context_seconds=pre_motion_context_seconds,
+    )
     with path.open("w", encoding="utf-8-sig", newline="") as f:
         writer = csv.writer(f)
         writer.writerow([
@@ -258,6 +271,9 @@ def _detailed_stats_v2(
     time_bias: float,
     order: tuple[str, ...],
     adaptive_filter: str,
+    analysis_scope: str = "full",
+    motion_segment: dict | None = None,
+    pre_motion_context_seconds: float = 30.0,
 ) -> list[dict[str, float | str]]:
     if hr.size == 0:
         return []
@@ -268,25 +284,33 @@ def _detailed_stats_v2(
     )
     ref = ref_interp(t_aligned)
     motion_flag = hr[:, 4] > 0.5 if hr.shape[1] > 4 else np.zeros(hr.shape[0], dtype=bool)
-    rest_flag = ~motion_flag
+
+    scope_mask = np.ones(hr.shape[0], dtype=bool)
+    if analysis_scope == "motion" and isinstance(motion_segment, dict):
+        view_start = float(motion_segment.get("start_s", 0)) - pre_motion_context_seconds
+        view_end = float(motion_segment.get("end_s", float("inf")))
+        scope_mask = (t_aligned >= view_start) & (t_aligned <= view_end)
+
+    rest_flag = ~motion_flag & scope_mask
+    motion_flag_scoped = motion_flag & scope_mask
     adaptive_label = method_label(adaptive_filter, order)
     result: list[dict[str, float | str]] = []
     for col, name in ((2, "FFT"), (3, adaptive_label)):
         pred = hr[:, col]
-        abs_err = np.abs(pred - ref)
+        abs_err = np.abs(pred[scope_mask] - ref[scope_mask])
         abs_err = abs_err[np.isfinite(abs_err)]
         abs_err_rest = np.abs(pred[rest_flag] - ref[rest_flag]) if rest_flag.any() else np.array([])
         abs_err_rest = abs_err_rest[np.isfinite(abs_err_rest)]
-        abs_err_motion = np.abs(pred[motion_flag] - ref[motion_flag]) if motion_flag.any() else np.array([])
+        abs_err_motion = np.abs(pred[motion_flag_scoped] - ref[motion_flag_scoped]) if motion_flag_scoped.any() else np.array([])
         abs_err_motion = abs_err_motion[np.isfinite(abs_err_motion)]
         result.append({
             "method": name,
             "total_aae": float(np.mean(abs_err)) if abs_err.size else float("nan"),
             "rest_aae": float(np.mean(abs_err_rest)) if abs_err_rest.size else float("nan"),
             "motion_aae": float(np.mean(abs_err_motion)) if abs_err_motion.size else float("nan"),
-            "total_hit_rate_5bpm": _hit_rate_5bpm(pred, ref),
+            "total_hit_rate_5bpm": _hit_rate_5bpm(pred[scope_mask], ref[scope_mask]),
             "rest_hit_rate_5bpm": _hit_rate_5bpm(pred[rest_flag], ref[rest_flag]) if rest_flag.any() else float("nan"),
-            "motion_hit_rate_5bpm": _hit_rate_5bpm(pred[motion_flag], ref[motion_flag]) if motion_flag.any() else float("nan"),
+            "motion_hit_rate_5bpm": _hit_rate_5bpm(pred[motion_flag_scoped], ref[motion_flag_scoped]) if motion_flag_scoped.any() else float("nan"),
         })
     return result
 

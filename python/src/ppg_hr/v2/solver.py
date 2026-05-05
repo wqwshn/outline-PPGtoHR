@@ -302,9 +302,7 @@ def _solve_v1_reference_path(cfg: V2RunConfig) -> V2SolverResult:
         center = time_1 + float(cfg.window_seconds) / 2.0
         want_adaptive = bool(references) and motion_segment is not None
         if want_adaptive:
-            adaptive_start = float(motion_segment["start_s"])
-            adaptive_end = float(motion_segment["end_s"]) + float(cfg.max_recovery_seconds)
-            in_adaptive_range = adaptive_start <= center <= adaptive_end
+            in_adaptive_range = center >= float(motion_segment["start_s"])
         else:
             in_adaptive_range = False
         idx_s_motion = int(round(time_1 * fs_origin))
@@ -393,10 +391,7 @@ def _solve_v1_reference_path(cfg: V2RunConfig) -> V2SolverResult:
         )
 
         if should_recover:
-            crossover_idx = _find_crossover_idx(
-                source, motion_end_idx,
-                float(cfg.max_recovery_seconds), float(cfg.window_step_seconds),
-            )
+            crossover_idx = _find_crossover_idx(source, motion_end_idx)
             used_adaptive_mask = np.zeros(source.shape[0], dtype=bool)
             if motion_idxs.size:
                 motion_start_idx = int(motion_idxs[0])
@@ -770,18 +765,12 @@ def _recovery_should_trigger(
 def _find_crossover_idx(
     source: np.ndarray,
     motion_end_idx: int,
-    max_recovery_seconds: float,
-    window_step_seconds: float,
 ) -> int:
     total = source.shape[0]
-    max_steps = int(round(float(max_recovery_seconds) / float(window_step_seconds)))
-    scan_end = min(total, motion_end_idx + max_steps + 1)
-    for idx in range(motion_end_idx + 1, scan_end):
-        if idx >= total:
-            break
+    for idx in range(motion_end_idx + 1, total):
         if source[idx, 4] >= source[idx, 2]:
             return idx
-    return min(motion_end_idx + max_steps, total - 1) if total > 0 else 0
+    return total - 1 if total > 0 else 0
 
 
 def _run_reference_cascade(

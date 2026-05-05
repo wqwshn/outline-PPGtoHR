@@ -150,7 +150,7 @@ def test_find_crossover_detects_fft_rise() -> None:
     source[10:20, 7] = 1.0
     motion_end_idx = 19
 
-    cross = _find_crossover_idx(source, motion_end_idx, 30.0, 1.0)
+    cross = _find_crossover_idx(source, motion_end_idx)
     assert cross > motion_end_idx
     assert source[cross, 4] >= source[cross, 2]
     for idx in range(motion_end_idx + 1, cross):
@@ -166,5 +166,5 @@ def test_find_crossover_forces_switch_at_max_recovery() -> None:
     source[10:20, 7] = 1.0
     motion_end_idx = 19
 
-    cross = _find_crossover_idx(source, motion_end_idx, 10.0, 1.0)
-    assert cross == 29
+    cross = _find_crossover_idx(source, motion_end_idx)
+    assert cross == 39
