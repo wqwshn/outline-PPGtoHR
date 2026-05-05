@@ -168,3 +168,93 @@ def test_find_crossover_forces_switch_at_max_recovery() -> None:
 
     cross = _find_crossover_idx(source, motion_end_idx)
     assert cross == 39
+
+
+def test_motion_scope_crops_hr_output(tmp_path: Path) -> None:
+    data = tmp_path / "raw.csv"
+    ref = tmp_path / "ref.csv"
+    _write_sensor(data, motion=True)
+    _write_ref(ref)
+
+    cfg_full = V2RunConfig(
+        data_path=data,
+        ref_path=ref,
+        analysis_scope="full",
+        reference_groups_order=("HF",),
+    )
+    cfg_motion = V2RunConfig(
+        data_path=data,
+        ref_path=ref,
+        analysis_scope="motion",
+        reference_groups_order=("HF",),
+    )
+
+    result_full = solve_v2(cfg_full)
+    result_motion = solve_v2(cfg_motion)
+
+    assert result_full.HR.shape[0] > 0
+    assert result_motion.HR.shape[0] > 0
+    assert result_motion.HR.shape[0] < result_full.HR.shape[0], (
+        f"motion scope ({result_motion.HR.shape[0]} rows) 应少于 "
+        f"full scope ({result_full.HR.shape[0]} rows)"
+    )
+
+    motion_seg = result_motion.metadata["motion_segment"]
+    pre_ctx = cfg_motion.pre_motion_context_seconds
+    expected_start = max(
+        result_motion.HR[0, 0],
+        float(motion_seg["start_s"]) - pre_ctx,
+    )
+    for t in result_motion.HR[:, 0]:
+        assert t >= expected_start - 0.1, f"窗口时间 {t:.1f} 在裁剪范围之前"
+        assert t <= float(motion_seg["end_s"]) + 0.1, f"窗口时间 {t:.1f} 在运动结束之后"
+
+
+def test_full_scope_keeps_all_windows(tmp_path: Path) -> None:
+    data = tmp_path / "raw.csv"
+    ref = tmp_path / "ref.csv"
+    _write_sensor(data, motion=True)
+    _write_ref(ref)
+
+    cfg = V2RunConfig(
+        data_path=data,
+        ref_path=ref,
+        analysis_scope="full",
+        reference_groups_order=("HF", "ACC"),
+    )
+    result = solve_v2(cfg)
+    assert result.metadata["analysis_scope"] == "full"
+    assert result.HR.shape[0] > 50
+    assert all(row["in_analysis_scope"] for row in result.window_table)
+
+
+def test_adaptive_range_respects_motion_scope(tmp_path: Path) -> None:
+    data = tmp_path / "raw.csv"
+    ref = tmp_path / "ref.csv"
+    _write_sensor(data, motion=True)
+    _write_ref(ref)
+
+    cfg = V2RunConfig(
+        data_path=data,
+        ref_path=ref,
+        analysis_scope="motion",
+        reference_groups_order=("HF",),
+    )
+    result = solve_v2(cfg)
+    motion_seg = result.metadata["motion_segment"]
+    motion_end = float(motion_seg["end_s"])
+
+    post_motion_adaptive_count = 0
+    for entry in result.window_table:
+        if entry["used_adaptive"] and entry["center_s"] > motion_end + 2.0:
+            raise AssertionError(
+                f"窗口 {entry['window_idx']} center={entry['center_s']:.1f}s "
+                f"在运动结束后 ({motion_end:.1f}s) 过远，不应使用 adaptive"
+            )
+        if entry["used_adaptive"] and entry["center_s"] > motion_end:
+            post_motion_adaptive_count += 1
+
+    assert post_motion_adaptive_count <= 2, (
+        f"motion scope 下运动结束后使用 adaptive 的窗口数 "
+        f"({post_motion_adaptive_count}) 过多"
+    )
