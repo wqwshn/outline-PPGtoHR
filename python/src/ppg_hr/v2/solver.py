@@ -290,7 +290,7 @@ def _solve_v1_reference_path(cfg: V2RunConfig) -> V2SolverResult:
     time_1 = float(params.time_start)
     time_end = len(ppg_ori) / fs - params.time_buffer
     times_idx = 0
-    last_adaptive_flag = False
+    last_in_adaptive_range = False
     while True:
         time_2 = time_1 + float(cfg.window_seconds)
         idx_s = int(round(time_1 * fs))
@@ -299,11 +299,13 @@ def _solve_v1_reference_path(cfg: V2RunConfig) -> V2SolverResult:
             break
 
         center = time_1 + float(cfg.window_seconds) / 2.0
-        use_adaptive = bool(references) and _window_uses_adaptive(
-            center,
-            motion_segment,
-            cfg,
-        )
+        want_adaptive = bool(references) and motion_segment is not None
+        if want_adaptive:
+            adaptive_start = float(motion_segment["start_s"])
+            adaptive_end = float(motion_segment["end_s"]) + float(cfg.max_recovery_seconds)
+            in_adaptive_range = adaptive_start <= center <= adaptive_end
+        else:
+            in_adaptive_range = False
         idx_s_motion = int(round(time_1 * fs_origin))
         idx_e_motion = int(round(time_2 * fs_origin))
         is_motion_flag = _is_motion_window(
@@ -315,7 +317,7 @@ def _solve_v1_reference_path(cfg: V2RunConfig) -> V2SolverResult:
         row[0] = center
         row[1] = find_real_hr("dummy", center, ref_data)
         row[7] = 1.0 if is_motion_flag else 0.0
-        row[8] = 1.0 if use_adaptive else 0.0
+        row[8] = 1.0 if is_motion_flag else 0.0
 
         sig_p = ppg[idx_s:idx_e]
         sig_a = [accx[idx_s:idx_e], accy[idx_s:idx_e], accz[idx_s:idx_e]]
@@ -335,8 +337,8 @@ def _solve_v1_reference_path(cfg: V2RunConfig) -> V2SolverResult:
         )
 
         stages: list[dict[str, Any]] = []
-        if use_adaptive:
-            times_ref = 0 if not last_adaptive_flag else times_idx
+        if in_adaptive_range:
+            times_ref = 0 if not last_in_adaptive_range else times_idx
             filtered, penalty_ref, stages = _run_v1_style_reference_cascade(
                 ppg=ppg,
                 sig_p=sig_p,
@@ -367,7 +369,7 @@ def _solve_v1_reference_path(cfg: V2RunConfig) -> V2SolverResult:
         row[3] = row[2]
         rows.append(row)
         adaptive_stage_rows.append(stages)
-        last_adaptive_flag = bool(use_adaptive)
+        last_in_adaptive_range = in_adaptive_range
         time_1 += float(cfg.window_step_seconds)
         times_idx += 1
         if time_1 > time_end:
@@ -377,8 +379,34 @@ def _solve_v1_reference_path(cfg: V2RunConfig) -> V2SolverResult:
     if source.size:
         source[:, 2] = smoothdata_movmedian(source[:, 2], int(cfg.smooth_win_len))
         source[:, 4] = smoothdata_movmedian(source[:, 4], int(cfg.smooth_win_len))
-        source[:, 5] = np.where(source[:, 8] == 1, source[:, 2], source[:, 4])
+
+        motion_mask = source[:, 7] == 1
+        motion_idxs = np.flatnonzero(motion_mask)
+        motion_end_idx = int(motion_idxs[-1]) if motion_idxs.size else -1
+
+        should_recover = (
+            motion_end_idx >= 0
+            and _recovery_should_trigger(
+                source, motion_end_idx, float(cfg.recovery_trigger_bpm)
+            )
+        )
+
+        if should_recover:
+            crossover_idx = _find_crossover_idx(
+                source, motion_end_idx,
+                float(cfg.max_recovery_seconds), float(cfg.window_step_seconds),
+            )
+            used_adaptive_mask = np.zeros(source.shape[0], dtype=bool)
+            if motion_idxs.size:
+                motion_start_idx = int(motion_idxs[0])
+                used_adaptive_mask[motion_start_idx:crossover_idx + 1] = True
+        else:
+            used_adaptive_mask = motion_mask.copy()
+
+        source[:, 5] = np.where(used_adaptive_mask, source[:, 2], source[:, 4])
         source[:, 5] = smoothdata_movmedian(source[:, 5], 3)
+        source[:, 8] = used_adaptive_mask.astype(float)
+
         HR = np.column_stack(
             [
                 source[:, 0],
@@ -404,10 +432,11 @@ def _solve_v1_reference_path(cfg: V2RunConfig) -> V2SolverResult:
         "reference_groups_order": list(reference_order),
         "reference_order_key": reference_order_key(reference_order),
         "motion_segment": motion_segment,
-        "used_adaptive_windows": int(np.sum(HR[:, 5] > 0)) if HR.size else 0,
+        "used_adaptive_windows": int(np.sum(source[:, 8] > 0)) if source.size else 0,
         "fallback_reason": "" if motion_segment is not None else "no_motion_segment",
         "solver_kernel": "v1_fusion_reference_path",
         "time_bias": float(cfg.time_bias),
+        "pre_motion_context_seconds": float(cfg.pre_motion_context_seconds),
     }
     return V2SolverResult(
         HR=HR,
@@ -718,6 +747,40 @@ def _window_uses_adaptive(
     if cfg.analysis_scope == "full":
         end += float(cfg.post_motion_adaptive_seconds)
     return start <= center_s <= end
+
+
+def _recovery_should_trigger(
+    source: np.ndarray,
+    motion_end_idx: int,
+    trigger_bpm: float,
+    n_compare: int = 5,
+) -> bool:
+    if source.size == 0 or motion_end_idx < 0:
+        return False
+    start_idx = max(0, motion_end_idx - n_compare + 1)
+    idxs = list(range(start_idx, motion_end_idx + 1))
+    if len(idxs) < 1:
+        return False
+    adaptive_mean = float(np.mean(source[idxs, 2]))
+    fft_mean = float(np.mean(source[idxs, 4]))
+    return (adaptive_mean - fft_mean) > float(trigger_bpm)
+
+
+def _find_crossover_idx(
+    source: np.ndarray,
+    motion_end_idx: int,
+    max_recovery_seconds: float,
+    window_step_seconds: float,
+) -> int:
+    total = source.shape[0]
+    max_steps = int(round(float(max_recovery_seconds) / float(window_step_seconds)))
+    scan_end = min(total, motion_end_idx + max_steps + 1)
+    for idx in range(motion_end_idx + 1, scan_end):
+        if idx >= total:
+            break
+        if source[idx, 4] >= source[idx, 2]:
+            return idx
+    return min(motion_end_idx + max_steps, total - 1) if total > 0 else 0
 
 
 def _run_reference_cascade(
