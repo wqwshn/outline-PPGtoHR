@@ -12,10 +12,10 @@ _CHANNELS: dict[str, tuple[str, ...]] = {
 
 _ALGO_SHORT: dict[str, str] = {
     "lms": "LMS",
-    "klms": "KLMS",
-    "volterra": "VLMS",
-    "noncausal_lms": "NLMS",
-    "rff_lms": "RFF",
+    "klms": "K-LMS",
+    "volterra": "V-LMS",
+    "noncausal_lms": "NC-LMS",
+    "rff_lms": "RFF-LMS",
 }
 
 _REF_SHORT: dict[str, str] = {
@@ -30,7 +30,7 @@ def method_label(adaptive_filter: str, groups: tuple[str, ...]) -> str:
     if not groups:
         return algo
     suffix = "".join(_REF_SHORT.get(g, g) for g in normalise_reference_order(groups))
-    return f"{algo}-{suffix}"
+    return f"{algo}+{suffix}"
 
 
 _ORDER_COLORS: dict[str, str] = {

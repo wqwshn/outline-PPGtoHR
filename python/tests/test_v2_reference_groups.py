@@ -39,9 +39,9 @@ def test_ordered_reference_colors_are_distinct_and_stable() -> None:
 
 
 def test_method_label_formats_correctly() -> None:
-    assert method_label("lms", ("HF",)) == "LMS-H"
-    assert method_label("klms", ("HF", "CF", "ACC")) == "KLMS-HCA"
-    assert method_label("noncausal_lms", ("ACC", "HF")) == "NLMS-AH"
-    assert method_label("volterra", ("CF",)) == "VLMS-C"
-    assert method_label("rff_lms", ()) == "RFF"
-    assert method_label("unknown", ("HF", "ACC")) == "LMS-HA"
+    assert method_label("lms", ("HF",)) == "LMS+H"
+    assert method_label("klms", ("HF", "CF", "ACC")) == "K-LMS+HCA"
+    assert method_label("noncausal_lms", ("ACC", "HF")) == "NC-LMS+AH"
+    assert method_label("volterra", ("CF",)) == "V-LMS+C"
+    assert method_label("rff_lms", ()) == "RFF-LMS"
+    assert method_label("unknown", ("HF", "ACC")) == "LMS+HA"

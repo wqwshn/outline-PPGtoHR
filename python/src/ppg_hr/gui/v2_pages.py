@@ -64,7 +64,7 @@ class V2BatchPipelinePage(_PageBase):
         self._ref_list = QListWidget()
         self._ref_list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
         self._ref_list.setDefaultDropAction(Qt.DropAction.MoveAction)
-        self._ref_list.setMaximumHeight(80)
+        self._ref_list.setMaximumHeight(100)
         for group in ("HF", "CF", "ACC"):
             item = QListWidgetItem(group)
             item.setCheckState(Qt.CheckState.Checked if group == "HF" else Qt.CheckState.Unchecked)
@@ -109,10 +109,10 @@ class V2BatchPipelinePage(_PageBase):
 
     def _build_results(self) -> None:
         card = SectionCard("结果", "v2报告、摘要和日志")
-        self._summary = AAETable(["字段", "值"])
         self._log = LogPanel()
-        card.add(self._summary)
+        self._summary = AAETable(["字段", "值"])
         card.add(self._log)
+        card.add(self._summary)
         self.body().addWidget(card)
         self.body().addStretch(1)
 
@@ -203,10 +203,10 @@ class V2BatchPlotPage(_PageBase):
         self.body().addLayout(row)
 
         result = SectionCard("绘图结果", "参考组合、状态和输出文件")
-        self._table = AAETable(["报告", "参考组合", "状态", "图像", "HR CSV", "错误"])
         self._log = LogPanel()
-        result.add(self._table)
+        self._table = AAETable(["报告", "参考组合", "状态", "图像", "HR CSV", "错误"])
         result.add(self._log)
+        result.add(self._table)
         self.body().addWidget(result)
         self.body().addStretch(1)
 

@@ -135,4 +135,4 @@ def test_render_v2_report_error_csv_has_v1_style_format(tmp_path: Path) -> None:
     ]
     methods = [r[0] for r in rows]
     assert "FFT" in methods
-    assert any("NLMS-H" in m for m in methods)
+    assert any("NC-LMS+H" in m for m in methods)
