@@ -14,7 +14,7 @@ from scipy.interpolate import interp1d
 matplotlib.use("Agg", force=True)
 import matplotlib.pyplot as plt  # noqa: E402
 
-from .reference_groups import color_for_reference_order, reference_order_key
+from .reference_groups import color_for_reference_order, method_label, reference_order_key
 from .report import is_v2_report, load_v2_report
 
 
@@ -65,14 +65,16 @@ def render_v2_report(
     hr = np.asarray(payload.get("hr", []), dtype=float)
     meta = payload.get("metadata", {})
     time_bias = float(meta.get("time_bias", 5.0))
+    adaptive_filter = str(meta.get("adaptive_filter", "lms"))
+    adaptive_label = method_label(adaptive_filter, order)
     fig_base = out / f"{prefix}-v2-hr"
     fig_path = fig_base.with_suffix(".png")
     err_path = csv_out / f"{prefix}-v2-error.csv"
     hr_path = csv_out / f"{prefix}-v2-hr.csv"
 
     _write_hr_csv(hr_path, hr, time_bias=time_bias)
-    _write_error_csv(err_path, payload, key)
-    _plot_hr(fig_base, hr, key, order, payload)
+    _write_error_csv(err_path, hr, time_bias, order, adaptive_filter)
+    _plot_hr(fig_base, hr, key, order, payload, adaptive_label)
     return V2PlotArtefacts(
         report_path=report,
         reference_order_key=key,
@@ -115,6 +117,7 @@ def _plot_hr(
     key: str,
     order: tuple[str, ...],
     payload: dict,
+    adaptive_label: str = "LMS-H",
 ) -> None:
     _apply_style()
     fig, ax = plt.subplots(figsize=(3.54, 2.60), dpi=120)
@@ -179,7 +182,7 @@ def _plot_hr(
         t_plot, final_plot,
         color=color, linewidth=1.45, marker="o", markersize=2.0,
         linestyle="-",
-        label=f"Adaptive {key}" if key != "FFT" else "Final FFT",
+        label=adaptive_label if key != "FFT" else "FFT",
         zorder=4,
     )
 
@@ -189,7 +192,7 @@ def _plot_hr(
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
 
-    _draw_error_table(ax, hr, aligned, time_bias, key)
+    _draw_error_table(ax, hr, aligned, time_bias, adaptive_label)
 
     ax.legend(
         loc="upper left",
@@ -212,13 +215,74 @@ def _write_hr_csv(path: Path, hr: np.ndarray, time_bias: float = 0.0) -> None:
             writer.writerow(aligned_row)
 
 
-def _write_error_csv(path: Path, payload: dict, key: str) -> None:
-    err = payload.get("err_stats", {})
+def _write_error_csv(
+    path: Path,
+    hr: np.ndarray,
+    time_bias: float,
+    order: tuple[str, ...],
+    adaptive_filter: str,
+) -> None:
+    rows = _detailed_stats_v2(hr, time_bias, order, adaptive_filter)
     with path.open("w", encoding="utf-8-sig", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["metric", "reference_order", "value"])
-        writer.writerow(["FFT AAE", key, err.get("fft_aae_bpm", "")])
-        writer.writerow(["Adaptive/Final AAE", key, err.get("final_aae_bpm", "")])
+        writer.writerow([
+            "method", "total_aae", "rest_aae", "motion_aae",
+            "total_hit_rate_5bpm", "rest_hit_rate_5bpm", "motion_hit_rate_5bpm",
+        ])
+        for r in rows:
+            writer.writerow([
+                r["method"],
+                f"{r['total_aae']:.4f}", f"{r['rest_aae']:.4f}", f"{r['motion_aae']:.4f}",
+                f"{r['total_hit_rate_5bpm']:.6f}",
+                f"{r['rest_hit_rate_5bpm']:.6f}",
+                f"{r['motion_hit_rate_5bpm']:.6f}",
+            ])
+
+
+def _detailed_stats_v2(
+    hr: np.ndarray,
+    time_bias: float,
+    order: tuple[str, ...],
+    adaptive_filter: str,
+) -> list[dict[str, float | str]]:
+    if hr.size == 0:
+        return []
+    t_aligned = hr[:, 0] + time_bias
+    ref_interp = interp1d(
+        hr[:, 0], hr[:, 1],
+        kind="linear", fill_value="extrapolate", assume_sorted=False,
+    )
+    ref = ref_interp(t_aligned)
+    motion_flag = hr[:, 4] > 0.5 if hr.shape[1] > 4 else np.zeros(hr.shape[0], dtype=bool)
+    rest_flag = ~motion_flag
+    adaptive_label = method_label(adaptive_filter, order)
+    result: list[dict[str, float | str]] = []
+    for col, name in ((2, "FFT"), (3, adaptive_label)):
+        pred = hr[:, col]
+        abs_err = np.abs(pred - ref)
+        abs_err = abs_err[np.isfinite(abs_err)]
+        abs_err_rest = np.abs(pred[rest_flag] - ref[rest_flag]) if rest_flag.any() else np.array([])
+        abs_err_rest = abs_err_rest[np.isfinite(abs_err_rest)]
+        abs_err_motion = np.abs(pred[motion_flag] - ref[motion_flag]) if motion_flag.any() else np.array([])
+        abs_err_motion = abs_err_motion[np.isfinite(abs_err_motion)]
+        result.append({
+            "method": name,
+            "total_aae": float(np.mean(abs_err)) if abs_err.size else float("nan"),
+            "rest_aae": float(np.mean(abs_err_rest)) if abs_err_rest.size else float("nan"),
+            "motion_aae": float(np.mean(abs_err_motion)) if abs_err_motion.size else float("nan"),
+            "total_hit_rate_5bpm": _hit_rate_5bpm(pred, ref),
+            "rest_hit_rate_5bpm": _hit_rate_5bpm(pred[rest_flag], ref[rest_flag]) if rest_flag.any() else float("nan"),
+            "motion_hit_rate_5bpm": _hit_rate_5bpm(pred[motion_flag], ref[motion_flag]) if motion_flag.any() else float("nan"),
+        })
+    return result
+
+
+def _hit_rate_5bpm(pred: np.ndarray, truth: np.ndarray) -> float:
+    valid = np.isfinite(pred) & np.isfinite(truth)
+    if not valid.any():
+        return float("nan")
+    hit = np.abs(pred[valid] - truth[valid]) <= 5.0
+    return float(np.mean(hit.astype(float)))
 
 
 def _write_batch_summary(path: Path, items: list[V2PlotArtefacts]) -> None:
@@ -252,7 +316,7 @@ def _draw_error_table(
     hr: np.ndarray,
     aligned: np.ndarray,
     time_bias: float,
-    key: str,
+    adaptive_label: str,
 ) -> None:
     t_aligned = hr[:, 0] + time_bias
     ref_interp = interp1d(
@@ -284,11 +348,7 @@ def _draw_error_table(
 
     rows = [
         ("FFT", fft_all, fft_motion),
-        (
-            f"Adaptive {key}" if key != "FFT" else "Adaptive",
-            final_all,
-            final_motion,
-        ),
+        (adaptive_label if adaptive_label != "FFT" else "Final", final_all, final_motion),
     ]
 
     x0 = 0.02

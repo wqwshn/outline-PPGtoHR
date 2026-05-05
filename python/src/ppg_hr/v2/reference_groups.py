@@ -10,32 +10,55 @@ _CHANNELS: dict[str, tuple[str, ...]] = {
     "ACC": ("accx", "accy", "accz"),
 }
 
+_ALGO_SHORT: dict[str, str] = {
+    "lms": "LMS",
+    "klms": "KLMS",
+    "volterra": "VLMS",
+    "noncausal_lms": "NLMS",
+    "rff_lms": "RFF",
+}
+
+_REF_SHORT: dict[str, str] = {
+    "HF": "H",
+    "CF": "C",
+    "ACC": "A",
+}
+
+
+def method_label(adaptive_filter: str, groups: tuple[str, ...]) -> str:
+    algo = _ALGO_SHORT.get(str(adaptive_filter).strip().lower(), "LMS")
+    if not groups:
+        return algo
+    suffix = "".join(_REF_SHORT.get(g, g) for g in normalise_reference_order(groups))
+    return f"{algo}-{suffix}"
+
+
 _ORDER_COLORS: dict[str, str] = {
     "FFT": "#A8ADB3",
-    "HF": "#6FA8DC",
+    "HF": "#D4382C",
     "CF": "#8CCB9B",
     "ACC": "#D9A66A",
-    "HF+CF": "#7BAF9E",
-    "CF+HF": "#9AB7D9",
-    "HF+ACC": "#DFAE7B",
-    "ACC+HF": "#B7A0D8",
+    "HF+CF": "#E06930",
+    "CF+HF": "#E07B40",
+    "HF+ACC": "#D4552A",
+    "ACC+HF": "#C84830",
     "CF+ACC": "#A7C98B",
     "ACC+CF": "#D7A4A4",
-    "HF+CF+ACC": "#5FA4B8",
-    "HF+ACC+CF": "#C7A46B",
-    "CF+HF+ACC": "#79B58B",
-    "CF+ACC+HF": "#B6B46E",
-    "ACC+HF+CF": "#AA9DD6",
-    "ACC+CF+HF": "#D69AA6",
+    "HF+CF+ACC": "#D44A30",
+    "HF+ACC+CF": "#E06038",
+    "CF+HF+ACC": "#D46038",
+    "CF+ACC+HF": "#D06040",
+    "ACC+HF+CF": "#C85038",
+    "ACC+CF+HF": "#D05840",
 }
 
 _FALLBACK_COLORS: tuple[str, ...] = (
-    "#6FA8DC",
-    "#8CCB9B",
-    "#D9A66A",
-    "#B7A0D8",
-    "#D7A4A4",
-    "#5FA4B8",
+    "#D4382C",
+    "#E06930",
+    "#D4552A",
+    "#C84830",
+    "#D44A30",
+    "#E06038",
 )
 
 

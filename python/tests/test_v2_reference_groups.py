@@ -6,6 +6,7 @@ from ppg_hr.v2.reference_groups import (
     V2_REFERENCE_GROUPS,
     channel_names_for_group,
     color_for_reference_order,
+    method_label,
     normalise_reference_order,
     reference_order_key,
 )
@@ -34,4 +35,13 @@ def test_ordered_reference_colors_are_distinct_and_stable() -> None:
     acc_hf = color_for_reference_order(("ACC", "HF"))
     assert hf_acc != acc_hf
     assert color_for_reference_order(("HF", "ACC")) == hf_acc
-    assert color_for_reference_order(("HF",)) == "#6FA8DC"
+    assert color_for_reference_order(("HF",)) == "#D4382C"
+
+
+def test_method_label_formats_correctly() -> None:
+    assert method_label("lms", ("HF",)) == "LMS-H"
+    assert method_label("klms", ("HF", "CF", "ACC")) == "KLMS-HCA"
+    assert method_label("noncausal_lms", ("ACC", "HF")) == "NLMS-AH"
+    assert method_label("volterra", ("CF",)) == "VLMS-C"
+    assert method_label("rff_lms", ()) == "RFF"
+    assert method_label("unknown", ("HF", "ACC")) == "LMS-HA"

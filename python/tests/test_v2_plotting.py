@@ -29,6 +29,7 @@ def _write_report(
         "metadata": {
             "time_bias": time_bias,
             "ref_path": str(path.parent / "sample_ref.csv"),
+            "adaptive_filter": "noncausal_lms",
         },
         "best_params": {"max_order": 16},
     }
@@ -115,3 +116,23 @@ def test_render_v2_report_hr_csv_has_aligned_times(tmp_path: Path) -> None:
     times = [float(r[0]) for r in rows]
     assert times[0] == 4.0 + 3.0
     assert times[1] == 5.0 + 3.0
+
+
+def test_render_v2_report_error_csv_has_v1_style_format(tmp_path: Path) -> None:
+    """验证错误 CSV 采用 v1 格式：含 total/rest/motion AAE 和 hit rate."""
+    import csv
+
+    report = tmp_path / "new.json"
+    _write_report(report, ["HF"])
+    arte = render_v2_report(report, out_dir=tmp_path / "out")
+    with arte.error_csv.open("r", encoding="utf-8-sig") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+    assert header == [
+        "method", "total_aae", "rest_aae", "motion_aae",
+        "total_hit_rate_5bpm", "rest_hit_rate_5bpm", "motion_hit_rate_5bpm",
+    ]
+    methods = [r[0] for r in rows]
+    assert "FFT" in methods
+    assert any("NLMS-H" in m for m in methods)
