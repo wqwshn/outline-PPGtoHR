@@ -8,16 +8,24 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
-from scipy.signal import resample_poly
+from scipy.signal import butter, filtfilt, resample_poly
 from scipy.signal.windows import hamming
 
 from ppg_hr.core.adaptive_filter import apply_adaptive_cascade
+from ppg_hr.core.choose_delay import choose_delay
 from ppg_hr.core.fft_peaks import fft_peaks
-from ppg_hr.core.heart_rate_solver import solve as solve_v1
+from ppg_hr.core.find_real_hr import find_real_hr
+from ppg_hr.core.heart_rate_solver import (
+    _is_motion_window,
+    _motion_detector_from_raw_acc,
+    _process_spectrum,
+    load_raw_data,
+    solve as solve_v1,
+)
 from ppg_hr.params import SolverParams
-from ppg_hr.preprocess.utils import smoothdata_movmedian
+from ppg_hr.preprocess.utils import filloutliers_mean_previous, smoothdata_movmedian
 
-from .preprocess import filtered_channels, load_v2_dataset
+from .preprocess import filtered_channels, load_v2_dataset, safe_cf_ratio
 from .reference_groups import (
     channel_names_for_group,
     normalise_reference_order,
@@ -38,6 +46,8 @@ def solve_v2(config: V2RunConfig) -> V2SolverResult:
     cfg = _normalise_config(config)
     if _uses_v1_hf_compat_path(cfg):
         return _solve_v1_hf_compat(cfg)
+    if cfg.reference_groups_order:
+        return _solve_v1_reference_path(cfg)
     ds = load_v2_dataset(cfg.data_path, cfg.ref_path, fs_origin=cfg.fs_origin)
     frame = filtered_channels(ds.data, ds.fs)
     frame = _resample_frame(frame, ds.fs, cfg.fs_target)
@@ -157,30 +167,7 @@ def _uses_v1_hf_compat_path(cfg: V2RunConfig) -> bool:
 
 
 def _solve_v1_hf_compat(cfg: V2RunConfig) -> V2SolverResult:
-    params = SolverParams(
-        file_name=cfg.data_path,
-        ref_file=cfg.ref_path,
-        adaptive_filter=cfg.adaptive_filter,
-        ppg_mode=cfg.ppg_mode,
-        analysis_scope=cfg.analysis_scope,
-        fs_target=int(cfg.fs_target),
-        calib_time=float(cfg.calib_time),
-        motion_th_scale=float(cfg.motion_th_scale),
-        lms_mu_base=float(cfg.lms_mu_base),
-        lms_mu_min=float(cfg.lms_mu_min),
-        max_order=int(cfg.max_order),
-        smooth_win_len=int(cfg.smooth_win_len),
-        spec_penalty_enable=bool(cfg.spec_penalty_enable),
-        spec_penalty_weight=float(cfg.spec_penalty_weight),
-        spec_penalty_width=float(cfg.spec_penalty_width),
-        hr_range_hz=float(cfg.hr_range_hz),
-        slew_limit_bpm=float(cfg.slew_limit_bpm),
-        slew_step_bpm=float(cfg.slew_step_bpm),
-        time_bias=float(cfg.time_bias),
-        rff_D=int(cfg.rff_D),
-        rff_sigma=float(cfg.rff_sigma),
-        rff_seed=int(cfg.rff_seed),
-    )
+    params = _solver_params_from_v2(cfg)
     result = solve_v1(params)
     source = np.asarray(result.HR, dtype=float)
     if source.size:
@@ -224,6 +211,7 @@ def _solve_v1_hf_compat(cfg: V2RunConfig) -> V2SolverResult:
         "used_adaptive_windows": int(np.sum(HR[:, 5] > 0)) if HR.size else 0,
         "fallback_reason": "",
         "compat_solver": "v1_fusion_hf",
+        "solver_kernel": "v1_fusion_reference_path",
     }
     return V2SolverResult(
         HR=HR,
@@ -234,6 +222,363 @@ def _solve_v1_hf_compat(cfg: V2RunConfig) -> V2SolverResult:
         metadata=metadata,
         window_table=window_table,
     )
+
+
+def _solve_v1_reference_path(cfg: V2RunConfig) -> V2SolverResult:
+    params = _solver_params_from_v2(cfg)
+    raw_data, ref_data = load_raw_data(params)
+    fs_origin = 100
+    fs = int(cfg.fs_target)
+
+    ppg_raw = _select_ppg_raw(raw_data, cfg.ppg_mode)
+    uc1_raw = raw_data[:, 1]
+    uc2_raw = raw_data[:, 2]
+    ut1_raw = raw_data[:, 3]
+    ut2_raw = raw_data[:, 4]
+    accx_raw = raw_data[:, 8]
+    accy_raw = raw_data[:, 9]
+    accz_raw = raw_data[:, 10]
+
+    ppg_ori = resample_poly(filloutliers_mean_previous(ppg_raw), fs, fs_origin)
+    hf1_ori = resample_poly(ut1_raw, fs, fs_origin)
+    hf2_ori = resample_poly(ut2_raw, fs, fs_origin)
+    cf1_ori = resample_poly(safe_cf_ratio(uc1_raw, ut1_raw), fs, fs_origin)
+    cf2_ori = resample_poly(safe_cf_ratio(uc2_raw, ut2_raw), fs, fs_origin)
+    accx_ori = resample_poly(accx_raw, fs, fs_origin)
+    accy_ori = resample_poly(accy_raw, fs, fs_origin)
+    accz_ori = resample_poly(accz_raw, fs, fs_origin)
+
+    nyq = fs / 2.0
+    b, a = butter(
+        params.bp_order,
+        [params.bp_low_hz / nyq, params.bp_high_hz / nyq],
+        btype="bandpass",
+    )
+    ppg = filtfilt(b, a, ppg_ori)
+    hf1 = filtfilt(b, a, hf1_ori)
+    hf2 = filtfilt(b, a, hf2_ori)
+    cf1 = filtfilt(b, a, cf1_ori)
+    cf2 = filtfilt(b, a, cf2_ori)
+    accx = filtfilt(b, a, accx_ori)
+    accy = filtfilt(b, a, accy_ori)
+    accz = filtfilt(b, a, accz_ori)
+
+    acc_mag_motion, motion_threshold = _motion_detector_from_raw_acc(
+        accx_raw, accy_raw, accz_raw, params, fs_origin
+    )
+    acc_mag = np.sqrt(accx**2 + accy**2 + accz**2)
+    motion_flags = _motion_flags(acc_mag, cfg)
+    motion_segment = _longest_true_run(motion_flags, cfg)
+    reference_order = normalise_reference_order(cfg.reference_groups_order)
+    references = _ordered_reference_signals(
+        reference_order,
+        hf1=hf1,
+        hf2=hf2,
+        cf1=cf1,
+        cf2=cf2,
+        accx=accx,
+        accy=accy,
+        accz=accz,
+    )
+
+    rows: list[list[float]] = []
+    adaptive_stage_rows: list[list[dict[str, Any]]] = []
+    time_1 = float(params.time_start)
+    time_end = len(ppg_ori) / fs - params.time_buffer
+    times_idx = 0
+    last_adaptive_flag = False
+    while True:
+        time_2 = time_1 + float(cfg.window_seconds)
+        idx_s = int(round(time_1 * fs))
+        idx_e = int(round(time_2 * fs))
+        if idx_e > len(ppg):
+            break
+
+        center = time_1 + float(cfg.window_seconds) / 2.0
+        use_adaptive = bool(references) and _window_uses_adaptive(
+            center,
+            motion_segment,
+            cfg,
+        )
+        idx_s_motion = int(round(time_1 * fs_origin))
+        idx_e_motion = int(round(time_2 * fs_origin))
+        is_motion_flag = _is_motion_window(
+            acc_mag_motion[idx_s_motion:idx_e_motion],
+            motion_threshold,
+        )
+
+        row = [0.0] * 9
+        row[0] = time_1
+        row[1] = find_real_hr("dummy", time_1, ref_data)
+        row[7] = 1.0 if is_motion_flag else 0.0
+        row[8] = 1.0 if use_adaptive else 0.0
+
+        sig_p = ppg[idx_s:idx_e]
+        sig_a = [accx[idx_s:idx_e], accy[idx_s:idx_e], accz[idx_s:idx_e]]
+        sig_fft = (sig_p - sig_p.mean()) * hamming(len(sig_p))
+        history_fft = np.array([r[4] for r in rows] + [0.0])
+        row[4] = _process_spectrum(
+            sig_fft,
+            sig_a[2],
+            fs,
+            params,
+            times_idx,
+            history_fft,
+            True,
+            params.hr_range_rest,
+            params.slew_limit_rest,
+            params.slew_step_rest,
+        )
+
+        stages: list[dict[str, Any]] = []
+        if use_adaptive:
+            times_ref = 0 if not last_adaptive_flag else times_idx
+            filtered, penalty_ref, stages = _run_v1_style_reference_cascade(
+                ppg=ppg,
+                sig_p=sig_p,
+                references=references,
+                idx_s=idx_s,
+                idx_e=idx_e,
+                time_1=time_1,
+                fs=fs,
+                params=params,
+                cfg=cfg,
+            )
+            history_ref = np.array([r[2] for r in rows] + [0.0])
+            row[2] = _process_spectrum(
+                filtered,
+                penalty_ref,
+                fs,
+                params,
+                times_ref,
+                history_ref,
+                True,
+                params.hr_range_hz,
+                params.slew_limit_bpm,
+                params.slew_step_bpm,
+            )
+        else:
+            row[2] = row[4]
+
+        row[3] = row[2]
+        rows.append(row)
+        adaptive_stage_rows.append(stages)
+        last_adaptive_flag = bool(use_adaptive)
+        time_1 += float(cfg.window_step_seconds)
+        times_idx += 1
+        if time_1 > time_end:
+            break
+
+    source = np.asarray(rows, dtype=float) if rows else np.zeros((0, 9), dtype=float)
+    if source.size:
+        source[:, 2] = smoothdata_movmedian(source[:, 2], int(cfg.smooth_win_len))
+        source[:, 4] = smoothdata_movmedian(source[:, 4], int(cfg.smooth_win_len))
+        source[:, 5] = np.where(source[:, 8] == 1, source[:, 2], source[:, 4])
+        source[:, 5] = smoothdata_movmedian(source[:, 5], 3)
+        HR = np.column_stack(
+            [
+                source[:, 0],
+                source[:, 1] * 60.0,
+                source[:, 4] * 60.0,
+                source[:, 5] * 60.0,
+                source[:, 7],
+                source[:, 8],
+            ]
+        )
+    else:
+        HR = np.zeros((0, 6), dtype=float)
+
+    window_table = _window_table_from_hr(HR, adaptive_stage_rows, cfg, motion_segment)
+    err_stats = _v1_style_error_stats(source, cfg, motion_segment)
+    metadata = {
+        "schema_version": "v2",
+        "data_path": str(cfg.data_path),
+        "ref_path": str(cfg.ref_path),
+        "ppg_mode": cfg.ppg_mode,
+        "analysis_scope": cfg.analysis_scope,
+        "adaptive_filter": cfg.adaptive_filter,
+        "reference_groups_order": list(reference_order),
+        "reference_order_key": reference_order_key(reference_order),
+        "motion_segment": motion_segment,
+        "used_adaptive_windows": int(np.sum(HR[:, 5] > 0)) if HR.size else 0,
+        "fallback_reason": "" if motion_segment is not None else "no_motion_segment",
+        "solver_kernel": "v1_fusion_reference_path",
+    }
+    return V2SolverResult(
+        HR=HR,
+        err_stats=err_stats,
+        metadata=metadata,
+        window_table=window_table,
+    )
+
+
+def _solver_params_from_v2(cfg: V2RunConfig) -> SolverParams:
+    return SolverParams(
+        file_name=cfg.data_path,
+        ref_file=cfg.ref_path,
+        adaptive_filter=cfg.adaptive_filter,
+        ppg_mode=cfg.ppg_mode,
+        analysis_scope=cfg.analysis_scope,
+        fs_target=int(cfg.fs_target),
+        calib_time=float(cfg.calib_time),
+        motion_th_scale=float(cfg.motion_th_scale),
+        lms_mu_base=float(cfg.lms_mu_base),
+        lms_mu_min=float(cfg.lms_mu_min),
+        max_order=int(cfg.max_order),
+        smooth_win_len=int(cfg.smooth_win_len),
+        spec_penalty_enable=bool(cfg.spec_penalty_enable),
+        spec_penalty_weight=float(cfg.spec_penalty_weight),
+        spec_penalty_width=float(cfg.spec_penalty_width),
+        hr_range_hz=float(cfg.hr_range_hz),
+        slew_limit_bpm=float(cfg.slew_limit_bpm),
+        slew_step_bpm=float(cfg.slew_step_bpm),
+        time_bias=float(cfg.time_bias),
+        rff_D=int(cfg.rff_D),
+        rff_sigma=float(cfg.rff_sigma),
+        rff_seed=int(cfg.rff_seed),
+    )
+
+
+def _select_ppg_raw(raw_data: np.ndarray, mode: str) -> np.ndarray:
+    value = str(mode).strip().lower()
+    if value == "green":
+        return raw_data[:, 5]
+    if value == "red":
+        return raw_data[:, 6]
+    if value in {"ir", "infrared"}:
+        return raw_data[:, 7]
+    raise ValueError(f"Unsupported ppg_mode: {mode!r}")
+
+
+def _ordered_reference_signals(
+    reference_order: tuple[str, ...],
+    *,
+    hf1: np.ndarray,
+    hf2: np.ndarray,
+    cf1: np.ndarray,
+    cf2: np.ndarray,
+    accx: np.ndarray,
+    accy: np.ndarray,
+    accz: np.ndarray,
+) -> list[dict[str, Any]]:
+    by_group = {
+        "HF": [("hf1", hf1, 0), ("hf2", hf2, 0)],
+        "CF": [("cf1", cf1, 0), ("cf2", cf2, 0)],
+        "ACC": [("accx", accx, 1), ("accy", accy, 1), ("accz", accz, 1)],
+    }
+    refs: list[dict[str, Any]] = []
+    for group in reference_order:
+        for channel, signal, K in by_group[group]:
+            refs.append({"group": group, "channel": channel, "signal": signal, "K": K})
+    return refs
+
+
+def _run_v1_style_reference_cascade(
+    *,
+    ppg: np.ndarray,
+    sig_p: np.ndarray,
+    references: list[dict[str, Any]],
+    idx_s: int,
+    idx_e: int,
+    time_1: float,
+    fs: int,
+    params: SolverParams,
+    cfg: V2RunConfig,
+) -> tuple[np.ndarray, np.ndarray, list[dict[str, Any]]]:
+    signals = [ref["signal"] for ref in references]
+    corr_arr, _empty_acc, delay, _acc_delay = choose_delay(fs, time_1, ppg, [], signals)
+    current = sig_p
+    stages: list[dict[str, Any]] = []
+    if corr_arr.size == 0:
+        return current, sig_p, stages
+
+    order = np.argsort(corr_arr)[::-1]
+    best_idx = int(order[0])
+    M = int(np.floor(abs(delay))) if delay < 0 else 1
+    M = int(np.clip(M, 1, cfg.max_order))
+    for idx in order:
+        ref_meta = references[int(idx)]
+        K = int(ref_meta["K"])
+        ref_win = np.asarray(ref_meta["signal"][idx_s:idx_e], dtype=float)
+        max_u = current.size + K
+        if ref_win.size > max_u:
+            ref_win = ref_win[:max_u]
+        current = apply_adaptive_cascade(
+            strategy=cfg.adaptive_filter,
+            mu_base=cfg.lms_mu_base,
+            corr=float(corr_arr[int(idx)]),
+            order=M,
+            K=K,
+            u=ref_win,
+            d=current,
+            params=params,
+        )
+        stages.append(
+            {
+                "sensor_type": ref_meta["group"],
+                "channel": ref_meta["channel"],
+                "corr": float(corr_arr[int(idx)]),
+                "delay_samples": int(delay),
+                "M": int(M),
+                "K": int(K),
+                "filter_type": cfg.adaptive_filter,
+            }
+        )
+    penalty_ref = np.asarray(references[best_idx]["signal"][idx_s:idx_e], dtype=float)
+    return current, penalty_ref, stages
+
+
+def _window_table_from_hr(
+    HR: np.ndarray,
+    adaptive_stage_rows: list[list[dict[str, Any]]],
+    cfg: V2RunConfig,
+    motion_segment: dict[str, float] | None,
+) -> list[dict[str, Any]]:
+    rows = []
+    for idx, row in enumerate(HR):
+        center = float(row[0] + cfg.window_seconds / 2.0)
+        rows.append(
+            {
+                "window_idx": idx,
+                "start_s": float(row[0]),
+                "center_s": center,
+                "ref_hr_bpm": float(row[1]),
+                "fft_hr_bpm": float(row[2]),
+                "final_hr_bpm": float(row[3]),
+                "in_analysis_scope": _window_in_analysis_scope(center, motion_segment, cfg),
+                "is_motion": bool(row[4]),
+                "used_adaptive": bool(row[5]),
+                "adaptive_stages": adaptive_stage_rows[idx] if idx < len(adaptive_stage_rows) else [],
+            }
+        )
+    return rows
+
+
+def _v1_style_error_stats(
+    source_hr_hz: np.ndarray,
+    cfg: V2RunConfig,
+    motion_segment: dict[str, float] | None,
+) -> dict[str, float]:
+    if source_hr_hz.size == 0:
+        return {"fft_aae_bpm": float("nan"), "final_aae_bpm": float("nan")}
+    mask = np.ones(source_hr_hz.shape[0], dtype=bool)
+    if cfg.analysis_scope == "motion" and motion_segment is not None:
+        start = max(0.0, float(motion_segment["start_s"]) - cfg.pre_motion_context_seconds)
+        end = float(motion_segment["end_s"])
+        mask = (source_hr_hz[:, 0] >= start) & (source_hr_hz[:, 0] <= end)
+    t_pred = source_hr_hz[:, 0] + float(cfg.time_bias)
+    interp = interp1d(
+        source_hr_hz[:, 0],
+        source_hr_hz[:, 1],
+        kind="linear",
+        fill_value="extrapolate",
+        assume_sorted=False,
+    )
+    ref = interp(t_pred)
+    return {
+        "fft_aae_bpm": _mean_abs((source_hr_hz[:, 4][mask] - ref[mask]) * 60.0),
+        "final_aae_bpm": _mean_abs((source_hr_hz[:, 5][mask] - ref[mask]) * 60.0),
+    }
 
 
 def _ppg_column(mode: str) -> str:

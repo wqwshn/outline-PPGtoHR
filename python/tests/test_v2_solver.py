@@ -101,3 +101,24 @@ def test_solve_v2_empty_reference_order_degrades_to_fft(tmp_path: Path) -> None:
     assert result.metadata["reference_groups_order"] == []
     assert result.metadata["used_adaptive_windows"] == 0
     assert result.metadata["fallback_reason"] == "no_reference_groups"
+
+
+def test_solve_v2_non_hf_reference_uses_v1_fusion_kernel(tmp_path: Path) -> None:
+    data = tmp_path / "cf.csv"
+    ref = tmp_path / "cf_ref.csv"
+    _write_sensor(data, motion=True)
+    _write_ref(ref)
+    cfg = V2RunConfig(
+        data_path=data,
+        ref_path=ref,
+        analysis_scope="full",
+        adaptive_filter="lms",
+        reference_groups_order=("CF",),
+    )
+
+    result = solve_v2(cfg)
+
+    assert result.metadata["solver_kernel"] == "v1_fusion_reference_path"
+    assert result.metadata["reference_groups_order"] == ["CF"]
+    assert result.metadata["used_adaptive_windows"] > 0
+    assert np.isfinite(result.err_stats["final_aae_bpm"])
