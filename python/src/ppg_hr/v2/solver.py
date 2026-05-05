@@ -20,6 +20,8 @@ from ppg_hr.core.heart_rate_solver import (
     _motion_detector_from_raw_acc,
     _process_spectrum,
     load_raw_data,
+)
+from ppg_hr.core.heart_rate_solver import (
     solve as solve_v1,
 )
 from ppg_hr.params import SolverParams
@@ -97,7 +99,7 @@ def solve_v2(config: V2RunConfig) -> V2SolverResult:
         ref_hr = _ref_at(center, ref_data)
         rows.append(
             [
-                t0,
+                center,
                 ref_hr,
                 fft_hr,
                 final_hr,
@@ -141,6 +143,7 @@ def solve_v2(config: V2RunConfig) -> V2SolverResult:
             sum(1 for row in window_table if row["used_adaptive"])
         ),
         "fallback_reason": fallback_reason,
+        "time_bias": float(cfg.time_bias),
     }
     return V2SolverResult(
         HR=HR,
@@ -212,6 +215,7 @@ def _solve_v1_hf_compat(cfg: V2RunConfig) -> V2SolverResult:
         "fallback_reason": "",
         "compat_solver": "v1_fusion_hf",
         "solver_kernel": "v1_fusion_reference_path",
+        "time_bias": float(cfg.time_bias),
     }
     return V2SolverResult(
         HR=HR,
@@ -308,8 +312,8 @@ def _solve_v1_reference_path(cfg: V2RunConfig) -> V2SolverResult:
         )
 
         row = [0.0] * 9
-        row[0] = time_1
-        row[1] = find_real_hr("dummy", time_1, ref_data)
+        row[0] = center
+        row[1] = find_real_hr("dummy", center, ref_data)
         row[7] = 1.0 if is_motion_flag else 0.0
         row[8] = 1.0 if use_adaptive else 0.0
 
@@ -403,6 +407,7 @@ def _solve_v1_reference_path(cfg: V2RunConfig) -> V2SolverResult:
         "used_adaptive_windows": int(np.sum(HR[:, 5] > 0)) if HR.size else 0,
         "fallback_reason": "" if motion_segment is not None else "no_motion_segment",
         "solver_kernel": "v1_fusion_reference_path",
+        "time_bias": float(cfg.time_bias),
     }
     return V2SolverResult(
         HR=HR,
@@ -838,7 +843,13 @@ def _error_stats(
         start = max(0.0, float(motion_segment["start_s"]) - cfg.pre_motion_context_seconds)
         end = float(motion_segment["end_s"])
         mask = (HR[:, 0] >= start) & (HR[:, 0] <= end)
-    ref = HR[:, 1]
+
+    t_aligned = HR[:, 0] + float(cfg.time_bias)
+    ref_interp = interp1d(
+        HR[:, 0], HR[:, 1],
+        kind="linear", fill_value="extrapolate", assume_sorted=False,
+    )
+    ref = ref_interp(t_aligned)
     return {
         "fft_aae_bpm": _mean_abs(HR[:, 2][mask] - ref[mask]),
         "final_aae_bpm": _mean_abs(HR[:, 3][mask] - ref[mask]),
