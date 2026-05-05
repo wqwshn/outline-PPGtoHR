@@ -12,7 +12,7 @@ from pathlib import Path
 from .optimizer import V2BayesConfig, optimise_v2
 from .plotting import render_v2_report
 from .qc import quality_filter_sample_v2
-from .reference_groups import reference_order_key
+from .reference_groups import method_label, reference_order_key
 from .types import V2RunConfig
 
 
@@ -49,7 +49,12 @@ def run_v2_batch_pipeline(
     output_dir = (
         Path(output_dir).resolve()
         if output_dir is not None
-        else default_v2_batch_output_dir(input_dir)
+        else default_v2_batch_output_dir(
+            input_dir,
+            analysis_scope=analysis_scope,
+            adaptive_filter=adaptive_filter,
+            reference_groups_order=reference_groups_order,
+        )
     )
     output_dir.mkdir(parents=True, exist_ok=True)
     json_dir = output_dir / "json"
@@ -202,9 +207,18 @@ def run_v2_batch_pipeline(
     return {"records": records, "summary_csv": summary_csv, "output_dir": output_dir}
 
 
-def default_v2_batch_output_dir(input_dir: Path) -> Path:
+def default_v2_batch_output_dir(
+    input_dir: Path,
+    *,
+    analysis_scope: str = "full",
+    adaptive_filter: str = "lms",
+    reference_groups_order: tuple[str, ...] = (),
+) -> Path:
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return Path(input_dir).resolve() / "v2_batch_outputs" / stamp
+    scope = str(analysis_scope).strip().lower()
+    label = method_label(adaptive_filter, reference_groups_order)
+    tag = f"{stamp}_{scope}_{label}"
+    return Path(input_dir).resolve() / "v2_batch_outputs" / tag
 
 
 def safe_run_prefix(
