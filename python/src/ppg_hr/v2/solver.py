@@ -136,7 +136,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
         center = time_1 + float(cfg.window_seconds) / 2.0
         want_adaptive = bool(references) and motion_segment is not None
         if want_adaptive:
-            in_adaptive_range = _window_uses_adaptive(center, motion_segment, cfg)
+            in_adaptive_range = _window_compute_adaptive(center, motion_segment, cfg)
         else:
             in_adaptive_range = False
         idx_s_motion = int(round(time_1 * fs_origin))
@@ -558,6 +558,18 @@ def _window_in_analysis_scope(
     start = max(0.0, float(motion_segment["start_s"]) - cfg.pre_motion_context_seconds)
     end = float(motion_segment["end_s"])
     return start <= center_s <= end
+
+
+def _window_compute_adaptive(
+    center_s: float,
+    motion_segment: dict[str, float] | None,
+    cfg: V2RunConfig,
+) -> bool:
+    """决定是否计算 adaptive（无上限，延续至 FFT 自然交叉）。"""
+    if motion_segment is None:
+        return False
+    start = float(motion_segment["start_s"])
+    return center_s >= start
 
 
 def _window_uses_adaptive(
