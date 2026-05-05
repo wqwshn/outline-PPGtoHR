@@ -27,6 +27,8 @@ class V2RunConfig:
     calib_time: float = 30.0
     motion_th_scale: float = 2.5
     post_motion_adaptive_seconds: float = 10.0
+    max_recovery_seconds: float = 30.0
+    recovery_trigger_bpm: float = 20.0
     pre_motion_context_seconds: float = 30.0
     lms_mu_base: float = 0.01
     lms_mu_min: float = 1e-6

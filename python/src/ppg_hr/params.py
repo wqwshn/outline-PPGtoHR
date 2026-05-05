@@ -57,6 +57,7 @@ class SolverParams:
 
     smooth_win_len: int = 7
     time_bias: float = 5.0
+    max_recovery_seconds: float = 30.0
 
     # LMS cascade fixed parameters
     num_cascade_hf: int = 2

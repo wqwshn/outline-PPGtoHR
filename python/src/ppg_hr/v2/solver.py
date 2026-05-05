@@ -47,7 +47,7 @@ class V2SolverResult:
 def solve_v2(config: V2RunConfig) -> V2SolverResult:
     cfg = _normalise_config(config)
     if _uses_v1_hf_compat_path(cfg):
-        return _solve_v1_hf_compat(cfg)
+        return _solve_v1_reference_path(cfg)
     if cfg.reference_groups_order:
         return _solve_v1_reference_path(cfg)
     ds = load_v2_dataset(cfg.data_path, cfg.ref_path, fs_origin=cfg.fs_origin)
@@ -438,6 +438,7 @@ def _solver_params_from_v2(cfg: V2RunConfig) -> SolverParams:
         slew_limit_bpm=float(cfg.slew_limit_bpm),
         slew_step_bpm=float(cfg.slew_step_bpm),
         time_bias=float(cfg.time_bias),
+        max_recovery_seconds=float(cfg.max_recovery_seconds),
         rff_D=int(cfg.rff_D),
         rff_sigma=float(cfg.rff_sigma),
         rff_seed=int(cfg.rff_seed),
