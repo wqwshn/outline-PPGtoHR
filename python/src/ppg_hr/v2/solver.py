@@ -20,9 +20,6 @@ from ppg_hr.core.heart_rate_solver import (
     _process_spectrum,
     load_raw_data,
 )
-from ppg_hr.core.heart_rate_solver import (
-    solve as solve_v1,
-)
 from ppg_hr.params import SolverParams
 from ppg_hr.preprocess.utils import filloutliers_mean_previous, smoothdata_movmedian
 
@@ -45,8 +42,6 @@ class V2SolverResult:
 
 def solve_v2(config: V2RunConfig) -> V2SolverResult:
     cfg = _normalise_config(config)
-    if _uses_v1_hf_compat_path(cfg):
-        return _solve_v1_hf_compat(cfg)
     return _unified_solve(cfg)
 
 
@@ -59,69 +54,6 @@ def _normalise_config(config: V2RunConfig) -> V2RunConfig:
                 config.reference_groups_order
             ),
         }
-    )
-
-
-def _uses_v1_hf_compat_path(cfg: V2RunConfig) -> bool:
-    return cfg.analysis_scope == "full" and cfg.reference_groups_order == ("HF",)
-
-
-def _solve_v1_hf_compat(cfg: V2RunConfig) -> V2SolverResult:
-    params = _solver_params_from_v2(cfg)
-    result = solve_v1(params)
-    source = np.asarray(result.HR, dtype=float)
-    if source.size:
-        HR = np.column_stack(
-            [
-                source[:, 0],
-                source[:, 1] * 60.0,
-                source[:, 4] * 60.0,
-                source[:, 5] * 60.0,
-                source[:, 8],
-                source[:, 8],
-            ]
-        )
-    else:
-        HR = np.zeros((0, 6), dtype=float)
-    window_table = [
-        {
-            "window_idx": int(idx),
-            "start_s": float(row[0]),
-            "center_s": float(row[0] + cfg.window_seconds / 2.0),
-            "ref_hr_bpm": float(row[1]),
-            "fft_hr_bpm": float(row[2]),
-            "final_hr_bpm": float(row[3]),
-            "in_analysis_scope": True,
-            "is_motion": bool(row[4]),
-            "used_adaptive": bool(row[5]),
-            "adaptive_stages": [],
-        }
-        for idx, row in enumerate(HR)
-    ]
-    metadata = {
-        "schema_version": "v2",
-        "data_path": str(cfg.data_path),
-        "ref_path": str(cfg.ref_path),
-        "ppg_mode": cfg.ppg_mode,
-        "analysis_scope": cfg.analysis_scope,
-        "adaptive_filter": cfg.adaptive_filter,
-        "reference_groups_order": ["HF"],
-        "reference_order_key": "HF",
-        "motion_segment": None,
-        "used_adaptive_windows": int(np.sum(HR[:, 5] > 0)) if HR.size else 0,
-        "fallback_reason": "",
-        "compat_solver": "v1_fusion_hf",
-        "solver_kernel": "v1_fusion_reference_path",
-        "time_bias": float(cfg.time_bias),
-    }
-    return V2SolverResult(
-        HR=HR,
-        err_stats={
-            "fft_aae_bpm": float(result.err_stats[2, 0]),
-            "final_aae_bpm": float(result.err_stats[3, 0]),
-        },
-        metadata=metadata,
-        window_table=window_table,
     )
 
 
@@ -287,34 +219,39 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
         source[:, 2] = smoothdata_movmedian(source[:, 2], int(cfg.smooth_win_len))
         source[:, 4] = smoothdata_movmedian(source[:, 4], int(cfg.smooth_win_len))
 
-        if references:
-            motion_mask = source[:, 7] == 1
-            motion_idxs = np.flatnonzero(motion_mask)
-            motion_end_idx = int(motion_idxs[-1]) if motion_idxs.size else -1
+        if references and motion_segment is not None:
+            adaptive_start_time = float(motion_segment["start_s"])
+            motion_end_time = float(motion_segment["end_s"])
+            adaptive_end_time = motion_end_time
+            if cfg.analysis_scope == "full":
+                adaptive_end_time += float(cfg.post_motion_adaptive_seconds)
 
-            should_recover = (
-                motion_end_idx >= 0
-                and _recovery_should_trigger(
+            adaptive_start_idx = 0
+            motion_end_idx = -1
+            adaptive_end_idx = -1
+            for i in range(source.shape[0]):
+                t = float(source[i, 0])
+                if t <= adaptive_start_time + 1e-9:
+                    adaptive_start_idx = i
+                if t <= motion_end_time + 1e-9:
+                    motion_end_idx = i
+                if t <= adaptive_end_time + 1e-9:
+                    adaptive_end_idx = i
+
+            if motion_end_idx >= 0:
+                should_recover = _recovery_should_trigger(
                     source, motion_end_idx, float(cfg.recovery_trigger_bpm)
                 )
-            )
+            else:
+                should_recover = False
 
             if should_recover:
                 crossover_idx = _find_crossover_idx(source, motion_end_idx)
                 used_adaptive_mask = np.zeros(source.shape[0], dtype=bool)
-                if motion_idxs.size:
-                    motion_start_idx = int(motion_idxs[0])
-                    used_adaptive_mask[motion_start_idx:crossover_idx + 1] = True
+                used_adaptive_mask[adaptive_start_idx:crossover_idx + 1] = True
             else:
-                used_adaptive_mask = motion_mask.copy()
-
-            if cfg.analysis_scope == "motion" and motion_segment is not None:
-                motion_end_time = float(motion_segment["end_s"])
-                for i in range(used_adaptive_mask.shape[0] - 1, -1, -1):
-                    if source[i, 0] > motion_end_time + 1e-9:
-                        used_adaptive_mask[i] = False
-                    else:
-                        break
+                used_adaptive_mask = np.zeros(source.shape[0], dtype=bool)
+                used_adaptive_mask[adaptive_start_idx:adaptive_end_idx + 1] = True
 
             source[:, 5] = np.where(used_adaptive_mask, source[:, 2], source[:, 4])
             source[:, 5] = smoothdata_movmedian(source[:, 5], 3)
