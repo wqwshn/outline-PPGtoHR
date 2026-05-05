@@ -11,6 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - conda 环境 `ppg-hr`，所有命令通过 `conda run -n ppg-hr` 或先 `conda activate ppg-hr` 执行。
 - 包 editable 安装：`pip install -e .`（根目录 `python/`），GUI 依赖 `pip install -e .[gui]`。
+- **worktree 清理铁律**：删除 worktree 前必须在主目录执行 `conda run -n ppg-hr pip install -e python/ -q`，否则 .pth 指向已删除的 worktree 路径导致 `ModuleNotFoundError: No module named 'ppg_hr'`。
 
 ```bash
 conda run -n ppg-hr python -m pytest -q python/tests              # 完整测试
@@ -26,9 +27,11 @@ conda run -n ppg-hr ppg-hr-gui                                     # 启动 GUI
 `test_v2_v1_parity.py` 是回归门禁：v2 配置 `scope=full, ref_groups=("HF",)` 时与 v1 `solve()` 误差必须 < 1e-6。
 
 **v2 求解器三条分支**（`v2/solver.py:solve_v2`）：
-- `scope=full` 且 `ref_groups=("HF",)` → 直接调 `solve_v1()`，结果 100% 一致
+- `scope=full` 且 `ref_groups=("HF",)` → `_solve_v1_reference_path`（复用 v1 核 + v2 恢复段交叉检测）
 - 有参考信号组（任意组合/顺序） → `_solve_v1_reference_path`，复用 v1 核但用 v2 有序多组参考级联
 - 无参考信号组 → 纯 FFT 退化
+
+**v2 恢复段机制**（`solver.py`）：运动末尾 5 窗 FFT 与自适应均值差 > 20 BPM 触发恢复，自适应延续最多 30s，扫描 FFT 上穿自适应为交叉点。`max_recovery_seconds` 和 `recovery_trigger_bpm` 为固定参数。
 
 **其他硬规则：**
 - `SolverParams`（`params.py`）是所有求解参数的唯一数据源，新增参数必须有默认值，旧参数对象缺少新字段不报错。
