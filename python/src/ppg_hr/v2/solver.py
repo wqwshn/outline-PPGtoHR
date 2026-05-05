@@ -762,8 +762,8 @@ def _recovery_should_trigger(
     idxs = list(range(start_idx, motion_end_idx + 1))
     if len(idxs) < 1:
         return False
-    adaptive_mean = float(np.mean(source[idxs, 2]))
-    fft_mean = float(np.mean(source[idxs, 4]))
+    adaptive_mean = float(np.mean(source[idxs, 2])) * 60.0
+    fft_mean = float(np.mean(source[idxs, 4])) * 60.0
     return (adaptive_mean - fft_mean) > float(trigger_bpm)
 
 

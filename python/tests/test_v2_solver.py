@@ -128,16 +128,16 @@ def test_recovery_trigger_gating() -> None:
     from ppg_hr.v2.solver import _recovery_should_trigger
 
     source = np.zeros((20, 9), dtype=float)
-    source[:, 2] = 120.0
-    source[:, 4] = 50.0
+    source[:, 2] = 120.0 / 60.0
+    source[:, 4] = 50.0 / 60.0
     source[10:15, 7] = 1.0
 
     motion_end_idx = 14
     assert _recovery_should_trigger(source, motion_end_idx, 20.0)
-    source[:, 4] = 115.0
+    source[:, 4] = 115.0 / 60.0
     assert not _recovery_should_trigger(source, motion_end_idx, 20.0)
-    source[:, 4] = 50.0
-    source[:, 2] = 50.0
+    source[:, 4] = 50.0 / 60.0
+    source[:, 2] = 50.0 / 60.0
     assert not _recovery_should_trigger(source, motion_end_idx, 20.0)
 
 
@@ -145,8 +145,8 @@ def test_find_crossover_detects_fft_rise() -> None:
     from ppg_hr.v2.solver import _find_crossover_idx
 
     source = np.zeros((30, 9), dtype=float)
-    source[:, 2] = np.linspace(120, 80, 30)
-    source[:, 4] = np.linspace(60, 90, 30)
+    source[:, 2] = np.linspace(120, 80, 30) / 60.0
+    source[:, 4] = np.linspace(60, 90, 30) / 60.0
     source[10:20, 7] = 1.0
     motion_end_idx = 19
 
