@@ -144,6 +144,7 @@ def solve_v2(config: V2RunConfig) -> V2SolverResult:
         ),
         "fallback_reason": fallback_reason,
         "time_bias": float(cfg.time_bias),
+        "pre_motion_context_seconds": float(cfg.pre_motion_context_seconds),
     }
     return V2SolverResult(
         HR=HR,

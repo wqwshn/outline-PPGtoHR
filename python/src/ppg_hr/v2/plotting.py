@@ -133,6 +133,10 @@ def _plot_hr(
 
     meta = payload.get("metadata", {})
     time_bias = float(meta.get("time_bias", 5.0))
+    scope = str(meta.get("analysis_scope", "full")).strip().lower()
+    motion_segment = meta.get("motion_segment", None)
+    pre_motion_context = float(meta.get("pre_motion_context_seconds", 30.0))
+
     t_aligned = hr[:, 0] + time_bias
 
     ref_interp = interp1d(
@@ -149,7 +153,17 @@ def _plot_hr(
         t_min = float(t_aligned[0])
         t_max = float(t_aligned[-1])
 
-    aligned = (t_aligned >= t_min) & (t_aligned <= t_max)
+    if scope == "motion" and isinstance(motion_segment, dict):
+        view_start = max(
+            t_min,
+            float(motion_segment.get("start_s", t_min)) - pre_motion_context,
+        )
+        view_end = min(t_max, float(motion_segment.get("end_s", t_max)))
+    else:
+        view_start = t_min
+        view_end = t_max
+
+    aligned = (t_aligned >= view_start) & (t_aligned <= view_end)
     if not aligned.any():
         aligned = np.ones_like(t_aligned, dtype=bool)
 
