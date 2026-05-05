@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QFormLayout,
     QHBoxLayout,
+    QListWidget,
+    QListWidgetItem,
     QPushButton,
     QSpinBox,
-    QVBoxLayout,
-    QWidget,
 )
 
 from ppg_hr.v2.optimizer import V2BayesConfig
@@ -63,16 +61,16 @@ class V2BatchPipelinePage(_PageBase):
         self._scope_combo.addItem("整段 full", userData="full")
         self._scope_combo.addItem("最长运动段 + 前30s", userData="motion")
 
-        ref_widget = QWidget()
-        ref_layout = QHBoxLayout(ref_widget)
-        ref_layout.setContentsMargins(0, 0, 0, 0)
-        self._reference_checks: dict[str, QCheckBox] = {}
-        self._reference_order: list[str] = ["HF", "CF", "ACC"]
+        self._ref_list = QListWidget()
+        self._ref_list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
+        self._ref_list.setDefaultDropAction(Qt.DropAction.MoveAction)
+        self._ref_list.setMaximumHeight(80)
         for group in ("HF", "CF", "ACC"):
-            cb = QCheckBox(group)
-            cb.setChecked(group == "HF")
-            self._reference_checks[group] = cb
-            ref_layout.addWidget(cb)
+            item = QListWidgetItem(group)
+            item.setCheckState(Qt.CheckState.Checked if group == "HF" else Qt.CheckState.Unchecked)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            self._ref_list.addItem(item)
+        ref_widget = self._ref_list
 
         self._max_iter = QSpinBox()
         self._max_iter.setRange(1, 1000)
@@ -119,32 +117,12 @@ class V2BatchPipelinePage(_PageBase):
         self.body().addStretch(1)
 
     def selected_reference_order(self) -> tuple[str, ...]:
-        return tuple(
-            group
-            for group in self._reference_order
-            if self._reference_checks[group].isChecked()
-        )
-
-    def set_reference_enabled(self, group: str, enabled: bool) -> None:
-        self._reference_checks[group].setChecked(bool(enabled))
-
-    def move_reference_up(self, group: str) -> None:
-        idx = self._reference_order.index(group)
-        if idx <= 0:
-            return
-        self._reference_order[idx - 1], self._reference_order[idx] = (
-            self._reference_order[idx],
-            self._reference_order[idx - 1],
-        )
-
-    def move_reference_down(self, group: str) -> None:
-        idx = self._reference_order.index(group)
-        if idx >= len(self._reference_order) - 1:
-            return
-        self._reference_order[idx + 1], self._reference_order[idx] = (
-            self._reference_order[idx],
-            self._reference_order[idx + 1],
-        )
+        order: list[str] = []
+        for i in range(self._ref_list.count()):
+            item = self._ref_list.item(i)
+            if item is not None and item.checkState() == Qt.CheckState.Checked:
+                order.append(item.text())
+        return tuple(order)
 
     def _refresh(self) -> None:
         self._summary.set_rows([])
