@@ -192,7 +192,7 @@ class V2BatchPlotPage(_PageBase):
         card.add(form)
         self.body().addWidget(card)
 
-        curve_card = SectionCard("绘制曲线选择", "控制 PNG 中显示的曲线")
+        curve_card = SectionCard("绘图曲线选择", "控制 PNG 中显示的曲线")
         curve_row = QHBoxLayout()
         self._plot_reference_check = QCheckBox("心率真值")
         self._plot_reference_check.setChecked(True)
