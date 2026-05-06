@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from ppg_hr.io.golden import load_golden
@@ -70,6 +71,43 @@ def test_unknown_column_raises(dataset_dir: Path) -> None:
 def test_missing_file_raises(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         load_dataset(tmp_path / "nope.csv", tmp_path / "ref.csv")
+
+
+def test_timeline_loader_keeps_valid_mask_and_finite_processed_data(
+    tmp_path: Path,
+) -> None:
+    sensor = tmp_path / "timeline.csv"
+    ref = tmp_path / "timeline_ref.csv"
+    n = 140
+    t = np.arange(n, dtype=float) / 100.0
+    frame = pd.DataFrame(
+        {
+            "Time(s)": t,
+            "SampleIndex": np.arange(n),
+            "Seq": np.arange(n),
+            "ValidFlag": np.ones(n, dtype=int),
+            "InterpFlag": np.zeros(n, dtype=int),
+            "GapLen": np.zeros(n, dtype=int),
+            "MissingBefore": np.zeros(n, dtype=int),
+        }
+    )
+    for idx, (short, original) in enumerate(SENSOR_COLUMNS.items()):
+        frame[original] = 10.0 + idx + np.sin(t * 2.0 * np.pi)
+    frame.loc[40:44, "ValidFlag"] = 0
+    frame.loc[40:44, "GapLen"] = 5
+    for original in SENSOR_COLUMNS.values():
+        frame.loc[40:44, original] = np.nan
+    frame.to_csv(sensor, index=False)
+    ref.write_text("h1\nh2\nh3\n0,00:00:00,75\n", encoding="utf-8")
+
+    loaded = load_dataset(sensor, ref)
+
+    assert loaded.source_kind == "timeline_csv"
+    assert loaded.valid_mask is not None
+    assert loaded.valid_mask.shape == (n,)
+    assert int((~loaded.valid_mask).sum()) == 5
+    assert np.isfinite(loaded.data.to_numpy(dtype=float)).all()
+    np.testing.assert_allclose(loaded.data["Time_s"].to_numpy(), t)
 
 
 # --- Golden-snapshot alignment (skipped if .mat missing) ----------------------

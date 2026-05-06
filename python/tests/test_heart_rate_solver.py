@@ -103,6 +103,47 @@ def test_solver_result_contains_delay_profile() -> None:
     assert res.delay_profile.default_bounds.as_tuple() == (-80, 80)
 
 
+def test_window_quality_accepts_current_short_ble_gap_default() -> None:
+    from ppg_hr.core.heart_rate_solver import _window_quality_from_valid_mask
+
+    valid = np.ones(800, dtype=bool)
+    valid[200:250] = False
+
+    quality = _window_quality_from_valid_mask(
+        valid,
+        0,
+        800,
+        fs_origin=100,
+        max_missing_ratio=0.20,
+        max_consecutive_missing_seconds=1.0,
+    )
+
+    assert quality["missing_count"] == 50
+    assert quality["missing_ratio"] == pytest.approx(50 / 800)
+    assert quality["max_consecutive_missing_samples"] == 50
+    assert quality["reliable"] is True
+
+
+def test_interpolate_unreliable_hr_columns_uses_surrounding_reliable_windows() -> None:
+    from ppg_hr.core.heart_rate_solver import _interpolate_unreliable_hr_columns
+
+    HR = np.zeros((5, 9), dtype=float)
+    HR[:, 0] = np.arange(5, dtype=float)
+    HR[:, 5] = [70.0, 72.0, 10.0, 78.0, 80.0]
+    qualities = [
+        {"reliable": True},
+        {"reliable": True},
+        {"reliable": False},
+        {"reliable": True},
+        {"reliable": True},
+    ]
+
+    out = _interpolate_unreliable_hr_columns(HR.copy(), qualities, columns=(5,))
+
+    assert out[2, 5] == pytest.approx(75.0)
+    assert qualities[2]["interpolated"] is True
+
+
 def test_fixed_delay_mode_uses_fixed_profile() -> None:
     from ppg_hr.core.heart_rate_solver import solve_from_arrays
 

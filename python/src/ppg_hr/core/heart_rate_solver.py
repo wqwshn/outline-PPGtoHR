@@ -72,6 +72,7 @@ class SolverResult:
     HR_Ref_Interp: np.ndarray  # shape (T,)
     err_fus_hf: float
     delay_profile: DelaySearchProfile | None = None
+    window_quality: list[dict[str, Any]] | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -86,6 +87,7 @@ class SolverResult:
                 if self.delay_profile is not None
                 else None
             ),
+            "Window_Quality": self.window_quality,
         }
 
 
@@ -146,6 +148,12 @@ def load_raw_data(params: SolverParams) -> tuple[np.ndarray, np.ndarray]:
     else:
         ref_path = Path(params.ref_file)
     ds = load_dataset(file_name, ref_path)
+    if isinstance(params.extras, dict):
+        params.extras["_data_quality"] = {
+            **ds.quality_metadata,
+            "valid_mask": ds.valid_mask,
+            "fs_origin": 100,
+        }
     return ds.data.to_numpy(dtype=float)[:, : len(ds.data.columns) // 2 + 1], ds.ref_data
 
 
@@ -240,6 +248,106 @@ def _apply_analysis_scope(
         cropped[:, 7] = selected_motion.astype(float)
         cropped[:, 8] = cropped[:, 7]
     return cropped if cropped.size else HR
+
+
+def _max_false_run(mask: np.ndarray) -> int:
+    values = np.asarray(mask, dtype=bool)
+    best = 0
+    current = 0
+    for item in values:
+        if item:
+            current = 0
+        else:
+            current += 1
+            best = max(best, current)
+    return best
+
+
+def _window_quality_from_valid_mask(
+    valid_mask: np.ndarray | None,
+    start_idx: int,
+    end_idx: int,
+    *,
+    fs_origin: int,
+    max_missing_ratio: float,
+    max_consecutive_missing_seconds: float,
+) -> dict[str, Any]:
+    if valid_mask is None:
+        return {
+            "missing_count": 0,
+            "missing_ratio": 0.0,
+            "max_consecutive_missing_samples": 0,
+            "reliable": True,
+            "interpolated": False,
+        }
+    mask = np.asarray(valid_mask, dtype=bool)
+    start = max(0, int(start_idx))
+    end = min(mask.size, max(start, int(end_idx)))
+    window = mask[start:end]
+    if window.size == 0:
+        return {
+            "missing_count": 0,
+            "missing_ratio": 0.0,
+            "max_consecutive_missing_samples": 0,
+            "reliable": True,
+            "interpolated": False,
+        }
+    missing_count = int((~window).sum())
+    missing_ratio = float(missing_count / window.size)
+    max_gap = int(_max_false_run(window))
+    max_gap_allowed = int(round(float(max_consecutive_missing_seconds) * fs_origin))
+    reliable = (
+        missing_ratio <= float(max_missing_ratio)
+        and max_gap <= max_gap_allowed
+    )
+    return {
+        "missing_count": missing_count,
+        "missing_ratio": missing_ratio,
+        "max_consecutive_missing_samples": max_gap,
+        "reliable": bool(reliable),
+        "interpolated": False,
+    }
+
+
+def _data_quality_from_params(params: SolverParams) -> tuple[np.ndarray | None, int]:
+    quality = params.extras.get("_data_quality") if isinstance(params.extras, dict) else None
+    if not isinstance(quality, dict):
+        return None, 100
+    valid_mask = quality.get("valid_mask")
+    if valid_mask is None:
+        return None, int(quality.get("fs_origin", 100))
+    return np.asarray(valid_mask, dtype=bool), int(quality.get("fs_origin", 100))
+
+
+def _interpolate_unreliable_hr_columns(
+    HR: np.ndarray,
+    qualities: list[dict[str, Any]],
+    *,
+    columns: tuple[int, ...],
+) -> np.ndarray:
+    if HR.size == 0 or not qualities:
+        return HR
+    reliable = np.asarray(
+        [bool(q.get("reliable", True)) for q in qualities[: HR.shape[0]]],
+        dtype=bool,
+    )
+    if reliable.size != HR.shape[0] or reliable.all():
+        return HR
+    times = HR[:, 0].astype(float)
+    for col in columns:
+        values = HR[:, col].astype(float)
+        valid = reliable & np.isfinite(values)
+        if not valid.any():
+            continue
+        if valid.sum() == 1:
+            values[~reliable] = values[valid][0]
+        else:
+            values[~reliable] = np.interp(times[~reliable], times[valid], values[valid])
+        HR[:, col] = values
+    for idx, q in enumerate(qualities[: HR.shape[0]]):
+        if not bool(q.get("reliable", True)):
+            q["interpolated"] = True
+    return HR
 
 
 def _process_spectrum(
@@ -373,6 +481,8 @@ def solve_from_arrays(
     win_step_s = 1
     time_end = len(ppg_ori) / fs - params.time_buffer
     rows: list[list[float]] = []
+    quality_rows: list[dict[str, Any]] = []
+    valid_mask, quality_fs_origin = _data_quality_from_params(params)
 
     time_1 = float(params.time_start)
     times_idx = 0
@@ -390,6 +500,18 @@ def solve_from_arrays(
         idx_s_motion = int(round(time_1 * fs_origin))
         idx_e_motion = int(round(time_2 * fs_origin))
         sig_acc_mag_motion = acc_mag_motion[idx_s_motion:idx_e_motion]
+        quality = _window_quality_from_valid_mask(
+            valid_mask,
+            idx_s_motion,
+            idx_e_motion,
+            fs_origin=quality_fs_origin,
+            max_missing_ratio=float(params.max_missing_ratio_per_window),
+            max_consecutive_missing_seconds=float(
+                params.max_consecutive_missing_seconds
+            ),
+        )
+        quality["start_s"] = float(time_1)
+        quality["end_s"] = float(time_2)
 
         # Pre-allocate this row (9 columns: time, ref, A, B, C, fHF, fACC, motion_acc, motion_hf)
         row = [0.0] * 9
@@ -491,6 +613,7 @@ def solve_from_arrays(
 
         last_motion_flag = bool(is_motion_flag)
         rows.append(row)
+        quality_rows.append(quality)
         time_1 += win_step_s
         times_idx += 1
         if time_1 > time_end:
@@ -501,7 +624,11 @@ def solve_from_arrays(
         return SolverResult(empty, np.full((5, 3), np.nan), np.array([]),
                             (motion_threshold, motion_threshold), np.array([]),
                             float("nan"), delay_profile)
-    HR = _apply_analysis_scope(np.asarray(rows, dtype=float), params.analysis_scope)
+    HR_source = np.asarray(rows, dtype=float)
+    HR = _apply_analysis_scope(HR_source, params.analysis_scope)
+    if HR.shape[0] != HR_source.shape[0]:
+        quality_by_time = {float(row[0]): q for row, q in zip(HR_source, quality_rows)}
+        quality_rows = [quality_by_time[float(row[0])] for row in HR]
 
     # ---- post-processing ------------------------------------------------
     for c in (2, 3, 4):  # MATLAB cols 3, 4, 5 (1-based) -> Python 2, 3, 4
@@ -514,6 +641,12 @@ def solve_from_arrays(
     HR[:, 6] = np.where(motion_acc, HR[:, 3], HR[:, 4])
     HR[:, 5] = smoothdata_movmedian(HR[:, 5], 3)
     HR[:, 6] = smoothdata_movmedian(HR[:, 6], 3)
+    if bool(params.interpolate_unreliable_hr):
+        HR = _interpolate_unreliable_hr_columns(
+            HR,
+            quality_rows,
+            columns=(2, 3, 4, 5, 6),
+        )
 
     # ---- error stats ----------------------------------------------------
     t_pred = HR[:, 0] + params.time_bias
@@ -521,19 +654,38 @@ def solve_from_arrays(
                       fill_value="extrapolate", assume_sorted=False)
     hr_ref_interp = interp(t_pred)
 
-    mask_motion_acc = HR[:, 7] == 1
-    mask_rest_acc = HR[:, 7] == 0
+    reliable_mask = np.asarray(
+        [bool(q.get("reliable", True)) for q in quality_rows],
+        dtype=bool,
+    )
+    if reliable_mask.size != HR.shape[0] or not reliable_mask.any():
+        reliable_mask = np.ones(HR.shape[0], dtype=bool)
+    mask_motion_acc = (HR[:, 7] == 1) & reliable_mask
+    mask_rest_acc = (HR[:, 7] == 0) & reliable_mask
     col_indices = [2, 3, 4, 5, 6]  # MATLAB 3..7 (1-based) -> Python 2..6
     err_stats = np.zeros((5, 3), dtype=float)
     for k, col in enumerate(col_indices):
         abs_err = np.abs(HR[:, col] - hr_ref_interp) * 60.0
+        abs_err = abs_err[reliable_mask]
         with np.errstate(invalid="ignore"):
             err_stats[k, 0] = float(np.mean(abs_err)) if abs_err.size else float("nan")
             err_stats[k, 1] = (
-                float(np.mean(abs_err[mask_rest_acc])) if mask_rest_acc.any() else float("nan")
+                float(
+                    np.mean(
+                        np.abs(HR[:, col] - hr_ref_interp)[mask_rest_acc] * 60.0
+                    )
+                )
+                if mask_rest_acc.any()
+                else float("nan")
             )
             err_stats[k, 2] = (
-                float(np.mean(abs_err[mask_motion_acc])) if mask_motion_acc.any() else float("nan")
+                float(
+                    np.mean(
+                        np.abs(HR[:, col] - hr_ref_interp)[mask_motion_acc] * 60.0
+                    )
+                )
+                if mask_motion_acc.any()
+                else float("nan")
             )
 
     return SolverResult(
@@ -544,6 +696,7 @@ def solve_from_arrays(
         HR_Ref_Interp=hr_ref_interp,
         err_fus_hf=float(err_stats[3, 0]),
         delay_profile=delay_profile,
+        window_quality=quality_rows,
     )
 
 

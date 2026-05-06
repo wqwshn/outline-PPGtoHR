@@ -58,6 +58,9 @@ class SolverParams:
     smooth_win_len: int = 7
     time_bias: float = 5.0
     max_recovery_seconds: float = 30.0
+    max_missing_ratio_per_window: float = 0.20
+    max_consecutive_missing_seconds: float = 1.0
+    interpolate_unreliable_hr: bool = True
 
     # LMS cascade fixed parameters
     num_cascade_hf: int = 2

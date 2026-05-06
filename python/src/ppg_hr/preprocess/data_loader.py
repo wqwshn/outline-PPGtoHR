@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -55,6 +55,9 @@ class ProcessedDataset:
 
     data: pd.DataFrame
     ref_data: np.ndarray
+    valid_mask: np.ndarray | None = None
+    source_kind: str = "legacy_csv"
+    quality_metadata: dict[str, object] = field(default_factory=dict)
 
 
 def _bandpass_coeffs(fs: int = SAMPLE_RATE_HZ) -> tuple[np.ndarray, np.ndarray]:
@@ -96,6 +99,36 @@ def _parse_reference_csv(gt_csv: Path) -> np.ndarray:
     return np.column_stack([time_s[valid], bpm[valid]])
 
 
+def _detect_source_kind(raw: pd.DataFrame) -> str:
+    timeline_cols = {"ValidFlag", "InterpFlag", "GapLen"}
+    if timeline_cols.issubset(raw.columns):
+        return "timeline_csv"
+    if {"Time(s)", "MissingBefore"}.issubset(raw.columns):
+        return "compact_raw_csv"
+    return "legacy_csv"
+
+
+def _extract_valid_mask(raw: pd.DataFrame, selected: list[str]) -> np.ndarray:
+    finite = np.ones(len(raw), dtype=bool)
+    for short in selected:
+        original = SENSOR_COLUMNS[short]
+        values = pd.to_numeric(raw[original], errors="coerce").to_numpy(dtype=float)
+        finite &= np.isfinite(values)
+    if "ValidFlag" not in raw.columns:
+        return finite
+    flag = pd.to_numeric(raw["ValidFlag"], errors="coerce").to_numpy(dtype=float)
+    return finite & (flag > 0)
+
+
+def _time_axis(raw: pd.DataFrame, fs: int) -> np.ndarray:
+    if "Time(s)" not in raw.columns:
+        return np.arange(len(raw), dtype=float) / float(fs)
+    values = pd.to_numeric(raw["Time(s)"], errors="coerce").to_numpy(dtype=float)
+    if values.size != len(raw) or not np.isfinite(values).all():
+        return np.arange(len(raw), dtype=float) / float(fs)
+    return values
+
+
 def load_dataset(
     sensor_csv: str | Path,
     gt_csv: str | Path,
@@ -129,9 +162,6 @@ def load_dataset(
     if n == 0:
         raise ValueError(f"Sensor CSV is empty: {sensor_path}")
 
-    df = pd.DataFrame()
-    df["Time_s"] = np.arange(n, dtype=float) / float(fs)
-
     selected = list(columns) if columns is not None else list(SENSOR_COLUMNS)
     for short in selected:
         if short not in SENSOR_COLUMNS:
@@ -139,6 +169,14 @@ def load_dataset(
         original = SENSOR_COLUMNS[short]
         if original not in raw.columns:
             raise KeyError(f"Column '{original}' missing in {sensor_path}")
+
+    source_kind = _detect_source_kind(raw)
+    valid_mask = _extract_valid_mask(raw, selected)
+    df = pd.DataFrame()
+    df["Time_s"] = _time_axis(raw, fs)
+
+    for short in selected:
+        original = SENSOR_COLUMNS[short]
         df[short] = raw[original].astype(float).to_numpy()
 
     b, a = _bandpass_coeffs(fs)
@@ -148,4 +186,18 @@ def load_dataset(
         df[f"{short}_Filt"] = filtfilt(b, a, cleaned)
 
     ref_data = _parse_reference_csv(gt_path)
-    return ProcessedDataset(data=df, ref_data=ref_data)
+    quality_metadata = {
+        "source_kind": source_kind,
+        "valid_count": int(valid_mask.sum()),
+        "missing_count": int((~valid_mask).sum()),
+    }
+    if "GapLen" in raw.columns:
+        gap_len = pd.to_numeric(raw["GapLen"], errors="coerce").fillna(0)
+        quality_metadata["max_gap_samples"] = int(gap_len.max())
+    return ProcessedDataset(
+        data=df,
+        ref_data=ref_data,
+        valid_mask=valid_mask,
+        source_kind=source_kind,
+        quality_metadata=quality_metadata,
+    )

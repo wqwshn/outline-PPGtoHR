@@ -45,6 +45,61 @@ def _write_sensor(path: Path, *, motion: bool) -> None:
     df.to_csv(path, index=False)
 
 
+def _write_timeline_sensor_with_gap(path: Path, *, motion: bool) -> None:
+    fs = 100
+    n = 80 * fs
+    t = np.arange(n, dtype=float) / fs
+    accx = np.zeros(n)
+    if motion:
+        motion_mask = (t >= 35) & (t <= 55)
+        accx[motion_mask] = 0.8 * np.sin(2 * np.pi * 1.5 * t[motion_mask])
+    ppg = 1000 + 20 * np.sin(2 * np.pi * 1.2 * t)
+    df = pd.DataFrame(
+        {
+            "Time(s)": t,
+            "SampleIndex": np.arange(n),
+            "Seq": np.arange(n),
+            "ValidFlag": np.ones(n, dtype=int),
+            "InterpFlag": np.zeros(n, dtype=int),
+            "GapLen": np.zeros(n, dtype=int),
+            "MissingBefore": np.zeros(n, dtype=int),
+            "Uc1(mV)": 1.0 + 0.01 * np.sin(t),
+            "Uc2(mV)": 1.1 + 0.01 * np.cos(t),
+            "Ut1(mV)": 5.0 + 0.2 * accx,
+            "Ut2(mV)": 5.5 + 0.1 * accx,
+            "PPG_Green": ppg + 10 * accx,
+            "PPG_Red": ppg,
+            "PPG_IR": ppg,
+            "AccX(g)": accx,
+            "AccY(g)": np.zeros(n),
+            "AccZ(g)": np.ones(n),
+            "GyroX(dps)": np.zeros(n),
+            "GyroY(dps)": np.zeros(n),
+            "GyroZ(dps)": np.zeros(n),
+        }
+    )
+    gap = np.arange(4200, 4240)
+    df.loc[gap, "ValidFlag"] = 0
+    df.loc[gap, "GapLen"] = gap.size
+    sensor_columns = [
+        "Uc1(mV)",
+        "Uc2(mV)",
+        "Ut1(mV)",
+        "Ut2(mV)",
+        "PPG_Green",
+        "PPG_Red",
+        "PPG_IR",
+        "AccX(g)",
+        "AccY(g)",
+        "AccZ(g)",
+        "GyroX(dps)",
+        "GyroY(dps)",
+        "GyroZ(dps)",
+    ]
+    df.loc[gap, sensor_columns] = np.nan
+    df.to_csv(path, index=False)
+
+
 def test_solve_v2_motion_scope_uses_longest_motion_and_pre30_context(
     tmp_path: Path,
 ) -> None:
@@ -67,6 +122,32 @@ def test_solve_v2_motion_scope_uses_longest_motion_and_pre30_context(
     assert result.metadata["used_adaptive_windows"] > 0
     assert result.metadata["analysis_scope"] == "motion"
     assert result.metadata["motion_segment"]["start_s"] >= 30.0
+
+
+def test_solve_v2_window_table_marks_short_timeline_gap_reliable(
+    tmp_path: Path,
+) -> None:
+    data = tmp_path / "timeline.csv"
+    ref = tmp_path / "timeline_ref.csv"
+    _write_timeline_sensor_with_gap(data, motion=True)
+    _write_ref(ref)
+    cfg = V2RunConfig(
+        data_path=data,
+        ref_path=ref,
+        reference_groups_order=("HF",),
+    )
+
+    result = solve_v2(cfg)
+
+    gap_rows = [
+        row
+        for row in result.window_table
+        if row["missing_count"] > 0
+    ]
+    assert gap_rows
+    assert all(row["reliable"] for row in gap_rows)
+    assert all(row["missing_ratio"] < 0.20 for row in gap_rows)
+    assert all(not row["interpolated"] for row in gap_rows)
 
 
 def test_solve_v2_rest_only_degrades_to_fft(tmp_path: Path) -> None:

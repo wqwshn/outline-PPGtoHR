@@ -30,6 +30,9 @@ class V2RunConfig:
     max_recovery_seconds: float = 30.0
     recovery_trigger_bpm: float = 20.0
     pre_motion_context_seconds: float = 30.0
+    max_missing_ratio_per_window: float = 0.20
+    max_consecutive_missing_seconds: float = 1.0
+    interpolate_unreliable_hr: bool = True
     lms_mu_base: float = 0.01
     lms_mu_min: float = 1e-6
     max_order: int = 16

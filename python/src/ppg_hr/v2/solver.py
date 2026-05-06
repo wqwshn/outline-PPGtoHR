@@ -15,9 +15,12 @@ from ppg_hr.core.adaptive_filter import apply_adaptive_cascade
 from ppg_hr.core.choose_delay import choose_delay
 from ppg_hr.core.fft_peaks import fft_peaks
 from ppg_hr.core.heart_rate_solver import (
+    _data_quality_from_params,
+    _interpolate_unreliable_hr_columns,
     _is_motion_window,
     _motion_detector_from_raw_acc,
     _process_spectrum,
+    _window_quality_from_valid_mask,
     load_raw_data,
 )
 from ppg_hr.params import SolverParams
@@ -122,6 +125,8 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
 
     rows: list[list[float]] = []
     adaptive_stage_rows: list[list[dict[str, Any]]] = []
+    quality_rows: list[dict[str, Any]] = []
+    valid_mask, quality_fs_origin = _data_quality_from_params(params)
     time_1 = float(params.time_start)
     time_end = len(ppg_ori) / fs - params.time_buffer
     times_idx = 0
@@ -145,6 +150,19 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
             acc_mag_motion[idx_s_motion:idx_e_motion],
             motion_threshold,
         )
+        quality = _window_quality_from_valid_mask(
+            valid_mask,
+            idx_s_motion,
+            idx_e_motion,
+            fs_origin=quality_fs_origin,
+            max_missing_ratio=float(cfg.max_missing_ratio_per_window),
+            max_consecutive_missing_seconds=float(
+                cfg.max_consecutive_missing_seconds
+            ),
+        )
+        quality["start_s"] = float(time_1)
+        quality["end_s"] = float(time_2)
+        quality["center_s"] = float(center)
 
         row = [0.0] * 9
         row[0] = center
@@ -208,6 +226,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
         row[3] = row[2]
         rows.append(row)
         adaptive_stage_rows.append(stages)
+        quality_rows.append(quality)
         last_in_adaptive_range = in_adaptive_range
         time_1 += float(cfg.window_step_seconds)
         times_idx += 1
@@ -270,6 +289,12 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 source[:, 8],
             ]
         )
+        if bool(cfg.interpolate_unreliable_hr):
+            HR = _interpolate_unreliable_hr_columns(
+                HR,
+                quality_rows,
+                columns=(2, 3),
+            )
     else:
         HR = np.zeros((0, 6), dtype=float)
 
@@ -287,6 +312,31 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 "in_analysis_scope": _window_in_analysis_scope(c, motion_segment, cfg),
                 "is_motion": bool(hr_row[4]),
                 "used_adaptive": bool(hr_row[5]),
+                "missing_count": int(
+                    quality_rows[idx].get("missing_count", 0)
+                    if idx < len(quality_rows)
+                    else 0
+                ),
+                "missing_ratio": float(
+                    quality_rows[idx].get("missing_ratio", 0.0)
+                    if idx < len(quality_rows)
+                    else 0.0
+                ),
+                "max_consecutive_missing_samples": int(
+                    quality_rows[idx].get("max_consecutive_missing_samples", 0)
+                    if idx < len(quality_rows)
+                    else 0
+                ),
+                "reliable": bool(
+                    quality_rows[idx].get("reliable", True)
+                    if idx < len(quality_rows)
+                    else True
+                ),
+                "interpolated": bool(
+                    quality_rows[idx].get("interpolated", False)
+                    if idx < len(quality_rows)
+                    else False
+                ),
                 "adaptive_stages": (
                     adaptive_stage_rows[idx]
                     if idx < len(adaptive_stage_rows)
@@ -297,7 +347,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
 
     HR = _apply_v2_analysis_scope(HR, cfg, motion_segment)
 
-    err_stats = _error_stats(HR, cfg, motion_segment)
+    err_stats = _error_stats(HR, cfg, motion_segment, window_table)
     metadata = {
         "schema_version": "v2",
         "data_path": str(cfg.data_path),
@@ -310,6 +360,9 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
         "motion_segment": motion_segment,
         "used_adaptive_windows": int(
             sum(1 for row in window_table if row["used_adaptive"])
+        ),
+        "unreliable_windows": int(
+            sum(1 for row in window_table if not row["reliable"])
         ),
         "fallback_reason": fallback_reason,
         "solver_kernel": "v1_fusion_reference_path",
@@ -338,6 +391,9 @@ def _solver_params_from_v2(cfg: V2RunConfig) -> SolverParams:
         lms_mu_min=float(cfg.lms_mu_min),
         max_order=int(cfg.max_order),
         smooth_win_len=int(cfg.smooth_win_len),
+        max_missing_ratio_per_window=float(cfg.max_missing_ratio_per_window),
+        max_consecutive_missing_seconds=float(cfg.max_consecutive_missing_seconds),
+        interpolate_unreliable_hr=bool(cfg.interpolate_unreliable_hr),
         spec_penalty_enable=bool(cfg.spec_penalty_enable),
         spec_penalty_weight=float(cfg.spec_penalty_weight),
         spec_penalty_width=float(cfg.spec_penalty_width),
@@ -729,6 +785,7 @@ def _error_stats(
     HR: np.ndarray,
     cfg: V2RunConfig,
     motion_segment: dict[str, float] | None,
+    window_table: list[dict[str, Any]] | None = None,
 ) -> dict[str, float]:
     if HR.size == 0:
         return {"fft_aae_bpm": float("nan"), "final_aae_bpm": float("nan")}
@@ -738,6 +795,17 @@ def _error_stats(
         start = max(0.0, float(motion_segment["start_s"]) - cfg.pre_motion_context_seconds)
         end = float(motion_segment["end_s"])
         mask = (HR[:, 0] >= start) & (HR[:, 0] <= end)
+    if window_table:
+        reliable_by_time = {
+            float(row["center_s"]): bool(row.get("reliable", True))
+            for row in window_table
+        }
+        reliable = np.asarray(
+            [reliable_by_time.get(float(t), True) for t in HR[:, 0]],
+            dtype=bool,
+        )
+        if reliable.any():
+            mask &= reliable
 
     t_aligned = HR[:, 0] + float(cfg.time_bias)
     ref_interp = interp1d(
