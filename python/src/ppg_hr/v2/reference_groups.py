@@ -34,31 +34,48 @@ def method_label(adaptive_filter: str, groups: tuple[str, ...]) -> str:
 
 
 _ORDER_COLORS: dict[str, str] = {
-    "FFT": "#A8ADB3",
-    "HF": "#D4382C",
-    "CF": "#8CCB9B",
-    "ACC": "#D9A66A",
-    "HF+CF": "#E06930",
-    "CF+HF": "#E07B40",
-    "HF+ACC": "#D4552A",
-    "ACC+HF": "#C84830",
-    "CF+ACC": "#A7C98B",
-    "ACC+CF": "#D7A4A4",
-    "HF+CF+ACC": "#D44A30",
-    "HF+ACC+CF": "#E06038",
-    "CF+HF+ACC": "#D46038",
-    "CF+ACC+HF": "#D06040",
-    "ACC+HF+CF": "#C85038",
-    "ACC+CF+HF": "#D05840",
+    # Baseline / spectral method
+    "FFT": "#A7ADB5",      # soft neutral gray
+
+    # Single-reference cases
+    "HF": "#D95F5F",       # warm coral red
+    "CF": "#6AAA8B",       # muted sage green / cyan-green
+    "ACC": "#5B8FC0",      # soft scientific blue
+
+    # Two-reference combinations
+    # HF-dominant: warm family, shifted by CF or ACC
+    "HF+CF": "#D9855E",    # coral-orange, HF with CF contribution
+    "HF+ACC": "#C96C88",   # muted rose, HF blended with ACC
+
+    # CF-dominant: green family, shifted toward warm or cool
+    "CF+HF": "#B2A75D",    # soft olive, CF shifted by HF
+    "CF+ACC": "#58AA9B",   # teal-green, CF shifted by ACC
+
+    # ACC-dominant: blue family, shifted toward warm or CF
+    "ACC+HF": "#8B7CB8",   # muted blue-violet, ACC shifted by HF
+    "ACC+CF": "#5F9DB8",   # blue-teal, ACC shifted by CF
+
+    # Three-reference combinations
+    # HF-first: still warm, but less saturated than pure HF
+    "HF+CF+ACC": "#D27565",  # warm terracotta
+    "HF+ACC+CF": "#C97993",  # muted rose-purple
+
+    # CF-first: green/olive/teal branch
+    "CF+HF+ACC": "#A5AD68",  # soft yellow-green / olive
+    "CF+ACC+HF": "#6BA996",  # muted sea green
+
+    # ACC-first: blue/violet branch
+    "ACC+HF+CF": "#8D83AD",  # muted lavender-blue
+    "ACC+CF+HF": "#6B99B2",  # muted slate blue-teal
 }
 
 _FALLBACK_COLORS: tuple[str, ...] = (
-    "#D4382C",
-    "#E06930",
-    "#D4552A",
-    "#C84830",
-    "#D44A30",
-    "#E06038",
+    "#D95F5F",  # warm HF-like
+    "#6AAA8B",  # CF-like green
+    "#5B8FC0",  # ACC-like blue
+    "#D9855E",  # warm mixed
+    "#58AA9B",  # teal mixed
+    "#8B7CB8",  # blue-violet mixed
 )
 
 

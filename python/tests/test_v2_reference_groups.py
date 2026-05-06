@@ -35,7 +35,7 @@ def test_ordered_reference_colors_are_distinct_and_stable() -> None:
     acc_hf = color_for_reference_order(("ACC", "HF"))
     assert hf_acc != acc_hf
     assert color_for_reference_order(("HF", "ACC")) == hf_acc
-    assert color_for_reference_order(("HF",)) == "#D4382C"
+    assert color_for_reference_order(("HF",)) == "#D95F5F"
 
 
 def test_method_label_formats_correctly() -> None:
