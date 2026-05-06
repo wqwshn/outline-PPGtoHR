@@ -609,15 +609,25 @@ class V2BatchPlotWorker(QObject):
     log = Signal(str)
     progress = Signal(dict)
 
-    def __init__(self, root_dir: Path, out_dir: Path | None):
+    def __init__(
+        self,
+        root_dir: Path,
+        out_dir: Path | None,
+        plot_curves: tuple[str, ...] | None = None,
+    ):
         super().__init__()
         self._root_dir = root_dir
         self._out_dir = out_dir
+        self._plot_curves = plot_curves
 
     def run(self) -> None:
         try:
             self.log.emit(f"v2报告根目录: {self._root_dir}")
-            result = render_v2_report_batch(self._root_dir, self._out_dir)
+            result = render_v2_report_batch(
+                self._root_dir,
+                self._out_dir,
+                plot_curves=self._plot_curves,
+            )
             self.finished.emit(result)
         except Exception as exc:  # pragma: no cover
             self.failed.emit(f"v2批量绘图失败：{exc}\n\n{traceback.format_exc()}")

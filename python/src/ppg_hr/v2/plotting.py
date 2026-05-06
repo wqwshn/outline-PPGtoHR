@@ -17,6 +17,8 @@ import matplotlib.pyplot as plt  # noqa: E402
 from .reference_groups import color_for_reference_order, method_label, reference_order_key
 from .report import is_v2_report, load_v2_report
 
+_PLOT_CURVES = ("reference", "fft", "adaptive")
+
 
 @dataclass
 class V2PlotJob:
@@ -46,12 +48,30 @@ def discover_v2_plot_jobs(root_dir: str | Path) -> list[V2PlotJob]:
     return [V2PlotJob(p) for p in sorted(root.rglob("*.json")) if is_v2_report(p)]
 
 
+def _normalise_plot_curves(
+    plot_curves: tuple[str, ...] | list[str] | None,
+) -> tuple[str, ...]:
+    if plot_curves is None:
+        return _PLOT_CURVES
+    selected: list[str] = []
+    for item in plot_curves:
+        value = str(item).strip().lower()
+        if value not in _PLOT_CURVES:
+            raise ValueError(
+                f"Unsupported plot curve {item!r}; expected one of {_PLOT_CURVES}"
+            )
+        if value not in selected:
+            selected.append(value)
+    return tuple(selected)
+
+
 def render_v2_report(
     report_path: str | Path,
     out_dir: str | Path | None = None,
     *,
     csv_dir: str | Path | None = None,
     output_prefix: str | None = None,
+    plot_curves: tuple[str, ...] | list[str] | None = None,
 ) -> V2PlotArtefacts:
     report = Path(report_path)
     payload = load_v2_report(report)
@@ -79,7 +99,7 @@ def render_v2_report(
         motion_segment=meta.get("motion_segment"),
         pre_motion_context_seconds=float(meta.get("pre_motion_context_seconds", 30.0)),
     )
-    _plot_hr(fig_base, hr, key, order, payload, adaptive_label)
+    _plot_hr(fig_base, hr, key, order, payload, adaptive_label, plot_curves=plot_curves)
     return V2PlotArtefacts(
         report_path=report,
         reference_order_key=key,
@@ -92,6 +112,8 @@ def render_v2_report(
 def render_v2_report_batch(
     root_dir: str | Path,
     out_dir: str | Path | None = None,
+    *,
+    plot_curves: tuple[str, ...] | list[str] | None = None,
 ) -> V2BatchPlotResult:
     root = Path(root_dir)
     out = Path(out_dir) if out_dir is not None else root
@@ -99,7 +121,9 @@ def render_v2_report_batch(
     items: list[V2PlotArtefacts] = []
     for job in discover_v2_plot_jobs(root):
         try:
-            items.append(render_v2_report(job.report_path, out_dir=out))
+            items.append(
+                render_v2_report(job.report_path, out_dir=out, plot_curves=plot_curves)
+            )
         except Exception as exc:
             items.append(
                 V2PlotArtefacts(
@@ -123,8 +147,11 @@ def _plot_hr(
     order: tuple[str, ...],
     payload: dict,
     adaptive_label: str = "LMS-H",
+    *,
+    plot_curves: tuple[str, ...] | list[str] | None = None,
 ) -> None:
     _apply_style()
+    curves = _normalise_plot_curves(plot_curves)
     fig, ax = plt.subplots(figsize=(3.54, 2.60), dpi=120)
 
     if hr.size == 0:
@@ -188,36 +215,52 @@ def _plot_hr(
             color="#D9DDE3", alpha=0.24, edgecolor="none",
         )
 
-    ax.plot(
-        t_plot, ref_plot,
-        color="#2B2B2B", linewidth=1.05, label="Reference", zorder=5,
-    )
-    ax.plot(
-        t_plot, fft_plot,
-        color="#A8ADB3", linestyle=(0, (2.0, 1.6)), linewidth=0.9,
-        label="FFT", zorder=2,
-    )
-    ax.plot(
-        t_plot, final_plot,
-        color=color, linewidth=1.45, marker="o", markersize=2.0,
-        linestyle="-",
-        label=adaptive_label if key != "FFT" else "FFT",
-        zorder=4,
-    )
+    y_series: list[np.ndarray] = []
+    if "reference" in curves:
+        ax.plot(
+            t_plot, ref_plot,
+            color="#2B2B2B", linewidth=1.05, label="Reference", zorder=5,
+        )
+        y_series.append(ref_plot)
+    if "fft" in curves:
+        ax.plot(
+            t_plot, fft_plot,
+            color="#A8ADB3", linestyle=(0, (2.0, 1.6)), linewidth=0.9,
+            label="FFT", zorder=2,
+        )
+        y_series.append(fft_plot)
+    if "adaptive" in curves:
+        ax.plot(
+            t_plot, final_plot,
+            color=color, linewidth=1.45, marker="o", markersize=2.0,
+            linestyle="-",
+            label=adaptive_label if key != "FFT" else "FFT",
+            zorder=4,
+        )
+        y_series.append(final_plot)
 
     ax.set_ylabel("Heart rate (BPM)")
-    ax.set_ylim(_common_ylim(ref_plot, fft_plot, final_plot))
+    ax.set_ylim(_common_ylim(*y_series))
     ax.grid(True, axis="y", alpha=0.12, linewidth=0.45)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
 
-    _draw_error_table(ax, hr, aligned, time_bias, adaptive_label)
-
-    ax.legend(
-        loc="upper left",
-        bbox_to_anchor=(0.02, _legend_y(ax)),
-        fontsize=6, ncol=1, frameon=False,
+    _draw_error_table(
+        ax,
+        hr,
+        aligned,
+        time_bias,
+        adaptive_label,
+        plot_curves=tuple(curves),
     )
+
+    handles, labels = ax.get_legend_handles_labels()
+    if handles:
+        ax.legend(
+            loc="upper left",
+            bbox_to_anchor=(0.02, _legend_y(ax)),
+            fontsize=6, ncol=1, frameon=False,
+        )
     _export_figure(fig, output_base)
     plt.close(fig)
 
@@ -355,7 +398,52 @@ def _draw_error_table(
     aligned: np.ndarray,
     time_bias: float,
     adaptive_label: str,
+    *,
+    plot_curves: tuple[str, ...] = _PLOT_CURVES,
 ) -> None:
+    rows = _figure_error_rows(
+        hr,
+        aligned,
+        time_bias=time_bias,
+        adaptive_label=adaptive_label,
+        plot_curves=plot_curves,
+    )
+    if not rows:
+        return
+
+    x0 = 0.02
+    x_cols = [0.10, 0.22, 0.32]
+    y_top = 0.97
+    line_h = 0.045
+    _kw = dict(
+        transform=ax.transAxes, fontsize=6, family="Arial",
+        color="#333333", va="top",
+    )
+    ax.text(
+        x0, y_top, "", transform=ax.transAxes, fontsize=1, va="top",
+        bbox={
+            "boxstyle": "round,pad=0.18", "facecolor": "white",
+            "edgecolor": "#D6D6D6", "linewidth": 0.35, "alpha": 0.84,
+        },
+    )
+    y = y_top - 0.012
+    for x, txt in zip(x_cols, ["MAE (BPM)", "all", "motion"], strict=True):
+        ax.text(x, y, txt, ha="center", fontweight="bold", **_kw)
+    for row_idx, (name, all_val, mot_val) in enumerate(rows, start=1):
+        y = y_top - 0.012 - row_idx * line_h
+        for x, txt in zip(x_cols, [name, f"{all_val:.1f}", f"{mot_val:.1f}"], strict=True):
+            ax.text(x, y, txt, ha="center", **_kw)
+
+
+def _figure_error_rows(
+    hr: np.ndarray,
+    aligned: np.ndarray,
+    *,
+    time_bias: float,
+    adaptive_label: str,
+    plot_curves: tuple[str, ...] | list[str] | None = None,
+) -> list[tuple[str, float, float]]:
+    curves = _normalise_plot_curves(plot_curves)
     t_aligned = hr[:, 0] + time_bias
     ref_interp = interp1d(
         hr[:, 0], hr[:, 1],
@@ -384,33 +472,18 @@ def _draw_error_table(
     fft_all, fft_motion = _aae(hr[:, 2], ref, aligned)
     final_all, final_motion = _aae(hr[:, 3], ref, aligned)
 
-    rows = [
-        ("FFT", fft_all, fft_motion),
-        (adaptive_label if adaptive_label != "FFT" else "Final", final_all, final_motion),
-    ]
-
-    x0 = 0.02
-    x_cols = [0.10, 0.22, 0.32]
-    y_top = 0.97
-    line_h = 0.045
-    _kw = dict(
-        transform=ax.transAxes, fontsize=6, family="Arial",
-        color="#333333", va="top",
-    )
-    ax.text(
-        x0, y_top, "", transform=ax.transAxes, fontsize=1, va="top",
-        bbox={
-            "boxstyle": "round,pad=0.18", "facecolor": "white",
-            "edgecolor": "#D6D6D6", "linewidth": 0.35, "alpha": 0.84,
-        },
-    )
-    y = y_top - 0.012
-    for x, txt in zip(x_cols, ["MAE (BPM)", "all", "motion"], strict=True):
-        ax.text(x, y, txt, ha="center", fontweight="bold", **_kw)
-    for row_idx, (name, all_val, mot_val) in enumerate(rows, start=1):
-        y = y_top - 0.012 - row_idx * line_h
-        for x, txt in zip(x_cols, [name, f"{all_val:.1f}", f"{mot_val:.1f}"], strict=True):
-            ax.text(x, y, txt, ha="center", **_kw)
+    rows: list[tuple[str, float, float]] = []
+    if "fft" in curves:
+        rows.append(("FFT", fft_all, fft_motion))
+    if "adaptive" in curves:
+        rows.append(
+            (
+                adaptive_label if adaptive_label != "FFT" else "Final",
+                final_all,
+                final_motion,
+            )
+        )
+    return rows
 
 
 def _legend_y(ax) -> float:

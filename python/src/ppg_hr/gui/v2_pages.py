@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFormLayout,
     QHBoxLayout,
@@ -191,6 +192,21 @@ class V2BatchPlotPage(_PageBase):
         card.add(form)
         self.body().addWidget(card)
 
+        curve_card = SectionCard("绘制曲线选择", "控制 PNG 中显示的曲线")
+        curve_row = QHBoxLayout()
+        self._plot_reference_check = QCheckBox("心率真值")
+        self._plot_reference_check.setChecked(True)
+        self._plot_fft_check = QCheckBox("纯FFT方案")
+        self._plot_fft_check.setChecked(True)
+        self._plot_adaptive_check = QCheckBox("参考信号自适应滤波曲线")
+        self._plot_adaptive_check.setChecked(True)
+        curve_row.addWidget(self._plot_reference_check)
+        curve_row.addWidget(self._plot_fft_check)
+        curve_row.addWidget(self._plot_adaptive_check)
+        curve_row.addStretch(1)
+        curve_card.add(curve_row)
+        self.body().addWidget(curve_card)
+
         row = QHBoxLayout()
         row.addStretch(1)
         self._refresh_btn = QPushButton("刷新")
@@ -214,12 +230,26 @@ class V2BatchPlotPage(_PageBase):
         self._table.set_rows([])
         self._log.clear()
 
+    def selected_plot_curves(self) -> tuple[str, ...]:
+        curves: list[str] = []
+        if self._plot_reference_check.isChecked():
+            curves.append("reference")
+        if self._plot_fft_check.isChecked():
+            curves.append("fft")
+        if self._plot_adaptive_check.isChecked():
+            curves.append("adaptive")
+        return tuple(curves)
+
     def _run(self) -> None:
         root = self._root_pick.path()
         if root is None or not root.is_dir():
             self._log.error("请选择有效 v2 报告根目录")
             return
-        worker = V2BatchPlotWorker(root, self._out_pick.path())
+        plot_curves = self.selected_plot_curves()
+        if not plot_curves:
+            self._log.error("请至少选择一条需要绘制的曲线")
+            return
+        worker = V2BatchPlotWorker(root, self._out_pick.path(), plot_curves)
         worker.log.connect(self._log.info)
         worker.finished.connect(self._on_done)
         worker.failed.connect(self._log.error)

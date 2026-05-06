@@ -140,6 +140,50 @@ def test_render_v2_report_error_csv_has_v1_style_format(tmp_path: Path) -> None:
     assert any("NC-LMS+H" in m for m in methods)
 
 
+def test_render_v2_report_curve_selection_keeps_error_csv_full(
+    tmp_path: Path,
+) -> None:
+    import csv
+
+    report = tmp_path / "new.json"
+    _write_report(report, ["HF"])
+
+    arte = render_v2_report(
+        report,
+        out_dir=tmp_path / "out",
+        plot_curves=("reference", "adaptive"),
+    )
+
+    with arte.error_csv.open("r", encoding="utf-8-sig") as f:
+        rows = list(csv.reader(f))[1:]
+    methods = [row[0] for row in rows]
+    assert "FFT" in methods
+    assert any("NC-LMS+H" in method for method in methods)
+
+
+def test_figure_error_rows_follow_prediction_curve_selection() -> None:
+    from ppg_hr.v2.plotting import _figure_error_rows
+
+    hr = np.asarray(
+        [
+            [0.0, 75.0, 74.0, 75.5, 0.0, 0.0],
+            [1.0, 76.0, 75.0, 76.2, 1.0, 1.0],
+        ],
+        dtype=float,
+    )
+    aligned = np.ones(hr.shape[0], dtype=bool)
+
+    rows = _figure_error_rows(
+        hr,
+        aligned,
+        time_bias=0.0,
+        adaptive_label="NC-LMS+H",
+        plot_curves=("reference", "adaptive"),
+    )
+
+    assert [row[0] for row in rows] == ["NC-LMS+H"]
+
+
 def test_render_v2_report_motion_scope_crops_to_analysis_window(
     tmp_path: Path,
 ) -> None:

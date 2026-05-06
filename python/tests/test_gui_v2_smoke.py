@@ -37,7 +37,7 @@ def test_v2_batch_page_exposes_reference_order_controls() -> None:
         app.processEvents()
 
 
-def test_v2_plot_page_has_refresh_button() -> None:
+def test_v2_plot_page_has_refresh_button_and_curve_defaults() -> None:
     from PySide6.QtWidgets import QApplication
 
     from ppg_hr.gui.v2_pages import V2BatchPlotPage
@@ -46,6 +46,9 @@ def test_v2_plot_page_has_refresh_button() -> None:
     page = V2BatchPlotPage()
     try:
         assert page._refresh_btn.text() == "刷新"
+        assert page.selected_plot_curves() == ("reference", "fft", "adaptive")
+        page._plot_fft_check.setChecked(False)
+        assert page.selected_plot_curves() == ("reference", "adaptive")
     finally:
         page.deleteLater()
         app.processEvents()
