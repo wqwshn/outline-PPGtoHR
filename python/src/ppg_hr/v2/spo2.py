@@ -7,6 +7,10 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import pandas as pd
+
+from .preprocess import RAW_COLUMNS, safe_cf_ratio
+from .reference_groups import channel_names_for_group, normalise_reference_order
 
 
 @dataclass(frozen=True)
@@ -52,6 +56,16 @@ class V2SpO2Result:
     waveforms: dict[str, np.ndarray] = field(default_factory=dict)
 
 
+@dataclass
+class SpO2RawSignals:
+    fs: int
+    time_s: np.ndarray
+    red: np.ndarray
+    ir: np.ndarray
+    references: dict[str, np.ndarray]
+    valid_mask: np.ndarray
+
+
 def spo2_from_r(
     r: np.ndarray | float,
     coefficients: V2SpO2Coefficients | None = None,
@@ -64,3 +78,137 @@ def spo2_from_r(
 
 def solve_spo2_v2(config: V2SpO2Config) -> V2SpO2Result:
     raise NotImplementedError("solve_spo2_v2 is implemented in later plan tasks")
+
+
+def _clean_numeric_array(values: pd.Series | np.ndarray) -> np.ndarray:
+    arr = pd.to_numeric(pd.Series(values), errors="coerce").to_numpy(
+        dtype=float,
+        copy=True,
+    )
+    finite = np.isfinite(arr)
+    if finite.all():
+        return arr
+    if finite.any():
+        idx = np.flatnonzero(finite)
+        bad = np.flatnonzero(~finite)
+        arr[bad] = np.interp(bad, idx, arr[idx])
+    else:
+        arr[:] = 0.0
+    return arr
+
+
+def _valid_mask_from_raw(raw: pd.DataFrame) -> np.ndarray:
+    finite = np.ones(len(raw), dtype=bool)
+    for column in RAW_COLUMNS.values():
+        values = pd.to_numeric(raw[column], errors="coerce").to_numpy(dtype=float)
+        finite &= np.isfinite(values)
+    if "ValidFlag" in raw.columns:
+        flag = pd.to_numeric(raw["ValidFlag"], errors="coerce").to_numpy(dtype=float)
+        finite &= flag > 0
+    return finite
+
+
+def _load_spo2_raw_signals(cfg: V2SpO2Config) -> SpO2RawSignals:
+    raw = pd.read_csv(cfg.data_path)
+    missing = [name for name in RAW_COLUMNS.values() if name not in raw.columns]
+    if missing:
+        raise KeyError(f"Missing required v2 sensor columns: {', '.join(missing)}")
+    if raw.empty:
+        raise ValueError(f"Sensor CSV is empty: {cfg.data_path}")
+
+    fs = int(cfg.fs_origin)
+    if "Time(s)" in raw.columns:
+        time_s = _clean_numeric_array(raw["Time(s)"])
+    else:
+        time_s = np.arange(len(raw), dtype=float) / float(fs)
+
+    uc1 = _clean_numeric_array(raw[RAW_COLUMNS["uc1"]])
+    uc2 = _clean_numeric_array(raw[RAW_COLUMNS["uc2"]])
+    ut1 = _clean_numeric_array(raw[RAW_COLUMNS["ut1"]])
+    ut2 = _clean_numeric_array(raw[RAW_COLUMNS["ut2"]])
+    references = {
+        "hf1": ut1,
+        "hf2": ut2,
+        "cf1": safe_cf_ratio(uc1, ut1),
+        "cf2": safe_cf_ratio(uc2, ut2),
+        "accx": _clean_numeric_array(raw[RAW_COLUMNS["accx"]]),
+        "accy": _clean_numeric_array(raw[RAW_COLUMNS["accy"]]),
+        "accz": _clean_numeric_array(raw[RAW_COLUMNS["accz"]]),
+    }
+    return SpO2RawSignals(
+        fs=fs,
+        time_s=time_s,
+        red=_clean_numeric_array(raw[RAW_COLUMNS["ppg_red"]]),
+        ir=_clean_numeric_array(raw[RAW_COLUMNS["ppg_ir"]]),
+        references=references,
+        valid_mask=_valid_mask_from_raw(raw),
+    )
+
+
+def _ordered_references(
+    references: dict[str, np.ndarray],
+    groups: tuple[str, ...],
+) -> dict[str, np.ndarray]:
+    ordered: dict[str, np.ndarray] = {}
+    for group in normalise_reference_order(groups):
+        for channel in channel_names_for_group(group):
+            if channel in references:
+                ordered[channel] = references[channel]
+    return ordered
+
+
+def _delay_to_order(delay_samples: int, cfg: V2SpO2Config) -> int:
+    return int(np.clip(abs(int(delay_samples)), int(cfg.min_order), int(cfg.max_order)))
+
+
+def _safe_corr(a: np.ndarray, b: np.ndarray) -> float:
+    x = np.asarray(a, dtype=float)
+    y = np.asarray(b, dtype=float)
+    n = min(x.size, y.size)
+    if n < 4:
+        return 0.0
+    x = x[:n] - float(np.mean(x[:n]))
+    y = y[:n] - float(np.mean(y[:n]))
+    sx = float(np.std(x, ddof=1))
+    sy = float(np.std(y, ddof=1))
+    if sx <= 1e-12 or sy <= 1e-12:
+        return 0.0
+    corr = float(np.corrcoef(x, y)[0, 1])
+    return corr if np.isfinite(corr) else 0.0
+
+
+def _rank_references_for_window(
+    *,
+    target: np.ndarray,
+    references: dict[str, np.ndarray],
+    start: int,
+    end: int,
+    cfg: V2SpO2Config,
+) -> list[dict[str, Any]]:
+    target_seg = np.asarray(target[start:end], dtype=float)
+    ranked: list[dict[str, Any]] = []
+    max_lag = int(cfg.delay_search_samples)
+    for channel, signal in references.items():
+        ref_signal = np.asarray(signal, dtype=float)
+        best_corr = 0.0
+        best_delay = 0
+        for delay in range(-max_lag, max_lag + 1):
+            rel = np.arange(target_seg.size)
+            ref_idx = start + rel + delay
+            valid = (ref_idx >= 0) & (ref_idx < ref_signal.size)
+            if int(np.count_nonzero(valid)) < 4:
+                continue
+            corr = _safe_corr(target_seg[valid], ref_signal[ref_idx[valid]])
+            if abs(corr) > abs(best_corr):
+                best_corr = corr
+                best_delay = delay
+        ranked.append(
+            {
+                "channel": channel,
+                "corr": abs(float(best_corr)),
+                "signed_corr": float(best_corr),
+                "delay_samples": int(best_delay),
+                "order": _delay_to_order(best_delay, cfg),
+            }
+        )
+    return sorted(ranked, key=lambda row: row["corr"], reverse=True)
