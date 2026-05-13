@@ -13,6 +13,7 @@ Python 实现，包含 v1（MATLAB 等价移植）与 v2（统一参考路径）
 - **参考信号组**：HF / CF（冷端比）/ ACC 三类参考信号可自由排序组合，统一级联 LMS 路径
 - **最长运动段检测**：以单一最长连续运动段替代逐窗口运动判定，避免运动段内部反复启停
 - **恢复段机制**：运动结束后自动检测 LMS 收敛状态，必要时延长自适应路径直至与 FFT 自然交叉，消除过早切换导致的末端心率跳变
+- **血氧计算页面**：使用 100 Hz 红光/红外光 PPG，经幅值保持因果 LMS 清洗后计算 SpO2，并导出滤波前后趋势图与静息/运动窗口切片 PNG
 
 **共享基础设施：**
 - 优化结果的双子图结果分析（HF / ACC 两路融合曲线 + 误差表 + 参数表 + 心率结果表）
@@ -381,6 +382,26 @@ v2 引入三类参考信号，可通过 `reference_groups_order` 参数自由排
 
 v2 求解器通过 `V2RunConfig` 配置，CLI 和 GUI 均支持 v1/v2 切换。
 
+### 4.4 v2 血氧饱和度计算
+
+v2 血氧计算使用 100 Hz `PPG_Red` 与 `PPG_IR` 原始信号，默认认为输入 CSV 已经完成时间轴补齐，不再查找 `_timeline.csv`。算法先按 HF/CF/ACC 参考组在每个 4 s 窗口内做 `±20` 样本时延搜索，用时延绝对值决定窗口内 LMS 阶数，最大阶数为 20；步长沿用心率路线：
+
+```text
+mu = max(mu_min, mu_base - corr / 100)
+```
+
+首版血氧只实现因果、幅值保持的 LMS 清洗，不使用 v2 心率默认的非因果滤波。清洗后和清洗前会分别进入同一套 MAX30101 风格比值法：
+
+1. IR 带通检测信号确定心搏周期；
+2. Red 在同一 IR 周期内做局部峰谷修正；
+3. Red/IR 低通 ADC 路径保留 DC，用谷-峰-谷连线法计算 AC/DC；
+4. 单搏 `R = (ACred/DCred)/(ACir/DCir)`，窗口内取中位数；
+5. 默认二次公式计算 SpO2，并输出 `raw_spo2` 与 `adaptive_spo2`。
+
+当前版本尚未接入脉搏血氧仪真值数据，因此不进行 SpO2 贝叶斯优化，也不报告绝对精度指标。报告字段中的 `raw_valid_beat_count`、`adaptive_valid_beat_count`、`motion_score`、`missing_ratio` 和滤波阶段信息用于后续质控与标定。
+
+可视化只生成 600 dpi PNG：一张整段滤波前/后 SpO2 曲线，以及从低 `motion_score` 静息窗口和高 `motion_score` 运动窗口自动挑选的切片图。每张切片图同时展示 Red/IR 滤波前后波形，并在图例中标注该窗口滤波前/后的 SpO2。
+
 ---
 
 ## 5. Python API 使用
@@ -497,6 +518,7 @@ python -m ppg_hr.gui        # 作为模块启动
 | **批量全流程**     | 选择原始数据目录后，自动执行质量评估 → 运动段取样图保存 → 对所有带同名参考文件的数据按所选 PPG 通道**各自独立**跑贝叶斯优化（默认只跑绿光，红光 / 红外光可手动勾选） → 每个通道优化结束后立即重跑并生成可视化；质量判断只写入 `good_samples.csv` / `bad_samples.csv` 作为说明，不再阻断后续算法计算；输出文件按 `{数据名}-{通道}-{滤波}-…` 命名 | 组合流水线      |
 | **结果分析**     | 双 Tab 设计：「单次」Tab 选 `Best_Params_Result_*.json` 或 MATLAB `.mat` → 调用 `render` 重跑（自动按报告里记录的 `adaptive_filter` 选择算法）并在右侧直接显示 PNG；「批量」Tab 选报告根目录 → 递归扫描 JSON、自动匹配数据/参考文件、逐项渲染并汇总状态到表格和日志。默认输出到 JSON 报告所在目录。 | `view`     |
 | **MATLAB 对照** | 选 MATLAB 的 `.mat` 报告 → 自动找同名 CSV & `_ref.csv` → 用 MATLAB 最优参数在 Python 端复跑，表格列出 HF / ACC 的 AAE 差值 (`                                   | Δ          |
+| **血氧计算**     | v2 页面，选择 100 Hz 传感器 CSV 后计算滤波前/后 SpO2，输出 JSON、CSV、整段趋势 PNG 和静息/运动窗口切片 PNG。当前不需要血氧真值文件。 | GUI        |
 
 
 所有耗时任务都在 `QThread` 工作线程里跑，界面不会卡；底部状态栏和每个页面的
@@ -611,6 +633,8 @@ python/
       batch_pipeline.py    # v2 批量全流程
       plotting.py          # v2 出版级绘图
       report.py            # v2 报告读写
+      spo2.py              # v2 红光/红外光 SpO2 解算与报告输出
+      spo2_plotting.py     # v2 SpO2 趋势图与静息/运动切片 PNG
       qc.py                # v2 质量检测
     preprocess/
       data_loader.py       # CSV → 100 Hz 多通道 DataFrame
