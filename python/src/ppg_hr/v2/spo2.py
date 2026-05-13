@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import csv
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -235,6 +237,60 @@ def solve_spo2_v2(config: V2SpO2Config) -> V2SpO2Result:
         metadata=metadata,
         waveforms=waveforms,
     )
+
+
+def save_spo2_report(
+    result: V2SpO2Result,
+    *,
+    out_dir: str | Path,
+    output_prefix: str,
+) -> dict[str, Path]:
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    prefix = str(output_prefix).strip() or "spo2"
+    json_path = out / f"{prefix}-spo2.json"
+    csv_path = out / f"{prefix}-spo2.csv"
+    payload = {
+        "schema_version": "v2_spo2",
+        "metadata": _jsonify(result.metadata),
+        "spo2_table": _jsonify(result.spo2_table),
+        "beat_table": _jsonify(result.beat_table),
+        "waveforms": _jsonify(result.waveforms),
+    }
+    json_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    rows = result.spo2_table
+    fieldnames = sorted({key for row in rows for key in row.keys()})
+    with csv_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({key: row.get(key, "") for key in fieldnames})
+    return {"json": json_path, "csv": csv_path}
+
+
+def load_spo2_report(path: str | Path) -> dict[str, Any]:
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    if payload.get("schema_version") != "v2_spo2":
+        raise ValueError(f"{path} is not a v2 SpO2 report")
+    return payload
+
+
+def _jsonify(obj: Any) -> Any:
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, np.integer | np.floating):
+        return obj.item()
+    if isinstance(obj, Path):
+        return str(obj)
+    if isinstance(obj, dict):
+        return {str(k): _jsonify(v) for k, v in obj.items()}
+    if isinstance(obj, list | tuple):
+        return [_jsonify(v) for v in obj]
+    return obj
 
 
 def _clean_numeric_array(values: pd.Series | np.ndarray) -> np.ndarray:

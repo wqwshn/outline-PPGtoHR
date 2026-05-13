@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -16,6 +17,8 @@ from ppg_hr.v2.spo2 import (
     _delay_to_order,
     _load_spo2_raw_signals,
     _rank_references_for_window,
+    load_spo2_report,
+    save_spo2_report,
     solve_spo2_v2,
     spo2_from_r,
 )
@@ -211,3 +214,23 @@ def test_solve_spo2_v2_outputs_one_second_spo2_windows(tmp_path: Path) -> None:
     assert result.waveforms["red_raw"].shape == result.waveforms["red_clean"].shape
     assert result.waveforms["ir_raw"].shape == result.waveforms["ir_clean"].shape
     assert result.metadata["fs"] == 100
+
+
+def test_save_and_load_spo2_report_writes_json_csv_and_waveforms(
+    tmp_path: Path,
+) -> None:
+    data = tmp_path / "sample.csv"
+    _write_spo2_sensor(data, seconds=8)
+    result = solve_spo2_v2(V2SpO2Config(data_path=data, output_dir=tmp_path))
+
+    outputs = save_spo2_report(result, out_dir=tmp_path, output_prefix="sample")
+    payload = load_spo2_report(outputs["json"])
+    csv_frame = pd.read_csv(outputs["csv"])
+
+    assert outputs["json"].is_file()
+    assert outputs["csv"].is_file()
+    assert payload["schema_version"] == "v2_spo2"
+    assert len(payload["spo2_table"]) == len(result.spo2_table)
+    assert len(payload["waveforms"]["red_raw"]) == result.waveforms["red_raw"].size
+    assert {"raw_spo2", "adaptive_spo2", "motion_score"}.issubset(csv_frame.columns)
+    assert json.loads(outputs["json"].read_text(encoding="utf-8"))["metadata"]["fs"] == 100
