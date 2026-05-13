@@ -66,6 +66,13 @@ class SpO2RawSignals:
     valid_mask: np.ndarray
 
 
+@dataclass
+class CleanedSpO2Signals:
+    red_clean: np.ndarray
+    ir_clean: np.ndarray
+    stages: list[dict[str, Any]]
+
+
 def spo2_from_r(
     r: np.ndarray | float,
     coefficients: V2SpO2Coefficients | None = None,
@@ -212,3 +219,117 @@ def _rank_references_for_window(
             }
         )
     return sorted(ranked, key=lambda row: row["corr"], reverse=True)
+
+
+def _adaptive_mu(corr: float, cfg: V2SpO2Config) -> float:
+    corr_abs = abs(float(corr))
+    corr_for_formula = corr_abs / 100.0 if corr_abs > 1.0 else corr_abs
+    return max(float(cfg.lms_mu_min), float(cfg.lms_mu_base) - corr_for_formula / 100.0)
+
+
+def _amplitude_preserving_lms(
+    *,
+    desired: np.ndarray,
+    reference: np.ndarray,
+    order: int,
+    corr: float,
+    cfg: V2SpO2Config,
+) -> np.ndarray:
+    d = np.asarray(desired, dtype=float)
+    u = np.asarray(reference, dtype=float)
+    n = min(d.size, u.size)
+    if n == 0:
+        return d.copy()
+    d = d[:n]
+    u = u[:n]
+    m = int(np.clip(order, int(cfg.min_order), int(cfg.max_order)))
+    if n < m + 1:
+        return d.copy()
+
+    baseline = float(np.median(d))
+    d_center = d - baseline
+    u_center = u - float(np.mean(u))
+    u_std = float(np.std(u_center, ddof=1))
+    if u_std <= 1e-12 or not np.isfinite(u_std):
+        return d.copy()
+    u_norm = u_center / u_std
+
+    mu = _adaptive_mu(corr, cfg)
+    weights = np.zeros(m, dtype=float)
+    cleaned_center = d_center.copy()
+    for idx in range(m - 1, n):
+        x_vec = u_norm[idx - m + 1 : idx + 1][::-1]
+        estimate = float(weights @ x_vec)
+        err = float(d_center[idx] - estimate)
+        cleaned_center[idx] = err
+        denom = 1e-9 + float(x_vec @ x_vec)
+        weights += (2.0 * mu * err / denom) * x_vec
+
+    cleaned = cleaned_center + baseline
+    if cleaned.size < desired.size:
+        tail = np.asarray(desired[cleaned.size :], dtype=float)
+        cleaned = np.concatenate([cleaned, tail])
+    median_shift = float(np.median(desired) - np.median(cleaned))
+    return cleaned + median_shift
+
+
+def _clean_red_ir_adaptive(
+    red: np.ndarray,
+    ir: np.ndarray,
+    references: dict[str, np.ndarray],
+    *,
+    start: int,
+    end: int,
+    cfg: V2SpO2Config,
+) -> CleanedSpO2Signals:
+    red_clean = np.asarray(red, dtype=float).copy()
+    ir_clean = np.asarray(ir, dtype=float).copy()
+    if not cfg.adaptive_enabled:
+        return CleanedSpO2Signals(red_clean=red_clean, ir_clean=ir_clean, stages=[])
+
+    ordered_refs = _ordered_references(references, cfg.reference_groups_order)
+    ranked = _rank_references_for_window(
+        target=ir_clean,
+        references=ordered_refs,
+        start=start,
+        end=end,
+        cfg=cfg,
+    )
+    stages: list[dict[str, Any]] = []
+    for row in ranked:
+        corr = float(row["corr"])
+        if corr <= 1e-12:
+            continue
+        channel = str(row["channel"])
+        ref_segment = np.asarray(references[channel][start:end], dtype=float)
+        order = int(row["order"])
+        red_clean = _amplitude_preserving_lms(
+            desired=red_clean,
+            reference=ref_segment,
+            order=order,
+            corr=corr,
+            cfg=cfg,
+        )
+        ir_clean = _amplitude_preserving_lms(
+            desired=ir_clean,
+            reference=ref_segment,
+            order=order,
+            corr=corr,
+            cfg=cfg,
+        )
+        stages.append(
+            {
+                "channel": channel,
+                "corr": corr,
+                "signed_corr": float(row["signed_corr"]),
+                "delay_samples": int(row["delay_samples"]),
+                "order": order,
+                "mu": _adaptive_mu(corr, cfg),
+                "filter_type": "causal_lms",
+            }
+        )
+    return CleanedSpO2Signals(
+        red_clean=red_clean,
+        ir_clean=ir_clean,
+        stages=stages,
+    )

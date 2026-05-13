@@ -9,6 +9,8 @@ import pytest
 from ppg_hr.v2.spo2 import (
     V2SpO2Coefficients,
     V2SpO2Config,
+    _amplitude_preserving_lms,
+    _clean_red_ir_adaptive,
     _delay_to_order,
     _load_spo2_raw_signals,
     _rank_references_for_window,
@@ -117,3 +119,46 @@ def test_rank_references_uses_100hz_plus_minus_20_sample_delay(
         cfg,
     )
     assert ranked[0]["corr"] > 0.9
+
+
+def test_amplitude_preserving_lms_reduces_reference_correlated_artifact() -> None:
+    fs = 100
+    t = np.arange(12 * fs, dtype=float) / fs
+    pulse_with_dc = 900.0 + 20.0 * np.sin(2 * np.pi * 1.2 * t)
+    artifact_ref = np.sin(2 * np.pi * 2.0 * t)
+    contaminated = pulse_with_dc + 15.0 * artifact_ref
+    cfg = V2SpO2Config(data_path=Path("x.csv"), lms_mu_base=0.01, max_order=20)
+
+    cleaned = _amplitude_preserving_lms(
+        desired=contaminated,
+        reference=artifact_ref,
+        order=10,
+        corr=80.0,
+        cfg=cfg,
+    )
+
+    before_corr = abs(
+        np.corrcoef(contaminated - np.mean(contaminated), artifact_ref)[0, 1]
+    )
+    after_corr = abs(np.corrcoef(cleaned - np.mean(cleaned), artifact_ref)[0, 1])
+    assert after_corr < before_corr
+    assert np.median(cleaned) == pytest.approx(np.median(contaminated), abs=1.0)
+
+
+def test_clean_red_ir_adaptive_uses_same_reference_order_for_both_channels() -> None:
+    fs = 100
+    t = np.arange(12 * fs, dtype=float) / fs
+    artifact = np.sin(2 * np.pi * 1.5 * t)
+    red = 900.0 + 18.0 * np.sin(2 * np.pi * 1.2 * t) + 10.0 * artifact
+    ir = 800.0 + 24.0 * np.sin(2 * np.pi * 1.2 * t) + 8.0 * artifact
+    refs = {"accx": artifact, "accy": np.zeros_like(artifact)}
+    cfg = V2SpO2Config(data_path=Path("x.csv"))
+
+    cleaned = _clean_red_ir_adaptive(red, ir, refs, start=0, end=red.size, cfg=cfg)
+
+    assert cleaned.red_clean.shape == red.shape
+    assert cleaned.ir_clean.shape == ir.shape
+    assert cleaned.stages[0]["channel"] == "accx"
+    assert cleaned.stages[0]["order"] <= 20
+    assert np.median(cleaned.red_clean) == pytest.approx(np.median(red), abs=1.0)
+    assert np.median(cleaned.ir_clean) == pytest.approx(np.median(ir), abs=1.0)
