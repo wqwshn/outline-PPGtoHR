@@ -11,10 +11,15 @@ def _force_offscreen(monkeypatch):
 
 
 def test_v2_workers_are_exported() -> None:
-    from ppg_hr.gui.workers import V2BatchPipelineWorker, V2BatchPlotWorker
+    from ppg_hr.gui.workers import (
+        V2BatchPipelineWorker,
+        V2BatchPlotWorker,
+        V2SpO2Worker,
+    )
 
     assert V2BatchPipelineWorker is not None
     assert V2BatchPlotWorker is not None
+    assert V2SpO2Worker is not None
 
 
 def test_v2_batch_page_exposes_reference_order_controls() -> None:
@@ -67,7 +72,7 @@ def test_main_window_can_switch_between_v1_and_v2() -> None:
         assert "优化" in v1_names
         win.set_version("v2")
         assert win.current_version() == "v2"
-        assert win.nav_names() == ["批量全流程", "批量绘图"]
+        assert win.nav_names() == ["批量全流程", "批量绘图", "血氧计算"]
     finally:
         win.close()
         win.deleteLater()
@@ -111,6 +116,22 @@ def test_v2_batch_page_can_reorder_enabled_references() -> None:
         hf_item = page._ref_list.takeItem(0)
         page._ref_list.insertItem(1, hf_item)
         assert page.selected_reference_order() == ("CF", "HF")
+    finally:
+        page.deleteLater()
+        app.processEvents()
+
+
+def test_v2_spo2_page_exposes_reference_order_controls() -> None:
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.v2_pages import V2SpO2Page
+
+    app = QApplication.instance() or QApplication([])
+    page = V2SpO2Page()
+    try:
+        assert page.selected_reference_order() == ("HF", "CF", "ACC")
+        assert page._delay_samples.value() == 20
+        assert page._max_order.value() == 20
     finally:
         page.deleteLater()
         app.processEvents()

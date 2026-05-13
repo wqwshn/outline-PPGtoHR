@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
     QListWidget,
@@ -15,10 +18,16 @@ from PySide6.QtWidgets import (
 )
 
 from ppg_hr.v2.optimizer import V2BayesConfig
+from ppg_hr.v2.spo2 import V2SpO2Config
 
 from .pages import _PageBase
 from .widgets import AAETable, FilePicker, LogPanel, SectionCard
-from .workers import V2BatchPipelineWorker, V2BatchPlotWorker, WorkerThread
+from .workers import (
+    V2BatchPipelineWorker,
+    V2BatchPlotWorker,
+    V2SpO2Worker,
+    WorkerThread,
+)
 
 
 class V2BatchPipelinePage(_PageBase):
@@ -271,3 +280,130 @@ class V2BatchPlotPage(_PageBase):
         ]
         self._table.set_rows(rows)
         self._log.success(f"v2批量绘图完成：{len(rows)} 个报告")
+
+
+class V2SpO2Page(_PageBase):
+    def __init__(self):
+        super().__init__(
+            "v2 血氧计算",
+            "红光/红外光 PPG 自适应滤波后计算 SpO2",
+        )
+        self._worker_holder: WorkerThread | None = None
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        io_card = SectionCard(
+            "输入与输出",
+            "输入 100 Hz 传感器 CSV，输出 JSON、CSV 和高清 PNG",
+        )
+        form = QFormLayout()
+        self._data_pick = FilePicker(
+            placeholder="选择传感器 CSV",
+            filter_str="CSV (*.csv)",
+        )
+        self._out_pick = FilePicker(
+            placeholder="留空则输出到同级 v2_spo2_outputs",
+            mode="dir",
+            filter_str="",
+        )
+        form.addRow("数据文件", self._data_pick)
+        form.addRow("输出目录", self._out_pick)
+        io_card.add(form)
+        self.body().addWidget(io_card)
+
+        param_card = SectionCard(
+            "算法参数",
+            "100 Hz 下 ±20 样本时延搜索，最大 LMS 阶数 20",
+        )
+        form = QFormLayout()
+        self._delay_samples = QSpinBox()
+        self._delay_samples.setRange(1, 100)
+        self._delay_samples.setValue(20)
+        self._max_order = QSpinBox()
+        self._max_order.setRange(1, 100)
+        self._max_order.setValue(20)
+        self._mu_base = QDoubleSpinBox()
+        self._mu_base.setRange(0.0001, 1.0)
+        self._mu_base.setDecimals(4)
+        self._mu_base.setSingleStep(0.001)
+        self._mu_base.setValue(0.01)
+        self._ref_list = QListWidget()
+        self._ref_list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
+        self._ref_list.setDefaultDropAction(Qt.DropAction.MoveAction)
+        self._ref_list.setMaximumHeight(100)
+        for group in ("HF", "CF", "ACC"):
+            item = QListWidgetItem(group)
+            item.setCheckState(Qt.CheckState.Checked)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            self._ref_list.addItem(item)
+        form.addRow("时延搜索样本", self._delay_samples)
+        form.addRow("最大阶数", self._max_order)
+        form.addRow("mu_base", self._mu_base)
+        form.addRow("参考信号", self._ref_list)
+        param_card.add(form)
+        self.body().addWidget(param_card)
+
+        row = QHBoxLayout()
+        row.addStretch(1)
+        self._run_btn = QPushButton("开始血氧计算")
+        self._run_btn.setObjectName("primary")
+        self._run_btn.clicked.connect(self._run)
+        row.addWidget(self._run_btn)
+        self.body().addLayout(row)
+
+        result = SectionCard("结果", "报告、图像和日志")
+        self._log = LogPanel()
+        self._summary = AAETable(["产出", "路径"])
+        result.add(self._log)
+        result.add(self._summary)
+        self.body().addWidget(result)
+        self.body().addStretch(1)
+
+    def selected_reference_order(self) -> tuple[str, ...]:
+        order: list[str] = []
+        for i in range(self._ref_list.count()):
+            item = self._ref_list.item(i)
+            if item is not None and item.checkState() == Qt.CheckState.Checked:
+                order.append(item.text())
+        return tuple(order)
+
+    def _run(self) -> None:
+        data_path = self._data_pick.path()
+        if data_path is None or not data_path.is_file():
+            self._log.error("请选择有效传感器 CSV")
+            return
+        output_dir = self._out_pick.path()
+        cfg = V2SpO2Config(
+            data_path=data_path,
+            output_dir=output_dir,
+            reference_groups_order=self.selected_reference_order(),
+            delay_search_samples=int(self._delay_samples.value()),
+            max_order=int(self._max_order.value()),
+            lms_mu_base=float(self._mu_base.value()),
+        )
+        self._run_btn.setEnabled(False)
+        worker = V2SpO2Worker(cfg, output_prefix=Path(data_path).stem)
+        worker.log.connect(self._log.info)
+        worker.finished.connect(self._on_done)
+        worker.failed.connect(self._on_failed)
+        worker.finished.connect(lambda _payload=None: self._run_btn.setEnabled(True))
+        worker.failed.connect(lambda _msg=None: self._run_btn.setEnabled(True))
+        holder = WorkerThread(worker)
+        self._worker_holder = holder
+        holder.start()
+
+    def _on_done(self, payload: dict) -> None:
+        report = payload.get("report", {})
+        figures = payload.get("figures", {})
+        rows = []
+        for key, path in report.items():
+            rows.append([key, str(path)])
+        if figures.get("trend_png") is not None:
+            rows.append(["trend_png", str(figures["trend_png"])])
+        for idx, path in enumerate(figures.get("slice_pngs", []), start=1):
+            rows.append([f"slice_png_{idx}", str(path)])
+        self._summary.set_rows(rows)
+        self._log.success("v2血氧计算完成")
+
+    def _on_failed(self, msg: str) -> None:
+        self._log.error(msg)

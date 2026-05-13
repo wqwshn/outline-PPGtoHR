@@ -32,6 +32,8 @@ from ..visualization import render, render_report_batch
 from ..v2.batch_pipeline import run_v2_batch_pipeline
 from ..v2.optimizer import V2BayesConfig
 from ..v2.plotting import render_v2_report_batch
+from ..v2.spo2 import V2SpO2Config, save_spo2_report, solve_spo2_v2
+from ..v2.spo2_plotting import render_spo2_report
 
 __all__ = [
     "CompareResult",
@@ -43,6 +45,7 @@ __all__ = [
     "ViewWorker",
     "V2BatchPipelineWorker",
     "V2BatchPlotWorker",
+    "V2SpO2Worker",
     "WorkerThread",
 ]
 
@@ -631,6 +634,42 @@ class V2BatchPlotWorker(QObject):
             self.finished.emit(result)
         except Exception as exc:  # pragma: no cover
             self.failed.emit(f"v2批量绘图失败：{exc}\n\n{traceback.format_exc()}")
+
+
+class V2SpO2Worker(QObject):
+    finished = Signal(object)
+    failed = Signal(str)
+    log = Signal(str)
+
+    def __init__(self, cfg: V2SpO2Config, output_prefix: str):
+        super().__init__()
+        self._cfg = cfg
+        self._output_prefix = output_prefix
+
+    def run(self) -> None:
+        try:
+            self.log.emit(f"开始 v2 血氧计算：{Path(self._cfg.data_path).name}")
+            result = solve_spo2_v2(self._cfg)
+            out_dir = (
+                self._cfg.output_dir
+                or Path(self._cfg.data_path).parent / "v2_spo2_outputs"
+            )
+            report = save_spo2_report(
+                result,
+                out_dir=out_dir,
+                output_prefix=self._output_prefix,
+            )
+            figures = render_spo2_report(
+                report["json"],
+                out_dir=Path(out_dir) / "figures",
+            )
+            payload = {"report": report, "figures": figures, "result": result}
+            self.log.emit(f"血氧 JSON：{report['json']}")
+            self.log.emit(f"血氧 CSV：{report['csv']}")
+            self.log.emit(f"血氧趋势图：{figures['trend_png']}")
+            self.finished.emit(payload)
+        except Exception as exc:  # pragma: no cover
+            self.failed.emit(f"v2血氧计算失败：{exc}\n\n{traceback.format_exc()}")
 
 
 # ---------------------------------------------------------------------------

@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 
 from .pages import BatchPipelinePage, ComparePage, OptimisePage, SolvePage, ViewPage
 from .theme import STYLESHEET, Palette
-from .v2_pages import V2BatchPipelinePage, V2BatchPlotPage
+from .v2_pages import V2BatchPipelinePage, V2BatchPlotPage, V2SpO2Page
 
 __all__ = ["MainWindow", "main"]
 
@@ -51,6 +51,7 @@ _NAV_ITEMS_V1 = [
 _NAV_ITEMS_V2 = [
     ("批量全流程", "v2单路径质检+优化+输出", V2BatchPipelinePage, Palette.success),
     ("批量绘图", "v2科研风格批量绘图", V2BatchPlotPage, Palette.warning),
+    ("血氧计算", "红光/红外光 PPG 计算 SpO2", V2SpO2Page, Palette.primary),
 ]
 
 

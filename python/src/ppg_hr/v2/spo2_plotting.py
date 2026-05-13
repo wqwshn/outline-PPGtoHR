@@ -9,7 +9,7 @@ from typing import Any
 
 import matplotlib
 
-matplotlib.use("Agg")
+matplotlib.use("Agg", force=False)
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
