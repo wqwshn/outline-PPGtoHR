@@ -45,6 +45,8 @@ class V2SpO2Config:
     valley_search_seconds: float = 0.12
     peak_search_seconds: float = 0.16
     smooth_seconds: float = 0.06
+    spo2_smooth_seconds: float = 7.0
+    rest_motion_score_threshold: float = 0.02
     r_min: float = 0.05
     r_max: float = 3.0
     coefficients: V2SpO2Coefficients = field(default_factory=V2SpO2Coefficients)
@@ -123,14 +125,23 @@ def solve_spo2_v2(config: V2SpO2Config) -> V2SpO2Result:
 
     for window_idx, start in enumerate(range(0, signals.red.size - window_len + 1, step_len)):
         end = start + window_len
-        cleaned = _clean_red_ir_adaptive(
-            signals.red,
-            signals.ir,
-            signals.references,
-            start=start,
-            end=end,
-            cfg=cfg,
-        )
+        motion_score = float(np.std(acc_mag[start:end], ddof=1))
+        adaptive_applied = bool(motion_score > float(cfg.rest_motion_score_threshold))
+        if adaptive_applied:
+            cleaned = _clean_red_ir_adaptive(
+                signals.red,
+                signals.ir,
+                signals.references,
+                start=start,
+                end=end,
+                cfg=cfg,
+            )
+        else:
+            cleaned = CleanedSpO2Signals(
+                red_clean=signals.red[start:end].copy(),
+                ir_clean=signals.ir[start:end].copy(),
+                stages=[],
+            )
         red_accum[start:end] += cleaned.red_clean
         ir_accum[start:end] += cleaned.ir_clean
         overlap[start:end] += 1.0
@@ -173,7 +184,8 @@ def solve_spo2_v2(config: V2SpO2Config) -> V2SpO2Result:
             "start_s": float(signals.time_s[start]),
             "end_s": float(signals.time_s[end - 1]),
             "center_s": center_s,
-            "motion_score": float(np.std(acc_mag[start:end], ddof=1)),
+            "motion_score": motion_score,
+            "adaptive_applied": adaptive_applied,
             "spo2": adaptive_spo2,
             "raw_spo2": raw_spo2,
             "adaptive_spo2": adaptive_spo2,
@@ -211,12 +223,17 @@ def solve_spo2_v2(config: V2SpO2Config) -> V2SpO2Result:
         out=signals.ir.copy(),
         where=overlap > 0,
     )
+    _smooth_spo2_table(spo2_table, cfg)
+    _apply_rest_adaptive_policy(spo2_table, cfg)
+
     metadata = {
         "schema_version": "v2_spo2",
         "data_path": str(cfg.data_path),
         "fs": fs,
         "window_seconds": float(cfg.window_seconds),
         "window_step_seconds": float(cfg.window_step_seconds),
+        "spo2_smooth_seconds": float(cfg.spo2_smooth_seconds),
+        "rest_motion_score_threshold": float(cfg.rest_motion_score_threshold),
         "delay_search_samples": int(cfg.delay_search_samples),
         "max_order": int(cfg.max_order),
         "reference_groups_order": list(cfg.reference_groups_order),
@@ -282,7 +299,7 @@ def load_spo2_report(path: str | Path) -> dict[str, Any]:
 def _jsonify(obj: Any) -> Any:
     if isinstance(obj, np.ndarray):
         return obj.tolist()
-    if isinstance(obj, np.integer | np.floating):
+    if isinstance(obj, np.integer | np.floating | np.bool_):
         return obj.item()
     if isinstance(obj, Path):
         return str(obj)
@@ -291,6 +308,63 @@ def _jsonify(obj: Any) -> Any:
     if isinstance(obj, list | tuple):
         return [_jsonify(v) for v in obj]
     return obj
+
+
+def _centered_finite_moving_average(values: np.ndarray, width: int) -> np.ndarray:
+    arr = np.asarray(values, dtype=float)
+    out = arr.copy()
+    if arr.size == 0 or width <= 1:
+        return out
+    half = int(width) // 2
+    for idx in range(arr.size):
+        start = max(0, idx - half)
+        end = min(arr.size, idx + half + 1)
+        segment = arr[start:end]
+        finite = segment[np.isfinite(segment)]
+        out[idx] = float(np.mean(finite)) if finite.size else float("nan")
+    return out
+
+
+def _smooth_spo2_table(rows: list[dict[str, Any]], cfg: V2SpO2Config) -> None:
+    if not rows:
+        return
+    step = max(float(cfg.window_step_seconds), 1e-9)
+    width = max(1, int(round(float(cfg.spo2_smooth_seconds) / step)))
+    if width % 2 == 0:
+        width += 1
+
+    for key in ("raw_spo2", "adaptive_spo2"):
+        values = np.asarray([float(row.get(key, float("nan"))) for row in rows])
+        smoothed = _centered_finite_moving_average(values, width)
+        for row, value, original in zip(rows, smoothed, values, strict=True):
+            row.setdefault(f"{key}_unsmoothed", float(original))
+            row[key] = float(value)
+
+    for row in rows:
+        row["spo2"] = float(row.get("adaptive_spo2", float("nan")))
+
+
+def _apply_rest_adaptive_policy(
+    rows: list[dict[str, Any]],
+    cfg: V2SpO2Config,
+) -> None:
+    threshold = float(cfg.rest_motion_score_threshold)
+    for row in rows:
+        motion_score = float(row.get("motion_score", float("nan")))
+        adaptive_applied = bool(np.isfinite(motion_score) and motion_score > threshold)
+        row["adaptive_applied"] = adaptive_applied
+        if adaptive_applied:
+            row["spo2"] = float(row.get("adaptive_spo2", float("nan")))
+            continue
+        row["adaptive_spo2"] = float(row.get("raw_spo2", float("nan")))
+        row["adaptive_r_median"] = float(row.get("raw_r_median", float("nan")))
+        row["adaptive_valid_beat_count"] = int(row.get("raw_valid_beat_count", 0))
+        row["adaptive_carried_forward"] = bool(row.get("raw_carried_forward", False))
+        row["spo2"] = float(row.get("raw_spo2", float("nan")))
+        row["reliable"] = bool(
+            row.get("missing_ratio", 0.0) <= 0.20
+            and int(row.get("raw_valid_beat_count", 0)) > 0
+        )
 
 
 def _clean_numeric_array(values: pd.Series | np.ndarray) -> np.ndarray:

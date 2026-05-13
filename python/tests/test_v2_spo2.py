@@ -10,6 +10,7 @@ import pytest
 from ppg_hr.v2.spo2 import (
     V2SpO2Coefficients,
     V2SpO2Config,
+    _apply_rest_adaptive_policy,
     _amplitude_preserving_lms,
     _calc_ac_dc_by_valley_line,
     _clean_red_ir_adaptive,
@@ -17,6 +18,7 @@ from ppg_hr.v2.spo2 import (
     _delay_to_order,
     _load_spo2_raw_signals,
     _rank_references_for_window,
+    _smooth_spo2_table,
     load_spo2_report,
     save_spo2_report,
     solve_spo2_v2,
@@ -214,6 +216,102 @@ def test_solve_spo2_v2_outputs_one_second_spo2_windows(tmp_path: Path) -> None:
     assert result.waveforms["red_raw"].shape == result.waveforms["red_clean"].shape
     assert result.waveforms["ir_raw"].shape == result.waveforms["ir_clean"].shape
     assert result.metadata["fs"] == 100
+    assert result.metadata["spo2_smooth_seconds"] == pytest.approx(7.0)
+
+
+def test_spo2_table_applies_7s_average_to_remove_spikes() -> None:
+    rows = [
+        {
+            "raw_spo2": value,
+            "adaptive_spo2": value,
+            "spo2": value,
+            "motion_score": 1.0,
+        }
+        for value in [96.0, 96.0, 96.0, 80.0, 96.0, 96.0, 96.0]
+    ]
+    cfg = V2SpO2Config(data_path=Path("x.csv"), spo2_smooth_seconds=7.0)
+
+    _smooth_spo2_table(rows, cfg)
+
+    assert rows[3]["adaptive_spo2_unsmoothed"] == pytest.approx(80.0)
+    assert rows[3]["adaptive_spo2"] == pytest.approx(np.mean([96.0] * 6 + [80.0]))
+    assert rows[3]["spo2"] == rows[3]["adaptive_spo2"]
+
+
+def test_rest_windows_use_raw_spo2_without_adaptive_comparison() -> None:
+    rows = [
+        {
+            "raw_spo2": 96.0,
+            "adaptive_spo2": 94.0,
+            "spo2": 94.0,
+            "raw_r_median": 0.7,
+            "adaptive_r_median": 0.8,
+            "raw_valid_beat_count": 3,
+            "adaptive_valid_beat_count": 2,
+            "raw_carried_forward": False,
+            "adaptive_carried_forward": False,
+            "motion_score": 0.001,
+            "reliable": True,
+        },
+        {
+            "raw_spo2": 92.0,
+            "adaptive_spo2": 95.0,
+            "spo2": 95.0,
+            "raw_r_median": 0.9,
+            "adaptive_r_median": 0.6,
+            "raw_valid_beat_count": 3,
+            "adaptive_valid_beat_count": 3,
+            "raw_carried_forward": False,
+            "adaptive_carried_forward": False,
+            "motion_score": 0.2,
+            "reliable": True,
+        },
+    ]
+    cfg = V2SpO2Config(data_path=Path("x.csv"), rest_motion_score_threshold=0.02)
+
+    _apply_rest_adaptive_policy(rows, cfg)
+
+    assert rows[0]["adaptive_applied"] is False
+    assert rows[0]["adaptive_spo2"] == rows[0]["raw_spo2"]
+    assert rows[0]["spo2"] == rows[0]["raw_spo2"]
+    assert rows[0]["adaptive_r_median"] == rows[0]["raw_r_median"]
+    assert rows[0]["adaptive_valid_beat_count"] == rows[0]["raw_valid_beat_count"]
+    assert rows[1]["adaptive_applied"] is True
+    assert rows[1]["spo2"] == rows[1]["adaptive_spo2"]
+
+
+def test_solver_skips_adaptive_filtering_for_static_rest_windows(tmp_path: Path) -> None:
+    data = tmp_path / "rest.csv"
+    fs = 100
+    n = 8 * fs
+    t = np.arange(n, dtype=float) / fs
+    artifact = np.sin(2 * np.pi * 1.5 * t)
+    frame = pd.DataFrame(
+        {
+            "Time(s)": t,
+            "Uc1(mV)": np.ones(n),
+            "Uc2(mV)": np.ones(n) * 1.2,
+            "Ut1(mV)": 5.0 + artifact,
+            "Ut2(mV)": np.ones(n) * 5.2,
+            "PPG_Green": 1000.0 + 10.0 * np.sin(2 * np.pi * 1.2 * t),
+            "PPG_Red": 900.0 - 20.0 * np.cos(2 * np.pi * 1.2 * t) + 8.0 * artifact,
+            "PPG_IR": 800.0 - 24.0 * np.cos(2 * np.pi * 1.2 * t) + 7.0 * artifact,
+            "AccX(g)": np.zeros(n),
+            "AccY(g)": np.zeros(n),
+            "AccZ(g)": np.ones(n),
+            "GyroX(dps)": np.zeros(n),
+            "GyroY(dps)": np.zeros(n),
+            "GyroZ(dps)": np.zeros(n),
+        }
+    )
+    frame.to_csv(data, index=False)
+
+    result = solve_spo2_v2(V2SpO2Config(data_path=data, output_dir=tmp_path))
+
+    assert all(row["adaptive_applied"] is False for row in result.spo2_table)
+    assert all(not stages for stages in result.metadata["adaptive_stage_rows"])
+    assert np.allclose(result.waveforms["red_clean"], result.waveforms["red_raw"])
+    assert np.allclose(result.waveforms["ir_clean"], result.waveforms["ir_raw"])
 
 
 def test_save_and_load_spo2_report_writes_json_csv_and_waveforms(
