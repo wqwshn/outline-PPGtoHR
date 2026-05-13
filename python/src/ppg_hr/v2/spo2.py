@@ -8,6 +8,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from scipy.signal import butter, filtfilt, find_peaks
 
 from .preprocess import RAW_COLUMNS, safe_cf_ratio
 from .reference_groups import channel_names_for_group, normalise_reference_order
@@ -84,7 +85,156 @@ def spo2_from_r(
 
 
 def solve_spo2_v2(config: V2SpO2Config) -> V2SpO2Result:
-    raise NotImplementedError("solve_spo2_v2 is implemented in later plan tasks")
+    cfg = V2SpO2Config(
+        **{
+            **config.__dict__,
+            "reference_groups_order": normalise_reference_order(
+                config.reference_groups_order
+            ),
+        }
+    )
+    signals = _load_spo2_raw_signals(cfg)
+    fs = int(signals.fs)
+    window_len = int(round(float(cfg.window_seconds) * fs))
+    step_len = int(round(float(cfg.window_step_seconds) * fs))
+    if window_len <= 0 or step_len <= 0:
+        raise ValueError("window_seconds and window_step_seconds must be positive")
+    if signals.red.size < window_len:
+        raise ValueError(
+            f"Need at least one {cfg.window_seconds:g}s SpO2 window, got "
+            f"{signals.red.size / fs:.2f}s"
+        )
+
+    red_accum = np.zeros_like(signals.red, dtype=float)
+    ir_accum = np.zeros_like(signals.ir, dtype=float)
+    overlap = np.zeros_like(signals.red, dtype=float)
+    spo2_table: list[dict[str, Any]] = []
+    beat_table: list[dict[str, Any]] = []
+    adaptive_stage_rows: list[list[dict[str, Any]]] = []
+    acc_mag = np.sqrt(
+        signals.references["accx"] ** 2
+        + signals.references["accy"] ** 2
+        + signals.references["accz"] ** 2
+    )
+    last_raw_spo2 = float("nan")
+    last_adaptive_spo2 = float("nan")
+
+    for window_idx, start in enumerate(range(0, signals.red.size - window_len + 1, step_len)):
+        end = start + window_len
+        cleaned = _clean_red_ir_adaptive(
+            signals.red,
+            signals.ir,
+            signals.references,
+            start=start,
+            end=end,
+            cfg=cfg,
+        )
+        red_accum[start:end] += cleaned.red_clean
+        ir_accum[start:end] += cleaned.ir_clean
+        overlap[start:end] += 1.0
+        adaptive_stage_rows.append(cleaned.stages)
+
+        raw_out = _compute_spo2_window(
+            red=signals.red[start:end],
+            ir=signals.ir[start:end],
+            fs=fs,
+            cfg=cfg,
+            scheme="raw",
+        )
+        adaptive_out = _compute_spo2_window(
+            red=cleaned.red_clean,
+            ir=cleaned.ir_clean,
+            fs=fs,
+            cfg=cfg,
+            scheme="adaptive",
+        )
+
+        raw_spo2 = float(raw_out["spo2"])
+        adaptive_spo2 = float(adaptive_out["spo2"])
+        raw_carried = False
+        adaptive_carried = False
+        if np.isfinite(raw_spo2):
+            last_raw_spo2 = raw_spo2
+        elif np.isfinite(last_raw_spo2):
+            raw_spo2 = last_raw_spo2
+            raw_carried = True
+        if np.isfinite(adaptive_spo2):
+            last_adaptive_spo2 = adaptive_spo2
+        elif np.isfinite(last_adaptive_spo2):
+            adaptive_spo2 = last_adaptive_spo2
+            adaptive_carried = True
+
+        missing_ratio = 1.0 - float(np.mean(signals.valid_mask[start:end]))
+        center_s = float(signals.time_s[start] + cfg.window_seconds / 2.0)
+        row = {
+            "window_idx": int(window_idx),
+            "start_s": float(signals.time_s[start]),
+            "end_s": float(signals.time_s[end - 1]),
+            "center_s": center_s,
+            "motion_score": float(np.std(acc_mag[start:end], ddof=1)),
+            "spo2": adaptive_spo2,
+            "raw_spo2": raw_spo2,
+            "adaptive_spo2": adaptive_spo2,
+            "raw_r_median": float(raw_out["r_median"]),
+            "adaptive_r_median": float(adaptive_out["r_median"]),
+            "raw_valid_beat_count": int(raw_out["valid_beat_count"]),
+            "adaptive_valid_beat_count": int(adaptive_out["valid_beat_count"]),
+            "raw_carried_forward": raw_carried,
+            "adaptive_carried_forward": adaptive_carried,
+            "missing_ratio": missing_ratio,
+            "reliable": bool(
+                missing_ratio <= 0.20
+                and int(adaptive_out["valid_beat_count"]) > 0
+            ),
+        }
+        spo2_table.append(row)
+        for beat in raw_out["beat_rows"] + adaptive_out["beat_rows"]:
+            beat_table.append(
+                {
+                    "window_idx": int(window_idx),
+                    "window_center_s": center_s,
+                    **beat,
+                }
+            )
+
+    red_clean = np.divide(
+        red_accum,
+        overlap,
+        out=signals.red.copy(),
+        where=overlap > 0,
+    )
+    ir_clean = np.divide(
+        ir_accum,
+        overlap,
+        out=signals.ir.copy(),
+        where=overlap > 0,
+    )
+    metadata = {
+        "schema_version": "v2_spo2",
+        "data_path": str(cfg.data_path),
+        "fs": fs,
+        "window_seconds": float(cfg.window_seconds),
+        "window_step_seconds": float(cfg.window_step_seconds),
+        "delay_search_samples": int(cfg.delay_search_samples),
+        "max_order": int(cfg.max_order),
+        "reference_groups_order": list(cfg.reference_groups_order),
+        "adaptive_enabled": bool(cfg.adaptive_enabled),
+        "adaptive_stage_rows": adaptive_stage_rows,
+    }
+    waveforms = {
+        "time_s": signals.time_s,
+        "red_raw": signals.red,
+        "ir_raw": signals.ir,
+        "red_clean": red_clean,
+        "ir_clean": ir_clean,
+        "acc_mag": acc_mag,
+    }
+    return V2SpO2Result(
+        spo2_table=spo2_table,
+        beat_table=beat_table,
+        metadata=metadata,
+        waveforms=waveforms,
+    )
 
 
 def _clean_numeric_array(values: pd.Series | np.ndarray) -> np.ndarray:
@@ -282,17 +432,22 @@ def _clean_red_ir_adaptive(
     end: int,
     cfg: V2SpO2Config,
 ) -> CleanedSpO2Signals:
-    red_clean = np.asarray(red, dtype=float).copy()
-    ir_clean = np.asarray(ir, dtype=float).copy()
+    red_arr = np.asarray(red, dtype=float)
+    ir_arr = np.asarray(ir, dtype=float)
+    has_full_target = red_arr.size >= end and ir_arr.size >= end
+    seg_start = start if has_full_target else 0
+    seg_end = end if has_full_target else min(red_arr.size, ir_arr.size)
+    red_clean = red_arr[seg_start:seg_end].copy()
+    ir_clean = ir_arr[seg_start:seg_end].copy()
     if not cfg.adaptive_enabled:
         return CleanedSpO2Signals(red_clean=red_clean, ir_clean=ir_clean, stages=[])
 
     ordered_refs = _ordered_references(references, cfg.reference_groups_order)
     ranked = _rank_references_for_window(
-        target=ir_clean,
+        target=ir_arr if has_full_target else ir_clean,
         references=ordered_refs,
-        start=start,
-        end=end,
+        start=seg_start,
+        end=seg_end,
         cfg=cfg,
     )
     stages: list[dict[str, Any]] = []
@@ -301,7 +456,8 @@ def _clean_red_ir_adaptive(
         if corr <= 1e-12:
             continue
         channel = str(row["channel"])
-        ref_segment = np.asarray(references[channel][start:end], dtype=float)
+        ref_source = np.asarray(references[channel], dtype=float)
+        ref_segment = ref_source[seg_start:seg_end]
         order = int(row["order"])
         red_clean = _amplitude_preserving_lms(
             desired=red_clean,
@@ -333,3 +489,196 @@ def _clean_red_ir_adaptive(
         ir_clean=ir_clean,
         stages=stages,
     )
+
+
+def _safe_zero_phase_filter(
+    values: np.ndarray,
+    *,
+    fs: int,
+    kind: str,
+    cfg: V2SpO2Config,
+) -> np.ndarray:
+    arr = np.asarray(values, dtype=float)
+    if arr.size < 16:
+        return arr - float(np.mean(arr)) if kind == "bandpass" else arr.copy()
+    nyq = fs / 2.0
+    order = int(cfg.filter_order)
+    try:
+        if kind == "bandpass":
+            low = max(float(cfg.bp_low_hz), 1e-3) / nyq
+            high = min(float(cfg.bp_high_hz), 0.45 * fs) / nyq
+            if not (0.0 < low < high < 1.0):
+                return arr - float(np.mean(arr))
+            b, a = butter(order, [low, high], btype="bandpass")
+            return filtfilt(b, a, arr)
+        if kind == "lowpass":
+            cutoff = min(float(cfg.lp_cutoff_hz), 0.45 * fs) / nyq
+            if not (0.0 < cutoff < 1.0):
+                return arr.copy()
+            b, a = butter(order, cutoff, btype="lowpass")
+            return filtfilt(b, a, arr)
+    except ValueError:
+        return arr - float(np.mean(arr)) if kind == "bandpass" else arr.copy()
+    raise ValueError(f"Unsupported filter kind: {kind!r}")
+
+
+def _moving_average(values: np.ndarray, samples: int) -> np.ndarray:
+    arr = np.asarray(values, dtype=float)
+    width = max(1, int(samples))
+    if width <= 1 or arr.size < width:
+        return arr.copy()
+    kernel = np.ones(width, dtype=float) / float(width)
+    return np.convolve(arr, kernel, mode="same")
+
+
+def _local_extreme_index(
+    values: np.ndarray,
+    start: int,
+    end: int,
+    mode: str,
+) -> int | None:
+    arr = np.asarray(values, dtype=float)
+    lo = max(0, int(start))
+    hi = min(arr.size - 1, int(end))
+    if hi < lo:
+        return None
+    segment = arr[lo : hi + 1]
+    if segment.size == 0:
+        return None
+    if mode == "min":
+        return int(lo + np.argmin(segment))
+    if mode == "max":
+        return int(lo + np.argmax(segment))
+    raise ValueError(f"Unsupported extreme mode: {mode!r}")
+
+
+def _calc_ac_dc_by_valley_line(
+    adc: np.ndarray,
+    v1_idx: int,
+    p_idx: int,
+    v2_idx: int,
+) -> tuple[float, float]:
+    x = np.asarray(adc, dtype=float)
+    v1 = int(v1_idx)
+    p = int(p_idx)
+    v2 = int(v2_idx)
+    if not (0 <= v1 < p < v2 < x.size):
+        return float("nan"), float("nan")
+    y1 = float(x[v1])
+    y2 = float(x[p])
+    y3 = float(x[v2])
+    dc = y1 + (y3 - y1) * ((p - v1) / float(v2 - v1))
+    ac = abs(y2 - dc)
+    return float(ac), float(dc)
+
+
+def _compute_spo2_window(
+    *,
+    red: np.ndarray,
+    ir: np.ndarray,
+    fs: int,
+    cfg: V2SpO2Config,
+    scheme: str,
+) -> dict[str, Any]:
+    red_arr = np.asarray(red, dtype=float)
+    ir_arr = np.asarray(ir, dtype=float)
+    n = min(red_arr.size, ir_arr.size)
+    red_arr = red_arr[:n]
+    ir_arr = ir_arr[:n]
+    if n < max(8, int(round(float(cfg.min_beat_interval_seconds) * fs)) * 2):
+        return {
+            "spo2": float("nan"),
+            "r_median": float("nan"),
+            "valid_beat_count": 0,
+            "beat_rows": [],
+        }
+
+    ir_det = _safe_zero_phase_filter(ir_arr, fs=fs, kind="bandpass", cfg=cfg)
+    red_det = _safe_zero_phase_filter(red_arr, fs=fs, kind="bandpass", cfg=cfg)
+    ir_adc = _safe_zero_phase_filter(ir_arr, fs=fs, kind="lowpass", cfg=cfg)
+    red_adc = _safe_zero_phase_filter(red_arr, fs=fs, kind="lowpass", cfg=cfg)
+    smooth_len = max(1, int(round(float(cfg.smooth_seconds) * fs)))
+    smooth_ir = _moving_average(ir_det, smooth_len)
+    smooth_red = _moving_average(red_det, smooth_len)
+
+    min_distance = max(1, int(round(float(cfg.min_beat_interval_seconds) * fs)))
+    valleys, _ = find_peaks(-smooth_ir, distance=min_distance)
+    valley_half = max(1, int(round(float(cfg.valley_search_seconds) * fs)))
+    peak_half = max(1, int(round(float(cfg.peak_search_seconds) * fs)))
+    r_values: list[float] = []
+    beat_rows: list[dict[str, Any]] = []
+
+    for beat_idx in range(max(0, valleys.size - 1)):
+        v1_ir = int(valleys[beat_idx])
+        v2_ir = int(valleys[beat_idx + 1])
+        if v2_ir <= v1_ir + 2:
+            continue
+        p_ir = _local_extreme_index(smooth_ir, v1_ir, v2_ir, "max")
+        if p_ir is None or p_ir <= v1_ir or p_ir >= v2_ir:
+            continue
+
+        ac_ir, dc_ir = _calc_ac_dc_by_valley_line(ir_adc, v1_ir, p_ir, v2_ir)
+        v1_red = _local_extreme_index(
+            smooth_red,
+            max(0, v1_ir - valley_half),
+            min(p_ir - 1, v1_ir + valley_half),
+            "min",
+        )
+        v2_red = _local_extreme_index(
+            smooth_red,
+            max(p_ir + 1, v2_ir - valley_half),
+            min(n - 1, v2_ir + valley_half),
+            "min",
+        )
+        if v1_red is None or v2_red is None or v2_red <= v1_red + 2:
+            continue
+        peak_start = max(v1_red + 1, p_ir - peak_half)
+        peak_end = min(v2_red - 1, p_ir + peak_half)
+        if peak_end <= peak_start:
+            peak_start = v1_red + 1
+            peak_end = v2_red - 1
+        p_red = _local_extreme_index(smooth_red, peak_start, peak_end, "max")
+        if p_red is None or p_red <= v1_red or p_red >= v2_red:
+            continue
+
+        ac_red, dc_red = _calc_ac_dc_by_valley_line(red_adc, v1_red, p_red, v2_red)
+        if not (ac_ir > 1e-4 and ac_red > 1e-4 and dc_ir > 1e-4 and dc_red > 1e-4):
+            continue
+        r_beat = (ac_red / dc_red) / (ac_ir / dc_ir)
+        if not (np.isfinite(r_beat) and float(cfg.r_min) < r_beat < float(cfg.r_max)):
+            continue
+        r_value = float(r_beat)
+        r_values.append(r_value)
+        beat_rows.append(
+            {
+                "scheme": str(scheme),
+                "beat_idx": int(beat_idx),
+                "v1_ir": int(v1_ir),
+                "p_ir": int(p_ir),
+                "v2_ir": int(v2_ir),
+                "v1_red": int(v1_red),
+                "p_red": int(p_red),
+                "v2_red": int(v2_red),
+                "ac_ir": float(ac_ir),
+                "dc_ir": float(dc_ir),
+                "ac_red": float(ac_red),
+                "dc_red": float(dc_red),
+                "r": r_value,
+            }
+        )
+
+    if not r_values:
+        return {
+            "spo2": float("nan"),
+            "r_median": float("nan"),
+            "valid_beat_count": 0,
+            "beat_rows": beat_rows,
+        }
+    r_median = float(np.median(np.asarray(r_values, dtype=float)))
+    spo2 = float(spo2_from_r(r_median, cfg.coefficients))
+    return {
+        "spo2": spo2,
+        "r_median": r_median,
+        "valid_beat_count": len(r_values),
+        "beat_rows": beat_rows,
+    }

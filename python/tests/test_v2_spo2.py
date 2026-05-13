@@ -10,10 +10,13 @@ from ppg_hr.v2.spo2 import (
     V2SpO2Coefficients,
     V2SpO2Config,
     _amplitude_preserving_lms,
+    _calc_ac_dc_by_valley_line,
     _clean_red_ir_adaptive,
+    _compute_spo2_window,
     _delay_to_order,
     _load_spo2_raw_signals,
     _rank_references_for_window,
+    solve_spo2_v2,
     spo2_from_r,
 )
 
@@ -162,3 +165,49 @@ def test_clean_red_ir_adaptive_uses_same_reference_order_for_both_channels() -> 
     assert cleaned.stages[0]["order"] <= 20
     assert np.median(cleaned.red_clean) == pytest.approx(np.median(red), abs=1.0)
     assert np.median(cleaned.ir_clean) == pytest.approx(np.median(ir), abs=1.0)
+
+
+def test_calc_ac_dc_by_valley_line_uses_peak_baseline() -> None:
+    adc = np.array([100.0, 110.0, 120.0, 110.0, 100.0])
+
+    ac, dc = _calc_ac_dc_by_valley_line(adc, 0, 2, 4)
+
+    assert dc == pytest.approx(100.0)
+    assert ac == pytest.approx(20.0)
+
+
+def test_compute_spo2_window_detects_ratio_from_ir_cycles() -> None:
+    fs = 100
+    t = np.arange(4 * fs, dtype=float) / fs
+    ir = 800.0 - 24.0 * np.cos(2 * np.pi * 1.2 * t)
+    red = 900.0 - 20.0 * np.cos(2 * np.pi * 1.2 * t)
+    cfg = V2SpO2Config(data_path=Path("x.csv"))
+
+    out = _compute_spo2_window(red=red, ir=ir, fs=fs, cfg=cfg, scheme="raw")
+
+    expected_r = (20.0 / 900.0) / (24.0 / 800.0)
+    assert out["valid_beat_count"] >= 2
+    assert out["r_median"] == pytest.approx(expected_r, rel=0.15)
+    assert 0.0 <= out["spo2"] <= 100.0
+    assert {row["scheme"] for row in out["beat_rows"]} == {"raw"}
+
+
+def test_solve_spo2_v2_outputs_one_second_spo2_windows(tmp_path: Path) -> None:
+    data = tmp_path / "sample.csv"
+    _write_spo2_sensor(data, seconds=12)
+    cfg = V2SpO2Config(data_path=data, output_dir=tmp_path)
+
+    result = solve_spo2_v2(cfg)
+
+    assert len(result.spo2_table) == 9
+    first_valid = next(
+        row for row in result.spo2_table if np.isfinite(row["adaptive_spo2"])
+    )
+    assert 0.0 <= first_valid["raw_spo2"] <= 100.0
+    assert 0.0 <= first_valid["adaptive_spo2"] <= 100.0
+    assert first_valid["spo2"] == first_valid["adaptive_spo2"]
+    assert first_valid["raw_valid_beat_count"] >= 1
+    assert first_valid["adaptive_valid_beat_count"] >= 1
+    assert result.waveforms["red_raw"].shape == result.waveforms["red_clean"].shape
+    assert result.waveforms["ir_raw"].shape == result.waveforms["ir_clean"].shape
+    assert result.metadata["fs"] == 100
