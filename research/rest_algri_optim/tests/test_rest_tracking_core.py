@@ -12,10 +12,13 @@ from research.rest_algri_optim.scripts.rest_tracking_core import (
     EvaluationResult,
     SearchConfig,
     SegmentMetrics,
+    _apply_post_motion_slew,
+    _apply_post_recovery_blend,
     assign_rest_segments,
     compute_segment_metrics,
     discover_cases,
     evaluate_arrays,
+    export_figures,
     export_results,
     objective_from_metrics,
     run_case_search,
@@ -175,6 +178,62 @@ def test_combined_mode_uses_all_peaks_before_raw_fallback() -> None:
     assert out == pytest.approx(1.22)
 
 
+def test_post_motion_slew_uses_recent_motion_peak_as_recovery_seed() -> None:
+    from ppg_hr.core.heart_rate_solver import SolverResult
+
+    hr = np.zeros((7, 9), dtype=float)
+    hr[:, 0] = np.arange(7, dtype=float)
+    hr[:, 4] = np.array([1.0, 1.0, 2.0, 2.2, 1.4, 1.2, 1.1])
+    hr[2:4, 7] = 1.0
+    hr[:, 8] = hr[:, 7]
+    hr[:, 5] = np.where(hr[:, 7] > 0.5, 0.8, hr[:, 4])
+    hr[:, 6] = hr[:, 5]
+    result = SolverResult(
+        HR=hr,
+        err_stats=np.zeros((5, 3), dtype=float),
+        T_Pred=hr[:, 0],
+        motion_threshold=(0.0, 0.0),
+        HR_Ref_Interp=np.zeros(hr.shape[0], dtype=float),
+        err_fus_hf=0.0,
+        window_quality=[{"reliable": True} for _ in range(hr.shape[0])],
+    )
+
+    out = _apply_post_motion_slew(
+        result,
+        SolverParams(smooth_win_len=2, slew_step_rest=6.0),
+    )
+
+    np.testing.assert_allclose(out.HR[4:, 4], [2.1, 2.0, 1.9])
+    np.testing.assert_allclose(out.HR[4:, 5], out.HR[4:, 4])
+
+
+def test_post_recovery_blend_uses_fixed_recovery_curve() -> None:
+    from ppg_hr.core.heart_rate_solver import SolverResult
+
+    hr = np.zeros((8, 9), dtype=float)
+    hr[:, 0] = np.arange(8, dtype=float)
+    hr[:, 4] = np.array([1.0, 1.1, 1.0, 2.0, 2.0, 1.6, 1.4, 1.2])
+    hr[3:5, 7] = 1.0
+    hr[:, 8] = hr[:, 7]
+    hr[:, 5] = hr[:, 4]
+    hr[:, 6] = hr[:, 4]
+    result = SolverResult(
+        HR=hr,
+        err_stats=np.zeros((5, 3), dtype=float),
+        T_Pred=hr[:, 0],
+        motion_threshold=(0.0, 0.0),
+        HR_Ref_Interp=np.zeros(hr.shape[0], dtype=float),
+        err_fus_hf=0.0,
+        window_quality=[{"reliable": True} for _ in range(hr.shape[0])],
+    )
+
+    out = _apply_post_recovery_blend(result)
+
+    assert out.HR[5, 4] == pytest.approx(1.7)
+    assert out.HR[6, 4] > hr[6, 4]
+    np.testing.assert_allclose(out.HR[5:, 5], out.HR[5:, 4])
+
+
 def _make_tiny_raw(
     n_sec: int = 70,
     fs: int = 100,
@@ -287,7 +346,10 @@ def test_search_config_default_modes_are_unified_mechanisms() -> None:
         "fallback_slew_to_raw_peak",
         "all_peaks_near_prev",
         "all_peaks_with_raw_fallback",
+        "post_motion_slew",
+        "post_recovery_blend",
     )
+    assert cfg.smooth_win_len[-3:] == (21, 31, 41)
     assert cfg.max_trials == 4
     assert cfg.random_state == 7
 
@@ -347,3 +409,22 @@ def test_export_results_writes_summary_files(tmp_path: Path) -> None:
         curve.columns
     )
     assert "Rest Tracking Optimization Experiment Report" in report
+
+
+def test_export_figures_writes_publication_formats(tmp_path: Path) -> None:
+    raw, ref = _make_tiny_raw()
+    params = SolverParams(fs_target=100, calib_time=10.0, time_buffer=2.0)
+    cfg = SearchConfig(max_trials=1, random_state=3, modes=("current",), smooth_win_len=(3,))
+    search = run_case_search(
+        case_name="synthetic",
+        raw_data=raw,
+        ref_data=ref,
+        base_params=params,
+        config=cfg,
+    )
+
+    export_figures([search], tmp_path)
+
+    assert (tmp_path / "figures" / "synthetic_best.png").is_file()
+    assert (tmp_path / "figures" / "synthetic_best.svg").is_file()
+    assert (tmp_path / "figures" / "synthetic_best.pdf").is_file()

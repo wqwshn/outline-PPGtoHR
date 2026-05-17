@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import sys
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -21,6 +22,8 @@ TrackingMode = Literal[
     "fallback_slew_to_raw_peak",
     "all_peaks_near_prev",
     "all_peaks_with_raw_fallback",
+    "post_motion_slew",
+    "post_recovery_blend",
 ]
 
 
@@ -363,7 +366,7 @@ def _research_process_spectrum(
     step_bpm: float,
 ) -> float:
     mode = str(params.extras.get("_rest_tracking_mode", "current"))
-    if mode == "current" or not _is_rest_tracking_call(
+    if mode in {"current", "post_motion_slew"} or not _is_rest_tracking_call(
         params=params,
         range_hz=range_hz,
         limit_bpm=limit_bpm,
@@ -399,11 +402,12 @@ def _research_process_spectrum(
         return curr_raw
 
     prev_hr = float(history_arr[times_idx - 1])
+    selection_mode = "all_peaks_near_prev" if mode == "post_recovery_blend" else mode
     return select_tracked_frequency(
         freqs=freqs,
         amps=amps,
         prev_hr=prev_hr,
-        mode=mode,  # type: ignore[arg-type]
+        mode=selection_mode,  # type: ignore[arg-type]
         range_hz=range_hz,
         limit_bpm=limit_bpm,
         step_bpm=step_bpm,
@@ -446,6 +450,148 @@ def _params_for_trial(
     return SolverParams(**data)
 
 
+def _apply_post_motion_slew(
+    result: solver.SolverResult,
+    params: SolverParams,
+) -> solver.SolverResult:
+    if result.HR.size == 0:
+        return result
+    hr = result.HR.copy()
+    labels = assign_rest_segments(hr)
+    post_mask = labels == "post_rest"
+    if not post_mask.any():
+        return result
+
+    adjusted = hr[:, 4].copy()
+    source = hr[:, 4].copy()
+    step_hz = max(float(params.slew_step_rest), 0.0) / 60.0
+    if step_hz <= 0:
+        step_hz = 0.5 / 60.0
+    lookback = max(1, int(params.smooth_win_len))
+
+    idx = 0
+    while idx < hr.shape[0]:
+        if not post_mask[idx]:
+            idx += 1
+            continue
+        start = idx
+        while idx + 1 < hr.shape[0] and post_mask[idx + 1]:
+            idx += 1
+        end = idx
+        hist_start = max(0, start - lookback)
+        history = source[hist_start:start]
+        history = history[np.isfinite(history)]
+        if history.size:
+            prev = float(np.nanmax(history))
+        elif start > 0:
+            prev = float(source[start - 1])
+        else:
+            prev = float(source[start])
+
+        for pos in range(start, end + 1):
+            target = float(source[pos])
+            if not np.isfinite(target):
+                adjusted[pos] = prev
+            elif target > prev + step_hz:
+                adjusted[pos] = prev + step_hz
+            elif target < prev - step_hz:
+                adjusted[pos] = prev - step_hz
+            else:
+                adjusted[pos] = target
+            prev = float(adjusted[pos])
+        idx += 1
+
+    hr[post_mask, 4] = adjusted[post_mask]
+    rest = hr[:, 7] <= 0.5
+    hr[rest, 5] = hr[rest, 4]
+    hr[rest, 6] = hr[rest, 4]
+    return solver.SolverResult(
+        HR=hr,
+        err_stats=result.err_stats,
+        T_Pred=result.T_Pred,
+        motion_threshold=result.motion_threshold,
+        HR_Ref_Interp=result.HR_Ref_Interp,
+        err_fus_hf=result.err_fus_hf,
+        delay_profile=result.delay_profile,
+        window_quality=result.window_quality,
+    )
+
+
+def _copy_result_with_hr(result: solver.SolverResult, hr: np.ndarray) -> solver.SolverResult:
+    return solver.SolverResult(
+        HR=hr,
+        err_stats=result.err_stats,
+        T_Pred=result.T_Pred,
+        motion_threshold=result.motion_threshold,
+        HR_Ref_Interp=result.HR_Ref_Interp,
+        err_fus_hf=result.err_fus_hf,
+        delay_profile=result.delay_profile,
+        window_quality=result.window_quality,
+    )
+
+
+def _apply_post_recovery_blend(result: solver.SolverResult) -> solver.SolverResult:
+    if result.HR.size == 0:
+        return result
+    hr = result.HR.copy()
+    labels = assign_rest_segments(hr)
+    pre_mask = labels == "pre_rest"
+    post_mask = labels == "post_rest"
+    if not pre_mask.any() or not post_mask.any():
+        return result
+
+    source = hr[:, 4].astype(float).copy()
+    adjusted = source.copy()
+    blend = 0.25
+    tau_windows = 40.0
+
+    idx = 0
+    while idx < hr.shape[0]:
+        if not post_mask[idx]:
+            idx += 1
+            continue
+        start = idx
+        while idx + 1 < hr.shape[0] and post_mask[idx + 1]:
+            idx += 1
+        end = idx
+
+        pre_values = source[pre_mask & np.isfinite(source)]
+        if pre_values.size == 0:
+            idx += 1
+            continue
+        pre_tail = pre_values[-15:] if pre_values.size >= 15 else pre_values
+        baseline = float(np.nanpercentile(pre_tail, 75.0))
+
+        prev_values = source[max(0, start - 20) : start]
+        first_values = source[start : min(end + 1, start + 8)]
+        anchor_values = np.concatenate(
+            [
+                prev_values[np.isfinite(prev_values)],
+                first_values[np.isfinite(first_values)],
+            ]
+        )
+        if anchor_values.size == 0:
+            idx += 1
+            continue
+        start_anchor = float(np.nanpercentile(anchor_values, 90.0))
+        if start_anchor <= baseline:
+            idx += 1
+            continue
+
+        k = np.arange(end - start + 1, dtype=float)
+        model = baseline + (start_anchor - baseline) * np.exp(-k / tau_windows)
+        adjusted[start : end + 1] = (
+            blend * model + (1.0 - blend) * source[start : end + 1]
+        )
+        idx += 1
+
+    hr[post_mask, 4] = adjusted[post_mask]
+    rest = hr[:, 7] <= 0.5
+    hr[rest, 5] = hr[rest, 4]
+    hr[rest, 6] = hr[rest, 4]
+    return _copy_result_with_hr(result, hr)
+
+
 def evaluate_arrays(
     *,
     raw_data: np.ndarray,
@@ -469,6 +615,10 @@ def evaluate_arrays(
     )
     with _patched_tracking_mode(mode):
         result = solver.solve_from_arrays(raw_data, ref_data, params)
+    if mode == "post_motion_slew":
+        result = _apply_post_motion_slew(result, params)
+    elif mode == "post_recovery_blend":
+        result = _apply_post_recovery_blend(result)
 
     ref_bpm = _ref_at_pred_time(result)
     reliable = _quality_reliable_mask(result)
@@ -514,6 +664,8 @@ class SearchConfig:
         "fallback_slew_to_raw_peak",
         "all_peaks_near_prev",
         "all_peaks_with_raw_fallback",
+        "post_motion_slew",
+        "post_recovery_blend",
     )
     hr_range_rest_bpm: tuple[float, ...] = (10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100)
     slew_limit_rest_bpm: tuple[float, ...] = (
@@ -548,7 +700,7 @@ class SearchConfig:
         12,
         15,
     )
-    smooth_win_len: tuple[int, ...] = (3, 5, 7, 9, 11, 13, 15)
+    smooth_win_len: tuple[int, ...] = (3, 5, 7, 9, 11, 13, 15, 21, 31, 41)
     time_bias_s: tuple[float, ...] = tuple(float(x) * 0.5 for x in range(-20, 41))
 
 
@@ -819,6 +971,100 @@ def _report_markdown(search_results: list[CaseSearchResult]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _publication_plotting_scripts() -> Path | None:
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        candidate = parent / "skills" / "publication-plotting" / "scripts"
+        if candidate.is_dir():
+            return candidate
+    return None
+
+
+def _common_ylim(*series: np.ndarray) -> tuple[float, float]:
+    values = np.concatenate([np.asarray(item, dtype=float).ravel() for item in series])
+    values = values[np.isfinite(values)]
+    if values.size == 0:
+        return 40.0, 180.0
+    lo = np.floor((float(values.min()) - 5.0) / 5.0) * 5.0
+    hi = np.ceil((float(values.max()) + 5.0) / 5.0) * 5.0
+    return max(35.0, lo), min(220.0, hi)
+
+
+def export_figures(search_results: list[CaseSearchResult], out_dir: str | Path) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg", force=True)
+    import matplotlib.pyplot as plt
+
+    skill_scripts = _publication_plotting_scripts()
+    if skill_scripts is not None:
+        scripts_path = str(skill_scripts)
+        if scripts_path not in sys.path:
+            sys.path.insert(0, scripts_path)
+        from export_figure import export_figure
+        from plot_style import apply_publication_style, figure_size
+
+        apply_publication_style("thesis_double_column", color_cycle="signal")
+        figsize = figure_size("thesis_double_column", height_ratio=0.46)
+    else:
+        export_figure = None
+        figsize = (6.8, 3.1)
+
+    fig_dir = Path(out_dir) / "figures"
+    fig_dir.mkdir(parents=True, exist_ok=True)
+
+    for search in search_results:
+        if search.best is None:
+            continue
+        curve = search.best.curve
+        x = np.asarray(curve["t_pred_s"], dtype=float)
+        ref = np.asarray(curve["ref_bpm"], dtype=float)
+        final = np.asarray(curve["final_bpm"], dtype=float)
+        pure = np.asarray(curve["pure_fft_bpm"], dtype=float)
+        motion = np.asarray(curve["motion_flag"] > 0, dtype=bool)
+
+        fig, ax = plt.subplots(figsize=figsize)
+        if motion.any():
+            ax.fill_between(
+                x,
+                0,
+                1,
+                where=motion,
+                transform=ax.get_xaxis_transform(),
+                color="#D9DDE3",
+                alpha=0.24,
+                edgecolor="none",
+                zorder=0,
+                label="Motion",
+            )
+        ax.plot(x, ref, color="#2B2B2B", linewidth=1.05, label="Polar", zorder=5)
+        ax.plot(x, final, color="#D55E00", linewidth=1.35, label="Final", zorder=4)
+        ax.plot(
+            x,
+            pure,
+            color="#8C9299",
+            linewidth=0.9,
+            linestyle="--",
+            label="Pure FFT",
+            zorder=2,
+        )
+        ax.set_xlabel("Aligned time (s)")
+        ax.set_ylabel("Heart rate (bpm)")
+        ax.set_ylim(*_common_ylim(ref, final, pure))
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.grid(True, axis="y", alpha=0.18)
+        ax.legend(loc="upper right", ncol=1, frameon=False, fontsize=6)
+        fig.tight_layout()
+
+        output_base = fig_dir / f"{search.case_name}_best"
+        if export_figure is None:
+            fig.savefig(output_base.with_suffix(".png"), dpi=600, bbox_inches="tight")
+        else:
+            export_figure(fig, output_base, formats=("pdf", "svg", "png"), dpi=600)
+        plt.close(fig)
+
+
 def export_results(search_results: list[CaseSearchResult], out_dir: str | Path) -> None:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -848,6 +1094,7 @@ def export_results(search_results: list[CaseSearchResult], out_dir: str | Path) 
         }
         _write_curve(out / "curves" / f"{search.case_name}_best.csv", search.best.curve)
 
+    export_figures(searches, out)
     _write_dict_rows(out / "per_file_metrics.csv", metrics_rows)
     _write_dict_rows(out / "trials.csv", trial_rows)
     (out / "best_params.json").write_text(
