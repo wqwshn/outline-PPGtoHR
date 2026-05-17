@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from ppg_hr.params import SolverParams
@@ -14,6 +16,7 @@ from research.rest_algri_optim.scripts.rest_tracking_core import (
     compute_segment_metrics,
     discover_cases,
     evaluate_arrays,
+    export_results,
     objective_from_metrics,
     run_case_search,
     select_tracked_frequency,
@@ -297,3 +300,32 @@ def test_run_case_search_with_preloaded_arrays() -> None:
     assert result.best is not None
     assert len(result.trials) == 3
     assert result.best.objective == min(trial.objective for trial in result.trials)
+
+
+def test_export_results_writes_summary_files(tmp_path: Path) -> None:
+    raw, ref = _make_tiny_raw()
+    params = SolverParams(fs_target=100, calib_time=10.0, time_buffer=2.0)
+    cfg = SearchConfig(max_trials=2, random_state=2, modes=("current",), smooth_win_len=(3,))
+    search = run_case_search(
+        case_name="synthetic",
+        raw_data=raw,
+        ref_data=ref,
+        base_params=params,
+        config=cfg,
+    )
+
+    export_results([search], tmp_path)
+
+    metrics = pd.read_csv(tmp_path / "per_file_metrics.csv")
+    trials = pd.read_csv(tmp_path / "trials.csv")
+    best = json.loads((tmp_path / "best_params.json").read_text(encoding="utf-8"))
+    curve = pd.read_csv(tmp_path / "curves" / "synthetic_best.csv")
+    report = (tmp_path / "report.md").read_text(encoding="utf-8")
+
+    assert metrics.loc[0, "case_name"] == "synthetic"
+    assert len(trials) == 2
+    assert best["synthetic"]["mode"] == "current"
+    assert {"t_pred_s", "ref_bpm", "final_bpm", "pure_fft_bpm", "segment"} <= set(
+        curve.columns
+    )
+    assert "Rest Tracking Optimization Experiment Report" in report

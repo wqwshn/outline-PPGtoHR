@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import json
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -605,3 +607,150 @@ def run_case_search(
     )
 
     return CaseSearchResult(case_name=case_name, best=best, trials=tuple(trials))
+
+
+def _metrics_row(case_name: str, result: EvaluationResult) -> dict[str, object]:
+    m = result.metrics
+    return {
+        "case_name": case_name,
+        **result.params,
+        "objective": result.objective,
+        "rest_all_mae": m.rest_all_mae,
+        "pre_rest_mae": m.pre_rest_mae,
+        "post_rest_mae": m.post_rest_mae,
+        "pure_fft_rest_all_mae": m.pure_fft_rest_all_mae,
+        "pure_fft_pre_rest_mae": m.pure_fft_pre_rest_mae,
+        "pure_fft_post_rest_mae": m.pure_fft_post_rest_mae,
+        "n_rest_all": m.n_rest_all,
+        "n_pre_rest": m.n_pre_rest,
+        "n_post_rest": m.n_post_rest,
+        "passed": m.passed(),
+    }
+
+
+def _write_dict_rows(path: Path, rows: list[dict[str, object]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not rows:
+        path.write_text("", encoding="utf-8")
+        return
+    fields: list[str] = []
+    for row in rows:
+        for key in row:
+            if key not in fields:
+                fields.append(key)
+    with path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _write_curve(path: Path, curve: np.ndarray) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    names = curve.dtype.names or ()
+    with path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(list(names))
+        for row in curve:
+            writer.writerow(
+                [
+                    row[name].item() if hasattr(row[name], "item") else row[name]
+                    for name in names
+                ]
+            )
+
+
+def _jsonable_value(value: object) -> object:
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(k): _jsonable_value(v) for k, v in value.items()}
+    if isinstance(value, list | tuple):
+        return [_jsonable_value(v) for v in value]
+    return value
+
+
+def _report_markdown(search_results: list[CaseSearchResult]) -> str:
+    lines = [
+        "# Rest Tracking Optimization Experiment Report",
+        "",
+        "## Acceptance",
+        "",
+        "Each file must have all-rest, pre-rest, and post-rest MAE below 1.5 bpm.",
+        "",
+        "## Best Results",
+        "",
+        "| case | mode | objective | all_rest | pre_rest | post_rest | time_bias | passed |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |",
+    ]
+    for search in search_results:
+        if search.best is None:
+            lines.append(f"| {search.case_name} | no result | nan | nan | nan | nan | nan | no |")
+            continue
+        best = search.best
+        m = best.metrics
+        lines.append(
+            "| {case} | {mode} | {obj:.4f} | {all:.4f} | {pre:.4f} | {post:.4f} | "
+            "{bias:.2f} | {passed} |".format(
+                case=search.case_name,
+                mode=best.mode,
+                obj=best.objective,
+                all=m.rest_all_mae,
+                pre=m.pre_rest_mae,
+                post=m.post_rest_mae,
+                bias=float(best.params["time_bias_s"]),
+                passed="yes" if m.passed() else "no",
+            )
+        )
+    lines.extend(
+        [
+            "",
+            "## Main Algorithm Recommendation Rules",
+            "",
+            "- If current passes every file, prefer expanding the parameter space only.",
+            "- If a candidate mechanism lowers post-rest MAE, consider a separate main-algorithm change.",
+            "- If most improvement comes from time_bias, report alignment contribution separately.",
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
+def export_results(search_results: list[CaseSearchResult], out_dir: str | Path) -> None:
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    searches = list(search_results)
+
+    metrics_rows: list[dict[str, object]] = []
+    trial_rows: list[dict[str, object]] = []
+    best_payload: dict[str, object] = {}
+
+    for search in searches:
+        for idx, trial in enumerate(search.trials, start=1):
+            trial_rows.append(
+                {
+                    "case_name": search.case_name,
+                    "trial_idx": idx,
+                    **_metrics_row(search.case_name, trial),
+                }
+            )
+        if search.best is None:
+            continue
+        metrics_rows.append(_metrics_row(search.case_name, search.best))
+        best_payload[search.case_name] = {
+            **search.best.params,
+            "objective": search.best.objective,
+            "metrics": asdict(search.best.metrics),
+            "passed": search.best.metrics.passed(),
+        }
+        _write_curve(out / "curves" / f"{search.case_name}_best.csv", search.best.curve)
+
+    _write_dict_rows(out / "per_file_metrics.csv", metrics_rows)
+    _write_dict_rows(out / "trials.csv", trial_rows)
+    (out / "best_params.json").write_text(
+        json.dumps(_jsonable_value(best_payload), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (out / "report.md").write_text(_report_markdown(searches), encoding="utf-8")
