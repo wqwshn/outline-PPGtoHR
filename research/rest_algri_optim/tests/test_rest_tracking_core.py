@@ -8,6 +8,7 @@ from research.rest_algri_optim.scripts.rest_tracking_core import (
     assign_rest_segments,
     compute_segment_metrics,
     objective_from_metrics,
+    select_tracked_frequency,
 )
 
 
@@ -76,3 +77,71 @@ def test_objective_is_worst_rest_subsegment() -> None:
 
     assert objective_from_metrics(metrics) == pytest.approx(2.2)
     assert not metrics.passed(threshold=1.5)
+
+
+def test_current_mode_keeps_previous_when_top_five_have_no_near_peak() -> None:
+    freqs = np.array([1.8, 1.9, 2.0, 2.1, 2.2, 1.18])
+    amps = np.array([10.0, 9.0, 8.0, 7.0, 6.0, 5.0])
+
+    out = select_tracked_frequency(
+        freqs=freqs,
+        amps=amps,
+        prev_hr=1.2,
+        mode="current",
+        range_hz=0.05,
+        limit_bpm=6.0,
+        step_bpm=4.0,
+    )
+
+    assert out == pytest.approx(1.2)
+
+
+def test_all_peaks_near_prev_can_use_sixth_peak() -> None:
+    freqs = np.array([1.8, 1.9, 2.0, 2.1, 2.2, 1.18])
+    amps = np.array([10.0, 9.0, 8.0, 7.0, 6.0, 5.0])
+
+    out = select_tracked_frequency(
+        freqs=freqs,
+        amps=amps,
+        prev_hr=1.2,
+        mode="all_peaks_near_prev",
+        range_hz=0.05,
+        limit_bpm=6.0,
+        step_bpm=4.0,
+    )
+
+    assert out == pytest.approx(1.18)
+
+
+def test_raw_peak_fallback_moves_by_existing_slew_step() -> None:
+    freqs = np.array([1.55, 1.9, 2.0])
+    amps = np.array([10.0, 4.0, 3.0])
+
+    out = select_tracked_frequency(
+        freqs=freqs,
+        amps=amps,
+        prev_hr=1.2,
+        mode="fallback_slew_to_raw_peak",
+        range_hz=0.05,
+        limit_bpm=6.0,
+        step_bpm=4.0,
+    )
+
+    assert out == pytest.approx(1.2 + 4.0 / 60.0)
+
+
+def test_combined_mode_uses_all_peaks_before_raw_fallback() -> None:
+    freqs = np.array([1.55, 1.9, 1.22])
+    amps = np.array([10.0, 4.0, 3.0])
+
+    out = select_tracked_frequency(
+        freqs=freqs,
+        amps=amps,
+        prev_hr=1.2,
+        mode="all_peaks_with_raw_fallback",
+        range_hz=0.05,
+        limit_bpm=6.0,
+        step_bpm=4.0,
+    )
+
+    assert out == pytest.approx(1.22)

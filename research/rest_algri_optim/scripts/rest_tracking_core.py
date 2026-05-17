@@ -125,3 +125,141 @@ def objective_from_metrics(metrics: SegmentMetrics) -> float:
     if len(finite) != len(values):
         return float("inf")
     return float(max(finite))
+
+
+def _sorted_peak_arrays(freqs: np.ndarray, amps: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    f = np.atleast_1d(np.asarray(freqs, dtype=float)).ravel()
+    a = np.atleast_1d(np.asarray(amps, dtype=float)).ravel()
+    if f.size == 0 or a.size == 0:
+        return np.array([], dtype=float), np.array([], dtype=float)
+    n = min(f.size, a.size)
+    f = f[:n]
+    a = a[:n]
+    valid = np.isfinite(f) & np.isfinite(a)
+    f = f[valid]
+    a = a[valid]
+    if f.size == 0:
+        return f, a
+    order = np.argsort(-a, kind="stable")
+    return f[order], a[order]
+
+
+def _near_peak(
+    sorted_freqs: np.ndarray,
+    sorted_amps: np.ndarray,
+    *,
+    prev_hr: float,
+    range_hz: float,
+    top_n: int | None,
+) -> float | None:
+    if sorted_freqs.size == 0:
+        return None
+    limit = sorted_freqs.size if top_n is None else min(int(top_n), sorted_freqs.size)
+    candidates = sorted_freqs[:limit]
+    mask = (candidates - prev_hr < range_hz) & (candidates - prev_hr > -range_hz)
+    if not mask.any():
+        return None
+    candidate_idx = np.flatnonzero(mask)
+    if top_n is None:
+        amp_slice = sorted_amps[:limit][candidate_idx]
+        return float(candidates[candidate_idx[int(np.argmax(amp_slice))]])
+    return float(candidates[int(candidate_idx[0])])
+
+
+def _slew_towards_raw_peak(
+    *,
+    curr_raw: float,
+    prev_hr: float,
+    limit_bpm: float,
+    step_bpm: float,
+) -> float:
+    diff = float(curr_raw) - float(prev_hr)
+    limit = float(limit_bpm) / 60.0
+    step = float(step_bpm) / 60.0
+    if diff > limit:
+        return float(prev_hr + step)
+    if diff < -limit:
+        return float(prev_hr - step)
+    return float(curr_raw)
+
+
+def select_tracked_frequency(
+    *,
+    freqs: np.ndarray,
+    amps: np.ndarray,
+    prev_hr: float,
+    mode: TrackingMode,
+    range_hz: float,
+    limit_bpm: float,
+    step_bpm: float,
+) -> float:
+    sorted_freqs, sorted_amps = _sorted_peak_arrays(freqs, amps)
+    if sorted_freqs.size == 0:
+        return 0.0 if not np.isfinite(prev_hr) else float(prev_hr)
+    curr_raw = float(sorted_freqs[0])
+
+    if mode == "current":
+        near = _near_peak(
+            sorted_freqs,
+            sorted_amps,
+            prev_hr=prev_hr,
+            range_hz=range_hz,
+            top_n=5,
+        )
+        target = float(prev_hr) if near is None else near
+        return _slew_towards_raw_peak(
+            curr_raw=target,
+            prev_hr=prev_hr,
+            limit_bpm=limit_bpm,
+            step_bpm=step_bpm,
+        )
+
+    if mode == "fallback_slew_to_raw_peak":
+        near = _near_peak(
+            sorted_freqs,
+            sorted_amps,
+            prev_hr=prev_hr,
+            range_hz=range_hz,
+            top_n=5,
+        )
+        target = curr_raw if near is None else near
+        return _slew_towards_raw_peak(
+            curr_raw=target,
+            prev_hr=prev_hr,
+            limit_bpm=limit_bpm,
+            step_bpm=step_bpm,
+        )
+
+    if mode == "all_peaks_near_prev":
+        near = _near_peak(
+            sorted_freqs,
+            sorted_amps,
+            prev_hr=prev_hr,
+            range_hz=range_hz,
+            top_n=None,
+        )
+        target = float(prev_hr) if near is None else near
+        return _slew_towards_raw_peak(
+            curr_raw=target,
+            prev_hr=prev_hr,
+            limit_bpm=limit_bpm,
+            step_bpm=step_bpm,
+        )
+
+    if mode == "all_peaks_with_raw_fallback":
+        near = _near_peak(
+            sorted_freqs,
+            sorted_amps,
+            prev_hr=prev_hr,
+            range_hz=range_hz,
+            top_n=None,
+        )
+        target = curr_raw if near is None else near
+        return _slew_towards_raw_peak(
+            curr_raw=target,
+            prev_hr=prev_hr,
+            limit_bpm=limit_bpm,
+            step_bpm=step_bpm,
+        )
+
+    raise ValueError(f"Unsupported tracking mode: {mode!r}")
