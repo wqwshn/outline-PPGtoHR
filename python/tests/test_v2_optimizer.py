@@ -7,16 +7,64 @@ import pandas as pd
 
 from ppg_hr.v2.optimizer import V2BayesConfig, optimise_v2
 from ppg_hr.v2.search_space import default_v2_search_space
+from ppg_hr.v2.solver import _solver_params_from_v2
 from ppg_hr.v2.types import V2RunConfig
 
 
-def test_default_search_space_has_rff_fields_only_for_rff() -> None:
+def test_default_search_space_has_rest_tracking_and_time_bias() -> None:
+    space = default_v2_search_space("noncausal_lms")
+
+    assert space.options("hr_range_rest") == [
+        20 / 60.0,
+        30 / 60.0,
+        50 / 60.0,
+        60 / 60.0,
+        80 / 60.0,
+        100 / 60.0,
+    ]
+    assert space.options("slew_limit_rest") == [1.0, 3.0, 5.0, 6.0, 8.0, 25.0]
+    assert space.options("slew_step_rest") == [0.5, 2.0, 4.0, 5.0, 8.0, 12.0]
+    assert space.options("time_bias") == [4, 5, 6]
+    assert "spec_penalty_weight" not in space.names()
+
+
+def test_default_search_space_has_strategy_specific_fields() -> None:
     lms_names = default_v2_search_space("noncausal_lms").names()
     rff_names = default_v2_search_space("rff_lms").names()
+    klms_names = default_v2_search_space("klms").names()
+    volterra_names = default_v2_search_space("volterra").names()
+
     assert "rff_D" not in lms_names
     assert "rff_sigma" not in lms_names
     assert "rff_D" in rff_names
     assert "rff_sigma" in rff_names
+    assert "klms_step_size" in klms_names
+    assert "klms_sigma" in klms_names
+    assert "klms_epsilon" in klms_names
+    assert "volterra_max_order_vol" not in klms_names
+    assert "volterra_max_order_vol" in volterra_names
+    assert "klms_sigma" not in volterra_names
+
+
+def test_v2_config_defaults_and_strategy_params_pass_to_solver_params(tmp_path: Path) -> None:
+    cfg = V2RunConfig(
+        data_path=tmp_path / "sample.csv",
+        ref_path=tmp_path / "sample_ref.csv",
+        adaptive_filter="klms",
+        klms_step_size=0.2,
+        klms_sigma=2.0,
+        klms_epsilon=0.05,
+        volterra_max_order_vol=5,
+    )
+
+    params = _solver_params_from_v2(cfg)
+
+    assert cfg.spec_penalty_weight == 0.4
+    assert params.spec_penalty_weight == 0.4
+    assert params.klms_step_size == 0.2
+    assert params.klms_sigma == 2.0
+    assert params.klms_epsilon == 0.05
+    assert params.volterra_max_order_vol == 5
 
 
 def test_v2_bayes_config_defaults_to_three_repeats() -> None:

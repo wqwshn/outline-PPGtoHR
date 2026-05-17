@@ -39,16 +39,23 @@ class V2RunConfig:
     M_base: int = 1
     C_scale: float = 1.0
     K_max: int = 16
+    klms_step_size: float = 0.1
+    klms_sigma: float = 1.0
+    klms_epsilon: float = 0.1
+    volterra_max_order_vol: int = 3
     rff_D: int = 100
     rff_sigma: float = 1.0
     rff_seed: int = 42
     smooth_win_len: int = 7
     spec_penalty_enable: bool = True
-    spec_penalty_weight: float = 0.2
+    spec_penalty_weight: float = 0.4
     spec_penalty_width: float = 0.2
     hr_range_hz: float = 25.0 / 60.0
     slew_limit_bpm: float = 10.0
     slew_step_bpm: float = 7.0
+    hr_range_rest: float = 30.0 / 60.0
+    slew_limit_rest: float = 6.0
+    slew_step_rest: float = 4.0
     time_bias: float = 5.0
     extras: dict[str, Any] = field(default_factory=dict)
 
