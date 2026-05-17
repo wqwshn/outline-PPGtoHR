@@ -1,16 +1,21 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
 from ppg_hr.params import SolverParams
 from research.rest_algri_optim.scripts.rest_tracking_core import (
     EvaluationResult,
+    SearchConfig,
     SegmentMetrics,
     assign_rest_segments,
     compute_segment_metrics,
+    discover_cases,
     evaluate_arrays,
     objective_from_metrics,
+    run_case_search,
     select_tracked_frequency,
 )
 
@@ -237,3 +242,58 @@ def test_time_bias_changes_prediction_time() -> None:
     )
 
     np.testing.assert_allclose(b.solver_result.T_Pred - a.solver_result.T_Pred, 2.0)
+
+
+def test_discover_cases_pairs_ref_suffixes(tmp_path: Path) -> None:
+    (tmp_path / "a.csv").write_text("sensor\n", encoding="utf-8")
+    (tmp_path / "a_ref.csv").write_text("ref\n", encoding="utf-8")
+    (tmp_path / "b.csv").write_text("sensor\n", encoding="utf-8")
+    (tmp_path / "b_HR_ref.csv").write_text("ref\n", encoding="utf-8")
+    (tmp_path / "b_ref.csv").write_text("older ref\n", encoding="utf-8")
+
+    cases = discover_cases(tmp_path)
+
+    assert [case.name for case in cases] == ["a", "b"]
+    assert cases[0].ref_path.name == "a_ref.csv"
+    assert cases[1].ref_path.name == "b_HR_ref.csv"
+
+
+def test_search_config_default_modes_are_unified_mechanisms() -> None:
+    cfg = SearchConfig(max_trials=4, random_state=7)
+
+    assert cfg.modes == (
+        "current",
+        "fallback_slew_to_raw_peak",
+        "all_peaks_near_prev",
+        "all_peaks_with_raw_fallback",
+    )
+    assert cfg.max_trials == 4
+    assert cfg.random_state == 7
+
+
+def test_run_case_search_with_preloaded_arrays() -> None:
+    raw, ref = _make_tiny_raw()
+    params = SolverParams(fs_target=100, calib_time=10.0, time_buffer=2.0)
+    cfg = SearchConfig(
+        max_trials=3,
+        random_state=1,
+        modes=("current",),
+        hr_range_rest_bpm=(20.0, 30.0),
+        slew_limit_rest_bpm=(4.0, 6.0),
+        slew_step_rest_bpm=(2.0, 4.0),
+        smooth_win_len=(3,),
+        time_bias_s=(0.0, 1.0),
+    )
+
+    result = run_case_search(
+        case_name="synthetic",
+        raw_data=raw,
+        ref_data=ref,
+        base_params=params,
+        config=cfg,
+    )
+
+    assert result.case_name == "synthetic"
+    assert result.best is not None
+    assert len(result.trials) == 3
+    assert result.best.objective == min(trial.objective for trial in result.trials)

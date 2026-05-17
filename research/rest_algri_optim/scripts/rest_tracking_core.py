@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Iterator, Literal
 
 import numpy as np
+import optuna
 from scipy.interpolate import interp1d
 
 from ppg_hr.core import heart_rate_solver as solver
@@ -487,3 +489,119 @@ def evaluate_arrays(
         solver_result=result,
         curve=_curve_array(result),
     )
+
+
+@dataclass(frozen=True)
+class DataCase:
+    name: str
+    sensor_path: Path
+    ref_path: Path
+
+
+@dataclass(frozen=True)
+class SearchConfig:
+    max_trials: int = 60
+    random_state: int = 42
+    modes: tuple[TrackingMode, ...] = (
+        "current",
+        "fallback_slew_to_raw_peak",
+        "all_peaks_near_prev",
+        "all_peaks_with_raw_fallback",
+    )
+    hr_range_rest_bpm: tuple[float, ...] = (10, 15, 20, 25, 30, 40, 50, 60, 70, 80)
+    slew_limit_rest_bpm: tuple[float, ...] = (1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20)
+    slew_step_rest_bpm: tuple[float, ...] = (1, 2, 3, 4, 5, 6, 8, 10, 12, 15)
+    smooth_win_len: tuple[int, ...] = (3, 5, 7, 9, 11)
+    time_bias_s: tuple[float, ...] = tuple(float(x) * 0.5 for x in range(0, 21))
+
+
+@dataclass(frozen=True)
+class CaseSearchResult:
+    case_name: str
+    best: EvaluationResult | None
+    trials: tuple[EvaluationResult, ...]
+
+
+def discover_cases(testdata_dir: str | Path) -> list[DataCase]:
+    root = Path(testdata_dir)
+    cases: list[DataCase] = []
+    for sensor in sorted(root.glob("*.csv")):
+        stem = sensor.stem
+        if stem.endswith("_ref") or stem.endswith("_HR_ref"):
+            continue
+        hr_ref = sensor.with_name(f"{stem}_HR_ref.csv")
+        plain_ref = sensor.with_name(f"{stem}_ref.csv")
+        if hr_ref.is_file():
+            ref = hr_ref
+        elif plain_ref.is_file():
+            ref = plain_ref
+        else:
+            continue
+        cases.append(DataCase(name=stem, sensor_path=sensor, ref_path=ref))
+    return cases
+
+
+def _suggest_from_tuple(
+    trial: optuna.Trial,
+    name: str,
+    options: tuple[float, ...] | tuple[int, ...],
+) -> float | int:
+    idx = trial.suggest_int(name, 0, len(options) - 1)
+    return options[idx]
+
+
+def run_case_search(
+    *,
+    case_name: str,
+    raw_data: np.ndarray,
+    ref_data: np.ndarray,
+    base_params: SolverParams,
+    config: SearchConfig,
+) -> CaseSearchResult:
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+    trials: list[EvaluationResult] = []
+    best: EvaluationResult | None = None
+
+    def objective(trial: optuna.Trial) -> float:
+        mode = config.modes[trial.suggest_int("mode", 0, len(config.modes) - 1)]
+        result = evaluate_arrays(
+            raw_data=raw_data,
+            ref_data=ref_data,
+            base_params=base_params,
+            mode=mode,
+            hr_range_rest_bpm=float(
+                _suggest_from_tuple(trial, "hr_range_rest_bpm", config.hr_range_rest_bpm)
+            ),
+            slew_limit_rest_bpm=float(
+                _suggest_from_tuple(
+                    trial, "slew_limit_rest_bpm", config.slew_limit_rest_bpm
+                )
+            ),
+            slew_step_rest_bpm=float(
+                _suggest_from_tuple(trial, "slew_step_rest_bpm", config.slew_step_rest_bpm)
+            ),
+            smooth_win_len=int(
+                _suggest_from_tuple(trial, "smooth_win_len", config.smooth_win_len)
+            ),
+            time_bias_s=float(_suggest_from_tuple(trial, "time_bias_s", config.time_bias_s)),
+        )
+        trials.append(result)
+        nonlocal best
+        if best is None or result.objective < best.objective:
+            best = result
+        trial.set_user_attr("metrics", asdict(result.metrics))
+        trial.set_user_attr("params", result.params)
+        return result.objective
+
+    sampler = optuna.samplers.TPESampler(
+        seed=int(config.random_state),
+        n_startup_trials=min(5, int(config.max_trials)),
+    )
+    study = optuna.create_study(direction="minimize", sampler=sampler)
+    study.optimize(
+        objective,
+        n_trials=int(config.max_trials),
+        show_progress_bar=False,
+    )
+
+    return CaseSearchResult(case_name=case_name, best=best, trials=tuple(trials))
