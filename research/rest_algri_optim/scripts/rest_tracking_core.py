@@ -1,9 +1,15 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Literal
+from contextlib import contextmanager
+from dataclasses import asdict, dataclass
+from typing import Iterator, Literal
 
 import numpy as np
+from scipy.interpolate import interp1d
+
+from ppg_hr.core import heart_rate_solver as solver
+from ppg_hr.core.fft_peaks import fft_peaks
+from ppg_hr.params import SolverParams
 
 TrackingMode = Literal[
     "current",
@@ -263,3 +269,221 @@ def select_tracked_frequency(
         )
 
     raise ValueError(f"Unsupported tracking mode: {mode!r}")
+
+
+@dataclass(frozen=True)
+class EvaluationResult:
+    mode: TrackingMode
+    params: dict[str, float | int | str]
+    metrics: SegmentMetrics
+    objective: float
+    solver_result: solver.SolverResult
+    curve: np.ndarray
+
+
+def _quality_reliable_mask(result: solver.SolverResult) -> np.ndarray:
+    rows = result.window_quality or []
+    if len(rows) != result.HR.shape[0]:
+        return np.ones(result.HR.shape[0], dtype=bool)
+    mask = np.asarray([bool(row.get("reliable", True)) for row in rows], dtype=bool)
+    return mask if mask.any() else np.ones(result.HR.shape[0], dtype=bool)
+
+
+def _ref_at_pred_time(result: solver.SolverResult) -> np.ndarray:
+    if result.HR.size == 0:
+        return np.array([], dtype=float)
+    interp = interp1d(
+        result.HR[:, 0],
+        result.HR[:, 1],
+        kind="linear",
+        fill_value="extrapolate",
+        assume_sorted=False,
+    )
+    return np.asarray(interp(result.T_Pred), dtype=float) * 60.0
+
+
+def _curve_array(result: solver.SolverResult) -> np.ndarray:
+    labels = assign_rest_segments(result.HR)
+    ref_bpm = _ref_at_pred_time(result)
+    dtype = [
+        ("t_center_s", "f8"),
+        ("t_pred_s", "f8"),
+        ("ref_bpm", "f8"),
+        ("final_bpm", "f8"),
+        ("pure_fft_bpm", "f8"),
+        ("motion_flag", "i4"),
+        ("segment", "U16"),
+    ]
+    out = np.empty(result.HR.shape[0], dtype=dtype)
+    out["t_center_s"] = result.HR[:, 0]
+    out["t_pred_s"] = result.T_Pred
+    out["ref_bpm"] = ref_bpm
+    out["final_bpm"] = result.HR[:, 5] * 60.0
+    out["pure_fft_bpm"] = result.HR[:, 4] * 60.0
+    out["motion_flag"] = (result.HR[:, 7] > 0.5).astype(int)
+    out["segment"] = labels.astype(str)
+    return out
+
+
+_ORIGINAL_PROCESS_SPECTRUM = solver._process_spectrum
+
+
+def _is_rest_tracking_call(
+    *,
+    params: SolverParams,
+    range_hz: float,
+    limit_bpm: float,
+    step_bpm: float,
+) -> bool:
+    return bool(
+        np.isclose(range_hz, params.hr_range_rest)
+        and np.isclose(limit_bpm, params.slew_limit_rest)
+        and np.isclose(step_bpm, params.slew_step_rest)
+    )
+
+
+def _research_process_spectrum(
+    sig_in: np.ndarray,
+    sig_penalty_ref: np.ndarray,
+    fs: int,
+    params: SolverParams,
+    times_idx: int,
+    history_arr: np.ndarray,
+    enable_penalty: bool,
+    range_hz: float,
+    limit_bpm: float,
+    step_bpm: float,
+) -> float:
+    mode = str(params.extras.get("_rest_tracking_mode", "current"))
+    if mode == "current" or not _is_rest_tracking_call(
+        params=params,
+        range_hz=range_hz,
+        limit_bpm=limit_bpm,
+        step_bpm=step_bpm,
+    ):
+        return _ORIGINAL_PROCESS_SPECTRUM(
+            sig_in,
+            sig_penalty_ref,
+            fs,
+            params,
+            times_idx,
+            history_arr,
+            enable_penalty,
+            range_hz,
+            limit_bpm,
+            step_bpm,
+        )
+
+    freqs, amps = fft_peaks(sig_in, fs, 0.3)
+    amps = amps.astype(float).copy()
+    if params.spec_penalty_enable and enable_penalty:
+        ref_freqs, ref_amps = fft_peaks(sig_penalty_ref, fs, 0.3)
+        if ref_freqs.size:
+            motion_freq = float(ref_freqs[int(np.argmax(ref_amps))])
+            penalty_mask = (
+                np.abs(freqs - motion_freq) < params.spec_penalty_width
+            ) | (np.abs(freqs - 2.0 * motion_freq) < params.spec_penalty_width)
+            amps[penalty_mask] *= params.spec_penalty_weight
+
+    sorted_freqs, _sorted_amps = _sorted_peak_arrays(freqs, amps)
+    curr_raw = float(sorted_freqs[0]) if sorted_freqs.size else 0.0
+    if times_idx == 0:
+        return curr_raw
+
+    prev_hr = float(history_arr[times_idx - 1])
+    return select_tracked_frequency(
+        freqs=freqs,
+        amps=amps,
+        prev_hr=prev_hr,
+        mode=mode,  # type: ignore[arg-type]
+        range_hz=range_hz,
+        limit_bpm=limit_bpm,
+        step_bpm=step_bpm,
+    )
+
+
+@contextmanager
+def _patched_tracking_mode(_mode: TrackingMode) -> Iterator[None]:
+    original = solver._process_spectrum
+    try:
+        solver._process_spectrum = _research_process_spectrum
+        yield
+    finally:
+        solver._process_spectrum = original
+
+
+def _params_for_trial(
+    base_params: SolverParams,
+    *,
+    mode: TrackingMode,
+    hr_range_rest_bpm: float,
+    slew_limit_rest_bpm: float,
+    slew_step_rest_bpm: float,
+    smooth_win_len: int,
+    time_bias_s: float,
+) -> SolverParams:
+    data = asdict(base_params)
+    extras = dict(data.get("extras") or {})
+    extras["_rest_tracking_mode"] = mode
+    data.update(
+        {
+            "hr_range_rest": float(hr_range_rest_bpm) / 60.0,
+            "slew_limit_rest": float(slew_limit_rest_bpm),
+            "slew_step_rest": float(slew_step_rest_bpm),
+            "smooth_win_len": int(smooth_win_len),
+            "time_bias": float(time_bias_s),
+            "extras": extras,
+        }
+    )
+    return SolverParams(**data)
+
+
+def evaluate_arrays(
+    *,
+    raw_data: np.ndarray,
+    ref_data: np.ndarray,
+    base_params: SolverParams,
+    mode: TrackingMode,
+    hr_range_rest_bpm: float,
+    slew_limit_rest_bpm: float,
+    slew_step_rest_bpm: float,
+    smooth_win_len: int,
+    time_bias_s: float,
+) -> EvaluationResult:
+    params = _params_for_trial(
+        base_params,
+        mode=mode,
+        hr_range_rest_bpm=hr_range_rest_bpm,
+        slew_limit_rest_bpm=slew_limit_rest_bpm,
+        slew_step_rest_bpm=slew_step_rest_bpm,
+        smooth_win_len=smooth_win_len,
+        time_bias_s=time_bias_s,
+    )
+    with _patched_tracking_mode(mode):
+        result = solver.solve_from_arrays(raw_data, ref_data, params)
+
+    ref_bpm = _ref_at_pred_time(result)
+    reliable = _quality_reliable_mask(result)
+    metrics = compute_segment_metrics(
+        hr=result.HR,
+        ref_bpm=ref_bpm,
+        reliable_mask=reliable,
+        final_col=5,
+        pure_fft_col=4,
+    )
+    param_payload: dict[str, float | int | str] = {
+        "mode": mode,
+        "hr_range_rest_bpm": float(hr_range_rest_bpm),
+        "slew_limit_rest_bpm": float(slew_limit_rest_bpm),
+        "slew_step_rest_bpm": float(slew_step_rest_bpm),
+        "smooth_win_len": int(smooth_win_len),
+        "time_bias_s": float(time_bias_s),
+    }
+    return EvaluationResult(
+        mode=mode,
+        params=param_payload,
+        metrics=metrics,
+        objective=objective_from_metrics(metrics),
+        solver_result=result,
+        curve=_curve_array(result),
+    )
