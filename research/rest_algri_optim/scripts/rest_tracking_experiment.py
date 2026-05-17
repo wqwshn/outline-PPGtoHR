@@ -18,6 +18,7 @@ from .rest_tracking_core import (
 def _parse_modes(value: str) -> tuple[TrackingMode, ...]:
     allowed = {
         "current",
+        "raw_peak",
         "fallback_slew_to_raw_peak",
         "all_peaks_near_prev",
         "all_peaks_with_raw_fallback",
@@ -59,7 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--modes",
         type=str,
-        default="current,fallback_slew_to_raw_peak,all_peaks_near_prev,"
+        default="current,raw_peak,fallback_slew_to_raw_peak,all_peaks_near_prev,"
         "all_peaks_with_raw_fallback",
     )
     return parser

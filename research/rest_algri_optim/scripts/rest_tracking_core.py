@@ -17,6 +17,7 @@ from ppg_hr.params import SolverParams
 
 TrackingMode = Literal[
     "current",
+    "raw_peak",
     "fallback_slew_to_raw_peak",
     "all_peaks_near_prev",
     "all_peaks_with_raw_fallback",
@@ -223,6 +224,9 @@ def select_tracked_frequency(
             limit_bpm=limit_bpm,
             step_bpm=step_bpm,
         )
+
+    if mode == "raw_peak":
+        return curr_raw
 
     if mode == "fallback_slew_to_raw_peak":
         near = _near_peak(
@@ -506,15 +510,46 @@ class SearchConfig:
     random_state: int = 42
     modes: tuple[TrackingMode, ...] = (
         "current",
+        "raw_peak",
         "fallback_slew_to_raw_peak",
         "all_peaks_near_prev",
         "all_peaks_with_raw_fallback",
     )
-    hr_range_rest_bpm: tuple[float, ...] = (10, 15, 20, 25, 30, 40, 50, 60, 70, 80)
-    slew_limit_rest_bpm: tuple[float, ...] = (1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20)
-    slew_step_rest_bpm: tuple[float, ...] = (1, 2, 3, 4, 5, 6, 8, 10, 12, 15)
-    smooth_win_len: tuple[int, ...] = (3, 5, 7, 9, 11)
-    time_bias_s: tuple[float, ...] = tuple(float(x) * 0.5 for x in range(0, 21))
+    hr_range_rest_bpm: tuple[float, ...] = (10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100)
+    slew_limit_rest_bpm: tuple[float, ...] = (
+        0.5,
+        1,
+        1.5,
+        2,
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        12,
+        15,
+        20,
+        25,
+        30,
+    )
+    slew_step_rest_bpm: tuple[float, ...] = (
+        0.5,
+        1,
+        1.5,
+        2,
+        2.5,
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        12,
+        15,
+    )
+    smooth_win_len: tuple[int, ...] = (3, 5, 7, 9, 11, 13, 15)
+    time_bias_s: tuple[float, ...] = tuple(float(x) * 0.5 for x in range(-20, 41))
 
 
 @dataclass(frozen=True)
@@ -552,6 +587,52 @@ def _suggest_from_tuple(
     return options[idx]
 
 
+def _result_with_time_bias(result: solver.SolverResult, time_bias_s: float) -> solver.SolverResult:
+    t_pred = result.HR[:, 0] + float(time_bias_s)
+    interp = interp1d(
+        result.HR[:, 0],
+        result.HR[:, 1],
+        kind="linear",
+        fill_value="extrapolate",
+        assume_sorted=False,
+    )
+    return solver.SolverResult(
+        HR=result.HR,
+        err_stats=result.err_stats,
+        T_Pred=t_pred,
+        motion_threshold=result.motion_threshold,
+        HR_Ref_Interp=np.asarray(interp(t_pred), dtype=float),
+        err_fus_hf=result.err_fus_hf,
+        delay_profile=result.delay_profile,
+        window_quality=result.window_quality,
+    )
+
+
+def _evaluation_from_result(
+    *,
+    result: solver.SolverResult,
+    mode: TrackingMode,
+    params: dict[str, float | int | str],
+) -> EvaluationResult:
+    ref_bpm = _ref_at_pred_time(result)
+    reliable = _quality_reliable_mask(result)
+    metrics = compute_segment_metrics(
+        hr=result.HR,
+        ref_bpm=ref_bpm,
+        reliable_mask=reliable,
+        final_col=5,
+        pure_fft_col=4,
+    )
+    return EvaluationResult(
+        mode=mode,
+        params=params,
+        metrics=metrics,
+        objective=objective_from_metrics(metrics),
+        solver_result=result,
+        curve=_curve_array(result),
+    )
+
+
 def run_case_search(
     *,
     case_name: str,
@@ -566,26 +647,46 @@ def run_case_search(
 
     def objective(trial: optuna.Trial) -> float:
         mode = config.modes[trial.suggest_int("mode", 0, len(config.modes) - 1)]
-        result = evaluate_arrays(
+        hr_range_rest_bpm = float(
+            _suggest_from_tuple(trial, "hr_range_rest_bpm", config.hr_range_rest_bpm)
+        )
+        slew_limit_rest_bpm = float(
+            _suggest_from_tuple(trial, "slew_limit_rest_bpm", config.slew_limit_rest_bpm)
+        )
+        slew_step_rest_bpm = float(
+            _suggest_from_tuple(trial, "slew_step_rest_bpm", config.slew_step_rest_bpm)
+        )
+        smooth_win_len = int(
+            _suggest_from_tuple(trial, "smooth_win_len", config.smooth_win_len)
+        )
+        raw_result = evaluate_arrays(
             raw_data=raw_data,
             ref_data=ref_data,
             base_params=base_params,
             mode=mode,
-            hr_range_rest_bpm=float(
-                _suggest_from_tuple(trial, "hr_range_rest_bpm", config.hr_range_rest_bpm)
-            ),
-            slew_limit_rest_bpm=float(
-                _suggest_from_tuple(
-                    trial, "slew_limit_rest_bpm", config.slew_limit_rest_bpm
+            hr_range_rest_bpm=hr_range_rest_bpm,
+            slew_limit_rest_bpm=slew_limit_rest_bpm,
+            slew_step_rest_bpm=slew_step_rest_bpm,
+            smooth_win_len=smooth_win_len,
+            time_bias_s=0.0,
+        )
+        result = min(
+            (
+                _evaluation_from_result(
+                    result=_result_with_time_bias(raw_result.solver_result, float(time_bias_s)),
+                    mode=mode,
+                    params={
+                        "mode": mode,
+                        "hr_range_rest_bpm": hr_range_rest_bpm,
+                        "slew_limit_rest_bpm": slew_limit_rest_bpm,
+                        "slew_step_rest_bpm": slew_step_rest_bpm,
+                        "smooth_win_len": smooth_win_len,
+                        "time_bias_s": float(time_bias_s),
+                    },
                 )
+                for time_bias_s in config.time_bias_s
             ),
-            slew_step_rest_bpm=float(
-                _suggest_from_tuple(trial, "slew_step_rest_bpm", config.slew_step_rest_bpm)
-            ),
-            smooth_win_len=int(
-                _suggest_from_tuple(trial, "smooth_win_len", config.smooth_win_len)
-            ),
-            time_bias_s=float(_suggest_from_tuple(trial, "time_bias_s", config.time_bias_s)),
+            key=lambda item: item.objective,
         )
         trials.append(result)
         nonlocal best

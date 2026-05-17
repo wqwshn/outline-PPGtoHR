@@ -141,6 +141,23 @@ def test_raw_peak_fallback_moves_by_existing_slew_step() -> None:
     assert out == pytest.approx(1.2 + 4.0 / 60.0)
 
 
+def test_raw_peak_mode_returns_current_strongest_peak() -> None:
+    freqs = np.array([1.55, 1.9, 1.22])
+    amps = np.array([10.0, 4.0, 3.0])
+
+    out = select_tracked_frequency(
+        freqs=freqs,
+        amps=amps,
+        prev_hr=1.2,
+        mode="raw_peak",
+        range_hz=0.05,
+        limit_bpm=6.0,
+        step_bpm=4.0,
+    )
+
+    assert out == pytest.approx(1.55)
+
+
 def test_combined_mode_uses_all_peaks_before_raw_fallback() -> None:
     freqs = np.array([1.55, 1.9, 1.22])
     amps = np.array([10.0, 4.0, 3.0])
@@ -266,6 +283,7 @@ def test_search_config_default_modes_are_unified_mechanisms() -> None:
 
     assert cfg.modes == (
         "current",
+        "raw_peak",
         "fallback_slew_to_raw_peak",
         "all_peaks_near_prev",
         "all_peaks_with_raw_fallback",
