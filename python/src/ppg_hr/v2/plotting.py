@@ -495,7 +495,10 @@ def _load_ref_data(ref_path: str) -> np.ndarray | None:
     if not p.is_file():
         return None
     try:
-        data = np.loadtxt(p, delimiter=",", skiprows=1, usecols=(0, 2), dtype=float)
+        if p.stem.endswith("_HR_ref"):
+            data = np.loadtxt(p, delimiter=",", skiprows=1, usecols=(1, 2), dtype=float)
+        else:
+            data = np.loadtxt(p, delimiter=",", skiprows=1, usecols=(0, 2), dtype=float)
         if data.ndim == 1:
             data = data.reshape(-1, 2)
         return data

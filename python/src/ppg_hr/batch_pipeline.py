@@ -86,7 +86,7 @@ def quality_scan(
         file_name = file_path.name
 
         # Skip reference files from QC scan.
-        if file_name.endswith("_ref.csv"):
+        if file_name.endswith("_ref.csv") or file_name.endswith("_HR_ref.csv"):
             continue
 
         try:
@@ -282,11 +282,13 @@ def run_batch_pipeline(
         if row.file_path is None:
             continue
         ref = row.file_path.with_name(f"{row.file_path.stem}_ref.csv")
+        if not ref.is_file():
+            ref = row.file_path.with_name(f"{row.file_path.stem}_HR_ref.csv")
         if ref.is_file():
             runnable.append((row, ref))
         else:
-            bad_rows.append(QcRow(row.file_name, "坏采样", "缺少同名 _ref.csv", row.file_path))
-            _log(f"跳过 {row.file_name}：未找到参考文件 {ref.name}")
+            bad_rows.append(QcRow(row.file_name, "坏采样", "缺少同名 _ref.csv / _HR_ref.csv", row.file_path))
+            _log(f"跳过 {row.file_name}：未找到参考文件")
 
     _write_qc_tables(output_dir, good_rows, bad_rows)
 

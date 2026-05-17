@@ -78,6 +78,8 @@ def _clean_signal(values: np.ndarray, name: str, fs: int) -> np.ndarray:
 
 
 def _parse_reference_csv(gt_csv: Path) -> np.ndarray:
+    if gt_csv.stem.endswith("_HR_ref"):
+        return _parse_hr_ref_csv(gt_csv)
     gt = pd.read_csv(gt_csv, skiprows=3, header=None)
     if gt.shape[1] < 3:
         raise ValueError(f"Reference CSV {gt_csv} has fewer than 3 columns")
@@ -96,6 +98,20 @@ def _parse_reference_csv(gt_csv: Path) -> np.ndarray:
     time_s = np.array([_to_seconds(t) for t in raw_time], dtype=float)
     bpm = pd.to_numeric(raw_bpm, errors="coerce").to_numpy(dtype=float)
     valid = ~(np.isnan(time_s) | np.isnan(bpm))
+    return np.column_stack([time_s[valid], bpm[valid]])
+
+
+def _parse_hr_ref_csv(gt_csv: Path) -> np.ndarray:
+    """解析 _HR_ref.csv 格式：header 行 + elapsed_seconds / hr_bpm 列。"""
+    ref = pd.read_csv(gt_csv)
+    if "elapsed_seconds" not in ref.columns or "hr_bpm" not in ref.columns:
+        raise ValueError(
+            f"HR ref CSV {gt_csv} 缺少 elapsed_seconds / hr_bpm 列，"
+            f"实际列: {list(ref.columns)}"
+        )
+    time_s = pd.to_numeric(ref["elapsed_seconds"], errors="coerce").to_numpy(dtype=float)
+    bpm = pd.to_numeric(ref["hr_bpm"], errors="coerce").to_numpy(dtype=float)
+    valid = np.isfinite(time_s) & np.isfinite(bpm)
     return np.column_stack([time_s[valid], bpm[valid]])
 
 

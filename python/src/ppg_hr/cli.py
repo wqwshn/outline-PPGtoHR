@@ -7,7 +7,7 @@ Three sub-commands mirror the three MATLAB scripts kept after the refactor:
 * ``view``      — re-run solver on the HF/ACC optima and emit result-analysis files.
 
 All three read their sensor/ground-truth paths from a simple pair:
-``<file>.csv`` and either an explicit ``--ref`` or a sibling ``<file>_ref.csv``.
+``<file>.csv`` and either an explicit ``--ref`` or a sibling ``<file>_ref.csv`` / ``<file>_HR_ref.csv``.
 """
 
 from __future__ import annotations

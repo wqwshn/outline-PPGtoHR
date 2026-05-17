@@ -137,7 +137,7 @@ def _build_data_index(root: Path) -> dict[str, list[Path]]:
     index: dict[str, list[Path]] = {}
     for pattern in ("*.csv", "*_processed.mat"):
         for path in root.rglob(pattern):
-            if path.name.endswith("_ref.csv"):
+            if path.name.endswith("_ref.csv") or path.name.endswith("_HR_ref.csv"):
                 continue
             index.setdefault(path.stem, []).append(path)
     return index
@@ -158,6 +158,8 @@ def _match_report(
     ref_path = _payload_path(payload, "ref_file", report.parent, root)
     if ref_path is None or not ref_path.is_file():
         ref_path = data_path.with_name(f"{data_path.stem}_ref.csv")
+    if ref_path is None or not ref_path.is_file():
+        ref_path = data_path.with_name(f"{data_path.stem}_HR_ref.csv")
     if ref_path is None or not ref_path.is_file():
         return data_path, None, "missing reference file"
     return data_path, ref_path, None

@@ -137,13 +137,16 @@ def load_raw_data(params: SolverParams) -> tuple[np.ndarray, np.ndarray]:
         return _load_processed_table(file_name)
 
     if params.ref_file is None:
-        # Try sibling _ref.csv
-        sibling = file_name.with_name(file_name.stem + "_ref" + file_name.suffix)
-        if sibling.is_file():
-            ref_path = sibling
+        # Try sibling _ref.csv first, then _HR_ref.csv
+        sibling_ref = file_name.with_name(file_name.stem + "_ref" + file_name.suffix)
+        sibling_hr_ref = file_name.with_name(file_name.stem + "_HR_ref" + file_name.suffix)
+        if sibling_ref.is_file():
+            ref_path = sibling_ref
+        elif sibling_hr_ref.is_file():
+            ref_path = sibling_hr_ref
         else:
             raise FileNotFoundError(
-                f"ref_file not given and no sibling found for {file_name}"
+                f"ref_file not given and no sibling (_ref.csv / _HR_ref.csv) found for {file_name}"
             )
     else:
         ref_path = Path(params.ref_file)

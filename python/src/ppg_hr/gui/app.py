@@ -61,7 +61,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("ppg-hr · PPG 心率算法工作台")
         self.resize(1280, 820)
         self.setMinimumSize(1100, 720)
-        self._version = "v1"
+        self._version = "v2"
 
         central = QWidget()
         central.setObjectName("central")
@@ -125,7 +125,7 @@ class MainWindow(QMainWindow):
 
         self._stack = QStackedWidget()
         layout.addWidget(self._stack)
-        self.set_version("v1")
+        self.set_version("v2")
         return container
 
     def _on_nav_changed(self, row: int) -> None:

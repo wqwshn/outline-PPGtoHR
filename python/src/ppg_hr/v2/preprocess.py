@@ -177,6 +177,8 @@ def _safe_bandpass(
 
 
 def _parse_reference_csv(ref_csv: Path) -> np.ndarray:
+    if ref_csv.stem.endswith("_HR_ref"):
+        return _parse_hr_ref_csv_v2(ref_csv)
     ref = pd.read_csv(ref_csv, skiprows=3, header=None)
     if ref.shape[1] < 3:
         raise ValueError(f"Reference CSV {ref_csv} has fewer than 3 columns")
@@ -195,3 +197,17 @@ def _parse_reference_csv(ref_csv: Path) -> np.ndarray:
     seconds = np.asarray([to_seconds(x) for x in times], dtype=float)
     mask = np.isfinite(seconds) & np.isfinite(bpm)
     return np.column_stack([seconds[mask], bpm[mask]])
+
+
+def _parse_hr_ref_csv_v2(ref_csv: Path) -> np.ndarray:
+    """解析 _HR_ref.csv 格式：header 行 + elapsed_seconds / hr_bpm 列。"""
+    ref = pd.read_csv(ref_csv)
+    if "elapsed_seconds" not in ref.columns or "hr_bpm" not in ref.columns:
+        raise ValueError(
+            f"HR ref CSV {ref_csv} 缺少 elapsed_seconds / hr_bpm 列，"
+            f"实际列: {list(ref.columns)}"
+        )
+    time_s = pd.to_numeric(ref["elapsed_seconds"], errors="coerce").to_numpy(dtype=float)
+    bpm = pd.to_numeric(ref["hr_bpm"], errors="coerce").to_numpy(dtype=float)
+    mask = np.isfinite(time_s) & np.isfinite(bpm)
+    return np.column_stack([time_s[mask], bpm[mask]])

@@ -117,14 +117,14 @@ def _dataset_card(
     output_default_factory: Callable[[Path], Path] | None = None,
 ) -> tuple[SectionCard, FilePicker, FilePicker, FilePicker | None]:
     """Build the Input/Reference/Output picker block used by every page."""
-    card = SectionCard("数据输入", "传感器 CSV + 参考心率 CSV（省略 --ref 时会找同名 *_ref.csv）")
+    card = SectionCard("数据输入", "传感器 CSV + 参考心率 CSV（省略时依次找 *_ref.csv / *_HR_ref.csv）")
     form = QFormLayout()
     form.setContentsMargins(0, 0, 0, 0)
     form.setHorizontalSpacing(14)
     form.setVerticalSpacing(8)
 
     input_pick = FilePicker(placeholder="传感器 CSV 或 *_processed.mat", filter_str=input_filter)
-    ref_pick = FilePicker(placeholder="参考心率 CSV（留空则自动找 *_ref.csv）",
+    ref_pick = FilePicker(placeholder="参考心率 CSV（留空则自动找 *_ref.csv / *_HR_ref.csv）",
                           filter_str="CSV (*.csv)")
     form.addRow("数据文件", input_pick)
     form.addRow("参考心率", ref_pick)
@@ -140,6 +140,8 @@ def _dataset_card(
         p = Path(path_str)
         if not ref_pick.text():
             sibling = p.with_name(p.stem + "_ref.csv")
+            if not sibling.is_file():
+                sibling = p.with_name(p.stem + "_HR_ref.csv")
             if sibling.is_file():
                 ref_pick.setPath(sibling)
 
@@ -887,7 +889,7 @@ class BatchPipelinePage(_PageBase):
             "每条数据会按勾选的 PPG 通道各自完整跑一遍，结果一一对应保存。",
         )
 
-        io_card = SectionCard("输入与输出", "输入目录需包含 *.csv 与同名 *_ref.csv")
+        io_card = SectionCard("输入与输出", "输入目录需包含 *.csv 与同名 *_ref.csv 或 *_HR_ref.csv")
         io_form = QFormLayout()
         io_form.setHorizontalSpacing(14)
         io_form.setVerticalSpacing(10)
@@ -1500,6 +1502,8 @@ class ComparePage(_PageBase):
         for d in candidates:
             csv = d / f"{stem}.csv"
             ref = d / f"{stem}_ref.csv"
+            if not ref.is_file():
+                ref = d / f"{stem}_HR_ref.csv"
             if csv.is_file() and ref.is_file():
                 self._in_pick.setPath(csv)
                 self._ref_pick.setPath(ref)

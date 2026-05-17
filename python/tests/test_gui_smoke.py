@@ -24,11 +24,11 @@ def test_main_window_builds():
     app = QApplication.instance() or QApplication([])
     win = MainWindow()
     try:
-        # Sidebar has 5 nav items and stack has 5 pages
-        assert win._nav.count() == 5
-        assert win._stack.count() == 5
+        # Default is v2: 3 nav items
+        assert win._nav.count() == 3
+        assert win._stack.count() == 3
         # Switch pages to exercise on_nav_changed
-        for i in range(5):
+        for i in range(3):
             win._nav.setCurrentRow(i)
             app.processEvents()
             assert win._stack.currentIndex() == i
@@ -46,6 +46,8 @@ def test_main_window_uses_result_analysis_label():
     app = QApplication.instance() or QApplication([])
     win = MainWindow()
     try:
+        # Default v2 does not have 结果分析; switch to v1 to verify it exists there
+        win.set_version("v1")
         labels = [win._nav.item(i).text().strip() for i in range(win._nav.count())]
         assert "结果分析" in labels
         assert "可视化" not in labels

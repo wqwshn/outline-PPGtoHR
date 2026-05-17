@@ -67,12 +67,12 @@ def test_main_window_can_switch_between_v1_and_v2() -> None:
     app = QApplication.instance() or QApplication([])
     win = MainWindow()
     try:
+        assert win.current_version() == "v2"
+        assert win.nav_names() == ["批量全流程", "批量绘图", "血氧计算"]
+        win.set_version("v1")
         assert win.current_version() == "v1"
         v1_names = win.nav_names()
         assert "优化" in v1_names
-        win.set_version("v2")
-        assert win.current_version() == "v2"
-        assert win.nav_names() == ["批量全流程", "批量绘图", "血氧计算"]
     finally:
         win.close()
         win.deleteLater()

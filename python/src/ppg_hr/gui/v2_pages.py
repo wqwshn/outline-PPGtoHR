@@ -39,7 +39,7 @@ class V2BatchPipelinePage(_PageBase):
         self._build_results()
 
     def _build_io(self) -> None:
-        card = SectionCard("输入与输出", "输入目录包含 *.csv 与同名 *_ref.csv")
+        card = SectionCard("输入与输出", "输入目录包含 *.csv 与同名 *_ref.csv 或 *_HR_ref.csv")
         form = QFormLayout()
         self._input_dir_pick = FilePicker(
             placeholder="选择 v2 输入目录",

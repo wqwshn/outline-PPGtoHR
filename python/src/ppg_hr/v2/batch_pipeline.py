@@ -65,16 +65,19 @@ def run_v2_batch_pipeline(
 
     records: list[V2BatchRecord] = []
     samples = [
-        p for p in sorted(input_dir.glob("*.csv")) if not p.name.endswith("_ref.csv")
+        p for p in sorted(input_dir.glob("*.csv"))
+        if not (p.name.endswith("_ref.csv") or p.name.endswith("_HR_ref.csv"))
     ]
     total_runs = len(samples) * max(1, len(ppg_modes))
     run_idx = 0
 
     for sample in samples:
         ref = sample.with_name(f"{sample.stem}_ref.csv")
+        if not ref.is_file():
+            ref = sample.with_name(f"{sample.stem}_HR_ref.csv")
         qc = quality_filter_sample_v2(sample, ref_csv=ref if ref.is_file() else None)
         if not ref.is_file():
-            _log(on_log, f"跳过 {sample.name}: 缺少 {ref.name}")
+            _log(on_log, f"跳过 {sample.name}: 缺少 _ref.csv / _HR_ref.csv")
             continue
 
         for mode in ppg_modes:
