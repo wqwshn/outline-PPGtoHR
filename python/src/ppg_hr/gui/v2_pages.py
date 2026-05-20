@@ -192,7 +192,7 @@ class V2BatchPlotPage(_PageBase):
             filter_str="",
         )
         self._out_pick = FilePicker(
-            placeholder="选择输出目录",
+            placeholder="留空则在数据文件目录生成 v2_plot_outputs",
             mode="dir",
             filter_str="",
         )
@@ -202,18 +202,34 @@ class V2BatchPlotPage(_PageBase):
         self.body().addWidget(card)
 
         curve_card = SectionCard("绘图曲线选择", "控制 PNG 中显示的曲线")
-        curve_row = QHBoxLayout()
+        base_row = QHBoxLayout()
         self._plot_reference_check = QCheckBox("心率真值")
         self._plot_reference_check.setChecked(True)
         self._plot_fft_check = QCheckBox("纯FFT方案")
         self._plot_fft_check.setChecked(True)
-        self._plot_adaptive_check = QCheckBox("参考信号自适应滤波曲线")
+        self._plot_adaptive_check = QCheckBox("原始优化曲线")
         self._plot_adaptive_check.setChecked(True)
-        curve_row.addWidget(self._plot_reference_check)
-        curve_row.addWidget(self._plot_fft_check)
-        curve_row.addWidget(self._plot_adaptive_check)
-        curve_row.addStretch(1)
-        curve_card.add(curve_row)
+        base_row.addWidget(self._plot_reference_check)
+        base_row.addWidget(self._plot_fft_check)
+        base_row.addWidget(self._plot_adaptive_check)
+        base_row.addStretch(1)
+        curve_card.add(base_row)
+
+        from PySide6.QtWidgets import QLabel
+        cmp_label = QLabel("对比参考信号 (勾选后使用 best_params 以不同参考信号重新解算，支持拖拽排序)")
+        cmp_label.setStyleSheet("font-size: 9pt; color: #666; margin-top: 6px;")
+        curve_card.add(cmp_label)
+
+        self._comparison_ref_list = QListWidget()
+        self._comparison_ref_list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
+        self._comparison_ref_list.setDefaultDropAction(Qt.DropAction.MoveAction)
+        self._comparison_ref_list.setMaximumHeight(100)
+        for group in ("HF", "CF", "ACC"):
+            item = QListWidgetItem(group)
+            item.setCheckState(Qt.CheckState.Unchecked)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            self._comparison_ref_list.addItem(item)
+        curve_card.add(self._comparison_ref_list)
         self.body().addWidget(curve_card)
 
         row = QHBoxLayout()
@@ -249,6 +265,16 @@ class V2BatchPlotPage(_PageBase):
             curves.append("adaptive")
         return tuple(curves)
 
+    def selected_comparison_groups(self) -> tuple[tuple[str, ...], ...]:
+        order: list[str] = []
+        for i in range(self._comparison_ref_list.count()):
+            item = self._comparison_ref_list.item(i)
+            if item is not None and item.checkState() == Qt.CheckState.Checked:
+                order.append(item.text())
+        if not order:
+            return ()
+        return (tuple(order),)
+
     def _run(self) -> None:
         root = self._root_pick.path()
         if root is None or not root.is_dir():
@@ -258,7 +284,13 @@ class V2BatchPlotPage(_PageBase):
         if not plot_curves:
             self._log.error("请至少选择一条需要绘制的曲线")
             return
-        worker = V2BatchPlotWorker(root, self._out_pick.path(), plot_curves)
+        comparison_groups = self.selected_comparison_groups()
+        worker = V2BatchPlotWorker(
+            root,
+            self._out_pick.path(),
+            plot_curves,
+            comparison_groups=comparison_groups,
+        )
         worker.log.connect(self._log.info)
         worker.finished.connect(self._on_done)
         worker.failed.connect(self._log.error)

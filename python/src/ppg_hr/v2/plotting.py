@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import dataclasses
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -65,6 +66,70 @@ def _normalise_plot_curves(
     return tuple(selected)
 
 
+def _compute_comparison_curves(
+    payload: dict,
+    comparison_groups: tuple[tuple[str, ...], ...],
+    orig_key: str,
+    adaptive_filter: str,
+    report_dir: Path,
+) -> list[dict[str, object]]:
+    """用 report 中的 best_params 以不同参考信号组重新解算，返回对比曲线列表。"""
+    if not comparison_groups:
+        return []
+
+    best_params = payload.get("best_params", {})
+    from .types import V2RunConfig
+    from .solver import solve_v2
+
+    field_names = {f.name for f in dataclasses.fields(V2RunConfig)}
+    comparison_curves: list[dict[str, object]] = []
+    seen_keys = {orig_key}
+
+    def _resolve_path(key: str) -> Path:
+        p = Path(payload.get(key, ""))
+        if p.is_absolute() and p.is_file():
+            return p
+        candidate = report_dir / p.name
+        if candidate.is_file():
+            return candidate
+        return p
+
+    data_path = _resolve_path("data_path")
+    ref_path = _resolve_path("ref_path")
+
+    for comp_order in comparison_groups:
+        comp_order_norm = tuple(str(g).strip().upper() for g in comp_order)
+        comp_key = reference_order_key(comp_order_norm)
+        if comp_key in seen_keys:
+            continue
+        seen_keys.add(comp_key)
+        try:
+            cfg_dict: dict[str, object] = {
+                "data_path": data_path,
+                "ref_path": ref_path,
+                "ppg_mode": payload.get("ppg_mode", "green"),
+                "analysis_scope": payload.get("analysis_scope", "full"),
+                "adaptive_filter": adaptive_filter,
+                "reference_groups_order": comp_order_norm,
+            }
+            for k, v in best_params.items():
+                if k in field_names:
+                    cfg_dict[k] = v
+            cfg = V2RunConfig(**{k: v for k, v in cfg_dict.items() if k in field_names})
+            comp_result = solve_v2(cfg)
+            comp_hr = comp_result.HR
+            comparison_curves.append({
+                "order": comp_order_norm,
+                "key": comp_key,
+                "label": method_label(adaptive_filter, comp_order_norm),
+                "hr": comp_hr,
+            })
+        except Exception:
+            pass
+
+    return comparison_curves
+
+
 def render_v2_report(
     report_path: str | Path,
     out_dir: str | Path | None = None,
@@ -72,12 +137,20 @@ def render_v2_report(
     csv_dir: str | Path | None = None,
     output_prefix: str | None = None,
     plot_curves: tuple[str, ...] | list[str] | None = None,
+    comparison_groups: tuple[tuple[str, ...], ...] = (),
 ) -> V2PlotArtefacts:
     report = Path(report_path)
     payload = load_v2_report(report)
     out = Path(out_dir) if out_dir is not None else report.parent
-    csv_out = Path(csv_dir) if csv_dir is not None else out
-    out.mkdir(parents=True, exist_ok=True)
+    # 若调用者显式分别传入 out_dir 与 csv_dir，则沿用原路径（如 batch_pipeline 已组织子目录）；
+    # 若仅传入 out_dir（或均未传入），则自动创建 png/csv 子目录。
+    if csv_dir is not None:
+        fig_dir = out
+        csv_out = Path(csv_dir)
+    else:
+        fig_dir = out / "png"
+        csv_out = out / "csv"
+    fig_dir.mkdir(parents=True, exist_ok=True)
     csv_out.mkdir(parents=True, exist_ok=True)
     order = tuple(payload.get("reference_groups_order", []))
     key = reference_order_key(order)
@@ -87,19 +160,27 @@ def render_v2_report(
     time_bias = float(meta.get("time_bias", 5.0))
     adaptive_filter = str(meta.get("adaptive_filter", "lms"))
     adaptive_label = method_label(adaptive_filter, order)
-    fig_base = out / f"{prefix}-v2-hr"
+    fig_base = fig_dir / f"{prefix}-v2-hr"
     fig_path = fig_base.with_suffix(".png")
     err_path = csv_out / f"{prefix}-v2-error.csv"
     hr_path = csv_out / f"{prefix}-v2-hr.csv"
 
-    _write_hr_csv(hr_path, hr, time_bias=time_bias)
+    comparison_curves = _compute_comparison_curves(
+        payload, comparison_groups, key, adaptive_filter, report.parent
+    )
+
+    _write_hr_csv(hr_path, hr, time_bias=time_bias, comparison_curves=comparison_curves)
     _write_error_csv(
         err_path, hr, time_bias, order, adaptive_filter,
         analysis_scope=str(meta.get("analysis_scope", "full")),
         motion_segment=meta.get("motion_segment"),
         pre_motion_context_seconds=float(meta.get("pre_motion_context_seconds", 30.0)),
+        comparison_curves=comparison_curves,
     )
-    _plot_hr(fig_base, hr, key, order, payload, adaptive_label, plot_curves=plot_curves)
+    _plot_hr(
+        fig_base, hr, key, order, payload, adaptive_label,
+        plot_curves=plot_curves, comparison_curves=comparison_curves,
+    )
     return V2PlotArtefacts(
         report_path=report,
         reference_order_key=key,
@@ -114,6 +195,7 @@ def render_v2_report_batch(
     out_dir: str | Path | None = None,
     *,
     plot_curves: tuple[str, ...] | list[str] | None = None,
+    comparison_groups: tuple[tuple[str, ...], ...] = (),
 ) -> V2BatchPlotResult:
     root = Path(root_dir)
     out = Path(out_dir) if out_dir is not None else root
@@ -122,7 +204,12 @@ def render_v2_report_batch(
     for job in discover_v2_plot_jobs(root):
         try:
             items.append(
-                render_v2_report(job.report_path, out_dir=out, plot_curves=plot_curves)
+                render_v2_report(
+                    job.report_path,
+                    out_dir=out,
+                    plot_curves=plot_curves,
+                    comparison_groups=comparison_groups,
+                )
             )
         except Exception as exc:
             items.append(
@@ -136,7 +223,6 @@ def render_v2_report_batch(
                     error=str(exc),
                 )
             )
-    _write_batch_summary(out / "v2_plot_summary.csv", items)
     return V2BatchPlotResult(root_dir=root, out_dir=out, items=items)
 
 
@@ -149,9 +235,11 @@ def _plot_hr(
     adaptive_label: str = "LMS-H",
     *,
     plot_curves: tuple[str, ...] | list[str] | None = None,
+    comparison_curves: list[dict[str, object]] | None = None,
 ) -> None:
     _apply_style()
     curves = _normalise_plot_curves(plot_curves)
+    comp_curves = comparison_curves or []
     fig, ax = plt.subplots(figsize=(3.54, 2.60), dpi=120)
 
     if hr.size == 0:
@@ -239,6 +327,23 @@ def _plot_hr(
         )
         y_series.append(final_plot)
 
+    if comp_curves:
+        for comp in comp_curves:
+            comp_order = comp["order"]
+            comp_hr = np.asarray(comp["hr"], dtype=float)
+            comp_label = str(comp["label"])
+            if comp_hr.size:
+                comp_final = comp_hr[aligned, 3]
+                comp_color = color_for_reference_order(tuple(comp_order))
+                ax.plot(
+                    t_plot, comp_final,
+                    color=comp_color, linewidth=1.25, marker="s", markersize=1.8,
+                    linestyle="--",
+                    label=comp_label,
+                    zorder=3,
+                )
+                y_series.append(comp_final)
+
     ax.set_ylabel("Heart rate (BPM)")
     ax.set_ylim(_common_ylim(*y_series))
     ax.grid(True, axis="y", alpha=0.12, linewidth=0.45)
@@ -252,6 +357,7 @@ def _plot_hr(
         time_bias,
         adaptive_label,
         plot_curves=tuple(curves),
+        comparison_curves=comp_curves,
     )
 
     handles, labels = ax.get_legend_handles_labels()
@@ -265,15 +371,31 @@ def _plot_hr(
     plt.close(fig)
 
 
-def _write_hr_csv(path: Path, hr: np.ndarray, time_bias: float = 0.0) -> None:
+def _write_hr_csv(
+    path: Path,
+    hr: np.ndarray,
+    time_bias: float = 0.0,
+    comparison_curves: list[dict[str, object]] | None = None,
+) -> None:
+    comp_curves = comparison_curves or []
+    comp_labels = [str(c["label"]) for c in comp_curves]
+    comp_columns = [f"{lbl}_bpm" for lbl in comp_labels]
+    headers = [
+        "time_s", "ref_bpm", "fft_bpm", "final_bpm",
+        "is_motion", "used_adaptive",
+    ] + comp_columns
     with path.open("w", encoding="utf-8-sig", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(
-            ["time_s", "ref_bpm", "fft_bpm", "final_bpm", "is_motion", "used_adaptive"]
-        )
-        for row in hr:
+        writer.writerow(headers)
+        for i, row in enumerate(hr):
             aligned_row = row.tolist()
             aligned_row[0] = row[0] + time_bias
+            for comp in comp_curves:
+                comp_hr = np.asarray(comp["hr"], dtype=float)
+                if i < comp_hr.shape[0]:
+                    aligned_row.append(comp_hr[i, 3])
+                else:
+                    aligned_row.append(float("nan"))
             writer.writerow(aligned_row)
 
 
@@ -286,12 +408,14 @@ def _write_error_csv(
     analysis_scope: str = "full",
     motion_segment: dict | None = None,
     pre_motion_context_seconds: float = 30.0,
+    comparison_curves: list[dict[str, object]] | None = None,
 ) -> None:
     rows = _detailed_stats_v2(
         hr, time_bias, order, adaptive_filter,
         analysis_scope=analysis_scope,
         motion_segment=motion_segment,
         pre_motion_context_seconds=pre_motion_context_seconds,
+        comparison_curves=comparison_curves,
     )
     with path.open("w", encoding="utf-8-sig", newline="") as f:
         writer = csv.writer(f)
@@ -317,6 +441,7 @@ def _detailed_stats_v2(
     analysis_scope: str = "full",
     motion_segment: dict | None = None,
     pre_motion_context_seconds: float = 30.0,
+    comparison_curves: list[dict[str, object]] | None = None,
 ) -> list[dict[str, float | str]]:
     if hr.size == 0:
         return []
@@ -355,6 +480,34 @@ def _detailed_stats_v2(
             "rest_hit_rate_5bpm": _hit_rate_5bpm(pred[rest_flag], ref[rest_flag]) if rest_flag.any() else float("nan"),
             "motion_hit_rate_5bpm": _hit_rate_5bpm(pred[motion_flag_scoped], ref[motion_flag_scoped]) if motion_flag_scoped.any() else float("nan"),
         })
+
+    comp_curves = comparison_curves or []
+    for comp in comp_curves:
+        comp_hr = np.asarray(comp["hr"], dtype=float)
+        if comp_hr.size == 0:
+            continue
+        comp_label = str(comp["label"])
+        comp_ref_interp = interp1d(
+            comp_hr[:, 0], comp_hr[:, 1],
+            kind="linear", fill_value="extrapolate", assume_sorted=False,
+        )
+        comp_ref = comp_ref_interp(comp_hr[:, 0] + time_bias)
+        pred = comp_hr[:, 3]
+        abs_err = np.abs(pred[scope_mask] - comp_ref[scope_mask])
+        abs_err = abs_err[np.isfinite(abs_err)]
+        abs_err_rest = np.abs(pred[rest_flag] - comp_ref[rest_flag]) if rest_flag.any() else np.array([])
+        abs_err_rest = abs_err_rest[np.isfinite(abs_err_rest)]
+        abs_err_motion = np.abs(pred[motion_flag_scoped] - comp_ref[motion_flag_scoped]) if motion_flag_scoped.any() else np.array([])
+        abs_err_motion = abs_err_motion[np.isfinite(abs_err_motion)]
+        result.append({
+            "method": comp_label,
+            "total_aae": float(np.mean(abs_err)) if abs_err.size else float("nan"),
+            "rest_aae": float(np.mean(abs_err_rest)) if abs_err_rest.size else float("nan"),
+            "motion_aae": float(np.mean(abs_err_motion)) if abs_err_motion.size else float("nan"),
+            "total_hit_rate_5bpm": _hit_rate_5bpm(pred[scope_mask], comp_ref[scope_mask]),
+            "rest_hit_rate_5bpm": _hit_rate_5bpm(pred[rest_flag], comp_ref[rest_flag]) if rest_flag.any() else float("nan"),
+            "motion_hit_rate_5bpm": _hit_rate_5bpm(pred[motion_flag_scoped], comp_ref[motion_flag_scoped]) if motion_flag_scoped.any() else float("nan"),
+        })
     return result
 
 
@@ -366,32 +519,6 @@ def _hit_rate_5bpm(pred: np.ndarray, truth: np.ndarray) -> float:
     return float(np.mean(hit.astype(float)))
 
 
-def _write_batch_summary(path: Path, items: list[V2PlotArtefacts]) -> None:
-    with path.open("w", encoding="utf-8-sig", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(
-            [
-                "report_path",
-                "reference_order_key",
-                "status",
-                "figure_png",
-                "hr_csv",
-                "error",
-            ]
-        )
-        for item in items:
-            writer.writerow(
-                [
-                    item.report_path,
-                    item.reference_order_key,
-                    item.status,
-                    item.figure_png,
-                    item.hr_csv,
-                    item.error,
-                ]
-            )
-
-
 def _draw_error_table(
     ax,
     hr: np.ndarray,
@@ -400,6 +527,7 @@ def _draw_error_table(
     adaptive_label: str,
     *,
     plot_curves: tuple[str, ...] = _PLOT_CURVES,
+    comparison_curves: list[dict[str, object]] | None = None,
 ) -> None:
     rows = _figure_error_rows(
         hr,
@@ -407,6 +535,7 @@ def _draw_error_table(
         time_bias=time_bias,
         adaptive_label=adaptive_label,
         plot_curves=plot_curves,
+        comparison_curves=comparison_curves,
     )
     if not rows:
         return
@@ -442,6 +571,7 @@ def _figure_error_rows(
     time_bias: float,
     adaptive_label: str,
     plot_curves: tuple[str, ...] | list[str] | None = None,
+    comparison_curves: list[dict[str, object]] | None = None,
 ) -> list[tuple[str, float, float]]:
     curves = _normalise_plot_curves(plot_curves)
     t_aligned = hr[:, 0] + time_bias
@@ -483,6 +613,16 @@ def _figure_error_rows(
                 final_motion,
             )
         )
+
+    comp_curves = comparison_curves or []
+    for comp in comp_curves:
+        comp_hr = np.asarray(comp["hr"], dtype=float)
+        if comp_hr.size:
+            comp_label = str(comp["label"])
+            comp_final = comp_hr[aligned, 3]
+            comp_all, comp_motion = _aae(comp_final, ref, aligned)
+            rows.append((comp_label, comp_all, comp_motion))
+
     return rows
 
 

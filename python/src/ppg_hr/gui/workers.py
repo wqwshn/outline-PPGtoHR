@@ -617,11 +617,13 @@ class V2BatchPlotWorker(QObject):
         root_dir: Path,
         out_dir: Path | None,
         plot_curves: tuple[str, ...] | None = None,
+        comparison_groups: tuple[tuple[str, ...], ...] = (),
     ):
         super().__init__()
         self._root_dir = root_dir
         self._out_dir = out_dir
         self._plot_curves = plot_curves
+        self._comparison_groups = comparison_groups
 
     def run(self) -> None:
         try:
@@ -630,6 +632,7 @@ class V2BatchPlotWorker(QObject):
                 self._root_dir,
                 self._out_dir,
                 plot_curves=self._plot_curves,
+                comparison_groups=self._comparison_groups,
             )
             self.finished.emit(result)
         except Exception as exc:  # pragma: no cover
