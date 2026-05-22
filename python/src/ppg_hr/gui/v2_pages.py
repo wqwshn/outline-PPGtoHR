@@ -332,7 +332,9 @@ class V2WindowDiagnosticsPage(_PageBase):
         )
         self._session = None
         self._current_result = None
-        self._worker_holder: WorkerThread | None = None
+        self._load_worker_holder: WorkerThread | None = None
+        self._render_worker_holder: WorkerThread | None = None
+        self._save_worker_holder: WorkerThread | None = None
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -476,7 +478,7 @@ class V2WindowDiagnosticsPage(_PageBase):
         worker.finished.connect(lambda _payload=None: self._load_btn.setEnabled(True))
         worker.failed.connect(lambda _msg=None: self._load_btn.setEnabled(True))
         holder = WorkerThread(worker)
-        self._worker_holder = holder
+        self._load_worker_holder = holder
         holder.start()
 
     def _on_session_loaded(self, session) -> None:
@@ -541,7 +543,7 @@ class V2WindowDiagnosticsPage(_PageBase):
         worker.finished.connect(lambda _payload=None: self._render_btn.setEnabled(True))
         worker.failed.connect(lambda _msg=None: self._render_btn.setEnabled(True))
         holder = WorkerThread(worker)
-        self._worker_holder = holder
+        self._render_worker_holder = holder
         holder.start()
 
     def _on_rendered(self, result) -> None:
@@ -615,7 +617,7 @@ class V2WindowDiagnosticsPage(_PageBase):
         worker.finished.connect(lambda _payload=None: self._save_btn.setEnabled(True))
         worker.failed.connect(lambda _msg=None: self._save_btn.setEnabled(True))
         holder = WorkerThread(worker)
-        self._worker_holder = holder
+        self._save_worker_holder = holder
         holder.start()
 
     def _on_saved(self, saved) -> None:

@@ -169,3 +169,63 @@ def test_v2_window_diagnostics_page_exposes_controls() -> None:
     finally:
         page.deleteLater()
         app.processEvents()
+
+
+def test_v2_window_diagnostics_page_keeps_load_and_render_workers_separate(
+    monkeypatch,
+) -> None:
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui import v2_pages
+    from ppg_hr.gui.v2_pages import V2WindowDiagnosticsPage
+    from ppg_hr.v2.window_diagnostics import DiagnosticWindow
+
+    class FakeSession:
+        data_path = "data.csv"
+        ref_path = "ref.csv"
+
+        def __init__(self) -> None:
+            self.windows = [
+                DiagnosticWindow(
+                    window_idx=0,
+                    start_s=0.0,
+                    center_s=4.0,
+                    end_s=8.0,
+                    aligned_time_s=9.0,
+                    ref_hr_bpm=70.0,
+                    fft_hr_bpm=72.0,
+                    final_hr_bpm=71.0,
+                    error_bpm=1.0,
+                    is_motion=False,
+                    used_adaptive=False,
+                    reliable=True,
+                )
+            ]
+
+        def select_nearest_window(self, _value: float):
+            return self.windows[0]
+
+    class FakeHolder:
+        instances: list["FakeHolder"] = []
+
+        def __init__(self, worker) -> None:
+            self.worker = worker
+            FakeHolder.instances.append(self)
+
+        def start(self) -> None:
+            return None
+
+    monkeypatch.setattr(v2_pages, "WorkerThread", FakeHolder)
+
+    app = QApplication.instance() or QApplication([])
+    page = V2WindowDiagnosticsPage()
+    try:
+        page._on_session_loaded(FakeSession())
+
+        assert hasattr(page, "_load_worker_holder")
+        assert hasattr(page, "_render_worker_holder")
+        assert page._render_worker_holder is FakeHolder.instances[-1]
+        assert page._load_worker_holder is not page._render_worker_holder
+    finally:
+        page.deleteLater()
+        app.processEvents()

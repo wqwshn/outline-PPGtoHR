@@ -258,9 +258,7 @@ def plot_waveform(
         )
     ax.set_xlabel("Aligned time (s)")
     ax.set_ylabel("Amplitude (a.u.)")
-    ax.grid(True, color="#E1E5EA", linewidth=0.55, alpha=0.8)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
+    _apply_diagnostic_axes_style(ax, x_margin=0.035, y_margin=0.08)
     ax.legend(loc="upper right", frameon=False, fontsize=7)
 
 
@@ -325,9 +323,7 @@ def plot_spectrum(
     ax.set_xlabel("Heart-rate frequency (BPM)")
     ax.set_ylabel("Normalised amplitude")
     ax.set_ylim(0, 1.05)
-    ax.grid(True, color="#E1E5EA", linewidth=0.55, alpha=0.8)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
+    _apply_diagnostic_axes_style(ax, x_margin=0.035, y_margin=0.05)
     ax.legend(loc="upper right", frameon=False, fontsize=7)
 
 
@@ -401,6 +397,8 @@ def _resolve_data_path(payload: dict[str, Any], report: Path) -> Path:
     for candidate in sorted(report.parent.glob("*.csv")):
         if not candidate.stem.endswith(("_ref", "_HR_ref")):
             return candidate
+    if path.name:
+        return path
     raise FileNotFoundError(f"Cannot resolve data_path from report: {report}")
 
 
@@ -424,6 +422,8 @@ def _resolve_ref_path(
         candidate = data_path.parent / name
         if candidate.is_file():
             return candidate
+    if path.name:
+        return path
     raise FileNotFoundError(f"Cannot resolve ref_path from report: {report}")
 
 
@@ -772,6 +772,50 @@ def _vline(ax: Axes, value: Any, color: str, linestyle: str, label: str) -> None
     if not np.isfinite(numeric):
         return
     ax.axvline(numeric, color=color, linestyle=linestyle, linewidth=0.95, label=label)
+
+
+def _apply_diagnostic_axes_style(
+    ax: Axes,
+    *,
+    x_margin: float,
+    y_margin: float,
+) -> None:
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_visible(True)
+    ax.spines["bottom"].set_visible(True)
+    for side in ("left", "bottom"):
+        ax.spines[side].set_color("#2B2B2B")
+        ax.spines[side].set_linewidth(0.75)
+    ax.tick_params(
+        axis="both",
+        which="major",
+        direction="in",
+        top=False,
+        right=False,
+        bottom=True,
+        left=True,
+        length=3.2,
+        width=0.65,
+        color="#2B2B2B",
+        labelcolor="#2B2B2B",
+        pad=3,
+    )
+    ax.tick_params(
+        axis="both",
+        which="minor",
+        direction="in",
+        top=False,
+        right=False,
+        bottom=True,
+        left=True,
+        length=1.8,
+        width=0.5,
+        color="#2B2B2B",
+    )
+    ax.margins(x=x_margin, y=y_margin)
+    ax.grid(True, axis="y", color="#E1E5EA", linewidth=0.45, alpha=0.45)
+    ax.grid(False, axis="x")
 
 
 def _zscore_for_plot(values: np.ndarray) -> np.ndarray:
