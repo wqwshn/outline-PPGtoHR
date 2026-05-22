@@ -63,9 +63,12 @@ class DiagnosticPlotOptions:
     show_filtered_spectrum: bool = True
     show_penalized_spectrum: bool = True
     show_hr_markers: bool = True
+    show_candidate_marker: bool = False
+    show_ref_tolerance_band: bool = True
     show_penalty_band: bool = True
-    waveform_x_padding_s: float = 0.5
-    spectrum_x_padding_bpm: float = 5.0
+    ref_tolerance_bpm: float = 5.0
+    waveform_x_padding_s: float = 0.1
+    spectrum_x_padding_bpm: float = 0.0
     include_vectors: bool = False
 
 
@@ -275,18 +278,63 @@ def plot_spectrum(
     opts = options or DiagnosticPlotOptions()
     spec = result.spectrum
     bpm = spec["bpm"]
+    penalty_band = _penalty_band_bpm(result)
     ax.clear()
-    if opts.show_penalty_band and bool(result.summary.get("has_motion_peak", False)):
-        peak_bpm = float(result.summary["motion_peak_hz"]) * 60.0
-        width_bpm = float(result.summary["spec_penalty_width_hz"]) * 60.0
+    if opts.show_penalty_band and penalty_band is not None:
         ax.axvspan(
-            peak_bpm - width_bpm,
-            peak_bpm + width_bpm,
+            penalty_band[0],
+            penalty_band[1],
             color="#F2B8B5",
-            alpha=0.25,
+            alpha=0.22,
             linewidth=0,
             label="Penalty band",
+            zorder=0.2,
         )
+    if opts.show_hr_markers and opts.show_ref_tolerance_band:
+        ref_hr = _finite_float(result.summary.get("ref_hr_bpm"))
+        if ref_hr is not None:
+            tol = max(float(opts.ref_tolerance_bpm), 0.0)
+            ax.axvspan(
+                ref_hr - tol,
+                ref_hr + tol,
+                color="#536D8E",
+                alpha=0.12,
+                linewidth=0,
+                label="Ref ±5 BPM",
+                zorder=0.3,
+            )
+    if opts.show_hr_markers:
+        _vline(
+            ax,
+            result.summary.get("ref_hr_bpm"),
+            "#233142",
+            "-",
+            "Ref HR",
+            linewidth=1.75,
+            alpha=0.98,
+            zorder=6,
+        )
+        _vline(
+            ax,
+            result.summary.get("final_hr_bpm"),
+            "#078C7B",
+            "--",
+            "Final HR",
+            linewidth=1.75,
+            alpha=0.98,
+            zorder=6,
+        )
+        if opts.show_candidate_marker:
+            _vline(
+                ax,
+                result.summary.get("candidate_hr_bpm"),
+                "#7C6FAD",
+                ":",
+                "Candidate HR",
+                linewidth=0.95,
+                alpha=0.72,
+                zorder=5,
+            )
     if opts.show_raw_spectrum:
         ax.plot(
             bpm,
@@ -295,6 +343,7 @@ def plot_spectrum(
             linewidth=0.85,
             alpha=0.58,
             label="Raw PPG",
+            zorder=2,
         )
     if opts.show_filtered_spectrum:
         ax.plot(
@@ -304,25 +353,20 @@ def plot_spectrum(
             linewidth=1.0,
             alpha=0.82,
             label="Filtered",
+            zorder=3,
         )
     if opts.show_penalized_spectrum:
+        penalized_amp = spec["penalized_amp_norm"]
+        if penalty_band is not None:
+            penalized_amp = _break_y_at_x_band(bpm, penalized_amp, penalty_band)
         ax.plot(
             bpm,
-            spec["penalized_amp_norm"],
+            penalized_amp,
             color="#D9855E",
             linewidth=1.35,
             alpha=0.96,
             label="Penalized",
-        )
-    if opts.show_hr_markers:
-        _vline(ax, result.summary.get("ref_hr_bpm"), "#2B2B2B", "-", "Ref HR")
-        _vline(ax, result.summary.get("final_hr_bpm"), "#4F9D8B", "--", "Final HR")
-        _vline(
-            ax,
-            result.summary.get("candidate_hr_bpm"),
-            "#7C6FAD",
-            ":",
-            "Candidate HR",
+            zorder=4,
         )
     ax.set_xlabel("Heart-rate frequency (BPM)")
     ax.set_ylabel("Normalised amplitude")
@@ -786,14 +830,65 @@ def _summary_from_window(
     }
 
 
-def _vline(ax: Axes, value: Any, color: str, linestyle: str, label: str) -> None:
+def _vline(
+    ax: Axes,
+    value: Any,
+    color: str,
+    linestyle: str,
+    label: str,
+    *,
+    linewidth: float = 0.95,
+    alpha: float = 1.0,
+    zorder: float = 4.0,
+) -> None:
+    numeric = _finite_float(value)
+    if numeric is None:
+        return
+    ax.axvline(
+        numeric,
+        color=color,
+        linestyle=linestyle,
+        linewidth=linewidth,
+        alpha=alpha,
+        label=label,
+        zorder=zorder,
+    )
+
+
+def _penalty_band_bpm(result: WindowDiagnosticsResult) -> tuple[float, float] | None:
+    if not bool(result.summary.get("has_motion_peak", False)):
+        return None
+    peak_hz = _finite_float(result.summary.get("motion_peak_hz"))
+    width_hz = _finite_float(result.summary.get("spec_penalty_width_hz"))
+    if peak_hz is None or width_hz is None:
+        return None
+    peak_bpm = peak_hz * 60.0
+    width_bpm = abs(width_hz) * 60.0
+    return peak_bpm - width_bpm, peak_bpm + width_bpm
+
+
+def _break_y_at_x_band(
+    x: np.ndarray,
+    y: np.ndarray,
+    band: tuple[float, float],
+) -> np.ndarray:
+    x_arr = np.asarray(x, dtype=float)
+    out = np.asarray(y, dtype=float).copy()
+    if x_arr.size != out.size or out.size < 2:
+        return out
+    lo, hi = sorted((float(band[0]), float(band[1])))
+    in_band = (x_arr >= lo) & (x_arr <= hi)
+    transition_idx = np.flatnonzero(in_band[1:] != in_band[:-1]) + 1
+    out[transition_idx] = np.nan
+    return out
+
+
+def _finite_float(value: Any) -> float | None:
     try:
         numeric = float(value)
     except (TypeError, ValueError):
-        return
-    if not np.isfinite(numeric):
-        return
-    ax.axvline(numeric, color=color, linestyle=linestyle, linewidth=0.95, label=label)
+        return None
+    return numeric if np.isfinite(numeric) else None
 
 
 def _apply_diagnostic_axes_style(

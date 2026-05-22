@@ -409,6 +409,8 @@ class V2WindowDiagnosticsPage(_PageBase):
         self._spectrum_penalized_check.setChecked(True)
         self._spectrum_marker_check = QCheckBox("HR标记")
         self._spectrum_marker_check.setChecked(True)
+        self._spectrum_candidate_check = QCheckBox("Candidate HR")
+        self._spectrum_candidate_check.setChecked(False)
         self._spectrum_penalty_band_check = QCheckBox("惩罚带")
         self._spectrum_penalty_band_check.setChecked(True)
         for widget in (
@@ -416,6 +418,7 @@ class V2WindowDiagnosticsPage(_PageBase):
             self._spectrum_filtered_check,
             self._spectrum_penalized_check,
             self._spectrum_marker_check,
+            self._spectrum_candidate_check,
             self._spectrum_penalty_band_check,
         ):
             spectrum_row.addWidget(widget)
@@ -461,6 +464,7 @@ class V2WindowDiagnosticsPage(_PageBase):
             show_filtered_spectrum=self._spectrum_filtered_check.isChecked(),
             show_penalized_spectrum=self._spectrum_penalized_check.isChecked(),
             show_hr_markers=self._spectrum_marker_check.isChecked(),
+            show_candidate_marker=self._spectrum_candidate_check.isChecked(),
             show_penalty_band=self._spectrum_penalty_band_check.isChecked(),
             include_vectors=self._save_vectors_check.isChecked(),
         )

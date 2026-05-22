@@ -154,3 +154,49 @@ def test_diagnostic_axes_use_framed_style_with_fixed_x_padding() -> None:
     shown_min, shown_max = spec_ax.get_xlim()
     assert shown_min == pytest.approx(bpm_min - 5.0)
     assert shown_max == pytest.approx(bpm_max + 5.0)
+
+
+@pytest.mark.skipif(not REPORT.exists(), reason="window diagnostics fixture missing")
+def test_spectrum_emphasizes_ref_final_and_hides_candidate_by_default() -> None:
+    from matplotlib.figure import Figure
+
+    session = load_window_diagnostics_session(REPORT)
+    result = render_window_diagnostics(session, 99.0)
+
+    fig = Figure(figsize=(7.2, 2.6))
+    ax = fig.add_subplot(1, 1, 1)
+    plot_spectrum(ax, result)
+
+    lines = {line.get_label(): line for line in ax.lines}
+    assert "Candidate HR" not in lines
+    assert lines["Ref HR"].get_linewidth() >= 1.5
+    assert lines["Final HR"].get_linewidth() >= 1.5
+
+    ref_band = next(
+        patch for patch in ax.patches if patch.get_label() == "Ref ±5 BPM"
+    )
+    ref_x = float(result.summary["ref_hr_bpm"])
+    assert ref_band.get_x() == pytest.approx(ref_x - 5.0)
+    assert ref_band.get_x() + ref_band.get_width() == pytest.approx(ref_x + 5.0)
+
+    plot_spectrum(ax, result, DiagnosticPlotOptions(show_candidate_marker=True))
+    lines = {line.get_label(): line for line in ax.lines}
+    assert "Candidate HR" in lines
+    assert lines["Candidate HR"].get_linewidth() < lines["Final HR"].get_linewidth()
+
+
+@pytest.mark.skipif(not REPORT.exists(), reason="window diagnostics fixture missing")
+def test_penalized_spectrum_breaks_at_penalty_band_without_changing_width() -> None:
+    import numpy as np
+    from matplotlib.figure import Figure
+
+    session = load_window_diagnostics_session(REPORT)
+    result = render_window_diagnostics(session, 99.0)
+
+    fig = Figure(figsize=(7.2, 2.6))
+    ax = fig.add_subplot(1, 1, 1)
+    plot_spectrum(ax, result)
+
+    penalized = next(line for line in ax.lines if line.get_label() == "Penalized")
+    assert penalized.get_linewidth() == pytest.approx(1.35)
+    assert np.isnan(np.asarray(penalized.get_ydata(), dtype=float)).any()
