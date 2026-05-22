@@ -106,7 +106,7 @@ def test_save_window_diagnostics_writes_png_and_csv_outputs(tmp_path: Path) -> N
 
 
 @pytest.mark.skipif(not REPORT.exists(), reason="window diagnostics fixture missing")
-def test_diagnostic_axes_use_open_nature_style_with_inner_ticks() -> None:
+def test_diagnostic_axes_use_framed_style_with_fixed_x_padding() -> None:
     from matplotlib.figure import Figure
 
     session = load_window_diagnostics_session(REPORT)
@@ -119,8 +119,8 @@ def test_diagnostic_axes_use_open_nature_style_with_inner_ticks() -> None:
     plot_spectrum(spec_ax, result)
 
     for ax in (wave_ax, spec_ax):
-        assert not ax.spines["top"].get_visible()
-        assert not ax.spines["right"].get_visible()
+        assert ax.spines["top"].get_visible()
+        assert ax.spines["right"].get_visible()
         assert ax.spines["left"].get_visible()
         assert ax.spines["bottom"].get_visible()
         assert ax.xaxis.majorTicks[0]._tickdir == "in"
@@ -129,5 +129,11 @@ def test_diagnostic_axes_use_open_nature_style_with_inner_ticks() -> None:
     x_min = float(result.waveform["aligned_time_s"][0])
     x_max = float(result.waveform["aligned_time_s"][-1])
     shown_min, shown_max = wave_ax.get_xlim()
-    assert shown_min < x_min
-    assert shown_max > x_max
+    assert shown_min == pytest.approx(x_min - 0.5)
+    assert shown_max == pytest.approx(x_max + 0.5)
+
+    bpm_min = float(result.spectrum["bpm"][0])
+    bpm_max = float(result.spectrum["bpm"][-1])
+    shown_min, shown_max = spec_ax.get_xlim()
+    assert shown_min == pytest.approx(bpm_min - 5.0)
+    assert shown_max == pytest.approx(bpm_max + 5.0)

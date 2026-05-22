@@ -63,6 +63,8 @@ class DiagnosticPlotOptions:
     show_penalized_spectrum: bool = True
     show_hr_markers: bool = True
     show_penalty_band: bool = True
+    waveform_x_padding_s: float = 0.5
+    spectrum_x_padding_bpm: float = 5.0
     include_vectors: bool = False
 
 
@@ -258,7 +260,8 @@ def plot_waveform(
         )
     ax.set_xlabel("Aligned time (s)")
     ax.set_ylabel("Amplitude (a.u.)")
-    _apply_diagnostic_axes_style(ax, x_margin=0.035, y_margin=0.08)
+    _apply_diagnostic_axes_style(ax, y_margin=0.08)
+    _set_x_limits_with_padding(ax, x, opts.waveform_x_padding_s)
     ax.legend(loc="upper right", frameon=False, fontsize=7)
 
 
@@ -323,7 +326,8 @@ def plot_spectrum(
     ax.set_xlabel("Heart-rate frequency (BPM)")
     ax.set_ylabel("Normalised amplitude")
     ax.set_ylim(0, 1.05)
-    _apply_diagnostic_axes_style(ax, x_margin=0.035, y_margin=0.05)
+    _apply_diagnostic_axes_style(ax, y_margin=0.05)
+    _set_x_limits_with_padding(ax, bpm, opts.spectrum_x_padding_bpm)
     ax.legend(loc="upper right", frameon=False, fontsize=7)
 
 
@@ -777,14 +781,13 @@ def _vline(ax: Axes, value: Any, color: str, linestyle: str, label: str) -> None
 def _apply_diagnostic_axes_style(
     ax: Axes,
     *,
-    x_margin: float,
     y_margin: float,
 ) -> None:
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(True)
+    ax.spines["right"].set_visible(True)
     ax.spines["left"].set_visible(True)
     ax.spines["bottom"].set_visible(True)
-    for side in ("left", "bottom"):
+    for side in ("top", "right", "left", "bottom"):
         ax.spines[side].set_color("#2B2B2B")
         ax.spines[side].set_linewidth(0.75)
     ax.tick_params(
@@ -813,9 +816,18 @@ def _apply_diagnostic_axes_style(
         width=0.5,
         color="#2B2B2B",
     )
-    ax.margins(x=x_margin, y=y_margin)
+    ax.margins(y=y_margin)
     ax.grid(True, axis="y", color="#E1E5EA", linewidth=0.45, alpha=0.45)
     ax.grid(False, axis="x")
+
+
+def _set_x_limits_with_padding(ax: Axes, values: np.ndarray, padding: float) -> None:
+    arr = np.asarray(values, dtype=float)
+    finite = arr[np.isfinite(arr)]
+    if finite.size == 0:
+        return
+    pad = max(float(padding), 0.0)
+    ax.set_xlim(float(np.min(finite)) - pad, float(np.max(finite)) + pad)
 
 
 def _zscore_for_plot(values: np.ndarray) -> np.ndarray:
