@@ -12,6 +12,7 @@ from typing import Any
 import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from scipy.interpolate import interp1d
 from scipy.signal import butter, filtfilt, resample_poly
 from scipy.signal.windows import hamming
 
@@ -467,11 +468,12 @@ def _windows_from_payload(
     hr = np.asarray(payload.get("hr", []), dtype=float)
     if hr.ndim != 2 or hr.shape[1] < 4:
         return []
+    ref_aligned = _aligned_reference_bpm(hr, time_bias)
     table_by_center = _window_table_by_center(payload.get("window_table", []))
     windows: list[DiagnosticWindow] = []
     for idx, row in enumerate(hr):
         center = float(row[0])
-        ref_hr = float(row[1])
+        ref_hr = float(ref_aligned[idx]) if idx < ref_aligned.size else float(row[1])
         fft_hr = float(row[2])
         final_hr = float(row[3])
         if not all(np.isfinite(v) for v in (center, ref_hr, fft_hr, final_hr)):
@@ -502,6 +504,22 @@ def _windows_from_payload(
             )
         )
     return windows
+
+
+def _aligned_reference_bpm(hr: np.ndarray, time_bias: float) -> np.ndarray:
+    arr = np.asarray(hr, dtype=float)
+    if arr.ndim != 2 or arr.shape[1] < 2:
+        return np.asarray([], dtype=float)
+    if arr.shape[0] < 2:
+        return arr[:, 1].copy()
+    ref_interp = interp1d(
+        arr[:, 0],
+        arr[:, 1],
+        kind="linear",
+        fill_value="extrapolate",
+        assume_sorted=False,
+    )
+    return np.asarray(ref_interp(arr[:, 0] + float(time_bias)), dtype=float)
 
 
 def _window_table_by_center(raw_table: Any) -> dict[float, dict[str, Any]]:

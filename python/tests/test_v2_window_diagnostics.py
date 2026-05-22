@@ -85,6 +85,19 @@ def test_render_window_diagnostics_returns_summary_waveform_spectrum_and_stages(
 
 
 @pytest.mark.skipif(not REPORT.exists(), reason="window diagnostics fixture missing")
+def test_window_diagnostics_reference_hr_uses_aligned_time() -> None:
+    session = load_window_diagnostics_session(REPORT)
+
+    result = render_window_diagnostics(session, 99.0)
+
+    assert result.selected_window.center_s == pytest.approx(94.0)
+    assert result.selected_window.aligned_time_s == pytest.approx(99.0)
+    assert result.selected_window.ref_hr_bpm == pytest.approx(117.0)
+    assert result.summary["ref_hr_bpm"] == pytest.approx(117.0)
+    assert result.summary["error_bpm"] == pytest.approx(0.1875)
+
+
+@pytest.mark.skipif(not REPORT.exists(), reason="window diagnostics fixture missing")
 def test_save_window_diagnostics_writes_png_and_csv_outputs(tmp_path: Path) -> None:
     session = load_window_diagnostics_session(REPORT)
     result = render_window_diagnostics(session, session.windows[0].aligned_time_s)
@@ -115,8 +128,12 @@ def test_diagnostic_axes_use_framed_style_with_fixed_x_padding() -> None:
     fig = Figure(figsize=(7.2, 2.6))
     wave_ax = fig.add_subplot(1, 2, 1)
     spec_ax = fig.add_subplot(1, 2, 2)
-    plot_waveform(wave_ax, result)
-    plot_spectrum(spec_ax, result)
+    options = DiagnosticPlotOptions(
+        waveform_x_padding_s=0.5,
+        spectrum_x_padding_bpm=5.0,
+    )
+    plot_waveform(wave_ax, result, options)
+    plot_spectrum(spec_ax, result, options)
 
     for ax in (wave_ax, spec_ax):
         assert ax.spines["top"].get_visible()

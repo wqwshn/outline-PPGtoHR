@@ -118,6 +118,9 @@ def test_render_v2_report_hr_csv_has_aligned_times(tmp_path: Path) -> None:
     times = [float(r[0]) for r in rows]
     assert times[0] == 4.0 + 3.0
     assert times[1] == 5.0 + 3.0
+    refs = [float(r[1]) for r in rows]
+    assert refs[0] == 78.0
+    assert refs[1] == 79.0
 
 
 def test_render_v2_report_error_csv_has_v1_style_format(tmp_path: Path) -> None:

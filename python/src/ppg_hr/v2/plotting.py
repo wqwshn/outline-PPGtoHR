@@ -380,6 +380,7 @@ def _write_hr_csv(
     comp_curves = comparison_curves or []
     comp_labels = [str(c["label"]) for c in comp_curves]
     comp_columns = [f"{lbl}_bpm" for lbl in comp_labels]
+    ref_aligned = _aligned_reference_bpm(hr, time_bias)
     headers = [
         "time_s", "ref_bpm", "fft_bpm", "final_bpm",
         "is_motion", "used_adaptive",
@@ -390,6 +391,8 @@ def _write_hr_csv(
         for i, row in enumerate(hr):
             aligned_row = row.tolist()
             aligned_row[0] = row[0] + time_bias
+            if i < ref_aligned.size:
+                aligned_row[1] = ref_aligned[i]
             for comp in comp_curves:
                 comp_hr = np.asarray(comp["hr"], dtype=float)
                 if i < comp_hr.shape[0]:
@@ -397,6 +400,22 @@ def _write_hr_csv(
                 else:
                     aligned_row.append(float("nan"))
             writer.writerow(aligned_row)
+
+
+def _aligned_reference_bpm(hr: np.ndarray, time_bias: float) -> np.ndarray:
+    arr = np.asarray(hr, dtype=float)
+    if arr.ndim != 2 or arr.shape[1] < 2:
+        return np.asarray([], dtype=float)
+    if arr.shape[0] < 2:
+        return arr[:, 1].copy()
+    ref_interp = interp1d(
+        arr[:, 0],
+        arr[:, 1],
+        kind="linear",
+        fill_value="extrapolate",
+        assume_sorted=False,
+    )
+    return np.asarray(ref_interp(arr[:, 0] + float(time_bias)), dtype=float)
 
 
 def _write_error_csv(
