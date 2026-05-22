@@ -68,7 +68,7 @@ def test_main_window_can_switch_between_v1_and_v2() -> None:
     win = MainWindow()
     try:
         assert win.current_version() == "v2"
-        assert win.nav_names() == ["批量全流程", "批量绘图", "血氧计算"]
+        assert win.nav_names() == ["批量全流程", "批量绘图", "窗口诊断", "血氧计算"]
         win.set_version("v1")
         assert win.current_version() == "v1"
         v1_names = win.nav_names()
@@ -132,6 +132,40 @@ def test_v2_spo2_page_exposes_reference_order_controls() -> None:
         assert page.selected_reference_order() == ("HF", "CF", "ACC")
         assert page._delay_samples.value() == 20
         assert page._max_order.value() == 20
+    finally:
+        page.deleteLater()
+        app.processEvents()
+
+
+def test_main_window_v2_navigation_includes_window_diagnostics() -> None:
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.app import MainWindow
+
+    app = QApplication.instance() or QApplication([])
+    win = MainWindow()
+    try:
+        assert "窗口诊断" in win.nav_names()
+    finally:
+        win.close()
+        win.deleteLater()
+        app.processEvents()
+
+
+def test_v2_window_diagnostics_page_exposes_controls() -> None:
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.v2_pages import V2WindowDiagnosticsPage
+
+    app = QApplication.instance() or QApplication([])
+    page = V2WindowDiagnosticsPage()
+    try:
+        assert page._report_pick is not None
+        assert page._time_spin.suffix() == " s"
+        assert page._wave_final_check.isChecked()
+        assert page._wave_stage_check.isChecked() is False
+        assert page._spectrum_penalized_check.isChecked()
+        assert page._save_vectors_check.isChecked() is False
     finally:
         page.deleteLater()
         app.processEvents()

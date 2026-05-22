@@ -11,21 +11,31 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
+    QLabel,
     QListWidget,
     QListWidgetItem,
     QPushButton,
+    QSlider,
     QSpinBox,
 )
 
 from ppg_hr.v2.optimizer import V2BayesConfig
 from ppg_hr.v2.spo2 import V2SpO2Config
+from ppg_hr.v2.window_diagnostics import (
+    DiagnosticPlotOptions,
+    plot_spectrum,
+    plot_waveform,
+)
 
 from .pages import _PageBase
-from .widgets import AAETable, FilePicker, LogPanel, SectionCard
+from .widgets import AAETable, FilePicker, LogPanel, MplCanvas, SectionCard
 from .workers import (
     V2BatchPipelineWorker,
     V2BatchPlotWorker,
     V2SpO2Worker,
+    V2WindowDiagnosticsLoadWorker,
+    V2WindowDiagnosticsRenderWorker,
+    V2WindowDiagnosticsSaveWorker,
     WorkerThread,
 )
 
@@ -312,6 +322,307 @@ class V2BatchPlotPage(_PageBase):
         ]
         self._table.set_rows(rows)
         self._log.success(f"v2批量绘图完成：{len(rows)} 个报告")
+
+
+class V2WindowDiagnosticsPage(_PageBase):
+    def __init__(self):
+        super().__init__(
+            "v2 窗口诊断",
+            "按对齐时间重放单个窗口，观察自适应滤波与频谱惩罚",
+        )
+        self._session = None
+        self._current_result = None
+        self._worker_holder: WorkerThread | None = None
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        io_card = SectionCard("报告输入", "选择训练后生成的 v2 JSON 报告")
+        form = QFormLayout()
+        self._report_pick = FilePicker(
+            placeholder="选择 v2 报告 JSON",
+            filter_str="JSON (*.json)",
+        )
+        form.addRow("参数报告", self._report_pick)
+        io_card.add(form)
+        row = QHBoxLayout()
+        row.addStretch(1)
+        self._load_btn = QPushButton("加载报告")
+        self._load_btn.setObjectName("primary")
+        self._load_btn.clicked.connect(self._load_report)
+        row.addWidget(self._load_btn)
+        io_card.add(row)
+        self.body().addWidget(io_card)
+
+        time_card = SectionCard("时间窗口", "滑动条和秒数输入均使用对齐后的实际时间")
+        time_row = QHBoxLayout()
+        self._time_slider = QSlider(Qt.Orientation.Horizontal)
+        self._time_slider.setRange(0, 0)
+        self._time_slider.valueChanged.connect(self._on_slider_changed)
+        self._time_spin = QDoubleSpinBox()
+        self._time_spin.setDecimals(2)
+        self._time_spin.setSuffix(" s")
+        self._time_spin.setSingleStep(1.0)
+        self._time_spin.valueChanged.connect(self._on_time_spin_changed)
+        self._time_label = QLabel("未加载")
+        time_row.addWidget(self._time_slider, 1)
+        time_row.addWidget(self._time_spin, 0)
+        time_row.addWidget(self._time_label, 0)
+        time_card.add(time_row)
+        action_row = QHBoxLayout()
+        action_row.addStretch(1)
+        self._render_btn = QPushButton("渲染当前窗口")
+        self._render_btn.setObjectName("primary")
+        self._render_btn.clicked.connect(self._render_current)
+        self._render_btn.setEnabled(False)
+        action_row.addWidget(self._render_btn)
+        time_card.add(action_row)
+        self.body().addWidget(time_card)
+
+        curve_card = SectionCard("曲线选择", "默认突出关键曲线，辅助曲线按需打开")
+        wave_row = QHBoxLayout()
+        self._wave_ppg_check = QCheckBox("带通PPG")
+        self._wave_ppg_check.setChecked(True)
+        self._wave_final_check = QCheckBox("最终滤波")
+        self._wave_final_check.setChecked(True)
+        self._wave_stage_check = QCheckBox("Stage输出")
+        self._wave_stage_check.setChecked(False)
+        self._wave_ref_check = QCheckBox("参考通道")
+        self._wave_ref_check.setChecked(False)
+        for widget in (
+            self._wave_ppg_check,
+            self._wave_final_check,
+            self._wave_stage_check,
+            self._wave_ref_check,
+        ):
+            wave_row.addWidget(widget)
+        wave_row.addStretch(1)
+        curve_card.add(wave_row)
+
+        spectrum_row = QHBoxLayout()
+        self._spectrum_raw_check = QCheckBox("原始频谱")
+        self._spectrum_raw_check.setChecked(True)
+        self._spectrum_filtered_check = QCheckBox("滤波后频谱")
+        self._spectrum_filtered_check.setChecked(True)
+        self._spectrum_penalized_check = QCheckBox("惩罚后频谱")
+        self._spectrum_penalized_check.setChecked(True)
+        self._spectrum_marker_check = QCheckBox("HR标记")
+        self._spectrum_marker_check.setChecked(True)
+        self._spectrum_penalty_band_check = QCheckBox("惩罚带")
+        self._spectrum_penalty_band_check.setChecked(True)
+        for widget in (
+            self._spectrum_raw_check,
+            self._spectrum_filtered_check,
+            self._spectrum_penalized_check,
+            self._spectrum_marker_check,
+            self._spectrum_penalty_band_check,
+        ):
+            spectrum_row.addWidget(widget)
+        spectrum_row.addStretch(1)
+        curve_card.add(spectrum_row)
+        self.body().addWidget(curve_card)
+
+        plot_card = SectionCard("诊断图", "波形域与频域单窗口重放")
+        self._wave_canvas = MplCanvas(nrows=1, height=260)
+        self._spectrum_canvas = MplCanvas(nrows=1, height=260)
+        plot_card.add(self._wave_canvas)
+        plot_card.add(self._spectrum_canvas)
+        self.body().addWidget(plot_card)
+
+        result_card = SectionCard("窗口摘要与保存", "当前窗口指标、stage 参数和导出")
+        self._summary = AAETable(["字段", "值"])
+        self._stage_table = AAETable(
+            ["#", "group", "channel", "corr", "delay", "M", "K", "filter"]
+        )
+        self._log = LogPanel()
+        result_card.add(self._summary)
+        result_card.add(self._stage_table)
+        save_row = QHBoxLayout()
+        self._save_vectors_check = QCheckBox("同时保存 SVG/PDF")
+        self._save_vectors_check.setChecked(False)
+        self._save_btn = QPushButton("保存当前窗口")
+        self._save_btn.clicked.connect(self._save_current)
+        self._save_btn.setEnabled(False)
+        save_row.addWidget(self._save_vectors_check)
+        save_row.addStretch(1)
+        save_row.addWidget(self._save_btn)
+        result_card.add(save_row)
+        result_card.add(self._log)
+        self.body().addWidget(result_card)
+
+    def _plot_options(self) -> DiagnosticPlotOptions:
+        return DiagnosticPlotOptions(
+            show_ppg=self._wave_ppg_check.isChecked(),
+            show_final=self._wave_final_check.isChecked(),
+            show_stages=self._wave_stage_check.isChecked(),
+            show_references=self._wave_ref_check.isChecked(),
+            show_raw_spectrum=self._spectrum_raw_check.isChecked(),
+            show_filtered_spectrum=self._spectrum_filtered_check.isChecked(),
+            show_penalized_spectrum=self._spectrum_penalized_check.isChecked(),
+            show_hr_markers=self._spectrum_marker_check.isChecked(),
+            show_penalty_band=self._spectrum_penalty_band_check.isChecked(),
+            include_vectors=self._save_vectors_check.isChecked(),
+        )
+
+    def _load_report(self) -> None:
+        report_path = self._report_pick.path()
+        if report_path is None or not report_path.is_file():
+            self._log.error("请选择有效 v2 JSON 报告")
+            return
+        self._load_btn.setEnabled(False)
+        worker = V2WindowDiagnosticsLoadWorker(report_path)
+        worker.log.connect(self._log.info)
+        worker.finished.connect(self._on_session_loaded)
+        worker.failed.connect(self._on_failed)
+        worker.finished.connect(lambda _payload=None: self._load_btn.setEnabled(True))
+        worker.failed.connect(lambda _msg=None: self._load_btn.setEnabled(True))
+        holder = WorkerThread(worker)
+        self._worker_holder = holder
+        holder.start()
+
+    def _on_session_loaded(self, session) -> None:
+        self._session = session
+        self._current_result = None
+        count = len(session.windows)
+        self._time_slider.blockSignals(True)
+        self._time_slider.setRange(0, max(0, count - 1))
+        self._time_slider.setValue(0)
+        self._time_slider.blockSignals(False)
+        lo = session.windows[0].aligned_time_s
+        hi = session.windows[-1].aligned_time_s
+        self._time_spin.blockSignals(True)
+        self._time_spin.setRange(lo, hi)
+        self._time_spin.setValue(lo)
+        self._time_spin.blockSignals(False)
+        self._time_label.setText(f"{lo:.1f}–{hi:.1f} s · {count} 窗口")
+        self._render_btn.setEnabled(True)
+        self._save_btn.setEnabled(False)
+        self._summary.set_rows(
+            [
+                ["数据文件", str(session.data_path)],
+                ["真值文件", str(session.ref_path)],
+                ["时间范围", f"{lo:.2f}–{hi:.2f} s"],
+                ["窗口数", str(count)],
+            ]
+        )
+        self._stage_table.set_rows([])
+        self._log.success("v2窗口诊断报告加载完成")
+        self._render_current()
+
+    def _on_slider_changed(self, value: int) -> None:
+        if self._session is None or not self._session.windows:
+            return
+        idx = max(0, min(int(value), len(self._session.windows) - 1))
+        aligned = self._session.windows[idx].aligned_time_s
+        self._time_spin.blockSignals(True)
+        self._time_spin.setValue(aligned)
+        self._time_spin.blockSignals(False)
+
+    def _on_time_spin_changed(self, value: float) -> None:
+        if self._session is None or not self._session.windows:
+            return
+        selected = self._session.select_nearest_window(float(value))
+        idx = self._session.windows.index(selected)
+        self._time_slider.blockSignals(True)
+        self._time_slider.setValue(idx)
+        self._time_slider.blockSignals(False)
+
+    def _render_current(self) -> None:
+        if self._session is None:
+            self._log.error("请先加载 v2 报告")
+            return
+        self._render_btn.setEnabled(False)
+        worker = V2WindowDiagnosticsRenderWorker(
+            self._session,
+            float(self._time_spin.value()),
+            self._plot_options(),
+        )
+        worker.finished.connect(self._on_rendered)
+        worker.failed.connect(self._on_failed)
+        worker.finished.connect(lambda _payload=None: self._render_btn.setEnabled(True))
+        worker.failed.connect(lambda _msg=None: self._render_btn.setEnabled(True))
+        holder = WorkerThread(worker)
+        self._worker_holder = holder
+        holder.start()
+
+    def _on_rendered(self, result) -> None:
+        self._current_result = result
+        opts = self._plot_options()
+        plot_waveform(self._wave_canvas.axes, result, opts)
+        self._wave_canvas.redraw()
+        plot_spectrum(self._spectrum_canvas.axes, result, opts)
+        self._spectrum_canvas.redraw()
+        self._summary.set_rows(self._summary_rows(result))
+        self._stage_table.set_rows(self._stage_rows(result))
+        self._save_btn.setEnabled(True)
+        self._log.success(
+            f"已渲染窗口：aligned={result.selected_window.aligned_time_s:.2f} s"
+        )
+
+    def _summary_rows(self, result) -> list[list[str]]:
+        keys = [
+            ("aligned_time_s", "对齐时间"),
+            ("center_s", "窗口中心"),
+            ("start_s", "窗口开始"),
+            ("end_s", "窗口结束"),
+            ("ref_hr_bpm", "真值HR"),
+            ("fft_hr_bpm", "FFT HR"),
+            ("final_hr_bpm", "Final HR"),
+            ("error_bpm", "误差"),
+            ("is_motion", "运动窗口"),
+            ("used_adaptive", "使用adaptive"),
+            ("reliable", "可靠窗口"),
+        ]
+        rows = []
+        for key, label in keys:
+            value = result.summary.get(key)
+            if isinstance(value, float):
+                text = f"{value:.3f}"
+            else:
+                text = str(value)
+            rows.append([label, text])
+        return rows
+
+    def _stage_rows(self, result) -> list[list[str]]:
+        if not result.stages:
+            return [["-", "未使用", "-", "-", "-", "-", "-", "-"]]
+        rows = []
+        for idx, stage in enumerate(result.stages, start=1):
+            rows.append(
+                [
+                    str(idx),
+                    str(stage.get("sensor_type", "")),
+                    str(stage.get("channel", "")),
+                    f"{float(stage.get('corr', 0.0)):.3f}",
+                    str(stage.get("delay_samples", "")),
+                    str(stage.get("M", "")),
+                    str(stage.get("K", "")),
+                    str(stage.get("filter_type", "")),
+                ]
+            )
+        return rows
+
+    def _save_current(self) -> None:
+        if self._current_result is None:
+            self._log.error("请先渲染一个窗口")
+            return
+        self._save_btn.setEnabled(False)
+        worker = V2WindowDiagnosticsSaveWorker(
+            self._current_result,
+            include_vectors=self._save_vectors_check.isChecked(),
+        )
+        worker.finished.connect(self._on_saved)
+        worker.failed.connect(self._on_failed)
+        worker.finished.connect(lambda _payload=None: self._save_btn.setEnabled(True))
+        worker.failed.connect(lambda _msg=None: self._save_btn.setEnabled(True))
+        holder = WorkerThread(worker)
+        self._worker_holder = holder
+        holder.start()
+
+    def _on_saved(self, saved) -> None:
+        self._log.success(f"窗口诊断已保存：{saved.output_dir}")
+
+    def _on_failed(self, msg: str) -> None:
+        self._log.error(msg)
 
 
 class V2SpO2Page(_PageBase):

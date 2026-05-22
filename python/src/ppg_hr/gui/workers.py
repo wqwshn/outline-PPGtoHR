@@ -34,6 +34,12 @@ from ..v2.optimizer import V2BayesConfig
 from ..v2.plotting import render_v2_report_batch
 from ..v2.spo2 import V2SpO2Config, save_spo2_report, solve_spo2_v2
 from ..v2.spo2_plotting import render_spo2_report
+from ..v2.window_diagnostics import (
+    DiagnosticPlotOptions,
+    load_window_diagnostics_session,
+    render_window_diagnostics,
+    save_window_diagnostics,
+)
 
 __all__ = [
     "CompareResult",
@@ -46,6 +52,9 @@ __all__ = [
     "V2BatchPipelineWorker",
     "V2BatchPlotWorker",
     "V2SpO2Worker",
+    "V2WindowDiagnosticsLoadWorker",
+    "V2WindowDiagnosticsRenderWorker",
+    "V2WindowDiagnosticsSaveWorker",
     "WorkerThread",
 ]
 
@@ -673,6 +682,76 @@ class V2SpO2Worker(QObject):
             self.finished.emit(payload)
         except Exception as exc:  # pragma: no cover
             self.failed.emit(f"v2血氧计算失败：{exc}\n\n{traceback.format_exc()}")
+
+
+class V2WindowDiagnosticsLoadWorker(QObject):
+    finished = Signal(object)
+    failed = Signal(str)
+    log = Signal(str)
+
+    def __init__(self, report_path: Path):
+        super().__init__()
+        self._report_path = report_path
+
+    def run(self) -> None:
+        try:
+            self.log.emit(f"读取 v2 诊断报告：{self._report_path.name}")
+            session = load_window_diagnostics_session(self._report_path)
+            lo = session.windows[0].aligned_time_s
+            hi = session.windows[-1].aligned_time_s
+            self.log.emit(f"可诊断时间范围：{lo:.1f}–{hi:.1f} s")
+            self.finished.emit(session)
+        except Exception as exc:  # pragma: no cover
+            self.failed.emit(f"v2窗口诊断加载失败：{exc}\n\n{traceback.format_exc()}")
+
+
+class V2WindowDiagnosticsRenderWorker(QObject):
+    finished = Signal(object)
+    failed = Signal(str)
+
+    def __init__(
+        self,
+        session,
+        aligned_time_s: float,
+        options: DiagnosticPlotOptions | None = None,
+    ):
+        super().__init__()
+        self._session = session
+        self._aligned_time_s = float(aligned_time_s)
+        self._options = options or DiagnosticPlotOptions()
+
+    def run(self) -> None:
+        try:
+            self.finished.emit(
+                render_window_diagnostics(
+                    self._session,
+                    self._aligned_time_s,
+                    options=self._options,
+                )
+            )
+        except Exception as exc:  # pragma: no cover
+            self.failed.emit(f"v2窗口诊断渲染失败：{exc}\n\n{traceback.format_exc()}")
+
+
+class V2WindowDiagnosticsSaveWorker(QObject):
+    finished = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, result, include_vectors: bool = False):
+        super().__init__()
+        self._result = result
+        self._include_vectors = bool(include_vectors)
+
+    def run(self) -> None:
+        try:
+            self.finished.emit(
+                save_window_diagnostics(
+                    self._result,
+                    options=DiagnosticPlotOptions(include_vectors=self._include_vectors),
+                )
+            )
+        except Exception as exc:  # pragma: no cover
+            self.failed.emit(f"v2窗口诊断保存失败：{exc}\n\n{traceback.format_exc()}")
 
 
 # ---------------------------------------------------------------------------
