@@ -3,11 +3,14 @@ from __future__ import annotations
 from pathlib import Path
 import json
 
+import numpy as np
 import pytest
 
 from ppg_hr.v2.window_diagnostics import (
     DiagnosticPlotOptions,
+    diagnostic_panel_figsize,
     load_window_diagnostics_session,
+    plot_spectra,
     plot_spectrum,
     plot_waveform,
     render_window_diagnostics,
@@ -16,8 +19,8 @@ from ppg_hr.v2.window_diagnostics import (
 
 
 ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = ROOT / "data" / "test_for_win_diag"
-REPORT = DATA_DIR / "multi_tiaosheng7-green-lms-full-HF-v2.json"
+DATA_DIR = ROOT / "data" / "testforwindiag"
+REPORT = DATA_DIR / "multi_tiaosheng6-green-lms-full-HF-v2.json"
 
 
 @pytest.mark.skipif(not REPORT.exists(), reason="window diagnostics fixture missing")
@@ -25,11 +28,11 @@ def test_session_loads_v2_report_and_uses_fallback_data_paths() -> None:
     session = load_window_diagnostics_session(REPORT)
 
     assert session.report_path == REPORT
-    assert session.data_path == DATA_DIR / "multi_tiaosheng7.csv"
-    assert session.ref_path == DATA_DIR / "multi_tiaosheng7_HR_ref.csv"
+    assert session.data_path == DATA_DIR / "multi_tiaosheng6.csv"
+    assert session.ref_path == DATA_DIR / "multi_tiaosheng6_HR_ref.csv"
     assert session.config.ppg_mode == "green"
     assert session.config.adaptive_filter == "lms"
-    assert session.config.fs_target == 50
+    assert session.config.fs_target == 100
     assert session.time_bias == pytest.approx(5.0)
     assert len(session.windows) > 10
     assert session.windows[0].aligned_time_s == pytest.approx(
@@ -92,9 +95,9 @@ def test_window_diagnostics_reference_hr_uses_aligned_time() -> None:
 
     assert result.selected_window.center_s == pytest.approx(94.0)
     assert result.selected_window.aligned_time_s == pytest.approx(99.0)
-    assert result.selected_window.ref_hr_bpm == pytest.approx(117.0)
-    assert result.summary["ref_hr_bpm"] == pytest.approx(117.0)
-    assert result.summary["error_bpm"] == pytest.approx(0.1875)
+    assert result.selected_window.ref_hr_bpm == pytest.approx(116.0)
+    assert result.summary["ref_hr_bpm"] == pytest.approx(116.0)
+    assert result.summary["error_bpm"] == pytest.approx(-1.009765625)
 
 
 @pytest.mark.skipif(not REPORT.exists(), reason="window diagnostics fixture missing")
@@ -200,3 +203,94 @@ def test_penalized_spectrum_breaks_at_penalty_band_without_changing_width() -> N
     penalized = next(line for line in ax.lines if line.get_label() == "Penalized")
     assert penalized.get_linewidth() == pytest.approx(1.35)
     assert np.isnan(np.asarray(penalized.get_ydata(), dtype=float)).any()
+
+
+@pytest.mark.skipif(not REPORT.exists(), reason="window diagnostics fixture missing")
+def test_render_window_diagnostics_replays_acc_comparison_reference_group() -> None:
+    session = load_window_diagnostics_session(REPORT)
+    adaptive = next((w for w in session.windows if w.used_adaptive), session.windows[0])
+
+    result = render_window_diagnostics(
+        session,
+        adaptive.aligned_time_s,
+        options=DiagnosticPlotOptions(comparison_reference_groups=(("ACC",),)),
+    )
+
+    assert result.summary["reference_groups_order"] == "HF"
+    assert len(result.comparisons) == 1
+    comparison = result.comparisons[0]
+    assert comparison.reference_groups_order == ("ACC",)
+    assert comparison.reference_order_key == "ACC"
+    assert comparison.label.endswith("+A")
+    assert comparison.waveform["filtered_final"].size == result.waveform["time_s"].size
+    assert comparison.spectrum["freq_hz"].size == result.spectrum["freq_hz"].size
+    assert "comparison_1_filtered_final" in result.waveform
+
+
+@pytest.mark.skipif(not REPORT.exists(), reason="window diagnostics fixture missing")
+def test_waveform_layers_ppg_primary_and_comparison_on_separate_lanes() -> None:
+    from matplotlib.figure import Figure
+
+    session = load_window_diagnostics_session(REPORT)
+    result = render_window_diagnostics(
+        session,
+        session.windows[0].aligned_time_s,
+        options=DiagnosticPlotOptions(comparison_reference_groups=(("ACC",),)),
+    )
+
+    fig = Figure(figsize=(2.4, 2.6))
+    ax = fig.add_subplot(1, 1, 1)
+    plot_waveform(
+        ax,
+        result,
+        DiagnosticPlotOptions(comparison_reference_groups=(("ACC",),)),
+    )
+
+    lines = {line.get_label(): line for line in ax.lines}
+    assert ["Band-pass PPG", "LMS+H", "LMS+A"] == list(lines)[:3]
+    means = [
+        float(np.nanmean(lines[label].get_ydata()))
+        for label in ("Band-pass PPG", "LMS+H", "LMS+A")
+    ]
+    assert means[0] > means[1] > means[2]
+    lane_labels = [patch.get_label() for patch in ax.patches]
+    assert "Band-pass PPG background" in lane_labels
+    assert "LMS+H background" in lane_labels
+    assert "LMS+A background" in lane_labels
+
+
+@pytest.mark.skipif(not REPORT.exists(), reason="window diagnostics fixture missing")
+def test_plot_spectra_draws_primary_and_comparison_panels() -> None:
+    from matplotlib.figure import Figure
+
+    session = load_window_diagnostics_session(REPORT)
+    result = render_window_diagnostics(
+        session,
+        session.windows[0].aligned_time_s,
+        options=DiagnosticPlotOptions(comparison_reference_groups=(("ACC",),)),
+    )
+
+    fig = Figure(figsize=(4.8, 2.6))
+    axes = fig.subplots(2, 1)
+    plot_spectra(
+        axes,
+        result,
+        DiagnosticPlotOptions(comparison_reference_groups=(("ACC",),)),
+    )
+
+    assert axes[0].get_title() == "LMS+H"
+    assert axes[1].get_title() == "LMS+A"
+    for ax in axes:
+        lines = {line.get_label(): line for line in ax.lines}
+        assert "Filtered" in lines
+        assert "Penalized" in lines
+
+
+def test_diagnostic_panel_figsize_uses_requested_column_fractions() -> None:
+    assert diagnostic_panel_figsize("waveform") == pytest.approx((2.4, 2.6))
+    assert diagnostic_panel_figsize("spectrum", panel_count=1) == pytest.approx(
+        (4.8, 1.3)
+    )
+    assert diagnostic_panel_figsize("spectrum", panel_count=2) == pytest.approx(
+        (4.8, 2.6)
+    )

@@ -737,17 +737,24 @@ class V2WindowDiagnosticsSaveWorker(QObject):
     finished = Signal(object)
     failed = Signal(str)
 
-    def __init__(self, result, include_vectors: bool = False):
+    def __init__(
+        self,
+        result,
+        options: DiagnosticPlotOptions | None = None,
+        include_vectors: bool = False,
+    ):
         super().__init__()
         self._result = result
-        self._include_vectors = bool(include_vectors)
+        self._options = options or DiagnosticPlotOptions(
+            include_vectors=bool(include_vectors)
+        )
 
     def run(self) -> None:
         try:
             self.finished.emit(
                 save_window_diagnostics(
                     self._result,
-                    options=DiagnosticPlotOptions(include_vectors=self._include_vectors),
+                    options=self._options,
                 )
             )
         except Exception as exc:  # pragma: no cover

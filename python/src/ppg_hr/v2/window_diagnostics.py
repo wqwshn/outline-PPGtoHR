@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import dataclasses
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +25,12 @@ from ppg_hr.params import SolverParams
 from ppg_hr.preprocess.utils import filloutliers_mean_previous
 
 from .preprocess import safe_cf_ratio
-from .reference_groups import normalise_reference_order, reference_order_key
+from .reference_groups import (
+    color_for_reference_order,
+    method_label,
+    normalise_reference_order,
+    reference_order_key,
+)
 from .report import load_v2_report
 from .solver import (
     _longest_true_run,
@@ -35,6 +40,17 @@ from .solver import (
     _solver_params_from_v2,
 )
 from .types import V2RunConfig
+
+
+_DOUBLE_COLUMN_WIDTH_IN = 7.2
+_WAVEFORM_WIDTH_IN = _DOUBLE_COLUMN_WIDTH_IN / 3.0
+_SPECTRUM_WIDTH_IN = _DOUBLE_COLUMN_WIDTH_IN * 2.0 / 3.0
+_WAVEFORM_HEIGHT_IN = 2.6
+_SPECTRUM_PANEL_HEIGHT_IN = _WAVEFORM_HEIGHT_IN / 2.0
+_AXIS_LABEL_SIZE = 6.5
+_TICK_LABEL_SIZE = 5.6
+_LEGEND_SIZE = 5.6
+_TITLE_SIZE = 6.8
 
 
 @dataclass(frozen=True)
@@ -70,6 +86,7 @@ class DiagnosticPlotOptions:
     waveform_x_padding_s: float = 0.1
     spectrum_x_padding_bpm: float = 0.0
     include_vectors: bool = False
+    comparison_reference_groups: tuple[tuple[str, ...], ...] = ()
 
 
 @dataclass
@@ -90,6 +107,17 @@ class WindowDiagnosticsSession:
 
 
 @dataclass
+class WindowDiagnosticsComparison:
+    reference_groups_order: tuple[str, ...]
+    reference_order_key: str
+    label: str
+    waveform: dict[str, np.ndarray]
+    spectrum: dict[str, np.ndarray]
+    stages: list[dict[str, Any]]
+    summary: dict[str, Any]
+
+
+@dataclass
 class WindowDiagnosticsResult:
     session: WindowDiagnosticsSession
     selected_window: DiagnosticWindow
@@ -97,6 +125,7 @@ class WindowDiagnosticsResult:
     spectrum: dict[str, np.ndarray]
     stages: list[dict[str, Any]]
     summary: dict[str, Any]
+    comparisons: list[WindowDiagnosticsComparison] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -111,6 +140,16 @@ class WindowDiagnosticsSaveResult:
     waveform_pdf: Path | None = None
     spectrum_svg: Path | None = None
     spectrum_pdf: Path | None = None
+
+
+def diagnostic_panel_figsize(kind: str, *, panel_count: int = 1) -> tuple[float, float]:
+    """Return publication-oriented diagnostic panel size in inches."""
+    count = max(1, int(panel_count))
+    if kind == "waveform":
+        return _WAVEFORM_WIDTH_IN, _WAVEFORM_HEIGHT_IN
+    if kind == "spectrum":
+        return _SPECTRUM_WIDTH_IN, _SPECTRUM_PANEL_HEIGHT_IN * count
+    raise ValueError(f"Unknown diagnostic panel kind: {kind}")
 
 
 @dataclass
@@ -151,7 +190,7 @@ def render_window_diagnostics(
     options: DiagnosticPlotOptions | None = None,
 ) -> WindowDiagnosticsResult:
     """Replay and collect diagnostics for the nearest aligned time window."""
-    _ = options or DiagnosticPlotOptions()
+    opts = options or DiagnosticPlotOptions()
     selected = session.select_nearest_window(aligned_time_s)
     prepared = _prepare_signals(session.config)
 
@@ -192,6 +231,73 @@ def render_window_diagnostics(
         prepared.params,
     )
     summary = _summary_from_window(session, selected, spectrum, stages)
+    comparisons: list[WindowDiagnosticsComparison] = []
+    for comp_idx, comp_order in enumerate(
+        _normalise_comparison_reference_groups(
+            opts.comparison_reference_groups,
+            session.config.reference_groups_order,
+        ),
+        start=1,
+    ):
+        comp_cfg = dataclasses.replace(
+            session.config,
+            reference_groups_order=comp_order,
+        )
+        comp_prepared = _prepare_signals(comp_cfg)
+        (
+            comp_filtered,
+            comp_penalty_ref,
+            comp_stages,
+            comp_stage_outputs,
+            comp_ref_outputs,
+        ) = _replay_cascade(
+            comp_prepared,
+            sig_p=sig_p,
+            idx_s=idx_s,
+            idx_e=idx_e,
+            start_s=selected.start_s,
+        )
+        comp_waveform: dict[str, np.ndarray] = {
+            "time_s": time_s,
+            "aligned_time_s": waveform["aligned_time_s"],
+            "filtered_final": _fit_to_length(comp_filtered, sig_p.size),
+        }
+        for idx, values in enumerate(comp_stage_outputs, start=1):
+            comp_waveform[f"stage_{idx}"] = _fit_to_length(values, sig_p.size)
+        for idx, values in enumerate(comp_ref_outputs, start=1):
+            comp_waveform[f"reference_{idx}"] = _fit_to_length(values, sig_p.size)
+
+        comp_spectrum = _compute_spectrum(
+            sig_p,
+            comp_waveform["filtered_final"],
+            comp_penalty_ref,
+            fs,
+            comp_prepared.params,
+        )
+        comp_summary = _summary_from_window(
+            session,
+            selected,
+            comp_spectrum,
+            comp_stages,
+            reference_groups_order=comp_order,
+            final_hr_bpm=_candidate_from_spectrum(comp_spectrum),
+        )
+        comp_key = reference_order_key(comp_order)
+        comp_label = method_label(session.config.adaptive_filter, comp_order)
+        waveform[f"comparison_{comp_idx}_filtered_final"] = comp_waveform[
+            "filtered_final"
+        ]
+        comparisons.append(
+            WindowDiagnosticsComparison(
+                reference_groups_order=comp_order,
+                reference_order_key=comp_key,
+                label=comp_label,
+                waveform=comp_waveform,
+                spectrum=comp_spectrum,
+                stages=comp_stages,
+                summary=comp_summary,
+            )
+        )
     return WindowDiagnosticsResult(
         session=session,
         selected_window=selected,
@@ -199,6 +305,7 @@ def render_window_diagnostics(
         spectrum=spectrum,
         stages=stages,
         summary=summary,
+        comparisons=comparisons,
     )
 
 
@@ -212,61 +319,126 @@ def plot_waveform(
     wave = result.waveform
     x = wave["aligned_time_s"]
     ax.clear()
-    ax.axvspan(
-        float(x[0]),
-        float(x[-1]),
-        color="#D7EAD8",
-        alpha=0.32,
-        linewidth=0,
-        label="FFT window",
-    )
+    primary_order = result.session.config.reference_groups_order
+    series: list[dict[str, Any]] = []
     if opts.show_ppg and "ppg_bandpassed" in wave:
+        series.append(
+            {
+                "label": "Band-pass PPG",
+                "values": wave["ppg_bandpassed"],
+                "color": "#5DA9C9",
+                "background": "#E7F1F6",
+                "linewidth": 0.86,
+                "alpha": 0.90,
+            }
+        )
+    if opts.show_final and "filtered_final" in wave:
+        series.append(
+            {
+                "label": method_label(
+                    result.session.config.adaptive_filter,
+                    primary_order,
+                ),
+                "values": wave["filtered_final"],
+                "color": color_for_reference_order(primary_order),
+                "background": "#F9E7E3",
+                "linewidth": 1.02,
+                "alpha": 0.96,
+            }
+        )
+        for idx, comparison in enumerate(result.comparisons):
+            bg = ("#E6EEF7", "#EAF3EC", "#F2ECF7", "#F7F1E1")[idx % 4]
+            series.append(
+                {
+                    "label": comparison.label,
+                    "values": comparison.waveform["filtered_final"],
+                    "color": color_for_reference_order(
+                        comparison.reference_groups_order
+                    ),
+                    "background": bg,
+                    "linewidth": 0.98,
+                    "alpha": 0.94,
+                }
+            )
+
+    centers: dict[str, float] = {}
+    total = len(series)
+    for idx, item in enumerate(series):
+        center = float(total - idx - 1)
+        label = str(item["label"])
+        centers[label] = center
+        ax.axhspan(
+            center - 0.44,
+            center + 0.44,
+            color=str(item["background"]),
+            alpha=0.78,
+            linewidth=0,
+            label=f"{label} background",
+            zorder=0,
+        )
         ax.plot(
             x,
-            _zscore_for_plot(wave["ppg_bandpassed"]),
-            color="#87AFC7",
-            linewidth=0.9,
-            alpha=0.78,
-            label="Band-pass PPG",
+            _scale_for_lane(item["values"], center),
+            color=str(item["color"]),
+            linewidth=float(item["linewidth"]),
+            alpha=float(item["alpha"]),
+            label=label,
+            zorder=3 + idx * 0.1,
         )
-    if opts.show_stages:
+
+    overlay_center = centers.get(
+        method_label(result.session.config.adaptive_filter, primary_order),
+        0.0,
+    )
+    if opts.show_stages and total:
         stage_colors = ("#D6A36A", "#9CBF9E", "#B59AC5", "#D58E8A", "#8FB7B0")
         stage_keys = sorted(k for k in wave if k.startswith("stage_"))
         for idx, key in enumerate(stage_keys):
             ax.plot(
                 x,
-                _zscore_for_plot(wave[key]),
+                _scale_for_lane(wave[key], overlay_center, half_height=0.26),
                 color=stage_colors[idx % len(stage_colors)],
                 linewidth=0.72,
                 alpha=0.48,
                 label=f"Stage {idx + 1}",
             )
-    if opts.show_references:
+    if opts.show_references and total:
         ref_keys = sorted(k for k in wave if k.startswith("reference_"))
         for idx, key in enumerate(ref_keys):
             ax.plot(
                 x,
-                _zscore_for_plot(wave[key]),
+                _scale_for_lane(wave[key], overlay_center, half_height=0.22),
                 color="#A8ADB3",
                 linewidth=0.68,
                 alpha=0.42,
                 linestyle="--",
                 label=f"Ref {idx + 1}",
             )
-    if opts.show_final and "filtered_final" in wave:
-        ax.plot(
-            x,
-            _zscore_for_plot(wave["filtered_final"]),
-            color="#4F9D8B",
-            linewidth=1.25,
-            alpha=0.95,
-            label="Filtered final",
-        )
-    ax.set_xlabel("Aligned time (s)")
-    ax.set_ylabel("Amplitude (a.u.)")
+    ax.set_xlabel("Aligned time (s)", fontsize=_AXIS_LABEL_SIZE)
+    ax.set_ylabel("Amplitude (a.u.)", fontsize=_AXIS_LABEL_SIZE)
+    if total:
+        ax.set_ylim(-0.56, float(total) - 0.44)
+    ax.set_yticks([])
     _apply_diagnostic_axes_style(ax, y_margin=0.08)
     _set_x_limits_with_padding(ax, x, opts.waveform_x_padding_s)
-    ax.legend(loc="upper right", frameon=False, fontsize=7)
+    handles, labels = ax.get_legend_handles_labels()
+    line_pairs = [
+        (handle, label)
+        for handle, label in zip(handles, labels)
+        if not label.endswith(" background")
+    ]
+    if line_pairs:
+        line_handles, line_labels = zip(*line_pairs)
+        ax.legend(
+            line_handles,
+            line_labels,
+            loc="upper right",
+            frameon=False,
+            fontsize=_LEGEND_SIZE,
+            handlelength=1.4,
+            borderpad=0.1,
+            labelspacing=0.22,
+        )
 
 
 def plot_spectrum(
@@ -368,12 +540,67 @@ def plot_spectrum(
             label="Penalized",
             zorder=4,
         )
-    ax.set_xlabel("Heart-rate frequency (BPM)")
-    ax.set_ylabel("Normalised amplitude")
+    ax.set_xlabel("Heart-rate frequency (BPM)", fontsize=_AXIS_LABEL_SIZE)
+    ax.set_ylabel("Normalised amplitude", fontsize=_AXIS_LABEL_SIZE)
     ax.set_ylim(0, 1.05)
     _apply_diagnostic_axes_style(ax, y_margin=0.05)
     _set_x_limits_with_padding(ax, bpm, opts.spectrum_x_padding_bpm)
-    ax.legend(loc="upper right", frameon=False, fontsize=7)
+    ax.legend(
+        loc="upper right",
+        frameon=False,
+        fontsize=_LEGEND_SIZE,
+        handlelength=1.4,
+        borderpad=0.1,
+        labelspacing=0.22,
+    )
+
+
+def plot_spectra(
+    axes: Any,
+    result: WindowDiagnosticsResult,
+    options: DiagnosticPlotOptions | None = None,
+) -> None:
+    """Draw the primary spectrum plus comparison spectra on stacked axes."""
+    opts = options or DiagnosticPlotOptions()
+    if isinstance(axes, Axes):
+        axis_list = [axes]
+    else:
+        axis_list = list(np.ravel(axes))
+    if not axis_list:
+        return
+
+    panels: list[tuple[str, WindowDiagnosticsResult]] = [
+        (
+            method_label(
+                result.session.config.adaptive_filter,
+                result.session.config.reference_groups_order,
+            ),
+            result,
+        )
+    ]
+    for comparison in result.comparisons:
+        panels.append(
+            (
+                comparison.label,
+                WindowDiagnosticsResult(
+                    session=result.session,
+                    selected_window=result.selected_window,
+                    waveform=comparison.waveform,
+                    spectrum=comparison.spectrum,
+                    stages=comparison.stages,
+                    summary=comparison.summary,
+                    comparisons=[],
+                ),
+            )
+        )
+
+    for ax, (title, panel_result) in zip(axis_list, panels):
+        ax.set_visible(True)
+        plot_spectrum(ax, panel_result, opts)
+        ax.set_title(title, fontsize=_TITLE_SIZE, fontweight="normal", pad=2.0)
+    for ax in axis_list[len(panels) :]:
+        ax.clear()
+        ax.set_visible(False)
 
 
 def save_window_diagnostics(
@@ -392,7 +619,7 @@ def save_window_diagnostics(
     summary_csv = out_dir / "window_summary.csv"
 
     _write_waveform_csv(waveform_csv, result.waveform)
-    _write_spectrum_csv(spectrum_csv, result.spectrum)
+    _write_spectrum_csv(spectrum_csv, _spectrum_csv_payload(result))
     _write_summary_csv(summary_csv, result)
     _save_panel(waveform_png, result, opts, kind="waveform")
     _save_panel(spectrum_png, result, opts, kind="spectrum")
@@ -582,6 +809,9 @@ def _window_table_by_center(raw_table: Any) -> dict[float, dict[str, Any]]:
 
 def _prepare_signals(cfg: V2RunConfig) -> _PreparedSignals:
     params = _solver_params_from_v2(cfg)
+    params.extras["reference_groups_order"] = normalise_reference_order(
+        cfg.reference_groups_order
+    )
     raw_data, _ref_data = load_raw_data(params)
     fs_origin = int(cfg.fs_origin)
     fs = int(cfg.fs_target)
@@ -718,6 +948,22 @@ def _cfg_from_params(params: SolverParams) -> tuple[str, ...]:
         return ()
 
 
+def _normalise_comparison_reference_groups(
+    groups: tuple[tuple[str, ...], ...],
+    primary_order: tuple[str, ...],
+) -> tuple[tuple[str, ...], ...]:
+    seen = {reference_order_key(normalise_reference_order(primary_order))}
+    normalised: list[tuple[str, ...]] = []
+    for raw_order in groups:
+        order = normalise_reference_order(tuple(raw_order))
+        key = reference_order_key(order)
+        if key in seen:
+            continue
+        seen.add(key)
+        normalised.append(order)
+    return tuple(normalised)
+
+
 def _fit_to_length(values: np.ndarray, length: int) -> np.ndarray:
     arr = np.full(int(length), np.nan, dtype=float)
     raw = np.asarray(values, dtype=float).ravel()
@@ -725,6 +971,13 @@ def _fit_to_length(values: np.ndarray, length: int) -> np.ndarray:
     if n:
         arr[:n] = raw[:n]
     return arr
+
+
+def _candidate_from_spectrum(spectrum: dict[str, np.ndarray]) -> float:
+    values = np.asarray(spectrum.get("candidate_hr_bpm", []), dtype=float)
+    if values.size == 0:
+        return float("nan")
+    return float(values[0])
 
 
 def _compute_spectrum(
@@ -793,9 +1046,19 @@ def _summary_from_window(
     window: DiagnosticWindow,
     spectrum: dict[str, np.ndarray],
     stages: list[dict[str, Any]],
+    *,
+    reference_groups_order: tuple[str, ...] | None = None,
+    final_hr_bpm: float | None = None,
 ) -> dict[str, Any]:
     motion_peak = float(spectrum["motion_peak_hz"][0])
     candidate = float(spectrum["candidate_hr_bpm"][0])
+    final_hr = window.final_hr_bpm if final_hr_bpm is None else float(final_hr_bpm)
+    error = final_hr - window.ref_hr_bpm if np.isfinite(final_hr) else float("nan")
+    ref_order = (
+        session.config.reference_groups_order
+        if reference_groups_order is None
+        else reference_groups_order
+    )
     return {
         "report_path": str(session.report_path),
         "data_path": str(session.data_path),
@@ -808,8 +1071,8 @@ def _summary_from_window(
         "time_bias": session.time_bias,
         "ref_hr_bpm": window.ref_hr_bpm,
         "fft_hr_bpm": window.fft_hr_bpm,
-        "final_hr_bpm": window.final_hr_bpm,
-        "error_bpm": window.error_bpm,
+        "final_hr_bpm": final_hr,
+        "error_bpm": error,
         "candidate_hr_bpm": candidate,
         "motion_peak_hz": motion_peak,
         "has_motion_peak": bool(np.isfinite(motion_peak)),
@@ -820,7 +1083,7 @@ def _summary_from_window(
         "ppg_mode": session.config.ppg_mode,
         "analysis_scope": session.config.analysis_scope,
         "adaptive_filter": session.config.adaptive_filter,
-        "reference_groups_order": "+".join(session.config.reference_groups_order),
+        "reference_groups_order": "+".join(ref_order),
         "best_params_json": json.dumps(
             session.payload.get("best_params", {}),
             ensure_ascii=False,
@@ -915,6 +1178,7 @@ def _apply_diagnostic_axes_style(
         width=0.65,
         color="#2B2B2B",
         labelcolor="#2B2B2B",
+        labelsize=_TICK_LABEL_SIZE,
         pad=3,
     )
     ax.tick_params(
@@ -954,6 +1218,24 @@ def _zscore_for_plot(values: np.ndarray) -> np.ndarray:
     return (arr - float(np.mean(finite))) / sd
 
 
+def _scale_for_lane(
+    values: np.ndarray,
+    center: float,
+    *,
+    half_height: float = 0.34,
+) -> np.ndarray:
+    z = _zscore_for_plot(values)
+    finite = z[np.isfinite(z)]
+    if finite.size == 0:
+        return np.full_like(z, float(center), dtype=float)
+    denom = float(np.nanpercentile(np.abs(finite), 95))
+    if denom <= 1e-12:
+        denom = float(np.nanmax(np.abs(finite))) if finite.size else 1.0
+    if denom <= 1e-12:
+        return np.full_like(z, float(center), dtype=float)
+    return float(center) + np.clip(z / denom, -1.0, 1.0) * float(half_height)
+
+
 def _allocate_output_dir(
     result: WindowDiagnosticsResult,
     output_root: str | Path | None,
@@ -987,16 +1269,27 @@ def _save_panel(
     *,
     kind: str,
 ) -> None:
-    fig = Figure(figsize=(7.2, 2.6), dpi=120, facecolor="white")
-    ax = fig.add_subplot(1, 1, 1)
     if kind == "waveform":
+        fig = Figure(
+            figsize=diagnostic_panel_figsize("waveform"),
+            dpi=120,
+            facecolor="white",
+        )
+        ax = fig.add_subplot(1, 1, 1)
         plot_waveform(ax, result, options)
     elif kind == "spectrum":
-        plot_spectrum(ax, result, options)
+        panel_count = 1 + len(result.comparisons)
+        fig = Figure(
+            figsize=diagnostic_panel_figsize("spectrum", panel_count=panel_count),
+            dpi=120,
+            facecolor="white",
+        )
+        axes = fig.subplots(panel_count, 1, squeeze=False).ravel()
+        plot_spectra(axes, result, options)
     else:
         raise ValueError(f"Unknown diagnostic panel kind: {kind}")
-    fig.tight_layout()
-    kwargs = {"bbox_inches": "tight"}
+    fig.tight_layout(pad=0.35)
+    kwargs: dict[str, Any] = {}
     if path.suffix.lower() == ".png":
         kwargs["dpi"] = 600
     fig.savefig(path, **kwargs)
@@ -1005,6 +1298,20 @@ def _save_panel(
 def _write_waveform_csv(path: Path, waveform: dict[str, np.ndarray]) -> None:
     keys = [key for key in waveform if np.asarray(waveform[key]).ndim == 1]
     _write_array_csv(path, keys, waveform)
+
+
+def _spectrum_csv_payload(result: WindowDiagnosticsResult) -> dict[str, np.ndarray]:
+    payload = dict(result.spectrum)
+    for idx, comparison in enumerate(result.comparisons, start=1):
+        for key in (
+            "filtered_amp_norm",
+            "penalized_amp_norm",
+            "penalty_weight",
+            "is_penalty_band",
+        ):
+            if key in comparison.spectrum:
+                payload[f"comparison_{idx}_{key}"] = comparison.spectrum[key]
+    return payload
 
 
 def _write_spectrum_csv(path: Path, spectrum: dict[str, np.ndarray]) -> None:
@@ -1017,6 +1324,7 @@ def _write_spectrum_csv(path: Path, spectrum: dict[str, np.ndarray]) -> None:
         "penalty_weight",
         "is_penalty_band",
     ]
+    keys.extend(sorted(k for k in spectrum if k.startswith("comparison_")))
     _write_array_csv(path, keys, spectrum)
 
 

@@ -153,6 +153,7 @@ def test_main_window_v2_navigation_includes_window_diagnostics() -> None:
 
 
 def test_v2_window_diagnostics_page_exposes_controls() -> None:
+    from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication
 
     from ppg_hr.gui.v2_pages import V2WindowDiagnosticsPage
@@ -165,6 +166,12 @@ def test_v2_window_diagnostics_page_exposes_controls() -> None:
         assert page._wave_final_check.isChecked()
         assert page._wave_stage_check.isChecked() is False
         assert page._spectrum_penalized_check.isChecked()
+        assert page.selected_comparison_groups() == ()
+        for i in range(page._comparison_ref_list.count()):
+            item = page._comparison_ref_list.item(i)
+            if item is not None and item.text() == "ACC":
+                item.setCheckState(Qt.CheckState.Checked)
+        assert page.selected_comparison_groups() == (("ACC",),)
         assert page._save_vectors_check.isChecked() is False
     finally:
         page.deleteLater()

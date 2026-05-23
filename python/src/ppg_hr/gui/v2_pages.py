@@ -23,7 +23,7 @@ from ppg_hr.v2.optimizer import V2BayesConfig
 from ppg_hr.v2.spo2 import V2SpO2Config
 from ppg_hr.v2.window_diagnostics import (
     DiagnosticPlotOptions,
-    plot_spectrum,
+    plot_spectra,
     plot_waveform,
 )
 
@@ -424,11 +424,27 @@ class V2WindowDiagnosticsPage(_PageBase):
             spectrum_row.addWidget(widget)
         spectrum_row.addStretch(1)
         curve_card.add(spectrum_row)
+
+        comparison_label = QLabel(
+            "对比参考信号（勾选后用当前 best_params 按该参考组重放当前窗口）"
+        )
+        comparison_label.setStyleSheet("font-size: 9pt; color: #666; margin-top: 6px;")
+        curve_card.add(comparison_label)
+        self._comparison_ref_list = QListWidget()
+        self._comparison_ref_list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
+        self._comparison_ref_list.setDefaultDropAction(Qt.DropAction.MoveAction)
+        self._comparison_ref_list.setMaximumHeight(100)
+        for group in ("HF", "CF", "ACC"):
+            item = QListWidgetItem(group)
+            item.setCheckState(Qt.CheckState.Unchecked)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            self._comparison_ref_list.addItem(item)
+        curve_card.add(self._comparison_ref_list)
         self.body().addWidget(curve_card)
 
         plot_card = SectionCard("诊断图", "波形域与频域单窗口重放")
         self._wave_canvas = MplCanvas(nrows=1, height=260)
-        self._spectrum_canvas = MplCanvas(nrows=1, height=260)
+        self._spectrum_canvas = MplCanvas(nrows=2, height=260)
         plot_card.add(self._wave_canvas)
         plot_card.add(self._spectrum_canvas)
         self.body().addWidget(plot_card)
@@ -467,7 +483,18 @@ class V2WindowDiagnosticsPage(_PageBase):
             show_candidate_marker=self._spectrum_candidate_check.isChecked(),
             show_penalty_band=self._spectrum_penalty_band_check.isChecked(),
             include_vectors=self._save_vectors_check.isChecked(),
+            comparison_reference_groups=self.selected_comparison_groups(),
         )
+
+    def selected_comparison_groups(self) -> tuple[tuple[str, ...], ...]:
+        order: list[str] = []
+        for i in range(self._comparison_ref_list.count()):
+            item = self._comparison_ref_list.item(i)
+            if item is not None and item.checkState() == Qt.CheckState.Checked:
+                order.append(item.text())
+        if not order:
+            return ()
+        return (tuple(order),)
 
     def _load_report(self) -> None:
         report_path = self._report_pick.path()
@@ -555,7 +582,7 @@ class V2WindowDiagnosticsPage(_PageBase):
         opts = self._plot_options()
         plot_waveform(self._wave_canvas.axes, result, opts)
         self._wave_canvas.redraw()
-        plot_spectrum(self._spectrum_canvas.axes, result, opts)
+        plot_spectra(self._spectrum_canvas.axes, result, opts)
         self._spectrum_canvas.redraw()
         self._summary.set_rows(self._summary_rows(result))
         self._stage_table.set_rows(self._stage_rows(result))
@@ -614,7 +641,7 @@ class V2WindowDiagnosticsPage(_PageBase):
         self._save_btn.setEnabled(False)
         worker = V2WindowDiagnosticsSaveWorker(
             self._current_result,
-            include_vectors=self._save_vectors_check.isChecked(),
+            options=self._plot_options(),
         )
         worker.finished.connect(self._on_saved)
         worker.failed.connect(self._on_failed)
