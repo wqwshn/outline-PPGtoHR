@@ -326,8 +326,8 @@ def plot_waveform(
             {
                 "label": "Band-pass PPG",
                 "values": wave["ppg_bandpassed"],
-                "color": "#5DA9C9",
-                "background": "#E7F1F6",
+                "color": "#2F9B6D",
+                "background": "#E5F3EA",
                 "linewidth": 0.86,
                 "alpha": 0.90,
             }
@@ -421,24 +421,7 @@ def plot_waveform(
     ax.set_yticks([])
     _apply_diagnostic_axes_style(ax, y_margin=0.08)
     _set_x_limits_with_padding(ax, x, opts.waveform_x_padding_s)
-    handles, labels = ax.get_legend_handles_labels()
-    line_pairs = [
-        (handle, label)
-        for handle, label in zip(handles, labels)
-        if not label.endswith(" background")
-    ]
-    if line_pairs:
-        line_handles, line_labels = zip(*line_pairs)
-        ax.legend(
-            line_handles,
-            line_labels,
-            loc="upper right",
-            frameon=False,
-            fontsize=_LEGEND_SIZE,
-            handlelength=1.4,
-            borderpad=0.1,
-            labelspacing=0.22,
-        )
+    _draw_waveform_lane_labels(ax, series, centers)
 
 
 def plot_spectrum(
@@ -547,10 +530,13 @@ def plot_spectrum(
     _set_x_limits_with_padding(ax, bpm, opts.spectrum_x_padding_bpm)
     ax.legend(
         loc="upper right",
-        frameon=False,
+        frameon=True,
+        facecolor="white",
+        edgecolor="none",
+        framealpha=0.84,
         fontsize=_LEGEND_SIZE,
         handlelength=1.4,
-        borderpad=0.1,
+        borderpad=0.22,
         labelspacing=0.22,
     )
 
@@ -1234,6 +1220,39 @@ def _scale_for_lane(
     if denom <= 1e-12:
         return np.full_like(z, float(center), dtype=float)
     return float(center) + np.clip(z / denom, -1.0, 1.0) * float(half_height)
+
+
+def _draw_waveform_lane_labels(
+    ax: Axes,
+    series: list[dict[str, Any]],
+    centers: dict[str, float],
+) -> None:
+    if not series:
+        return
+    x_min, x_max = ax.get_xlim()
+    x_span = max(float(x_max - x_min), 1e-9)
+    label_x = float(x_min) + 0.035 * x_span
+    for item in series:
+        label = str(item["label"])
+        center = centers.get(label)
+        if center is None:
+            continue
+        ax.text(
+            label_x,
+            float(center) + 0.34,
+            label,
+            ha="left",
+            va="top",
+            fontsize=_LEGEND_SIZE,
+            color=str(item["color"]),
+            zorder=7,
+            bbox={
+                "boxstyle": "round,pad=0.12",
+                "facecolor": str(item["background"]),
+                "edgecolor": "none",
+                "alpha": 0.88,
+            },
+        )
 
 
 def _allocate_output_dir(

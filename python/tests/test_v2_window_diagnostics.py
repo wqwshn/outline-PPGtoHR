@@ -229,6 +229,7 @@ def test_render_window_diagnostics_replays_acc_comparison_reference_group() -> N
 
 @pytest.mark.skipif(not REPORT.exists(), reason="window diagnostics fixture missing")
 def test_waveform_layers_ppg_primary_and_comparison_on_separate_lanes() -> None:
+    from matplotlib.colors import to_rgb
     from matplotlib.figure import Figure
 
     session = load_window_diagnostics_session(REPORT)
@@ -248,6 +249,9 @@ def test_waveform_layers_ppg_primary_and_comparison_on_separate_lanes() -> None:
 
     lines = {line.get_label(): line for line in ax.lines}
     assert ["Band-pass PPG", "LMS+H", "LMS+A"] == list(lines)[:3]
+    ppg_rgb = to_rgb(lines["Band-pass PPG"].get_color())
+    assert ppg_rgb[1] > ppg_rgb[2]
+    assert ppg_rgb[1] > ppg_rgb[0]
     means = [
         float(np.nanmean(lines[label].get_ydata()))
         for label in ("Band-pass PPG", "LMS+H", "LMS+A")
@@ -257,6 +261,49 @@ def test_waveform_layers_ppg_primary_and_comparison_on_separate_lanes() -> None:
     assert "Band-pass PPG background" in lane_labels
     assert "LMS+H background" in lane_labels
     assert "LMS+A background" in lane_labels
+    ppg_patch = next(
+        patch for patch in ax.patches if patch.get_label() == "Band-pass PPG background"
+    )
+    ppg_bg_rgb = ppg_patch.get_facecolor()[:3]
+    assert ppg_bg_rgb[1] > ppg_bg_rgb[2]
+    assert ppg_bg_rgb[1] > ppg_bg_rgb[0]
+
+
+@pytest.mark.skipif(not REPORT.exists(), reason="window diagnostics fixture missing")
+def test_waveform_labels_are_placed_in_each_lane_instead_of_one_legend() -> None:
+    from matplotlib.figure import Figure
+
+    session = load_window_diagnostics_session(REPORT)
+    result = render_window_diagnostics(
+        session,
+        session.windows[0].aligned_time_s,
+        options=DiagnosticPlotOptions(comparison_reference_groups=(("ACC",),)),
+    )
+
+    fig = Figure(figsize=(2.4, 2.6))
+    ax = fig.add_subplot(1, 1, 1)
+    plot_waveform(
+        ax,
+        result,
+        DiagnosticPlotOptions(comparison_reference_groups=(("ACC",),)),
+    )
+
+    assert ax.get_legend() is None
+    texts = {text.get_text(): text for text in ax.texts}
+    for label in ("Band-pass PPG", "LMS+H", "LMS+A"):
+        assert label in texts
+    labels = ("Band-pass PPG", "LMS+H", "LMS+A")
+    label_y = [texts[label].get_position()[1] for label in labels]
+    line_means = [
+        float(
+            np.nanmean(
+                next(line for line in ax.lines if line.get_label() == label).get_ydata()
+            )
+        )
+        for label in labels
+    ]
+    assert label_y[0] > label_y[1] > label_y[2]
+    assert all(text_y > mean_y for text_y, mean_y in zip(label_y, line_means))
 
 
 @pytest.mark.skipif(not REPORT.exists(), reason="window diagnostics fixture missing")
@@ -284,6 +331,11 @@ def test_plot_spectra_draws_primary_and_comparison_panels() -> None:
         lines = {line.get_label(): line for line in ax.lines}
         assert "Filtered" in lines
         assert "Penalized" in lines
+        legend = ax.get_legend()
+        assert legend is not None
+        frame = legend.get_frame()
+        assert frame.get_visible()
+        assert frame.get_facecolor()[3] >= 0.78
 
 
 def test_diagnostic_panel_figsize_uses_requested_column_fractions() -> None:
