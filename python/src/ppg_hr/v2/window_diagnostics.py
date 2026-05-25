@@ -22,7 +22,6 @@ from ppg_hr.core.fft_peaks import fft_peaks
 from ppg_hr.core.find_maxpeak import find_maxpeak
 from ppg_hr.core.heart_rate_solver import load_raw_data
 from ppg_hr.params import SolverParams
-from ppg_hr.preprocess.utils import filloutliers_mean_previous
 
 from .preprocess import safe_cf_ratio
 from .reference_groups import (
@@ -33,6 +32,7 @@ from .reference_groups import (
 )
 from .report import load_v2_report
 from .solver import (
+    _apply_ppg_input_transform,
     _longest_true_run,
     _motion_flags,
     _ordered_reference_signals,
@@ -40,7 +40,6 @@ from .solver import (
     _solver_params_from_v2,
 )
 from .types import V2RunConfig
-
 
 _DOUBLE_COLUMN_WIDTH_IN = 7.2
 _WAVEFORM_WIDTH_IN = _DOUBLE_COLUMN_WIDTH_IN / 3.0
@@ -580,7 +579,7 @@ def plot_spectra(
             )
         )
 
-    for ax, (title, panel_result) in zip(axis_list, panels):
+    for ax, (title, panel_result) in zip(axis_list, panels, strict=False):
         ax.set_visible(True)
         plot_spectrum(ax, panel_result, opts)
         ax.set_title(title, fontsize=_TITLE_SIZE, fontweight="normal", pad=2.0)
@@ -811,7 +810,13 @@ def _prepare_signals(cfg: V2RunConfig) -> _PreparedSignals:
     accy_raw = raw_data[:, 9]
     accz_raw = raw_data[:, 10]
 
-    ppg_ori = resample_poly(filloutliers_mean_previous(ppg_raw), fs, fs_origin)
+    ppg_source = _apply_ppg_input_transform(
+        ppg_raw,
+        cfg.ppg_input_transform,
+        fs_origin=fs_origin,
+        baseline_seconds=float(cfg.ppg_input_baseline_seconds),
+    )
+    ppg_ori = resample_poly(ppg_source, fs, fs_origin)
     hf1_ori = resample_poly(ut1_raw, fs, fs_origin)
     hf2_ori = resample_poly(ut2_raw, fs, fs_origin)
     cf1_ori = resample_poly(safe_cf_ratio(uc1_raw, ut1_raw), fs, fs_origin)

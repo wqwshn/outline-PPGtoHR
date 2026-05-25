@@ -80,7 +80,7 @@ def test_run_v2_batch_pipeline_writes_json_png_csv_layout(tmp_path: Path) -> Non
     )
 
     out = tmp_path / "out"
-    prefix = "sample-green-lms-full-HF"
+    prefix = "sample-green-raw_bandpass-lms-full-HF"
     assert (out / "json" / f"{prefix}-v2.json").is_file()
     assert (out / "png" / f"{prefix}-v2-hr.png").is_file()
     assert (out / "csv" / f"{prefix}-v2-hr.csv").is_file()
@@ -90,6 +90,30 @@ def test_run_v2_batch_pipeline_writes_json_png_csv_layout(tmp_path: Path) -> Non
     record = payload["records"][0]
     assert record.figure_png == out / "png" / f"{prefix}-v2-hr.png"
     assert record.hr_csv == out / "csv" / f"{prefix}-v2-hr.csv"
+    assert record.ppg_input_transform == "raw_bandpass"
     assert any("repeat 1/2" in msg for msg in logs)
     assert any(item.get("stage") == "optimise" for item in progress)
     assert any(item.get("stage") == "visualise" for item in progress)
+
+
+def test_run_v2_batch_pipeline_names_and_records_log_absorbance_transform(
+    tmp_path: Path,
+) -> None:
+    _write_pair(tmp_path, "sample")
+    payload = run_v2_batch_pipeline(
+        input_dir=tmp_path,
+        output_dir=tmp_path / "out",
+        ppg_modes=["green"],
+        ppg_input_transform="log_absorbance",
+        adaptive_filter="lms",
+        analysis_scope="full",
+        reference_groups_order=("HF",),
+        bayes_cfg=V2BayesConfig(max_iterations=1, num_seed_points=1, random_state=1),
+    )
+
+    out = tmp_path / "out"
+    prefix = "sample-green-log_absorbance-lms-full-HF"
+    report = out / "json" / f"{prefix}-v2.json"
+    assert report.is_file()
+    assert payload["records"][0].ppg_input_transform == "log_absorbance"
+    assert "log_absorbance" in payload["summary_csv"].read_text(encoding="utf-8-sig")

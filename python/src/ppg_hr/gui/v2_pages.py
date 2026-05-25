@@ -32,6 +32,7 @@ from .widgets import AAETable, FilePicker, LogPanel, MplCanvas, SectionCard
 from .workers import (
     V2BatchPipelineWorker,
     V2BatchPlotWorker,
+    V2GeneralizationWorker,
     V2SpO2Worker,
     V2WindowDiagnosticsLoadWorker,
     V2WindowDiagnosticsRenderWorker,
@@ -72,6 +73,15 @@ class V2BatchPipelinePage(_PageBase):
         self._ppg_combo = QComboBox()
         for mode, label in (("green", "绿光 PPG"), ("red", "红光 PPG"), ("ir", "红外 PPG")):
             self._ppg_combo.addItem(label, userData=mode)
+        self._ppg_input_transform_combo = QComboBox()
+        self._ppg_input_transform_combo.addItem(
+            "RAW 直接带通",
+            userData="raw_bandpass",
+        )
+        self._ppg_input_transform_combo.addItem(
+            "-log(I/I0) 相对吸收",
+            userData="log_absorbance",
+        )
 
         self._filter_combo = QComboBox()
         for value in ("lms", "klms", "volterra", "noncausal_lms", "rff_lms"):
@@ -106,6 +116,7 @@ class V2BatchPipelinePage(_PageBase):
         self._seed.setValue(42)
 
         form.addRow("PPG通道", self._ppg_combo)
+        form.addRow("PPG输入策略", self._ppg_input_transform_combo)
         form.addRow("自适应滤波", self._filter_combo)
         form.addRow("分析范围", self._scope_combo)
         form.addRow("参考信号", ref_widget)
@@ -164,6 +175,7 @@ class V2BatchPipelinePage(_PageBase):
             input_dir=input_dir,
             output_dir=out_dir,
             ppg_modes=[str(self._ppg_combo.currentData())],
+            ppg_input_transform=str(self._ppg_input_transform_combo.currentData()),
             adaptive_filter=str(self._filter_combo.currentData()),
             analysis_scope=str(self._scope_combo.currentData()),
             reference_groups_order=self.selected_reference_order(),
@@ -185,6 +197,185 @@ class V2BatchPipelinePage(_PageBase):
             ]
         )
         self._log.success("v2批量全流程完成")
+
+
+class V2GeneralizationPage(_PageBase):
+    def __init__(self):
+        super().__init__(
+            "v2 泛化评估",
+            "同一运动类型多次实验共享参数，评估 all-train 与留一泛化",
+        )
+        self._worker_holder: WorkerThread | None = None
+        self._build_io()
+        self._build_run_options()
+        self._build_results()
+
+    def _build_io(self) -> None:
+        card = SectionCard("输入与输出", "输入目录包含同一运动类型的多组 v2 CSV 与参考 HR")
+        form = QFormLayout()
+        self._input_dir_pick = FilePicker(
+            placeholder="选择泛化评估输入目录",
+            mode="dir",
+            filter_str="",
+        )
+        self._output_dir_pick = FilePicker(
+            placeholder="留空则自动生成 v2_generalization_outputs",
+            mode="dir",
+            filter_str="",
+        )
+        form.addRow("输入目录", self._input_dir_pick)
+        form.addRow("输出目录", self._output_dir_pick)
+        card.add(form)
+        self.body().addWidget(card)
+
+    def _build_run_options(self) -> None:
+        card = SectionCard("运行参数", "共享参数训练、留出样本重放与汇总")
+        form = QFormLayout()
+        self._ppg_combo = QComboBox()
+        for mode, label in (("green", "绿光 PPG"), ("red", "红光 PPG"), ("ir", "红外 PPG")):
+            self._ppg_combo.addItem(label, userData=mode)
+        self._ppg_input_transform_combo = QComboBox()
+        self._ppg_input_transform_combo.addItem(
+            "RAW 直接带通",
+            userData="raw_bandpass",
+        )
+        self._ppg_input_transform_combo.addItem(
+            "-log(I/I0) 相对吸收",
+            userData="log_absorbance",
+        )
+        self._filter_combo = QComboBox()
+        for value in ("lms", "klms", "volterra", "noncausal_lms", "rff_lms"):
+            self._filter_combo.addItem(value, userData=value)
+        self._scope_combo = QComboBox()
+        self._scope_combo.addItem("最长运动段 + 前30s", userData="motion")
+        self._scope_combo.addItem("整段 full", userData="full")
+        self._ref_list = QListWidget()
+        self._ref_list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
+        self._ref_list.setDefaultDropAction(Qt.DropAction.MoveAction)
+        self._ref_list.setMaximumHeight(100)
+        for group in ("HF", "CF", "ACC"):
+            item = QListWidgetItem(group)
+            item.setCheckState(
+                Qt.CheckState.Checked if group == "HF" else Qt.CheckState.Unchecked
+            )
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            self._ref_list.addItem(item)
+        self._all_train_check = QCheckBox("all_train")
+        self._all_train_check.setChecked(True)
+        self._logo_check = QCheckBox("leave_one_group_out")
+        self._logo_check.setChecked(True)
+        mode_row = QHBoxLayout()
+        mode_row.addWidget(self._all_train_check)
+        mode_row.addWidget(self._logo_check)
+        mode_row.addStretch(1)
+        self._max_iter = QSpinBox()
+        self._max_iter.setRange(1, 1000)
+        self._max_iter.setValue(75)
+        self._seed_pts = QSpinBox()
+        self._seed_pts.setRange(1, 200)
+        self._seed_pts.setValue(10)
+        self._num_repeats = QSpinBox()
+        self._num_repeats.setRange(1, 100)
+        self._num_repeats.setValue(3)
+        self._seed = QSpinBox()
+        self._seed.setRange(0, 10000)
+        self._seed.setValue(42)
+
+        form.addRow("PPG通道", self._ppg_combo)
+        form.addRow("PPG输入策略", self._ppg_input_transform_combo)
+        form.addRow("自适应滤波", self._filter_combo)
+        form.addRow("分析范围", self._scope_combo)
+        form.addRow("参考信号", self._ref_list)
+        form.addRow("评估模式", mode_row)
+        form.addRow("max_iterations", self._max_iter)
+        form.addRow("num_seed_points", self._seed_pts)
+        form.addRow("num_repeats", self._num_repeats)
+        form.addRow("random_state", self._seed)
+        card.add(form)
+        self.body().addWidget(card)
+
+        row = QHBoxLayout()
+        row.addStretch(1)
+        self._refresh_btn = QPushButton("刷新")
+        self._refresh_btn.clicked.connect(self._refresh)
+        self._run_btn = QPushButton("开始泛化评估")
+        self._run_btn.setObjectName("primary")
+        self._run_btn.clicked.connect(self._run)
+        row.addWidget(self._refresh_btn)
+        row.addWidget(self._run_btn)
+        self.body().addLayout(row)
+
+    def _build_results(self) -> None:
+        card = SectionCard("结果", "泛化评估摘要、重放报告和日志")
+        self._log = LogPanel()
+        self._summary = AAETable(["字段", "值"])
+        card.add(self._log)
+        card.add(self._summary)
+        self.body().addWidget(card)
+        self.body().addStretch(1)
+
+    def selected_reference_order(self) -> tuple[str, ...]:
+        order: list[str] = []
+        for i in range(self._ref_list.count()):
+            item = self._ref_list.item(i)
+            if item is not None and item.checkState() == Qt.CheckState.Checked:
+                order.append(item.text())
+        return tuple(order)
+
+    def selected_evaluation_modes(self) -> tuple[str, ...]:
+        modes: list[str] = []
+        if self._all_train_check.isChecked():
+            modes.append("all_train")
+        if self._logo_check.isChecked():
+            modes.append("leave_one_group_out")
+        return tuple(modes)
+
+    def _refresh(self) -> None:
+        self._summary.set_rows([])
+        self._log.clear()
+
+    def _run(self) -> None:
+        input_dir = self._input_dir_pick.path()
+        if input_dir is None or not input_dir.is_dir():
+            self._log.error("请选择有效输入目录")
+            return
+        modes = self.selected_evaluation_modes()
+        if not modes:
+            self._log.error("请至少选择一种评估模式")
+            return
+        cfg = V2BayesConfig(
+            max_iterations=int(self._max_iter.value()),
+            num_seed_points=int(self._seed_pts.value()),
+            num_repeats=int(self._num_repeats.value()),
+            random_state=int(self._seed.value()),
+        )
+        worker = V2GeneralizationWorker(
+            input_dir=input_dir,
+            output_dir=self._output_dir_pick.path(),
+            ppg_mode=str(self._ppg_combo.currentData()),
+            ppg_input_transform=str(self._ppg_input_transform_combo.currentData()),
+            adaptive_filter=str(self._filter_combo.currentData()),
+            analysis_scope=str(self._scope_combo.currentData()),
+            reference_groups_order=self.selected_reference_order(),
+            bayes_cfg=cfg,
+            evaluation_modes=modes,
+        )
+        worker.log.connect(self._log.info)
+        worker.finished.connect(self._on_done)
+        worker.failed.connect(self._log.error)
+        holder = WorkerThread(worker)
+        self._worker_holder = holder
+        holder.start()
+
+    def _on_done(self, result) -> None:
+        self._summary.set_rows(
+            [
+                ["输出目录", str(result.output_dir)],
+                ["汇总CSV", str(result.summary_csv)],
+                ["记录数", str(len(result.records))],
+            ]
+        )
+        self._log.success("v2泛化评估完成")
 
 
 class V2BatchPlotPage(_PageBase):

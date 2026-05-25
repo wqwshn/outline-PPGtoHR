@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from ppg_hr.v2.solver import solve_v2
+from ppg_hr.v2.solver import _apply_ppg_input_transform, solve_v2
 from ppg_hr.v2.types import V2RunConfig
 
 
@@ -43,6 +43,47 @@ def _write_sensor(path: Path, *, motion: bool) -> None:
         }
     )
     df.to_csv(path, index=False)
+
+
+def test_log_absorbance_input_transform_estimates_relative_absorption() -> None:
+    fs = 100
+    t = np.arange(60 * fs, dtype=float) / fs
+    baseline = 1000.0 + 120.0 * np.sin(2 * np.pi * 0.04 * t)
+    absorption = 0.025 * np.sin(2 * np.pi * 1.2 * t)
+    raw_intensity = baseline * np.exp(-absorption)
+
+    transformed = _apply_ppg_input_transform(
+        raw_intensity,
+        "log_absorbance",
+        fs_origin=fs,
+        baseline_seconds=5.0,
+    )
+
+    interior = slice(5 * fs, -5 * fs)
+    corr = np.corrcoef(transformed[interior], absorption[interior])[0, 1]
+    assert transformed.shape == raw_intensity.shape
+    assert np.isfinite(transformed).all()
+    assert abs(float(np.mean(transformed[interior]))) < 1e-3
+    assert corr > 0.85
+
+
+def test_solve_v2_records_ppg_input_transform_in_metadata(tmp_path: Path) -> None:
+    data = tmp_path / "raw.csv"
+    ref = tmp_path / "raw_ref.csv"
+    _write_sensor(data, motion=True)
+    _write_ref(ref)
+
+    result = solve_v2(
+        V2RunConfig(
+            data_path=data,
+            ref_path=ref,
+            ppg_input_transform="log_absorbance",
+            reference_groups_order=("HF",),
+        )
+    )
+
+    assert result.metadata["ppg_input_transform"] == "log_absorbance"
+    assert result.metadata["ppg_input_transform_params"]["baseline_seconds"] == 5.0
 
 
 def _write_timeline_sensor_with_gap(path: Path, *, motion: bool) -> None:

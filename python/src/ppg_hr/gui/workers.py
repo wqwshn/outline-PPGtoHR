@@ -28,8 +28,8 @@ from ..optimization.bayes_optimizer import (
     _importance_from_study,
 )
 from ..params import SolverParams
-from ..visualization import render, render_report_batch
 from ..v2.batch_pipeline import run_v2_batch_pipeline
+from ..v2.generalization import run_v2_generalization
 from ..v2.optimizer import V2BayesConfig
 from ..v2.plotting import render_v2_report_batch
 from ..v2.spo2 import V2SpO2Config, save_spo2_report, solve_spo2_v2
@@ -40,6 +40,7 @@ from ..v2.window_diagnostics import (
     render_window_diagnostics,
     save_window_diagnostics,
 )
+from ..visualization import render, render_report_batch
 
 __all__ = [
     "CompareResult",
@@ -50,6 +51,7 @@ __all__ = [
     "SolveWorker",
     "ViewWorker",
     "V2BatchPipelineWorker",
+    "V2GeneralizationWorker",
     "V2BatchPlotWorker",
     "V2SpO2Worker",
     "V2WindowDiagnosticsLoadWorker",
@@ -520,6 +522,7 @@ class V2BatchPipelineWorker(QObject):
         input_dir: Path,
         output_dir: Path,
         ppg_modes: list[str],
+        ppg_input_transform: str,
         adaptive_filter: str,
         analysis_scope: str,
         reference_groups_order: tuple[str, ...],
@@ -529,6 +532,7 @@ class V2BatchPipelineWorker(QObject):
         self._input_dir = input_dir
         self._output_dir = output_dir
         self._ppg_modes = ppg_modes
+        self._ppg_input_transform = ppg_input_transform
         self._adaptive_filter = adaptive_filter
         self._analysis_scope = analysis_scope
         self._reference_groups_order = reference_groups_order
@@ -541,6 +545,7 @@ class V2BatchPipelineWorker(QObject):
             self.log.emit(
                 "运行配置: "
                 f"modes={','.join(self._ppg_modes)} | "
+                f"ppg_input_transform={self._ppg_input_transform} | "
                 f"adaptive_filter={self._adaptive_filter} | "
                 f"analysis_scope={self._analysis_scope} | "
                 f"reference_order={'+'.join(self._reference_groups_order) or 'FFT'} | "
@@ -603,6 +608,7 @@ class V2BatchPipelineWorker(QObject):
                 input_dir=self._input_dir,
                 output_dir=self._output_dir,
                 ppg_modes=self._ppg_modes,
+                ppg_input_transform=self._ppg_input_transform,
                 adaptive_filter=self._adaptive_filter,
                 analysis_scope=self._analysis_scope,
                 reference_groups_order=self._reference_groups_order,
@@ -613,6 +619,71 @@ class V2BatchPipelineWorker(QObject):
             self.finished.emit(payload)
         except Exception as exc:  # pragma: no cover
             self.failed.emit(f"v2批量全流程失败：{exc}\n\n{traceback.format_exc()}")
+
+
+class V2GeneralizationWorker(QObject):
+    finished = Signal(object)
+    failed = Signal(str)
+    log = Signal(str)
+    progress = Signal(dict)
+
+    def __init__(
+        self,
+        *,
+        input_dir: Path,
+        output_dir: Path | None,
+        ppg_mode: str,
+        ppg_input_transform: str,
+        adaptive_filter: str,
+        analysis_scope: str,
+        reference_groups_order: tuple[str, ...],
+        bayes_cfg: V2BayesConfig,
+        evaluation_modes: tuple[str, ...],
+    ):
+        super().__init__()
+        self._input_dir = input_dir
+        self._output_dir = output_dir
+        self._ppg_mode = ppg_mode
+        self._ppg_input_transform = ppg_input_transform
+        self._adaptive_filter = adaptive_filter
+        self._analysis_scope = analysis_scope
+        self._reference_groups_order = reference_groups_order
+        self._bayes_cfg = bayes_cfg
+        self._evaluation_modes = evaluation_modes
+
+    def run(self) -> None:
+        try:
+            self.log.emit(f"泛化评估输入目录: {self._input_dir}")
+            self.log.emit(f"输出目录: {self._output_dir or '自动生成'}")
+            self.log.emit(
+                "运行配置: "
+                f"ppg_mode={self._ppg_mode} | "
+                f"ppg_input_transform={self._ppg_input_transform} | "
+                f"adaptive_filter={self._adaptive_filter} | "
+                f"analysis_scope={self._analysis_scope} | "
+                f"reference_order={'+'.join(self._reference_groups_order) or 'FFT'} | "
+                f"evaluation_modes={'+'.join(self._evaluation_modes)} | "
+                f"max_iterations={self._bayes_cfg.max_iterations}, "
+                f"num_seed_points={self._bayes_cfg.num_seed_points}, "
+                f"num_repeats={self._bayes_cfg.num_repeats}, "
+                f"random_state={self._bayes_cfg.random_state}"
+            )
+            result = run_v2_generalization(
+                input_dir=self._input_dir,
+                output_dir=self._output_dir,
+                ppg_mode=self._ppg_mode,
+                ppg_input_transform=self._ppg_input_transform,
+                adaptive_filter=self._adaptive_filter,
+                analysis_scope=self._analysis_scope,
+                reference_groups_order=self._reference_groups_order,
+                bayes_cfg=self._bayes_cfg,
+                evaluation_modes=self._evaluation_modes,
+                on_log=self.log.emit,
+                on_progress=self.progress.emit,
+            )
+            self.finished.emit(result)
+        except Exception as exc:  # pragma: no cover
+            self.failed.emit(f"v2泛化评估失败：{exc}\n\n{traceback.format_exc()}")
 
 
 class V2BatchPlotWorker(QObject):

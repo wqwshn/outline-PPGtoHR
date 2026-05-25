@@ -17,6 +17,8 @@ class V2RunConfig:
     data_path: Path
     ref_path: Path
     ppg_mode: str = "green"
+    ppg_input_transform: str = "raw_bandpass"
+    ppg_input_baseline_seconds: float = 5.0
     analysis_scope: str = "full"
     adaptive_filter: str = "noncausal_lms"
     reference_groups_order: tuple[str, ...] = ("HF", "CF", "ACC")

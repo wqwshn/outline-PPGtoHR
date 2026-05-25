@@ -24,7 +24,12 @@ from ppg_hr.core.heart_rate_solver import (
     load_raw_data,
 )
 from ppg_hr.params import SolverParams
-from ppg_hr.preprocess.utils import filloutliers_mean_previous, smoothdata_movmedian
+from ppg_hr.preprocess.utils import (
+    fillmissing_linear,
+    fillmissing_nearest,
+    filloutliers_mean_previous,
+    smoothdata_movmedian,
+)
 
 from .preprocess import safe_cf_ratio
 from .reference_groups import (
@@ -52,6 +57,9 @@ def _normalise_config(config: V2RunConfig) -> V2RunConfig:
     return V2RunConfig(
         **{
             **config.__dict__,
+            "ppg_input_transform": _normalise_ppg_input_transform(
+                config.ppg_input_transform
+            ),
             "analysis_scope": str(config.analysis_scope).strip().lower(),
             "reference_groups_order": normalise_reference_order(
                 config.reference_groups_order
@@ -75,7 +83,13 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
     accy_raw = raw_data[:, 9]
     accz_raw = raw_data[:, 10]
 
-    ppg_ori = resample_poly(filloutliers_mean_previous(ppg_raw), fs, fs_origin)
+    ppg_source = _apply_ppg_input_transform(
+        ppg_raw,
+        cfg.ppg_input_transform,
+        fs_origin=fs_origin,
+        baseline_seconds=float(cfg.ppg_input_baseline_seconds),
+    )
+    ppg_ori = resample_poly(ppg_source, fs, fs_origin)
     hf1_ori = resample_poly(ut1_raw, fs, fs_origin)
     hf2_ori = resample_poly(ut2_raw, fs, fs_origin)
     cf1_ori = resample_poly(safe_cf_ratio(uc1_raw, ut1_raw), fs, fs_origin)
@@ -353,6 +367,10 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
         "data_path": str(cfg.data_path),
         "ref_path": str(cfg.ref_path),
         "ppg_mode": cfg.ppg_mode,
+        "ppg_input_transform": cfg.ppg_input_transform,
+        "ppg_input_transform_params": {
+            "baseline_seconds": float(cfg.ppg_input_baseline_seconds),
+        },
         "analysis_scope": cfg.analysis_scope,
         "adaptive_filter": cfg.adaptive_filter,
         "reference_groups_order": list(reference_order),
@@ -424,6 +442,76 @@ def _select_ppg_raw(raw_data: np.ndarray, mode: str) -> np.ndarray:
     if value in {"ir", "infrared"}:
         return raw_data[:, 7]
     raise ValueError(f"Unsupported ppg_mode: {mode!r}")
+
+
+def _normalise_ppg_input_transform(transform: str) -> str:
+    value = str(transform).strip().lower()
+    aliases = {
+        "raw": "raw_bandpass",
+        "raw_bandpass": "raw_bandpass",
+        "none": "raw_bandpass",
+        "log": "log_absorbance",
+        "absorbance": "log_absorbance",
+        "log_absorbance": "log_absorbance",
+    }
+    if value not in aliases:
+        raise ValueError(
+            f"Unsupported ppg_input_transform={transform!r}; expected "
+            "'raw_bandpass' or 'log_absorbance'."
+        )
+    return aliases[value]
+
+
+def _apply_ppg_input_transform(
+    values: np.ndarray,
+    transform: str,
+    *,
+    fs_origin: int,
+    baseline_seconds: float = 5.0,
+) -> np.ndarray:
+    """Return the PPG signal expression used before resampling and band-pass."""
+    mode = _normalise_ppg_input_transform(transform)
+    cleaned = _finite_signal(filloutliers_mean_previous(np.asarray(values, dtype=float)))
+    if mode == "raw_bandpass":
+        return cleaned
+
+    positive = cleaned[np.isfinite(cleaned) & (cleaned > 0)]
+    if positive.size == 0:
+        return np.zeros_like(cleaned, dtype=float)
+    eps = max(float(np.nanmedian(positive)) * 1e-6, 1e-9)
+    intensity = np.clip(cleaned, eps, None)
+    baseline = _slow_ppg_baseline(
+        intensity,
+        fs_origin=int(fs_origin),
+        baseline_seconds=float(baseline_seconds),
+    )
+    baseline = np.clip(baseline, eps, None)
+    absorbance = -np.log(intensity / baseline)
+    absorbance = _finite_signal(absorbance)
+    absorbance -= float(np.nanmean(absorbance)) if absorbance.size else 0.0
+    return absorbance
+
+
+def _slow_ppg_baseline(
+    values: np.ndarray,
+    *,
+    fs_origin: int,
+    baseline_seconds: float,
+) -> np.ndarray:
+    window = max(3, int(round(float(baseline_seconds) * int(fs_origin))))
+    if window % 2 == 0:
+        window += 1
+    baseline = smoothdata_movmedian(values, window)
+    return _finite_signal(baseline)
+
+
+def _finite_signal(values: np.ndarray) -> np.ndarray:
+    out = np.asarray(values, dtype=float).copy()
+    out[~np.isfinite(out)] = np.nan
+    out = fillmissing_linear(out)
+    out = fillmissing_nearest(out)
+    out[~np.isfinite(out)] = 0.0
+    return out
 
 
 def _ordered_reference_signals(

@@ -49,6 +49,16 @@ def discover_v2_plot_jobs(root_dir: str | Path) -> list[V2PlotJob]:
     return [V2PlotJob(p) for p in sorted(root.rglob("*.json")) if is_v2_report(p)]
 
 
+def _payload_value(payload: dict, key: str, *, default: object = None) -> object:
+    """从 payload 读取字段，兼容顶层展开和 ``metadata`` 子对象两种格式。"""
+    if key in payload:
+        return payload[key]
+    meta = payload.get("metadata")
+    if isinstance(meta, dict) and key in meta:
+        return meta[key]
+    return default
+
+
 def _normalise_plot_curves(
     plot_curves: tuple[str, ...] | list[str] | None,
 ) -> tuple[str, ...]:
@@ -78,8 +88,8 @@ def _compute_comparison_curves(
         return []
 
     best_params = payload.get("best_params", {})
-    from .types import V2RunConfig
     from .solver import solve_v2
+    from .types import V2RunConfig
 
     field_names = {f.name for f in dataclasses.fields(V2RunConfig)}
     comparison_curves: list[dict[str, object]] = []
@@ -108,6 +118,13 @@ def _compute_comparison_curves(
                 "data_path": data_path,
                 "ref_path": ref_path,
                 "ppg_mode": payload.get("ppg_mode", "green"),
+                "ppg_input_transform": payload.get(
+                    "ppg_input_transform",
+                    "raw_bandpass",
+                ),
+                "ppg_input_baseline_seconds": (
+                    payload.get("ppg_input_transform_params", {}) or {}
+                ).get("baseline_seconds", 5.0),
                 "analysis_scope": payload.get("analysis_scope", "full"),
                 "adaptive_filter": adaptive_filter,
                 "reference_groups_order": comp_order_norm,
@@ -156,9 +173,8 @@ def render_v2_report(
     key = reference_order_key(order)
     prefix = output_prefix or report.stem
     hr = np.asarray(payload.get("hr", []), dtype=float)
-    meta = payload.get("metadata", {})
-    time_bias = float(meta.get("time_bias", 5.0))
-    adaptive_filter = str(meta.get("adaptive_filter", "lms"))
+    time_bias = float(_payload_value(payload, "time_bias", default=5.0))
+    adaptive_filter = str(_payload_value(payload, "adaptive_filter", default="lms"))
     adaptive_label = method_label(adaptive_filter, order)
     fig_base = fig_dir / f"{prefix}-v2-hr"
     fig_path = fig_base.with_suffix(".png")
@@ -172,9 +188,9 @@ def render_v2_report(
     _write_hr_csv(hr_path, hr, time_bias=time_bias, comparison_curves=comparison_curves)
     _write_error_csv(
         err_path, hr, time_bias, order, adaptive_filter,
-        analysis_scope=str(meta.get("analysis_scope", "full")),
-        motion_segment=meta.get("motion_segment"),
-        pre_motion_context_seconds=float(meta.get("pre_motion_context_seconds", 30.0)),
+        analysis_scope=str(_payload_value(payload, "analysis_scope", default="full")),
+        motion_segment=_payload_value(payload, "motion_segment"),
+        pre_motion_context_seconds=float(_payload_value(payload, "pre_motion_context_seconds", default=30.0)),
         comparison_curves=comparison_curves,
     )
     _plot_hr(
@@ -251,11 +267,10 @@ def _plot_hr(
         plt.close(fig)
         return
 
-    meta = payload.get("metadata", {})
-    time_bias = float(meta.get("time_bias", 5.0))
-    scope = str(meta.get("analysis_scope", "full")).strip().lower()
-    motion_segment = meta.get("motion_segment", None)
-    pre_motion_context = float(meta.get("pre_motion_context_seconds", 30.0))
+    time_bias = float(_payload_value(payload, "time_bias", default=5.0))
+    scope = str(_payload_value(payload, "analysis_scope", default="full")).strip().lower()
+    motion_segment = _payload_value(payload, "motion_segment")
+    pre_motion_context = float(_payload_value(payload, "pre_motion_context_seconds", default=30.0))
 
     t_aligned = hr[:, 0] + time_bias
 
@@ -265,7 +280,7 @@ def _plot_hr(
     )
     ref_aligned = ref_interp(t_aligned)
 
-    ref_data = _load_ref_data(meta.get("ref_path", ""))
+    ref_data = _load_ref_data(str(_payload_value(payload, "ref_path", default="")))
     if ref_data is not None and ref_data.size:
         t_min = max(float(t_aligned[0]), float(ref_data[0, 0]))
         t_max = min(float(t_aligned[-1]), float(ref_data[-1, 0]))

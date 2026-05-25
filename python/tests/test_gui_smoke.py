@@ -24,11 +24,11 @@ def test_main_window_builds():
     app = QApplication.instance() or QApplication([])
     win = MainWindow()
     try:
-        # Default is v2: batch pipeline, batch plot, window diagnostics, SpO2
-        assert win._nav.count() == 4
-        assert win._stack.count() == 4
+        # Default is v2: batch pipeline, generalization, batch plot, diagnostics, SpO2
+        assert win._nav.count() == 5
+        assert win._stack.count() == 5
         # Switch pages to exercise on_nav_changed
-        for i in range(4):
+        for i in range(5):
             win._nav.setCurrentRow(i)
             app.processEvents()
             assert win._stack.currentIndex() == i

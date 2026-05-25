@@ -26,6 +26,7 @@ from .theme import STYLESHEET, Palette
 from .v2_pages import (
     V2BatchPipelinePage,
     V2BatchPlotPage,
+    V2GeneralizationPage,
     V2SpO2Page,
     V2WindowDiagnosticsPage,
 )
@@ -55,6 +56,7 @@ _NAV_ITEMS_V1 = [
 
 _NAV_ITEMS_V2 = [
     ("批量全流程", "v2单路径质检+优化+输出", V2BatchPipelinePage, Palette.success),
+    ("泛化评估", "同运动类型共享参数留出评估", V2GeneralizationPage, "#8B5CF6"),
     ("批量绘图", "v2科研风格批量绘图", V2BatchPlotPage, Palette.warning),
     ("窗口诊断", "v2单窗口重放与机制可视化", V2WindowDiagnosticsPage, Palette.primary),
     ("血氧计算", "红光/红外光 PPG 计算 SpO2", V2SpO2Page, Palette.primary),

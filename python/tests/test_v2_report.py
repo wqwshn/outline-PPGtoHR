@@ -19,6 +19,7 @@ def _result() -> V2SolverResult:
             "data_path": "sample.csv",
             "ref_path": "sample_ref.csv",
             "ppg_mode": "green",
+            "ppg_input_transform": "raw_bandpass",
             "analysis_scope": "full",
             "adaptive_filter": "noncausal_lms",
             "reference_groups_order": ["HF", "CF"],
@@ -40,6 +41,7 @@ def test_save_and_load_v2_report(tmp_path: Path) -> None:
 
     assert payload["schema_version"] == "v2"
     assert payload["reference_groups_order"] == ["HF", "CF"]
+    assert payload["ppg_input_transform"] == "raw_bandpass"
     assert payload["best_params"] == {"max_order": 16}
     assert payload["history"] == [{"value": 0.5}]
 

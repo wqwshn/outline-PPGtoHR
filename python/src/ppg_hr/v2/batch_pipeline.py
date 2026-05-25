@@ -20,6 +20,7 @@ from .types import V2RunConfig
 class V2BatchRecord:
     sample: str
     ppg_mode: str
+    ppg_input_transform: str
     adaptive_filter: str
     analysis_scope: str
     reference_order_key: str
@@ -38,6 +39,7 @@ def run_v2_batch_pipeline(
     input_dir: Path,
     output_dir: Path | None,
     ppg_modes: list[str],
+    ppg_input_transform: str = "raw_bandpass",
     adaptive_filter: str,
     analysis_scope: str,
     reference_groups_order: tuple[str, ...],
@@ -51,6 +53,7 @@ def run_v2_batch_pipeline(
         if output_dir is not None
         else default_v2_batch_output_dir(
             input_dir,
+            ppg_input_transform=ppg_input_transform,
             analysis_scope=analysis_scope,
             adaptive_filter=adaptive_filter,
             reference_groups_order=reference_groups_order,
@@ -86,6 +89,7 @@ def run_v2_batch_pipeline(
             prefix = safe_run_prefix(
                 sample.stem,
                 mode,
+                ppg_input_transform,
                 adaptive_filter,
                 analysis_scope,
                 reference_groups_order,
@@ -95,6 +99,7 @@ def run_v2_batch_pipeline(
                 data_path=sample,
                 ref_path=ref,
                 ppg_mode=mode,
+                ppg_input_transform=ppg_input_transform,
                 analysis_scope=analysis_scope,
                 adaptive_filter=adaptive_filter,
                 reference_groups_order=reference_groups_order,
@@ -105,19 +110,26 @@ def run_v2_batch_pipeline(
                 f"通道={mode} | 滤波={adaptive_filter} | 参考={key}",
             )
 
-            def _trial_step(info: dict) -> None:
+            def _trial_step(
+                info: dict,
+                *,
+                _run_idx: int = run_idx,
+                _sample_name: str = sample.name,
+                _mode: str = mode,
+                _key: str = key,
+            ) -> None:
                 if on_progress is not None:
                     on_progress(
                         {
                             "stage": "optimise",
                             "stage_label": "贝叶斯优化",
-                            "overall_current": run_idx,
+                            "overall_current": _run_idx,
                             "overall_total": total_runs,
                             "stage_current": int(info["global_trial"]),
                             "stage_total": int(info["global_total"]),
-                            "file": sample.name,
-                            "mode": mode,
-                            "reference_order_key": key,
+                            "file": _sample_name,
+                            "mode": _mode,
+                            "reference_order_key": _key,
                             "detail": (
                                 f"repeat {info['repeat_idx']}/{info['repeat_total']} | "
                                 f"trial {info['trial_idx']}/{info['trial_total']} | "
@@ -131,7 +143,7 @@ def run_v2_batch_pipeline(
                 if trial_idx == 1 or trial_idx % 10 == 0 or trial_idx == trial_total:
                     _log(
                         on_log,
-                        f"  {sample.name} {mode} repeat "
+                        f"  {_sample_name} {_mode} repeat "
                         f"{info['repeat_idx']}/{info['repeat_total']} "
                         f"trial {trial_idx}/{trial_total} "
                         f"value={float(info['value']):.3f}",
@@ -189,6 +201,7 @@ def run_v2_batch_pipeline(
                 V2BatchRecord(
                     sample=sample.name,
                     ppg_mode=mode,
+                    ppg_input_transform=ppg_input_transform,
                     adaptive_filter=adaptive_filter,
                     analysis_scope=analysis_scope,
                     reference_order_key=key,
@@ -213,20 +226,23 @@ def run_v2_batch_pipeline(
 def default_v2_batch_output_dir(
     input_dir: Path,
     *,
+    ppg_input_transform: str = "raw_bandpass",
     analysis_scope: str = "full",
     adaptive_filter: str = "lms",
     reference_groups_order: tuple[str, ...] = (),
 ) -> Path:
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     scope = str(analysis_scope).strip().lower()
+    transform = safe_name(ppg_input_transform)
     label = method_label(adaptive_filter, reference_groups_order)
-    tag = f"{stamp}_{scope}_{label}"
+    tag = f"{stamp}_{transform}_{scope}_{label}"
     return Path(input_dir).resolve() / "v2_batch_outputs" / tag
 
 
 def safe_run_prefix(
     sample_stem: str,
     ppg_mode: str,
+    ppg_input_transform: str,
     adaptive_filter: str,
     analysis_scope: str,
     reference_order: tuple[str, ...],
@@ -235,12 +251,17 @@ def safe_run_prefix(
         [
             str(sample_stem),
             str(ppg_mode),
+            str(ppg_input_transform),
             str(adaptive_filter),
             str(analysis_scope),
             reference_order_key(reference_order),
         ]
     )
-    return re.sub(r"[^A-Za-z0-9_.+-]+", "_", raw).strip("._-") or "v2-run"
+    return safe_name(raw) or "v2-run"
+
+
+def safe_name(raw: object) -> str:
+    return re.sub(r"[^A-Za-z0-9_.+-]+", "_", str(raw)).strip("._-")
 
 
 def _write_summary(output_dir: Path, records: list[V2BatchRecord]) -> Path:
@@ -251,6 +272,7 @@ def _write_summary(output_dir: Path, records: list[V2BatchRecord]) -> Path:
             [
                 "sample",
                 "ppg_mode",
+                "ppg_input_transform",
                 "adaptive_filter",
                 "analysis_scope",
                 "reference_order_key",
@@ -269,6 +291,7 @@ def _write_summary(output_dir: Path, records: list[V2BatchRecord]) -> Path:
                 [
                     r.sample,
                     r.ppg_mode,
+                    r.ppg_input_transform,
                     r.adaptive_filter,
                     r.analysis_scope,
                     r.reference_order_key,

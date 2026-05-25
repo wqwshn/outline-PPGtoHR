@@ -14,9 +14,11 @@ def test_v2_workers_are_exported() -> None:
     from ppg_hr.gui.workers import (
         V2BatchPipelineWorker,
         V2BatchPlotWorker,
+        V2GeneralizationWorker,
         V2SpO2Worker,
     )
 
+    assert V2GeneralizationWorker is not None
     assert V2BatchPipelineWorker is not None
     assert V2BatchPlotWorker is not None
     assert V2SpO2Worker is not None
@@ -68,7 +70,13 @@ def test_main_window_can_switch_between_v1_and_v2() -> None:
     win = MainWindow()
     try:
         assert win.current_version() == "v2"
-        assert win.nav_names() == ["批量全流程", "批量绘图", "窗口诊断", "血氧计算"]
+        assert win.nav_names() == [
+            "批量全流程",
+            "泛化评估",
+            "批量绘图",
+            "窗口诊断",
+            "血氧计算",
+        ]
         win.set_version("v1")
         assert win.current_version() == "v1"
         v1_names = win.nav_names()
@@ -94,6 +102,30 @@ def test_v2_batch_page_defaults_to_hf_and_exposes_all_filters() -> None:
         assert filters == ["lms", "klms", "volterra", "noncausal_lms", "rff_lms"]
         assert page.selected_reference_order() == ("HF",)
         assert page._num_repeats.value() == 3
+        assert page._ppg_input_transform_combo.currentData() == "raw_bandpass"
+    finally:
+        page.deleteLater()
+        app.processEvents()
+
+
+def test_v2_generalization_page_exposes_input_transform_and_logo_defaults() -> None:
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.v2_pages import V2GeneralizationPage
+
+    app = QApplication.instance() or QApplication([])
+    page = V2GeneralizationPage()
+    try:
+        assert page._ppg_input_transform_combo.currentData() == "raw_bandpass"
+        assert page._all_train_check.isChecked()
+        assert page._logo_check.isChecked()
+        assert page.selected_reference_order() == ("HF",)
+        for i in range(page._ref_list.count()):
+            item = page._ref_list.item(i)
+            if item is not None and item.text() == "ACC":
+                item.setCheckState(Qt.CheckState.Checked)
+        assert page.selected_reference_order() == ("HF", "ACC")
     finally:
         page.deleteLater()
         app.processEvents()
@@ -213,7 +245,7 @@ def test_v2_window_diagnostics_page_keeps_load_and_render_workers_separate(
             return self.windows[0]
 
     class FakeHolder:
-        instances: list["FakeHolder"] = []
+        instances: list[FakeHolder] = []
 
         def __init__(self, worker) -> None:
             self.worker = worker
