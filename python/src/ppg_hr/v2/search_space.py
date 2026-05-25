@@ -11,9 +11,9 @@ import numpy as np
 @dataclass
 class V2SearchSpace:
     # 目标重采样率；影响频谱分辨率和运行速度。
-    fs_target: list[int] | None = field(default_factory=lambda: [25, 50])
+    fs_target: list[int] | None = field(default_factory=lambda: [25, 50, 100])
     # 自适应滤波最大阶数；控制参考信号级联滤波长度上限。
-    max_order: list[int] | None = field(default_factory=lambda: [8, 12, 16])
+    max_order: list[int] | None = field(default_factory=lambda: [8, 12, 16, 20])
     # LMS 类滤波基础步长；非因果 LMS/RFF-LMS 会结合相关系数修正。
     lms_mu_base: list[float] | None = field(
         default_factory=lambda: [0.008, 0.01, 0.012]
@@ -34,7 +34,7 @@ class V2SearchSpace:
     slew_step_bpm: list[int] | None = field(default_factory=lambda: [5, 7, 9])
     # 静息段谱峰近邻追踪范围，综合 v1 和静息优化实验后保留少量代表值。
     hr_range_rest: list[float] | None = field(
-        default_factory=lambda: [x / 60.0 for x in (20, 30, 50, 60, 80, 100)]
+        default_factory=lambda: [x / 60.0 for x in (20, 30, 50, 60, 80)]
     )
     # 静息段心率跳变限幅阈值，单位 bpm，覆盖 v1 常用值和实验中有效的小/大限幅。
     slew_limit_rest: list[float] | None = field(
@@ -45,7 +45,7 @@ class V2SearchSpace:
         default_factory=lambda: [0.5, 2.0, 4.0, 5.0, 8.0, 12.0]
     )
     # 预测时间相对参考心率的统一对齐延迟，单位秒；沿用 v1 搜索空间。
-    time_bias: list[int] | None = field(default_factory=lambda: [4, 5, 6])
+    time_bias: list[float] | None = field(default_factory=lambda: [4, 4.5, 5, 5.5, 6])
     # RFF-LMS 随机傅里叶特征维度，仅 adaptive_filter="rff_lms" 时启用。
     rff_D: list[int] | None = None
     # RFF-LMS 核宽参数，仅 adaptive_filter="rff_lms" 时启用。

@@ -66,6 +66,7 @@ ignore = [
     "E501",  # line too long (handled by formatter)
     "N803",  # argument name should be lowercase (we sometimes mirror MATLAB names)
     "N806",  # variable in function should be lowercase (same reason)
+    "N815",  # class attributes may mirror MATLAB/API names such as rff_D
 ]
 
 [tool.ruff.lint.per-file-ignores]

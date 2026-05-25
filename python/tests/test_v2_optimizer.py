@@ -14,17 +14,18 @@ from ppg_hr.v2.types import V2RunConfig
 def test_default_search_space_has_rest_tracking_and_time_bias() -> None:
     space = default_v2_search_space("noncausal_lms")
 
+    assert space.options("fs_target") == [25, 50, 100]
+    assert space.options("max_order") == [8, 12, 16, 20]
     assert space.options("hr_range_rest") == [
         20 / 60.0,
         30 / 60.0,
         50 / 60.0,
         60 / 60.0,
         80 / 60.0,
-        100 / 60.0,
     ]
     assert space.options("slew_limit_rest") == [1.0, 3.0, 5.0, 6.0, 8.0, 25.0]
     assert space.options("slew_step_rest") == [0.5, 2.0, 4.0, 5.0, 8.0, 12.0]
-    assert space.options("time_bias") == [4, 5, 6]
+    assert space.options("time_bias") == [4, 4.5, 5, 5.5, 6]
     assert "spec_penalty_weight" not in space.names()
 
 
