@@ -263,6 +263,20 @@ def test_recovery_trigger_gating() -> None:
     assert not _recovery_should_trigger(source, motion_end_idx, 20.0)
 
 
+def test_final_hr_blend_keeps_fft_on_nonadaptive_windows() -> None:
+    from ppg_hr.v2.solver import _blend_final_hr_by_mask
+
+    source = np.zeros((6, 9), dtype=float)
+    source[:, 2] = np.asarray([180, 181, 182, 183, 184, 185], dtype=float) / 60.0
+    source[:, 4] = np.asarray([70, 71, 72, 73, 74, 75], dtype=float) / 60.0
+    used_adaptive_mask = np.asarray([False, True, True, False, False, True])
+
+    blended = _blend_final_hr_by_mask(source, used_adaptive_mask)
+
+    assert np.allclose(blended[~used_adaptive_mask], source[~used_adaptive_mask, 4])
+    assert np.allclose(blended[used_adaptive_mask], source[used_adaptive_mask, 2])
+
+
 def test_find_crossover_detects_fft_rise() -> None:
     from ppg_hr.v2.solver import _find_crossover_idx
 

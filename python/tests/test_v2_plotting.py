@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
+from ppg_hr.v2.solver import V2SolverResult
 from ppg_hr.v2.plotting import (
     discover_v2_plot_jobs,
     render_v2_report,
@@ -185,6 +186,146 @@ def test_figure_error_rows_follow_prediction_curve_selection() -> None:
     )
 
     assert [row[0] for row in rows] == ["NC-LMS+H"]
+
+
+def test_figure_error_rows_handles_aligned_subset_for_comparison_curve() -> None:
+    from ppg_hr.v2.plotting import _figure_error_rows
+
+    hr = np.asarray(
+        [
+            [0.0, 75.0, 74.0, 75.0, 0.0, 0.0],
+            [1.0, 76.0, 75.0, 76.0, 1.0, 1.0],
+            [2.0, 77.0, 76.0, 77.0, 1.0, 1.0],
+        ],
+        dtype=float,
+    )
+    comp_hr = np.asarray(
+        [
+            [0.0, 75.0, 74.0, 150.0, 0.0, 1.0],
+            [1.0, 76.0, 75.0, 151.0, 1.0, 1.0],
+            [2.0, 77.0, 76.0, 152.0, 1.0, 1.0],
+        ],
+        dtype=float,
+    )
+    aligned = np.asarray([False, True, True])
+
+    rows = _figure_error_rows(
+        hr,
+        aligned,
+        time_bias=0.0,
+        adaptive_label="K-LMS+H",
+        comparison_curves=[
+            {"label": "K-LMS+A", "order": ("ACC",), "hr": comp_hr},
+        ],
+    )
+
+    assert [row[0] for row in rows] == ["FFT", "K-LMS+H", "K-LMS+A"]
+
+
+def test_render_v2_report_comparison_curve_uses_shared_fft_outside_adaptive(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import csv
+
+    from ppg_hr.v2 import solver
+
+    report = tmp_path / "new.json"
+    _write_report(report, ["HF"], time_bias=3.0)
+    payload = json.loads(report.read_text(encoding="utf-8"))
+    payload["hr"] = [
+        [0.0, 75.0, 70.0, 90.0, 1.0, 1.0],
+        [1.0, 76.0, 71.0, 171.0, 0.0, 0.0],
+        [2.0, 77.0, 72.0, 172.0, 0.0, 0.0],
+    ]
+    payload["adaptive_filter"] = "klms"
+    payload["metadata"]["adaptive_filter"] = "klms"
+    payload["pre_motion_context_seconds"] = 12.0
+    report.write_text(json.dumps(payload), encoding="utf-8")
+
+    seen_configs = []
+
+    def fake_solve_v2(cfg):
+        seen_configs.append(cfg)
+        return V2SolverResult(
+            HR=np.asarray(
+                [
+                    [0.0, 75.0, 70.0, 190.0, 1.0, 1.0],
+                    [1.0, 76.0, 71.0, 191.0, 0.0, 1.0],
+                    [2.0, 77.0, 72.0, 192.0, 0.0, 1.0],
+                ],
+                dtype=float,
+            ),
+            err_stats={"fft_aae_bpm": 0.0, "final_aae_bpm": 0.0},
+            metadata={},
+            window_table=[],
+        )
+
+    monkeypatch.setattr(solver, "solve_v2", fake_solve_v2)
+
+    arte = render_v2_report(
+        report,
+        out_dir=tmp_path / "out",
+        comparison_groups=(("ACC",),),
+    )
+
+    with arte.hr_csv.open("r", encoding="utf-8-sig", newline="") as f:
+        rows = list(csv.DictReader(f))
+
+    assert seen_configs
+    assert seen_configs[0].time_bias == 3.0
+    assert seen_configs[0].pre_motion_context_seconds == 12.0
+    assert seen_configs[0].reference_groups_order == ("ACC",)
+    assert [float(row["final_bpm"]) for row in rows] == [90.0, 71.0, 72.0]
+    assert [float(row["K-LMS+A_bpm"]) for row in rows] == [190.0, 71.0, 72.0]
+
+
+def test_render_v2_report_comparison_curve_aligns_by_window_time(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import csv
+
+    from ppg_hr.v2 import solver
+
+    report = tmp_path / "new.json"
+    _write_report(report, ["HF"], time_bias=0.0)
+    payload = json.loads(report.read_text(encoding="utf-8"))
+    payload["hr"] = [
+        [0.0, 75.0, 70.0, 90.0, 1.0, 1.0],
+        [1.0, 76.0, 71.0, 91.0, 1.0, 1.0],
+        [2.0, 77.0, 72.0, 92.0, 1.0, 1.0],
+    ]
+    payload["adaptive_filter"] = "klms"
+    payload["metadata"]["adaptive_filter"] = "klms"
+    report.write_text(json.dumps(payload), encoding="utf-8")
+
+    def fake_solve_v2(_cfg):
+        return V2SolverResult(
+            HR=np.asarray(
+                [
+                    [0.0, 75.0, 70.0, 190.0, 1.0, 1.0],
+                    [2.0, 77.0, 72.0, 192.0, 1.0, 1.0],
+                ],
+                dtype=float,
+            ),
+            err_stats={"fft_aae_bpm": 0.0, "final_aae_bpm": 0.0},
+            metadata={},
+            window_table=[],
+        )
+
+    monkeypatch.setattr(solver, "solve_v2", fake_solve_v2)
+
+    arte = render_v2_report(
+        report,
+        out_dir=tmp_path / "out",
+        comparison_groups=(("ACC",),),
+    )
+
+    with arte.hr_csv.open("r", encoding="utf-8-sig", newline="") as f:
+        rows = list(csv.DictReader(f))
+
+    assert [float(row["K-LMS+A_bpm"]) for row in rows] == [190.0, 191.0, 192.0]
 
 
 def test_render_v2_report_motion_scope_crops_to_analysis_window(

@@ -107,6 +107,13 @@ def _compute_comparison_curves(
     data_path = _resolve_path("data_path")
     ref_path = _resolve_path("ref_path")
 
+    def _report_config_value(name: str) -> object:
+        if name == "ppg_input_baseline_seconds":
+            params = payload.get("ppg_input_transform_params", {}) or {}
+            if isinstance(params, dict) and "baseline_seconds" in params:
+                return params["baseline_seconds"]
+        return _payload_value(payload, name, default=None)
+
     for comp_order in comparison_groups:
         comp_order_norm = tuple(str(g).strip().upper() for g in comp_order)
         comp_key = reference_order_key(comp_order_norm)
@@ -117,20 +124,23 @@ def _compute_comparison_curves(
             cfg_dict: dict[str, object] = {
                 "data_path": data_path,
                 "ref_path": ref_path,
-                "ppg_mode": payload.get("ppg_mode", "green"),
-                "ppg_input_transform": payload.get(
-                    "ppg_input_transform",
-                    "raw_bandpass",
-                ),
-                "ppg_input_baseline_seconds": (
-                    payload.get("ppg_input_transform_params", {}) or {}
-                ).get("baseline_seconds", 5.0),
-                "analysis_scope": payload.get("analysis_scope", "full"),
                 "adaptive_filter": adaptive_filter,
                 "reference_groups_order": comp_order_norm,
             }
+            for name in field_names:
+                if name in cfg_dict or name == "extras":
+                    continue
+                value = _report_config_value(name)
+                if value is not None:
+                    cfg_dict[name] = value
             for k, v in best_params.items():
-                if k in field_names:
+                if k in field_names and k not in {
+                    "data_path",
+                    "ref_path",
+                    "adaptive_filter",
+                    "reference_groups_order",
+                    "extras",
+                }:
                     cfg_dict[k] = v
             cfg = V2RunConfig(**{k: v for k, v in cfg_dict.items() if k in field_names})
             comp_result = solve_v2(cfg)
@@ -305,7 +315,7 @@ def _plot_hr(
     t_plot = t_aligned[aligned]
     ref_plot = ref_aligned[aligned]
     fft_plot = hr[aligned, 2]
-    final_plot = hr[aligned, 3]
+    final_plot = _base_final_bpm_on_mask(hr)[aligned]
     motion_plot = hr[aligned, 4] if hr.shape[1] > 4 else np.zeros_like(t_plot)
 
     color = color_for_reference_order(order)
@@ -347,8 +357,9 @@ def _plot_hr(
             comp_order = comp["order"]
             comp_hr = np.asarray(comp["hr"], dtype=float)
             comp_label = str(comp["label"])
-            if comp_hr.size:
-                comp_final = comp_hr[aligned, 3]
+            comp_final_full = _comparison_final_bpm_on_base(hr, comp_hr)
+            if comp_final_full.size:
+                comp_final = comp_final_full[aligned]
                 comp_color = color_for_reference_order(tuple(comp_order))
                 ax.plot(
                     t_plot, comp_final,
@@ -395,6 +406,11 @@ def _write_hr_csv(
     comp_curves = comparison_curves or []
     comp_labels = [str(c["label"]) for c in comp_curves]
     comp_columns = [f"{lbl}_bpm" for lbl in comp_labels]
+    comp_values = [
+        _comparison_final_bpm_on_base(hr, np.asarray(c["hr"], dtype=float))
+        for c in comp_curves
+    ]
+    base_final = _base_final_bpm_on_mask(hr)
     ref_aligned = _aligned_reference_bpm(hr, time_bias)
     headers = [
         "time_s", "ref_bpm", "fft_bpm", "final_bpm",
@@ -408,13 +424,70 @@ def _write_hr_csv(
             aligned_row[0] = row[0] + time_bias
             if i < ref_aligned.size:
                 aligned_row[1] = ref_aligned[i]
-            for comp in comp_curves:
-                comp_hr = np.asarray(comp["hr"], dtype=float)
-                if i < comp_hr.shape[0]:
-                    aligned_row.append(comp_hr[i, 3])
+            if i < base_final.size:
+                aligned_row[3] = base_final[i]
+            for values in comp_values:
+                if i < values.size:
+                    aligned_row.append(values[i])
                 else:
                     aligned_row.append(float("nan"))
             writer.writerow(aligned_row)
+
+
+def _base_final_bpm_on_mask(hr: np.ndarray) -> np.ndarray:
+    arr = np.asarray(hr, dtype=float)
+    if arr.ndim != 2 or arr.shape[0] == 0 or arr.shape[1] <= 3:
+        return np.asarray([], dtype=float)
+    final = arr[:, 3].copy()
+    if arr.shape[1] > 5:
+        final = np.where(arr[:, 5] > 0.5, final, arr[:, 2])
+    return final
+
+
+def _comparison_final_bpm_on_base(
+    base_hr: np.ndarray,
+    comp_hr: np.ndarray,
+) -> np.ndarray:
+    base = np.asarray(base_hr, dtype=float)
+    comp = np.asarray(comp_hr, dtype=float)
+    if base.ndim != 2 or base.shape[0] == 0 or base.shape[1] <= 3:
+        return np.asarray([], dtype=float)
+
+    out = np.full(base.shape[0], float("nan"), dtype=float)
+    if comp.ndim == 2 and comp.shape[0] > 0 and comp.shape[1] > 3:
+        comp_t = comp[:, 0]
+        comp_final = comp[:, 3]
+        valid = np.isfinite(comp_t) & np.isfinite(comp_final)
+        if valid.sum() == 1:
+            t0 = float(comp_t[valid][0])
+            out[np.isclose(base[:, 0], t0, rtol=0.0, atol=1e-9)] = float(
+                comp_final[valid][0]
+            )
+        elif valid.sum() > 1:
+            order = np.argsort(comp_t[valid])
+            t_sorted = comp_t[valid][order]
+            v_sorted = comp_final[valid][order]
+            unique_t, unique_idx = np.unique(t_sorted, return_index=True)
+            unique_v = v_sorted[unique_idx]
+            if unique_t.size == 1:
+                out[np.isclose(base[:, 0], unique_t[0], rtol=0.0, atol=1e-9)] = (
+                    unique_v[0]
+                )
+            else:
+                interp = interp1d(
+                    unique_t,
+                    unique_v,
+                    kind="linear",
+                    bounds_error=False,
+                    fill_value=float("nan"),
+                    assume_sorted=True,
+                )
+                out = np.asarray(interp(base[:, 0]), dtype=float)
+
+    if base.shape[1] > 5:
+        used_adaptive = base[:, 5] > 0.5
+        out = np.where(used_adaptive, out, base[:, 2])
+    return out
 
 
 def _aligned_reference_bpm(hr: np.ndarray, time_bias: float) -> np.ndarray:
@@ -496,9 +569,10 @@ def _detailed_stats_v2(
     rest_flag = ~motion_flag & scope_mask
     motion_flag_scoped = motion_flag & scope_mask
     adaptive_label = method_label(adaptive_filter, order)
+    base_final = _base_final_bpm_on_mask(hr)
     result: list[dict[str, float | str]] = []
     for col, name in ((2, "FFT"), (3, adaptive_label)):
-        pred = hr[:, col]
+        pred = hr[:, col] if col == 2 else base_final
         abs_err = np.abs(pred[scope_mask] - ref[scope_mask])
         abs_err = abs_err[np.isfinite(abs_err)]
         abs_err_rest = np.abs(pred[rest_flag] - ref[rest_flag]) if rest_flag.any() else np.array([])
@@ -521,26 +595,23 @@ def _detailed_stats_v2(
         if comp_hr.size == 0:
             continue
         comp_label = str(comp["label"])
-        comp_ref_interp = interp1d(
-            comp_hr[:, 0], comp_hr[:, 1],
-            kind="linear", fill_value="extrapolate", assume_sorted=False,
-        )
-        comp_ref = comp_ref_interp(comp_hr[:, 0] + time_bias)
-        pred = comp_hr[:, 3]
-        abs_err = np.abs(pred[scope_mask] - comp_ref[scope_mask])
+        pred = _comparison_final_bpm_on_base(hr, comp_hr)
+        if pred.size != hr.shape[0]:
+            continue
+        abs_err = np.abs(pred[scope_mask] - ref[scope_mask])
         abs_err = abs_err[np.isfinite(abs_err)]
-        abs_err_rest = np.abs(pred[rest_flag] - comp_ref[rest_flag]) if rest_flag.any() else np.array([])
+        abs_err_rest = np.abs(pred[rest_flag] - ref[rest_flag]) if rest_flag.any() else np.array([])
         abs_err_rest = abs_err_rest[np.isfinite(abs_err_rest)]
-        abs_err_motion = np.abs(pred[motion_flag_scoped] - comp_ref[motion_flag_scoped]) if motion_flag_scoped.any() else np.array([])
+        abs_err_motion = np.abs(pred[motion_flag_scoped] - ref[motion_flag_scoped]) if motion_flag_scoped.any() else np.array([])
         abs_err_motion = abs_err_motion[np.isfinite(abs_err_motion)]
         result.append({
             "method": comp_label,
             "total_aae": float(np.mean(abs_err)) if abs_err.size else float("nan"),
             "rest_aae": float(np.mean(abs_err_rest)) if abs_err_rest.size else float("nan"),
             "motion_aae": float(np.mean(abs_err_motion)) if abs_err_motion.size else float("nan"),
-            "total_hit_rate_5bpm": _hit_rate_5bpm(pred[scope_mask], comp_ref[scope_mask]),
-            "rest_hit_rate_5bpm": _hit_rate_5bpm(pred[rest_flag], comp_ref[rest_flag]) if rest_flag.any() else float("nan"),
-            "motion_hit_rate_5bpm": _hit_rate_5bpm(pred[motion_flag_scoped], comp_ref[motion_flag_scoped]) if motion_flag_scoped.any() else float("nan"),
+            "total_hit_rate_5bpm": _hit_rate_5bpm(pred[scope_mask], ref[scope_mask]),
+            "rest_hit_rate_5bpm": _hit_rate_5bpm(pred[rest_flag], ref[rest_flag]) if rest_flag.any() else float("nan"),
+            "motion_hit_rate_5bpm": _hit_rate_5bpm(pred[motion_flag_scoped], ref[motion_flag_scoped]) if motion_flag_scoped.any() else float("nan"),
         })
     return result
 
@@ -634,7 +705,7 @@ def _figure_error_rows(
         )
 
     fft_all, fft_motion = _aae(hr[:, 2], ref, aligned)
-    final_all, final_motion = _aae(hr[:, 3], ref, aligned)
+    final_all, final_motion = _aae(_base_final_bpm_on_mask(hr), ref, aligned)
 
     rows: list[tuple[str, float, float]] = []
     if "fft" in curves:
@@ -653,7 +724,7 @@ def _figure_error_rows(
         comp_hr = np.asarray(comp["hr"], dtype=float)
         if comp_hr.size:
             comp_label = str(comp["label"])
-            comp_final = comp_hr[aligned, 3]
+            comp_final = _comparison_final_bpm_on_base(hr, comp_hr)
             comp_all, comp_motion = _aae(comp_final, ref, aligned)
             rows.append((comp_label, comp_all, comp_motion))
 

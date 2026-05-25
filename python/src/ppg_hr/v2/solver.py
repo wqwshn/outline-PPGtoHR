@@ -286,8 +286,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 used_adaptive_mask = np.zeros(source.shape[0], dtype=bool)
                 used_adaptive_mask[adaptive_start_idx:adaptive_end_idx + 1] = True
 
-            source[:, 5] = np.where(used_adaptive_mask, source[:, 2], source[:, 4])
-            source[:, 5] = smoothdata_movmedian(source[:, 5], 3)
+            source[:, 5] = _blend_final_hr_by_mask(source, used_adaptive_mask)
             source[:, 8] = used_adaptive_mask.astype(float)
         else:
             source[:, 5] = source[:, 4]
@@ -752,6 +751,19 @@ def _recovery_should_trigger(
     adaptive_mean = float(np.mean(source[idxs, 2])) * 60.0
     fft_mean = float(np.mean(source[idxs, 4])) * 60.0
     return (adaptive_mean - fft_mean) > float(trigger_bpm)
+
+
+def _blend_final_hr_by_mask(
+    source: np.ndarray,
+    used_adaptive_mask: np.ndarray,
+) -> np.ndarray:
+    src = np.asarray(source, dtype=float)
+    mask = np.asarray(used_adaptive_mask, dtype=bool)
+    if src.ndim != 2 or src.shape[1] <= 4:
+        raise ValueError("source must contain adaptive and FFT HR columns")
+    if mask.shape[0] != src.shape[0]:
+        raise ValueError("used_adaptive_mask length must match source rows")
+    return np.where(mask, src[:, 2], src[:, 4])
 
 
 def _find_crossover_idx(
