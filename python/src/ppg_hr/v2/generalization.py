@@ -392,12 +392,14 @@ def _run_generalization_fold(
     train_names = tuple(pair.stem for pair in train_pairs)
     test_names = tuple(pair.stem for pair in test_pairs)
     key = reference_order_key(reference_groups_order)
+    mode_tag = _evaluation_mode_tag(evaluation_mode)
+    fold_tag = _fold_output_tag(fold_id)
     params_prefix = safe_name(
         "-".join(
             [
                 motion_type,
-                evaluation_mode,
-                fold_id,
+                mode_tag,
+                fold_tag,
                 ppg_mode,
                 ppg_input_transform,
                 adaptive_filter,
@@ -546,7 +548,7 @@ def _run_generalization_fold(
         cfg = cfg.__class__(**{**cfg.__dict__, **shared.best_params})
         result = solve_v2(cfg)
         replay_prefix = safe_run_prefix(
-            f"{pair.stem}-{evaluation_mode}-{fold_id}-{split}",
+            f"{pair.stem}-{mode_tag}-{fold_tag}-{split}",
             ppg_mode,
             ppg_input_transform,
             adaptive_filter,
@@ -666,6 +668,23 @@ def _folds_for_mode(
             folds.append((f"test_{held_out.stem}", train, [held_out]))
         return folds
     raise ValueError(f"Unsupported evaluation mode: {evaluation_mode!r}")
+
+
+def _evaluation_mode_tag(evaluation_mode: str) -> str:
+    mapping = {
+        "all_train": "all",
+        "leave_one_group_out": "logo",
+    }
+    return mapping.get(str(evaluation_mode), safe_name(str(evaluation_mode)))
+
+
+def _fold_output_tag(fold_id: str) -> str:
+    value = str(fold_id)
+    if value == "all_train":
+        return "all"
+    if value.startswith("test_"):
+        return value[len("test_") :]
+    return safe_name(value)
 
 
 def _generalization_work_total(
