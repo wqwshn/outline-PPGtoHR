@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QProgressBar,
     QPushButton,
     QSlider,
     QSpinBox,
@@ -307,8 +308,24 @@ class V2GeneralizationPage(_PageBase):
 
     def _build_results(self) -> None:
         card = SectionCard("结果", "泛化评估摘要、重放报告和日志")
+        self._progress_title = QLabel("等待开始")
+        self._progress_meta = QLabel("尚未开始泛化评估")
+        self._overall_progress = QProgressBar()
+        self._overall_progress.setObjectName("heroProgress")
+        self._overall_progress.setRange(0, 100)
+        self._overall_progress.setValue(0)
+        self._overall_progress.setFormat("总进度 0%")
+        self._stage_progress = QProgressBar()
+        self._stage_progress.setObjectName("stageProgress")
+        self._stage_progress.setRange(0, 100)
+        self._stage_progress.setValue(0)
+        self._stage_progress.setFormat("阶段进度 0%")
         self._log = LogPanel()
         self._summary = AAETable(["字段", "值"])
+        card.add(self._progress_title)
+        card.add(self._progress_meta)
+        card.add(self._overall_progress)
+        card.add(self._stage_progress)
         card.add(self._log)
         card.add(self._summary)
         self.body().addWidget(card)
@@ -349,6 +366,15 @@ class V2GeneralizationPage(_PageBase):
             num_repeats=int(self._num_repeats.value()),
             random_state=int(self._seed.value()),
         )
+        self._run_btn.setEnabled(False)
+        self._refresh_btn.setEnabled(False)
+        self._summary.set_rows([])
+        self._overall_progress.setValue(0)
+        self._overall_progress.setFormat("总进度 0%")
+        self._stage_progress.setValue(0)
+        self._stage_progress.setFormat("阶段进度 0%")
+        self._progress_title.setText("启动中")
+        self._progress_meta.setText("正在准备泛化评估任务")
         worker = V2GeneralizationWorker(
             input_dir=input_dir,
             output_dir=self._output_dir_pick.path(),
@@ -361,11 +387,26 @@ class V2GeneralizationPage(_PageBase):
             evaluation_modes=modes,
         )
         worker.log.connect(self._log.info)
+        worker.progress.connect(self._on_progress)
         worker.finished.connect(self._on_done)
-        worker.failed.connect(self._log.error)
+        worker.failed.connect(self._on_failed)
         holder = WorkerThread(worker)
+        worker.finished.connect(lambda _=None: self._cleanup())
+        worker.failed.connect(lambda _=None: self._cleanup())
         self._worker_holder = holder
         holder.start()
+
+    def _on_progress(self, info: dict) -> None:
+        overall_pct = int(info.get("overall_percent", 0))
+        stage_pct = int(info.get("stage_percent", 0))
+        title = str(info.get("title") or info.get("stage_label") or info.get("stage", "运行中"))
+        message = str(info.get("message") or info.get("detail") or "运行中")
+        self._progress_title.setText(title)
+        self._progress_meta.setText(message)
+        self._overall_progress.setValue(max(0, min(100, overall_pct)))
+        self._overall_progress.setFormat(f"总进度 {max(0, min(100, overall_pct))}%")
+        self._stage_progress.setValue(max(0, min(100, stage_pct)))
+        self._stage_progress.setFormat(f"阶段进度 {max(0, min(100, stage_pct))}%")
 
     def _on_done(self, result) -> None:
         self._summary.set_rows(
@@ -375,7 +416,20 @@ class V2GeneralizationPage(_PageBase):
                 ["记录数", str(len(result.records))],
             ]
         )
+        self._progress_title.setText("泛化评估完成")
+        self._progress_meta.setText(f"汇总CSV: {result.summary_csv}")
+        self._overall_progress.setValue(100)
+        self._overall_progress.setFormat("总进度 100%")
+        self._stage_progress.setValue(100)
+        self._stage_progress.setFormat("阶段进度 100%")
         self._log.success("v2泛化评估完成")
+
+    def _on_failed(self, msg: str) -> None:
+        self._log.error(msg)
+
+    def _cleanup(self) -> None:
+        self._run_btn.setEnabled(True)
+        self._refresh_btn.setEnabled(True)
 
 
 class V2BatchPlotPage(_PageBase):

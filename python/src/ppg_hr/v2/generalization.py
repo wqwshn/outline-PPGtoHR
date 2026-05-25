@@ -83,6 +83,16 @@ class V2GeneralizationResult:
     records: list[V2GeneralizationRecord] = field(default_factory=list)
 
 
+@dataclass
+class _ProgressCounter:
+    total: int
+    current: int = 0
+
+    def advance(self, amount: int = 1) -> int:
+        self.current = min(int(self.total), int(self.current) + int(amount))
+        return self.current
+
+
 def infer_motion_type(sample_stem: str) -> str:
     value = str(sample_stem).strip()
     if value.startswith("multi_"):
@@ -157,6 +167,29 @@ def run_v2_generalization(
     for pair in pairs:
         by_motion.setdefault(pair.motion_type, []).append(pair)
 
+    progress = _ProgressCounter(
+        total=_generalization_work_total(
+            by_motion,
+            selected_modes,
+            repeat_total=max(1, int(cfg.num_repeats)),
+            trial_total=max(1, int(cfg.max_iterations)),
+        )
+    )
+    _progress(
+        on_progress,
+        event="setup",
+        stage="setup",
+        stage_label="准备泛化评估",
+        overall_current=progress.current,
+        overall_total=progress.total,
+        stage_current=0,
+        stage_total=1,
+        detail=(
+            f"motion_types={len(by_motion)} | modes={'+'.join(selected_modes)} | "
+            f"samples={len(pairs)}"
+        ),
+    )
+
     records: list[V2GeneralizationRecord] = []
     for motion_type in sorted(by_motion):
         samples = sorted(by_motion[motion_type], key=lambda p: p.stem)
@@ -194,10 +227,23 @@ def run_v2_generalization(
                     csv_dir=csv_dir,
                     on_log=on_log,
                     on_progress=on_progress,
+                    progress=progress,
                 )
                 records.extend(fold_records)
 
     summary_csv = _write_summary(csv_dir, records)
+    progress.advance()
+    _progress(
+        on_progress,
+        event="summary",
+        stage="summary",
+        stage_label="写出汇总",
+        overall_current=progress.current,
+        overall_total=progress.total,
+        stage_current=1,
+        stage_total=1,
+        detail=str(summary_csv),
+    )
     return V2GeneralizationResult(out, summary_csv, records)
 
 
@@ -237,15 +283,43 @@ def optimise_v2_shared_params(
             params = decode_v2(active_space, idx_map)
             sample_errors: dict[str, float] = {}
             values: list[float] = []
-            for base in base_configs:
+            for sample_index, base in enumerate(base_configs, start=1):
                 cfg = base.__class__(**{**base.__dict__, **params})
                 result = solve_v2(cfg)
                 err = float(result.err_stats["final_aae_bpm"])
                 sample_errors[Path(cfg.data_path).stem] = err
                 if np.isfinite(err):
                     values.append(err)
+                if on_trial_step is not None:
+                    on_trial_step(
+                        {
+                            "event": "train_sample",
+                            "repeat_idx": _repeat_idx0 + 1,
+                            "repeat_total": repeat_total,
+                            "trial": trial.number,
+                            "trial_idx": trial.number + 1,
+                            "trial_total": trials_per_repeat,
+                            "global_trial": (
+                                _repeat_idx0 * trials_per_repeat + trial.number + 1
+                            ),
+                            "global_total": repeat_total * trials_per_repeat,
+                            "sample_index": sample_index,
+                            "sample_total": len(base_configs),
+                            "sample": Path(cfg.data_path).stem,
+                            "sample_error": err,
+                            **params,
+                        }
+                    )
             value = float(np.mean(values)) if values else float("inf")
+            previous_values = [
+                float(item["value"])
+                for item in history
+                if np.isfinite(float(item.get("value", float("inf"))))
+            ]
+            previous_values.append(value)
+            current_best = min(previous_values)
             row = {
+                "event": "train_trial",
                 "repeat_idx": _repeat_idx0 + 1,
                 "repeat_total": repeat_total,
                 "trial": trial.number,
@@ -253,7 +327,9 @@ def optimise_v2_shared_params(
                 "trial_total": trials_per_repeat,
                 "global_trial": _repeat_idx0 * trials_per_repeat + trial.number + 1,
                 "global_total": repeat_total * trials_per_repeat,
+                "trial_value": value,
                 "value": value,
+                "best_error": current_best,
                 "sample_errors": sample_errors,
                 **params,
             }
@@ -300,6 +376,7 @@ def _run_generalization_fold(
     csv_dir: Path,
     on_log: Callable[[str], None] | None,
     on_progress: Callable[[dict], None] | None,
+    progress: _ProgressCounter,
 ) -> list[V2GeneralizationRecord]:
     train_configs = [
         _base_config(
@@ -335,30 +412,128 @@ def _run_generalization_fold(
         f"训练共享参数: {evaluation_mode}/{fold_id} "
         f"train={','.join(train_names)} test={','.join(test_names)}",
     )
+    train_stage_total = max(
+        1,
+        len(train_pairs) * max(1, int(bayes_cfg.num_repeats)) * max(
+            1, int(bayes_cfg.max_iterations)
+        ),
+    )
+    train_stage_current = 0
+
+    _progress(
+        on_progress,
+        event="fold_train_start",
+        stage="train",
+        stage_label="训练共享参数",
+        motion_type=motion_type,
+        evaluation_mode=evaluation_mode,
+        fold_id=fold_id,
+        train_samples=train_names,
+        test_samples=test_names,
+        overall_current=progress.current,
+        overall_total=progress.total,
+        stage_current=train_stage_current,
+        stage_total=train_stage_total,
+        detail=f"train={','.join(train_names)} test={','.join(test_names)}",
+    )
+
+    def _on_trial_progress(info: dict) -> None:
+        nonlocal train_stage_current
+        event = str(info.get("event", "train_trial"))
+        payload = {
+            **info,
+            "stage": "train",
+            "stage_label": "训练共享参数",
+            "motion_type": motion_type,
+            "evaluation_mode": evaluation_mode,
+            "fold_id": fold_id,
+            "train_samples": train_names,
+            "test_samples": test_names,
+            "stage_total": train_stage_total,
+            "overall_total": progress.total,
+        }
+        if event == "train_sample":
+            train_stage_current += 1
+            progress.advance()
+            sample = str(info.get("sample", ""))
+            sample_error = float(info.get("sample_error", float("nan")))
+            payload.update(
+                {
+                    "stage_current": train_stage_current,
+                    "overall_current": progress.current,
+                    "detail": (
+                        f"repeat {info.get('repeat_idx')}/{info.get('repeat_total')} | "
+                        f"trial {info.get('trial_idx')}/{info.get('trial_total')} | "
+                        f"sample={sample} | error={sample_error:.3g} bpm"
+                    ),
+                }
+            )
+            _progress(on_progress, **payload)
+            return
+
+        payload.update(
+            {
+                "stage_current": train_stage_current,
+                "overall_current": progress.current,
+                "detail": (
+                    f"repeat {info.get('repeat_idx')}/{info.get('repeat_total')} | "
+                    f"trial {info.get('trial_idx')}/{info.get('trial_total')} | "
+                    f"value={float(info.get('trial_value', float('nan'))):.3g} bpm | "
+                    f"best={float(info.get('best_error', float('nan'))):.3g} bpm"
+                ),
+            }
+        )
+        _progress(on_progress, **payload)
+
+        trial_idx = int(info.get("trial_idx", 0) or 0)
+        trial_total = int(info.get("trial_total", 0) or 0)
+        if trial_idx and (trial_idx == 1 or trial_idx == trial_total or trial_idx % 5 == 0):
+            _log(
+                on_log,
+                "训练进度: "
+                f"{evaluation_mode}/{fold_id} "
+                f"repeat {info.get('repeat_idx')}/{info.get('repeat_total')} "
+                f"trial {trial_idx}/{trial_total} "
+                f"value={float(info.get('trial_value', float('nan'))):.3g} bpm "
+                f"best={float(info.get('best_error', float('nan'))):.3g} bpm",
+            )
+
     shared = optimise_v2_shared_params(
         train_configs,
         bayes_cfg,
         out_path=params_report,
+        on_trial_step=_on_trial_progress,
+    )
+    _progress(
+        on_progress,
+        event="fold_train_done",
+        stage="train",
+        stage_label="训练共享参数",
+        motion_type=motion_type,
+        evaluation_mode=evaluation_mode,
+        fold_id=fold_id,
+        train_samples=train_names,
+        test_samples=test_names,
+        best_error=float(shared.best_error),
+        overall_current=progress.current,
+        overall_total=progress.total,
+        stage_current=train_stage_current,
+        stage_total=train_stage_total,
+        detail=f"best={float(shared.best_error):.3g} bpm",
+    )
+    _log(
+        on_log,
+        f"共享参数训练完成: {evaluation_mode}/{fold_id} best={float(shared.best_error):.3g} bpm",
     )
 
     test_stems = {p.stem for p in test_pairs}
     records: list[V2GeneralizationRecord] = []
+    replay_stage_total = max(1, len(all_pairs))
     for sample_idx, pair in enumerate(all_pairs, start=1):
         split = (
             "train_test"
             if evaluation_mode == "all_train"
             else "test" if pair.stem in test_stems else "train"
-        )
-        _progress(
-            on_progress,
-            stage="replay",
-            motion_type=motion_type,
-            evaluation_mode=evaluation_mode,
-            fold_id=fold_id,
-            stage_current=sample_idx,
-            stage_total=len(all_pairs),
-            sample=pair.stem,
-            split=split,
         )
         cfg = _base_config(
             pair,
@@ -427,6 +602,32 @@ def _run_generalization_fold(
                 hr_csv=arte.hr_csv,
             )
         )
+        progress.advance()
+        _progress(
+            on_progress,
+            event="replay_sample",
+            stage="replay",
+            stage_label="重放共享参数",
+            motion_type=motion_type,
+            evaluation_mode=evaluation_mode,
+            fold_id=fold_id,
+            overall_current=progress.current,
+            overall_total=progress.total,
+            stage_current=sample_idx,
+            stage_total=replay_stage_total,
+            sample=pair.stem,
+            split=split,
+            final_aae_bpm=float(result.err_stats.get("final_aae_bpm", float("nan"))),
+            detail=(
+                f"{pair.stem} ({split}) "
+                f"final={float(result.err_stats.get('final_aae_bpm', float('nan'))):.3g} bpm"
+            ),
+        )
+        _log(
+            on_log,
+            f"重放完成: {evaluation_mode}/{fold_id} {pair.stem} "
+            f"split={split} final={float(result.err_stats.get('final_aae_bpm', float('nan'))):.3g} bpm",
+        )
     return records
 
 
@@ -465,6 +666,23 @@ def _folds_for_mode(
             folds.append((f"test_{held_out.stem}", train, [held_out]))
         return folds
     raise ValueError(f"Unsupported evaluation mode: {evaluation_mode!r}")
+
+
+def _generalization_work_total(
+    by_motion: dict[str, list[V2SamplePair]],
+    evaluation_modes: tuple[str, ...],
+    *,
+    repeat_total: int,
+    trial_total: int,
+) -> int:
+    total = 1  # summary write
+    for motion_type in sorted(by_motion):
+        samples = sorted(by_motion[motion_type], key=lambda p: p.stem)
+        for mode in evaluation_modes:
+            for _, train_pairs, _ in _folds_for_mode(mode, samples):
+                total += len(train_pairs) * max(1, repeat_total) * max(1, trial_total)
+                total += len(samples)
+    return max(1, total)
 
 
 def _normalise_evaluation_modes(values: tuple[str, ...]) -> tuple[str, ...]:

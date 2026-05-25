@@ -668,6 +668,66 @@ class V2GeneralizationWorker(QObject):
                 f"num_repeats={self._bayes_cfg.num_repeats}, "
                 f"random_state={self._bayes_cfg.random_state}"
             )
+
+            def _on_progress(info: dict) -> None:
+                overall_total = int(info.get("overall_total", 0) or 0)
+                overall_current = int(info.get("overall_current", 0) or 0)
+                stage_total = int(info.get("stage_total", 0) or 0)
+                stage_current = int(info.get("stage_current", 0) or 0)
+                overall_percent = (
+                    0
+                    if overall_total <= 0
+                    else int(round(100.0 * overall_current / max(1, overall_total)))
+                )
+                stage_percent = (
+                    0
+                    if stage_total <= 0
+                    else int(round(100.0 * stage_current / max(1, stage_total)))
+                )
+                stage = str(info.get("stage", "unknown"))
+                stage_label = str(info.get("stage_label", stage))
+                motion_type = info.get("motion_type")
+                evaluation_mode = info.get("evaluation_mode")
+                fold_id = info.get("fold_id")
+                sample = info.get("sample")
+
+                title_parts: list[str] = [stage_label]
+                if motion_type:
+                    title_parts.append(str(motion_type))
+                if evaluation_mode:
+                    title_parts.append(str(evaluation_mode))
+                if fold_id:
+                    title_parts.append(str(fold_id))
+                title = " | ".join(title_parts)
+
+                meta_parts: list[str] = []
+                detail = str(info.get("detail", "")).strip()
+                if detail:
+                    meta_parts.append(detail)
+                repeat_idx = info.get("repeat_idx")
+                repeat_total = info.get("repeat_total")
+                trial_idx = info.get("trial_idx")
+                trial_total = info.get("trial_total")
+                if repeat_idx and repeat_total:
+                    meta_parts.append(f"repeat {repeat_idx}/{repeat_total}")
+                if trial_idx and trial_total:
+                    meta_parts.append(f"trial {trial_idx}/{trial_total}")
+                if sample:
+                    meta_parts.append(f"sample={sample}")
+                if overall_total:
+                    meta_parts.append(f"总进度 {overall_current}/{overall_total}")
+                message = " | ".join(meta_parts) if meta_parts else stage_label
+
+                self.progress.emit(
+                    {
+                        **info,
+                        "overall_percent": max(0, min(100, overall_percent)),
+                        "stage_percent": max(0, min(100, stage_percent)),
+                        "title": title,
+                        "message": message,
+                    }
+                )
+
             result = run_v2_generalization(
                 input_dir=self._input_dir,
                 output_dir=self._output_dir,
@@ -679,7 +739,7 @@ class V2GeneralizationWorker(QObject):
                 bayes_cfg=self._bayes_cfg,
                 evaluation_modes=self._evaluation_modes,
                 on_log=self.log.emit,
-                on_progress=self.progress.emit,
+                on_progress=_on_progress,
             )
             self.finished.emit(result)
         except Exception as exc:  # pragma: no cover

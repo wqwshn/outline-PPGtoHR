@@ -131,6 +131,34 @@ def test_v2_generalization_page_exposes_input_transform_and_logo_defaults() -> N
         app.processEvents()
 
 
+def test_v2_generalization_page_updates_progress_widgets() -> None:
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.v2_pages import V2GeneralizationPage
+
+    app = QApplication.instance() or QApplication([])
+    page = V2GeneralizationPage()
+    try:
+        page._on_progress(
+            {
+                "overall_percent": 37,
+                "stage_percent": 65,
+                "title": "训练共享参数",
+                "message": "repeat 1/3 | trial 4/75 | sample=multi_tiaosheng4",
+            }
+        )
+
+        assert page._overall_progress.value() == 37
+        assert page._stage_progress.value() == 65
+        assert "37%" in page._overall_progress.text()
+        assert "65%" in page._stage_progress.text()
+        assert page._progress_title.text() == "训练共享参数"
+        assert "multi_tiaosheng4" in page._progress_meta.text()
+    finally:
+        page.deleteLater()
+        app.processEvents()
+
+
 def test_v2_batch_page_can_reorder_enabled_references() -> None:
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication
