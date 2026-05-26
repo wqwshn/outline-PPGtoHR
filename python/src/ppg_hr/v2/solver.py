@@ -209,7 +209,6 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
 
         stages: list[dict[str, Any]] = []
         if in_adaptive_range:
-            times_ref = 0 if not last_in_adaptive_range else times_idx
             filtered, penalty_ref, stages = _run_v1_style_reference_cascade(
                 ppg=ppg,
                 sig_p=sig_p,
@@ -227,7 +226,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 penalty_ref,
                 fs,
                 params,
-                times_ref,
+                times_idx,
                 history_ref,
                 True,
                 params.hr_range_hz,

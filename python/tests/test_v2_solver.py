@@ -246,6 +246,62 @@ def test_solve_v2_non_hf_reference_uses_v1_fusion_kernel(tmp_path: Path) -> None
     assert np.isfinite(result.err_stats["final_aae_bpm"])
 
 
+def test_solve_v2_keeps_spectrum_tracking_when_entering_adaptive_range(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from ppg_hr.v2 import solver
+
+    data = tmp_path / "acc.csv"
+    ref = tmp_path / "acc_ref.csv"
+    _write_sensor(data, motion=True)
+    _write_ref(ref)
+    cfg = V2RunConfig(
+        data_path=data,
+        ref_path=ref,
+        analysis_scope="full",
+        adaptive_filter="lms",
+        reference_groups_order=("ACC",),
+    )
+    seen_adaptive_times_idx: list[int] = []
+    original_process = solver._process_spectrum
+
+    def spy_process_spectrum(
+        sig_in,
+        sig_penalty_ref,
+        fs,
+        params,
+        times_idx,
+        history_arr,
+        enable_penalty,
+        range_hz,
+        limit_bpm,
+        step_bpm,
+    ):
+        if abs(float(range_hz) - float(cfg.hr_range_hz)) < 1e-12:
+            seen_adaptive_times_idx.append(int(times_idx))
+        return original_process(
+            sig_in,
+            sig_penalty_ref,
+            fs,
+            params,
+            times_idx,
+            history_arr,
+            enable_penalty,
+            range_hz,
+            limit_bpm,
+            step_bpm,
+        )
+
+    monkeypatch.setattr(solver, "_process_spectrum", spy_process_spectrum)
+
+    result = solver.solve_v2(cfg)
+
+    assert result.metadata["used_adaptive_windows"] > 0
+    assert seen_adaptive_times_idx
+    assert seen_adaptive_times_idx[0] > 0
+
+
 def test_recovery_trigger_gating() -> None:
     from ppg_hr.v2.solver import _recovery_should_trigger
 
