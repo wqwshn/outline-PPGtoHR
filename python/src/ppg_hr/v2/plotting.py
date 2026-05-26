@@ -150,6 +150,7 @@ def _compute_comparison_curves(
                 "key": comp_key,
                 "label": method_label(adaptive_filter, comp_order_norm),
                 "hr": comp_hr,
+                "recovery_slew_step_bpm": float(cfg.slew_step_bpm),
             })
         except Exception:
             pass
@@ -357,7 +358,7 @@ def _plot_hr(
             comp_order = comp["order"]
             comp_hr = np.asarray(comp["hr"], dtype=float)
             comp_label = str(comp["label"])
-            comp_final_full = _comparison_final_bpm_on_base(hr, comp_hr)
+            comp_final_full = _comparison_curve_final_bpm(hr, comp)
             if comp_final_full.size:
                 comp_final = comp_final_full[aligned]
                 comp_color = color_for_reference_order(tuple(comp_order))
@@ -407,7 +408,7 @@ def _write_hr_csv(
     comp_labels = [str(c["label"]) for c in comp_curves]
     comp_columns = [f"{lbl}_bpm" for lbl in comp_labels]
     comp_values = [
-        _comparison_final_bpm_on_base(hr, np.asarray(c["hr"], dtype=float))
+        _comparison_curve_final_bpm(hr, c)
         for c in comp_curves
     ]
     base_final = _base_final_bpm_on_mask(hr)
@@ -447,12 +448,15 @@ def _base_final_bpm_on_mask(hr: np.ndarray) -> np.ndarray:
 def _comparison_final_bpm_on_base(
     base_hr: np.ndarray,
     comp_hr: np.ndarray,
+    *,
+    recovery_slew_step_bpm: float | None = None,
 ) -> np.ndarray:
     base = np.asarray(base_hr, dtype=float)
     comp = np.asarray(comp_hr, dtype=float)
     if base.ndim != 2 or base.shape[0] == 0 or base.shape[1] <= 3:
         return np.asarray([], dtype=float)
 
+    base_final = _base_final_bpm_on_mask(base)
     out = np.full(base.shape[0], float("nan"), dtype=float)
     if comp.ndim == 2 and comp.shape[0] > 0 and comp.shape[1] > 3:
         comp_t = comp[:, 0]
@@ -486,7 +490,76 @@ def _comparison_final_bpm_on_base(
 
     if base.shape[1] > 5:
         used_adaptive = base[:, 5] > 0.5
-        out = np.where(used_adaptive, out, base[:, 2])
+        out = np.where(used_adaptive, out, base_final)
+        if base.shape[1] > 4:
+            out = _slew_recovery_to_primary(
+                out,
+                base_final,
+                motion_flag=base[:, 4] > 0.5,
+                used_adaptive=used_adaptive,
+                step_bpm=recovery_slew_step_bpm,
+            )
+    return out
+
+
+def _comparison_curve_final_bpm(
+    base_hr: np.ndarray,
+    comp: dict[str, object],
+) -> np.ndarray:
+    return _comparison_final_bpm_on_base(
+        base_hr,
+        np.asarray(comp["hr"], dtype=float),
+        recovery_slew_step_bpm=_comparison_recovery_slew_step_bpm(comp),
+    )
+
+
+def _comparison_recovery_slew_step_bpm(comp: dict[str, object]) -> float | None:
+    try:
+        return float(comp.get("recovery_slew_step_bpm", float("nan")))
+    except (TypeError, ValueError):
+        return None
+
+
+def _slew_recovery_to_primary(
+    comparison: np.ndarray,
+    primary: np.ndarray,
+    *,
+    motion_flag: np.ndarray,
+    used_adaptive: np.ndarray,
+    step_bpm: float | None,
+) -> np.ndarray:
+    out = np.asarray(comparison, dtype=float).copy()
+    target = np.asarray(primary, dtype=float)
+    motion = np.asarray(motion_flag, dtype=bool)
+    used = np.asarray(used_adaptive, dtype=bool)
+    if out.shape != target.shape or out.shape != motion.shape or out.shape != used.shape:
+        return out
+
+    try:
+        step = float(step_bpm)
+    except (TypeError, ValueError):
+        step = float("nan")
+    if not np.isfinite(step) or step <= 0:
+        step = float("inf")
+
+    for idx in range(out.size):
+        if not used[idx]:
+            out[idx] = target[idx]
+            continue
+        if motion[idx]:
+            if not np.isfinite(out[idx]):
+                out[idx] = target[idx]
+            continue
+
+        prev = out[idx - 1] if idx > 0 and np.isfinite(out[idx - 1]) else target[idx]
+        if not np.isfinite(target[idx]):
+            out[idx] = prev
+            continue
+        delta = target[idx] - prev
+        if abs(delta) <= step:
+            out[idx] = target[idx]
+        else:
+            out[idx] = prev + np.sign(delta) * step
     return out
 
 
@@ -595,7 +668,7 @@ def _detailed_stats_v2(
         if comp_hr.size == 0:
             continue
         comp_label = str(comp["label"])
-        pred = _comparison_final_bpm_on_base(hr, comp_hr)
+        pred = _comparison_curve_final_bpm(hr, comp)
         if pred.size != hr.shape[0]:
             continue
         abs_err = np.abs(pred[scope_mask] - ref[scope_mask])
@@ -724,7 +797,7 @@ def _figure_error_rows(
         comp_hr = np.asarray(comp["hr"], dtype=float)
         if comp_hr.size:
             comp_label = str(comp["label"])
-            comp_final = _comparison_final_bpm_on_base(hr, comp_hr)
+            comp_final = _comparison_curve_final_bpm(hr, comp)
             comp_all, comp_motion = _aae(comp_final, ref, aligned)
             rows.append((comp_label, comp_all, comp_motion))
 
