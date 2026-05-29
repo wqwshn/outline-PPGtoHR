@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QListWidget,
     QListWidgetItem,
@@ -18,6 +19,8 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSlider,
     QSpinBox,
+    QTableWidget,
+    QTableWidgetItem,
 )
 
 from ppg_hr.v2.optimizer import V2BayesConfig
@@ -44,11 +47,13 @@ from .workers import (
 
 class V2BatchPipelinePage(_PageBase):
     def __init__(self):
-        super().__init__("v2 批量全流程", "单路径参考信号流程：质检、优化、报告输出")
+        super().__init__("v2 批量全流程", "单路径参考信号流程：质检、优化、报告输出", two_column=True)
         self._worker_holder: WorkerThread | None = None
         self._build_io()
         self._build_run_options()
         self._build_results()
+        self.body().addStretch(1)
+        self.body_right().addStretch(1)
 
     def _build_io(self) -> None:
         card = SectionCard("输入与输出", "输入目录包含 *.csv 与同名 *_ref.csv 或 *_HR_ref.csv")
@@ -145,8 +150,7 @@ class V2BatchPipelinePage(_PageBase):
         self._summary = AAETable(["字段", "值"])
         card.add(self._log)
         card.add(self._summary)
-        self.body().addWidget(card)
-        self.body().addStretch(1)
+        self.body_right().addWidget(card)
 
     def selected_reference_order(self) -> tuple[str, ...]:
         order: list[str] = []
@@ -205,11 +209,14 @@ class V2GeneralizationPage(_PageBase):
         super().__init__(
             "v2 泛化评估",
             "同一运动类型多次实验共享参数，评估 all-train 与留一泛化",
+            two_column=True,
         )
         self._worker_holder: WorkerThread | None = None
         self._build_io()
         self._build_run_options()
         self._build_results()
+        self.body().addStretch(1)
+        self.body_right().addStretch(1)
 
     def _build_io(self) -> None:
         card = SectionCard("输入与输出", "输入目录包含同一运动类型的多组 v2 CSV 与参考 HR")
@@ -328,8 +335,7 @@ class V2GeneralizationPage(_PageBase):
         card.add(self._stage_progress)
         card.add(self._log)
         card.add(self._summary)
-        self.body().addWidget(card)
-        self.body().addStretch(1)
+        self.body_right().addWidget(card)
 
     def selected_reference_order(self) -> tuple[str, ...]:
         order: list[str] = []
@@ -434,9 +440,11 @@ class V2GeneralizationPage(_PageBase):
 
 class V2BatchPlotPage(_PageBase):
     def __init__(self):
-        super().__init__("v2 批量绘图", "递归扫描 v2 JSON 并生成科研风格图表")
+        super().__init__("v2 批量绘图", "递归扫描 v2 JSON 并生成科研风格图表", two_column=True)
         self._worker_holder: WorkerThread | None = None
         self._build_ui()
+        self.body().addStretch(1)
+        self.body_right().addStretch(1)
 
     def _build_ui(self) -> None:
         card = SectionCard("输入与输出", "只处理 schema_version=v2 的报告")
@@ -503,8 +511,7 @@ class V2BatchPlotPage(_PageBase):
         self._table = AAETable(["报告", "参考组合", "状态", "图像", "HR CSV", "错误"])
         result.add(self._log)
         result.add(self._table)
-        self.body().addWidget(result)
-        self.body().addStretch(1)
+        self.body_right().addWidget(result)
 
     def _refresh(self) -> None:
         self._table.set_rows([])
@@ -574,6 +581,7 @@ class V2WindowDiagnosticsPage(_PageBase):
         super().__init__(
             "v2 窗口诊断",
             "按对齐时间重放单个窗口，观察自适应滤波与频谱惩罚",
+            two_column=True,
         )
         self._session = None
         self._current_result = None
@@ -581,6 +589,8 @@ class V2WindowDiagnosticsPage(_PageBase):
         self._render_worker_holder: WorkerThread | None = None
         self._save_worker_holder: WorkerThread | None = None
         self._build_ui()
+        self.body().addStretch(1)
+        self.body_right().addStretch(1)
 
     def _build_ui(self) -> None:
         io_card = SectionCard("报告输入", "选择训练后生成的 v2 JSON 报告")
@@ -692,13 +702,19 @@ class V2WindowDiagnosticsPage(_PageBase):
         self._spectrum_canvas = MplCanvas(nrows=2, height=260)
         plot_card.add(self._wave_canvas)
         plot_card.add(self._spectrum_canvas)
-        self.body().addWidget(plot_card)
+        self.body_right().addWidget(plot_card)
 
         result_card = SectionCard("窗口摘要与保存", "当前窗口指标、stage 参数和导出")
-        self._summary = AAETable(["字段", "值"])
+        self._summary = QTableWidget(1, 0)
+        self._summary.setEditTriggers(QTableWidget.NoEditTriggers)
+        self._summary.setShowGrid(False)
+        self._summary.verticalHeader().setVisible(False)
+        hh = self._summary.horizontalHeader()
+        hh.setSectionResizeMode(QHeaderView.ResizeToContents)
         self._stage_table = AAETable(
             ["#", "group", "channel", "corr", "delay", "M", "K", "filter"]
         )
+        self._stage_table.setMinimumHeight(100)
         self._log = LogPanel()
         result_card.add(self._summary)
         result_card.add(self._stage_table)
@@ -713,7 +729,7 @@ class V2WindowDiagnosticsPage(_PageBase):
         save_row.addWidget(self._save_btn)
         result_card.add(save_row)
         result_card.add(self._log)
-        self.body().addWidget(result_card)
+        self.body_right().addWidget(result_card)
 
     def _plot_options(self) -> DiagnosticPlotOptions:
         return DiagnosticPlotOptions(
@@ -774,7 +790,7 @@ class V2WindowDiagnosticsPage(_PageBase):
         self._time_label.setText(f"{lo:.1f}–{hi:.1f} s · {count} 窗口")
         self._render_btn.setEnabled(True)
         self._save_btn.setEnabled(False)
-        self._summary.set_rows(
+        self._set_summary_rows(
             [
                 ["数据文件", str(session.data_path)],
                 ["真值文件", str(session.ref_path)],
@@ -829,12 +845,20 @@ class V2WindowDiagnosticsPage(_PageBase):
         self._wave_canvas.redraw()
         plot_spectra(self._spectrum_canvas.axes, result, opts)
         self._spectrum_canvas.redraw()
-        self._summary.set_rows(self._summary_rows(result))
+        self._set_summary_rows(self._summary_rows(result))
         self._stage_table.set_rows(self._stage_rows(result))
         self._save_btn.setEnabled(True)
         self._log.success(
             f"已渲染窗口：aligned={result.selected_window.aligned_time_s:.2f} s"
         )
+
+    def _set_summary_rows(self, rows: list[list[str]]) -> None:
+        self._summary.setColumnCount(len(rows))
+        self._summary.setHorizontalHeaderLabels([r[0] for r in rows])
+        for col, row_data in enumerate(rows):
+            item = QTableWidgetItem(row_data[1])
+            item.setTextAlignment(Qt.AlignCenter)
+            self._summary.setItem(0, col, item)
 
     def _summary_rows(self, result) -> list[list[str]]:
         keys = [
@@ -908,9 +932,12 @@ class V2SpO2Page(_PageBase):
         super().__init__(
             "v2 血氧计算",
             "红光/红外光 PPG 自适应滤波后计算 SpO2",
+            two_column=True,
         )
         self._worker_holder: WorkerThread | None = None
         self._build_ui()
+        self.body().addStretch(1)
+        self.body_right().addStretch(1)
 
     def _build_ui(self) -> None:
         io_card = SectionCard(
@@ -977,8 +1004,7 @@ class V2SpO2Page(_PageBase):
         self._summary = AAETable(["产出", "路径"])
         result.add(self._log)
         result.add(self._summary)
-        self.body().addWidget(result)
-        self.body().addStretch(1)
+        self.body_right().addWidget(result)
 
     def selected_reference_order(self) -> tuple[str, ...]:
         order: list[str] = []

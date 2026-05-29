@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QSpinBox,
+    QSplitter,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -74,9 +75,10 @@ __all__ = [
 
 
 class _PageBase(QWidget):
-    """Base page: header + scrollable body."""
+    """Base page: header + scrollable body. Pass ``two_column=True`` for
+    a left/right splitter layout."""
 
-    def __init__(self, title: str, subtitle: str):
+    def __init__(self, title: str, subtitle: str, two_column: bool = False):
         super().__init__()
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -90,21 +92,54 @@ class _PageBase(QWidget):
         root.addWidget(title_lbl)
         root.addWidget(subtitle_lbl)
 
-        # Scroll body
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QScrollArea.NoFrame)
-        scroll.setStyleSheet("background: transparent;")
-        inner = QWidget()
-        inner.setStyleSheet(f"background-color: {Palette.bg};")
-        self._body_layout = QVBoxLayout(inner)
-        self._body_layout.setContentsMargins(28, 8, 28, 20)
-        self._body_layout.setSpacing(14)
-        scroll.setWidget(inner)
-        root.addWidget(scroll, 1)
+        if two_column:
+            splitter = QSplitter(Qt.Orientation.Horizontal)
+
+            left_scroll = QScrollArea()
+            left_scroll.setWidgetResizable(True)
+            left_scroll.setFrameShape(QScrollArea.NoFrame)
+            left_scroll.setStyleSheet("background: transparent;")
+            left_inner = QWidget()
+            left_inner.setStyleSheet(f"background-color: {Palette.bg};")
+            self._body_layout = QVBoxLayout(left_inner)
+            self._body_layout.setContentsMargins(20, 8, 12, 20)
+            self._body_layout.setSpacing(14)
+            left_scroll.setWidget(left_inner)
+
+            right_scroll = QScrollArea()
+            right_scroll.setWidgetResizable(True)
+            right_scroll.setFrameShape(QScrollArea.NoFrame)
+            right_scroll.setStyleSheet("background: transparent;")
+            right_inner = QWidget()
+            right_inner.setStyleSheet(f"background-color: {Palette.bg};")
+            self._body_right_layout = QVBoxLayout(right_inner)
+            self._body_right_layout.setContentsMargins(12, 8, 20, 20)
+            self._body_right_layout.setSpacing(14)
+            right_scroll.setWidget(right_inner)
+
+            splitter.addWidget(left_scroll)
+            splitter.addWidget(right_scroll)
+            splitter.setStretchFactor(0, 2)
+            splitter.setStretchFactor(1, 3)
+            root.addWidget(splitter, 1)
+        else:
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QScrollArea.NoFrame)
+            scroll.setStyleSheet("background: transparent;")
+            inner = QWidget()
+            inner.setStyleSheet(f"background-color: {Palette.bg};")
+            self._body_layout = QVBoxLayout(inner)
+            self._body_layout.setContentsMargins(28, 8, 28, 20)
+            self._body_layout.setSpacing(14)
+            scroll.setWidget(inner)
+            root.addWidget(scroll, 1)
 
     def body(self) -> QVBoxLayout:
         return self._body_layout
+
+    def body_right(self) -> QVBoxLayout:
+        return self._body_right_layout
 
 
 def _dataset_card(
