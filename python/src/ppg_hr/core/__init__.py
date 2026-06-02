@@ -1,6 +1,7 @@
 """Core algorithm modules ported from MATLAB."""
 
 from .adaptive_filter import AdaptiveStrategy, apply_adaptive_cascade
+from .as_lms_filter import as_lms_filter
 from .choose_delay import choose_delay
 from .delay_profile import (
     DelayBounds,
@@ -21,6 +22,7 @@ from .volterra_filter import volterra_filter
 __all__ = [
     "AdaptiveStrategy",
     "apply_adaptive_cascade",
+    "as_lms_filter",
     "choose_delay",
     "DelayBounds",
     "DelayGroupProfile",

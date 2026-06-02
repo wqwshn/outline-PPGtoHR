@@ -424,6 +424,8 @@ def _solver_params_from_v2(cfg: V2RunConfig) -> SolverParams:
         klms_step_size=float(cfg.klms_step_size),
         klms_sigma=float(cfg.klms_sigma),
         klms_epsilon=float(cfg.klms_epsilon),
+        as_lms_rho=float(cfg.as_lms_rho),
+        as_lms_mu_max=float(cfg.as_lms_mu_max),
         volterra_max_order_vol=int(cfg.volterra_max_order_vol),
         rff_D=int(cfg.rff_D),
         rff_sigma=float(cfg.rff_sigma),

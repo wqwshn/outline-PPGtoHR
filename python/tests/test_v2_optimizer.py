@@ -34,6 +34,7 @@ def test_default_search_space_has_strategy_specific_fields() -> None:
     rff_names = default_v2_search_space("rff_lms").names()
     klms_names = default_v2_search_space("klms").names()
     volterra_names = default_v2_search_space("volterra").names()
+    as_lms_names = default_v2_search_space("as_lms").names()
 
     assert "rff_D" not in lms_names
     assert "rff_sigma" not in lms_names
@@ -45,6 +46,9 @@ def test_default_search_space_has_strategy_specific_fields() -> None:
     assert "volterra_max_order_vol" not in klms_names
     assert "volterra_max_order_vol" in volterra_names
     assert "klms_sigma" not in volterra_names
+    assert "as_lms_rho" in as_lms_names
+    assert "as_lms_mu_max" in as_lms_names
+    assert "klms_sigma" not in as_lms_names
 
 
 def test_v2_config_defaults_and_strategy_params_pass_to_solver_params(tmp_path: Path) -> None:
@@ -56,6 +60,8 @@ def test_v2_config_defaults_and_strategy_params_pass_to_solver_params(tmp_path: 
         klms_sigma=2.0,
         klms_epsilon=0.05,
         volterra_max_order_vol=5,
+        as_lms_rho=2e-4,
+        as_lms_mu_max=0.08,
     )
 
     params = _solver_params_from_v2(cfg)
@@ -66,6 +72,8 @@ def test_v2_config_defaults_and_strategy_params_pass_to_solver_params(tmp_path: 
     assert params.klms_sigma == 2.0
     assert params.klms_epsilon == 0.05
     assert params.volterra_max_order_vol == 5
+    assert params.as_lms_rho == 2e-4
+    assert params.as_lms_mu_max == 0.08
 
 
 def test_v2_bayes_config_defaults_to_three_repeats() -> None:

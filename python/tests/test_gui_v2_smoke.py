@@ -99,7 +99,7 @@ def test_v2_batch_page_defaults_to_hf_and_exposes_all_filters() -> None:
             str(page._filter_combo.itemData(i))
             for i in range(page._filter_combo.count())
         ]
-        assert filters == ["lms", "klms", "volterra", "noncausal_lms", "rff_lms"]
+        assert filters == ["lms", "as_lms", "klms", "volterra", "noncausal_lms", "rff_lms"]
         assert page.selected_reference_order() == ("HF",)
         assert page._num_repeats.value() == 3
         assert page._ppg_input_transform_combo.currentData() == "raw_bandpass"

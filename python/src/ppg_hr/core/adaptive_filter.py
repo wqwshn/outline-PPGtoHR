@@ -7,6 +7,8 @@ function once per cascade stage; the strategy name (from
 Strategies
 ----------
 ``"lms"``       normalised linear LMS, uses ``mu_base - corr/100`` as step size.
+``"as_lms"``    adaptive step-size LMS; starts from ``mu_base - corr/100`` and
+                updates ``mu(n)`` with ``params.as_lms_rho`` under clipping.
 ``"klms"``      Gaussian-kernel LMS (QKLMS); uses ``params.klms_step_size``
                 (fixed, ignores ``corr``) and ``params.klms_sigma``
                 / ``params.klms_epsilon``. Matches the KLMS reference project.
@@ -23,6 +25,7 @@ from typing import Literal
 import numpy as np
 
 from ..params import SolverParams
+from .as_lms_filter import as_lms_filter
 from .klms_filter import klms_filter
 from .lms_filter import lms_filter
 from .noncausal_lms import noncausal_lms_filter
@@ -31,7 +34,14 @@ from .volterra_filter import volterra_filter
 
 __all__ = ["AdaptiveStrategy", "apply_adaptive_cascade"]
 
-AdaptiveStrategy = Literal["lms", "klms", "volterra", "noncausal_lms", "rff_lms"]
+AdaptiveStrategy = Literal[
+    "lms",
+    "as_lms",
+    "klms",
+    "volterra",
+    "noncausal_lms",
+    "rff_lms",
+]
 
 
 def apply_adaptive_cascade(
@@ -48,6 +58,18 @@ def apply_adaptive_cascade(
     """Run one cascade stage and return the new filtered signal ``e``."""
     if strategy == "lms":
         e, _, _ = lms_filter(mu_base - corr / 100.0, order, K, u, d)
+        return e
+    if strategy == "as_lms":
+        e, _, _ = as_lms_filter(
+            max(params.lms_mu_min, mu_base - corr / 100.0),
+            order,
+            K,
+            u,
+            d,
+            rho=params.as_lms_rho,
+            mu_min=params.lms_mu_min,
+            mu_max=params.as_lms_mu_max,
+        )
         return e
     if strategy == "klms":
         e, _, _ = klms_filter(

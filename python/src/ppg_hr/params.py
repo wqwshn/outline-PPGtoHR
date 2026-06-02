@@ -74,7 +74,7 @@ class SolverParams:
     bp_order: int = 4
 
     # Adaptive filter selection (new in 2026-04)
-    adaptive_filter: str = "lms"  # one of: "lms", "klms", "volterra"
+    adaptive_filter: str = "lms"  # one of: "lms", "as_lms", "klms", "volterra"
     ppg_mode: str = "green"  # one of: "green", "red", "ir"
     analysis_scope: str = "full"  # one of: "full", "motion"
 
@@ -91,6 +91,10 @@ class SolverParams:
     klms_step_size: float = 0.1
     klms_sigma: float = 1.0
     klms_epsilon: float = 0.1
+
+    # AS-LMS-specific parameters (only used when adaptive_filter == "as_lms")
+    as_lms_rho: float = 1e-4
+    as_lms_mu_max: float = 0.05
 
     # Volterra-specific parameters (only used when adaptive_filter == "volterra")
     volterra_max_order_vol: int = 3

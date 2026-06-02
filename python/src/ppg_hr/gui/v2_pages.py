@@ -90,7 +90,7 @@ class V2BatchPipelinePage(_PageBase):
         )
 
         self._filter_combo = QComboBox()
-        for value in ("lms", "klms", "volterra", "noncausal_lms", "rff_lms"):
+        for value in ("lms", "as_lms", "klms", "volterra", "noncausal_lms", "rff_lms"):
             self._filter_combo.addItem(value, userData=value)
 
         self._scope_combo = QComboBox()
@@ -252,7 +252,7 @@ class V2GeneralizationPage(_PageBase):
             userData="log_absorbance",
         )
         self._filter_combo = QComboBox()
-        for value in ("lms", "klms", "volterra", "noncausal_lms", "rff_lms"):
+        for value in ("lms", "as_lms", "klms", "volterra", "noncausal_lms", "rff_lms"):
             self._filter_combo.addItem(value, userData=value)
         self._scope_combo = QComboBox()
         self._scope_combo.addItem("最长运动段 + 前30s", userData="motion")

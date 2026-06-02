@@ -43,5 +43,6 @@ def test_method_label_formats_correctly() -> None:
     assert method_label("klms", ("HF", "CF", "ACC")) == "K-LMS+HCA"
     assert method_label("noncausal_lms", ("ACC", "HF")) == "NC-LMS+AH"
     assert method_label("volterra", ("CF",)) == "V-LMS+C"
+    assert method_label("as_lms", ("HF",)) == "AS-LMS+H"
     assert method_label("rff_lms", ()) == "RFF-LMS"
     assert method_label("unknown", ("HF", "ACC")) == "LMS+HA"

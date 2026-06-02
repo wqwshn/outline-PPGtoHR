@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from ppg_hr.core.adaptive_filter import apply_adaptive_cascade
+from ppg_hr.core.as_lms_filter import as_lms_filter
 from ppg_hr.core.klms_filter import klms_filter
 from ppg_hr.core.lms_filter import lms_filter
 from ppg_hr.core.volterra_filter import volterra_filter
@@ -59,6 +60,33 @@ def test_volterra_dispatch_uses_corr_adaptive_step() -> None:
         order=5, K=1, u=u, d=d, params=params,
     )
     expected, _, _ = volterra_filter(0.01 - corr / 100.0, 5, 3, 1, u, d)
+    np.testing.assert_array_equal(out, expected)
+
+
+def test_as_lms_dispatch_uses_adaptive_step_parameters() -> None:
+    u, d = _signals()
+    params = SolverParams(
+        adaptive_filter="as_lms",
+        lms_mu_base=0.01,
+        lms_mu_min=0.002,
+        as_lms_rho=1e-4,
+        as_lms_mu_max=0.03,
+    )
+    corr = 0.3
+    out = apply_adaptive_cascade(
+        strategy="as_lms", mu_base=0.01, corr=corr,
+        order=5, K=1, u=u, d=d, params=params,
+    )
+    expected, _, _ = as_lms_filter(
+        0.01 - corr / 100.0,
+        5,
+        1,
+        u,
+        d,
+        rho=1e-4,
+        mu_min=0.002,
+        mu_max=0.03,
+    )
     np.testing.assert_array_equal(out, expected)
 
 

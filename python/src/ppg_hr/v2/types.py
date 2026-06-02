@@ -44,6 +44,8 @@ class V2RunConfig:
     klms_step_size: float = 0.1
     klms_sigma: float = 1.0
     klms_epsilon: float = 0.1
+    as_lms_rho: float = 1e-4
+    as_lms_mu_max: float = 0.05
     volterra_max_order_vol: int = 3
     rff_D: int = 100
     rff_sigma: float = 1.0

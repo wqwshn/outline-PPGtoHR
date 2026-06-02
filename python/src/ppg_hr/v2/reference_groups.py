@@ -12,6 +12,7 @@ _CHANNELS: dict[str, tuple[str, ...]] = {
 
 _ALGO_SHORT: dict[str, str] = {
     "lms": "LMS",
+    "as_lms": "AS-LMS",
     "klms": "K-LMS",
     "volterra": "V-LMS",
     "noncausal_lms": "NC-LMS",

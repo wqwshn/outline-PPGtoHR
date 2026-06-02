@@ -56,6 +56,10 @@ class V2SearchSpace:
     klms_sigma: list[float] | None = None
     # KLMS 字典量化阈值，仅 adaptive_filter="klms" 时启用。
     klms_epsilon: list[float] | None = None
+    # AS-LMS 步长自适应速率，仅 adaptive_filter="as_lms" 时启用。
+    as_lms_rho: list[float] | None = None
+    # AS-LMS 步长上限，仅 adaptive_filter="as_lms" 时启用。
+    as_lms_mu_max: list[float] | None = None
     # Volterra 二阶核长度，仅 adaptive_filter="volterra" 时启用。
     volterra_max_order_vol: list[int] | None = None
 
@@ -81,6 +85,11 @@ def default_v2_search_space(adaptive_filter: str) -> V2SearchSpace:
             klms_step_size=[0.01, 0.05, 0.1, 0.2, 0.5],
             klms_sigma=[0.1, 0.5, 1.0, 2.0, 5.0],
             klms_epsilon=[0.01, 0.05, 0.1, 0.2],
+        )
+    if adaptive_filter == "as_lms":
+        return V2SearchSpace(
+            as_lms_rho=[1e-5, 5e-5, 1e-4, 2e-4],
+            as_lms_mu_max=[0.02, 0.05, 0.1],
         )
     if adaptive_filter == "volterra":
         return V2SearchSpace(volterra_max_order_vol=[2, 3, 4, 5])
