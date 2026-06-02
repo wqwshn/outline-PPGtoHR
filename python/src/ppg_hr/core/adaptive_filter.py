@@ -7,8 +7,8 @@ function once per cascade stage; the strategy name (from
 Strategies
 ----------
 ``"lms"``       normalised linear LMS, uses ``mu_base - corr/100`` as step size.
-``"as_lms"``    adaptive step-size LMS; starts from ``mu_base - corr/100`` and
-                updates ``mu(n)`` with ``params.as_lms_rho`` under clipping.
+``"as_lms"``    adaptive step-size LMS; starts from ``mu_base`` and updates
+                ``mu(n)`` with ``params.as_lms_rho`` under clipping.
 ``"klms"``      Gaussian-kernel LMS (QKLMS); uses ``params.klms_step_size``
                 (fixed, ignores ``corr``) and ``params.klms_sigma``
                 / ``params.klms_epsilon``. Matches the KLMS reference project.
@@ -61,7 +61,7 @@ def apply_adaptive_cascade(
         return e
     if strategy == "as_lms":
         e, _, _ = as_lms_filter(
-            max(params.lms_mu_min, mu_base - corr / 100.0),
+            mu_base,
             order,
             K,
             u,

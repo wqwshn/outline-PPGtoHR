@@ -63,7 +63,7 @@ def test_volterra_dispatch_uses_corr_adaptive_step() -> None:
     np.testing.assert_array_equal(out, expected)
 
 
-def test_as_lms_dispatch_uses_adaptive_step_parameters() -> None:
+def test_as_lms_dispatch_uses_base_mu_without_corr_compensation() -> None:
     u, d = _signals()
     params = SolverParams(
         adaptive_filter="as_lms",
@@ -72,13 +72,16 @@ def test_as_lms_dispatch_uses_adaptive_step_parameters() -> None:
         as_lms_rho=1e-4,
         as_lms_mu_max=0.03,
     )
-    corr = 0.3
-    out = apply_adaptive_cascade(
-        strategy="as_lms", mu_base=0.01, corr=corr,
+    out_low_corr = apply_adaptive_cascade(
+        strategy="as_lms", mu_base=0.01, corr=0.1,
+        order=5, K=1, u=u, d=d, params=params,
+    )
+    out_high_corr = apply_adaptive_cascade(
+        strategy="as_lms", mu_base=0.01, corr=0.9,
         order=5, K=1, u=u, d=d, params=params,
     )
     expected, _, _ = as_lms_filter(
-        0.01 - corr / 100.0,
+        0.01,
         5,
         1,
         u,
@@ -87,7 +90,8 @@ def test_as_lms_dispatch_uses_adaptive_step_parameters() -> None:
         mu_min=0.002,
         mu_max=0.03,
     )
-    np.testing.assert_array_equal(out, expected)
+    np.testing.assert_array_equal(out_low_corr, expected)
+    np.testing.assert_array_equal(out_high_corr, expected)
 
 
 def test_unknown_strategy_raises() -> None:
