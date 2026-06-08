@@ -973,20 +973,26 @@ class V2SpO2Page(_PageBase):
         self._mu_base = QDoubleSpinBox()
         self._mu_base.setRange(0.0001, 1.0)
         self._mu_base.setDecimals(4)
-        self._mu_base.setSingleStep(0.001)
-        self._mu_base.setValue(0.01)
+        self._mu_base.setSingleStep(0.01)
+        self._mu_base.setValue(0.12)
+        self._filter_combo = QComboBox()
+        for value in ("lms", "as_lms", "klms", "volterra", "noncausal_lms", "rff_lms"):
+            self._filter_combo.addItem(value, userData=value)
         self._ref_list = QListWidget()
         self._ref_list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
         self._ref_list.setDefaultDropAction(Qt.DropAction.MoveAction)
         self._ref_list.setMaximumHeight(100)
         for group in ("HF", "CF", "ACC"):
             item = QListWidgetItem(group)
-            item.setCheckState(Qt.CheckState.Checked)
+            item.setCheckState(
+                Qt.CheckState.Checked if group == "HF" else Qt.CheckState.Unchecked
+            )
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             self._ref_list.addItem(item)
         form.addRow("时延搜索样本", self._delay_samples)
         form.addRow("最大阶数", self._max_order)
         form.addRow("mu_base", self._mu_base)
+        form.addRow("adaptive_filter", self._filter_combo)
         form.addRow("参考信号", self._ref_list)
         param_card.add(form)
         self.body().addWidget(param_card)
@@ -1027,6 +1033,7 @@ class V2SpO2Page(_PageBase):
             delay_search_samples=int(self._delay_samples.value()),
             max_order=int(self._max_order.value()),
             lms_mu_base=float(self._mu_base.value()),
+            adaptive_filter=str(self._filter_combo.currentData()),
         )
         self._run_btn.setEnabled(False)
         worker = V2SpO2Worker(cfg, output_prefix=Path(data_path).stem)

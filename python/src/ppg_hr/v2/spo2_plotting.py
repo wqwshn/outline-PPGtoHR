@@ -255,6 +255,111 @@ def _plot_trend(report_stem: str, out: Path, table: list[dict[str, Any]]) -> Pat
     return path
 
 
+def _motion_spans(
+    metadata: dict[str, Any],
+    table: list[dict[str, Any]],
+) -> list[tuple[float, float]]:
+    spans: list[tuple[float, float]] = []
+    for segment in metadata.get("motion_segments", []) or []:
+        try:
+            spans.append((float(segment["start_s"]), float(segment["end_s"])))
+        except (KeyError, TypeError, ValueError):
+            continue
+    if spans:
+        return spans
+    motion_rows = [row for row in table if bool(row.get("adaptive_applied", False))]
+    if not motion_rows:
+        return []
+    start = min(float(row.get("start_s", 0.0)) for row in motion_rows)
+    end = max(float(row.get("end_s", 0.0)) for row in motion_rows)
+    return [(start, end)]
+
+
+def _shade_motion(ax, spans: list[tuple[float, float]]) -> None:
+    for start, end in spans:
+        ax.axvspan(start, end, color="#F2C94C", alpha=0.16, linewidth=0)
+
+
+def _plot_full_trace_recovery(
+    *,
+    report_stem: str,
+    out: Path,
+    table: list[dict[str, Any]],
+    metadata: dict[str, Any],
+    time_s: np.ndarray,
+    wave: dict[str, Any],
+) -> Path:
+    red_raw = np.asarray(wave.get("red_raw", []), dtype=float)
+    ir_raw = np.asarray(wave.get("ir_raw", []), dtype=float)
+    red_despiked = np.asarray(wave.get("red_despiked", red_raw), dtype=float)
+    ir_despiked = np.asarray(wave.get("ir_despiked", ir_raw), dtype=float)
+    red_clean = np.asarray(wave.get("red_clean", []), dtype=float)
+    ir_clean = np.asarray(wave.get("ir_clean", []), dtype=float)
+    ut1 = np.asarray(wave.get("ut1", []), dtype=float)
+    ut2 = np.asarray(wave.get("ut2", []), dtype=float)
+    score_t = np.asarray(wave.get("motion_window_center_s", []), dtype=float)
+    scores = np.asarray(wave.get("motion_score", []), dtype=float)
+    spans = _motion_spans(metadata, table)
+
+    fig, axes = plt.subplots(3, 1, figsize=(7.2, 4.8), sharex=True)
+    for axis in axes:
+        _shade_motion(axis, spans)
+        axis.spines["top"].set_visible(False)
+        axis.spines["right"].set_visible(False)
+        axis.grid(True, axis="y", alpha=0.10, linewidth=0.4)
+
+    axes[0].plot(time_s, ir_raw, color="#B6BAC0", linewidth=0.55, label="IR raw")
+    axes[0].plot(
+        time_s,
+        ir_despiked,
+        color="#7E8792",
+        linewidth=0.65,
+        alpha=0.80,
+        label="IR deglitched",
+    )
+    axes[0].plot(time_s, ir_clean, color="#2A6FBB", linewidth=0.90, label="IR recovered")
+    axes[0].set_ylabel("IR ADC")
+    axes[0].legend(frameon=False, loc="upper right", ncol=3)
+
+    axes[1].plot(time_s, red_raw, color="#B6BAC0", linewidth=0.55, label="Red raw")
+    axes[1].plot(
+        time_s,
+        red_despiked,
+        color="#7E8792",
+        linewidth=0.65,
+        alpha=0.80,
+        label="Red deglitched",
+    )
+    axes[1].plot(time_s, red_clean, color="#D43F3A", linewidth=0.90, label="Red recovered")
+    axes[1].set_ylabel("Red ADC")
+    axes[1].legend(frameon=False, loc="upper right", ncol=3)
+
+    if ut1.size == time_s.size:
+        axes[2].plot(time_s, ut1, color="#6AAA8B", linewidth=0.75, label="Ut1")
+    if ut2.size == time_s.size:
+        axes[2].plot(time_s, ut2, color="#5B8FC0", linewidth=0.75, label="Ut2")
+    if scores.size and score_t.size == scores.size:
+        ax_score = axes[2].twinx()
+        ax_score.plot(
+            score_t,
+            scores,
+            color="#3E4349",
+            linewidth=0.75,
+            linestyle=(0, (2.0, 1.5)),
+            label="Motion score",
+        )
+        ax_score.set_ylabel("Motion score")
+        ax_score.spines["top"].set_visible(False)
+        ax_score.legend(frameon=False, loc="upper right")
+    axes[2].set_ylabel("Reference")
+    axes[2].set_xlabel("Time (s)")
+    axes[2].legend(frameon=False, loc="upper left", ncol=2)
+
+    path = _export_png(fig, out / f"{report_stem}-full-trace-recovery.png")
+    plt.close(fig)
+    return path
+
+
 def _plot_slice(
     *,
     report_stem: str,
@@ -395,6 +500,14 @@ def render_spo2_report(
     red_clean = np.asarray(wave.get("red_clean", []), dtype=float)
     ir_clean = np.asarray(wave.get("ir_clean", []), dtype=float)
 
+    full_trace_png = _plot_full_trace_recovery(
+        report_stem=report.stem,
+        out=out,
+        table=table,
+        metadata=metadata,
+        time_s=time_s,
+        wave=wave,
+    )
     trend_png = _plot_trend(report.stem, out, table)
     slice_pngs: list[Path] = []
     label_counts: dict[str, int] = {"pre_rest": 0, "motion": 0, "post_rest": 0}
@@ -416,4 +529,8 @@ def render_spo2_report(
                 fs=fs,
             )
         )
-    return {"trend_png": trend_png, "slice_pngs": slice_pngs}
+    return {
+        "full_trace_png": full_trace_png,
+        "trend_png": trend_png,
+        "slice_pngs": slice_pngs,
+    }

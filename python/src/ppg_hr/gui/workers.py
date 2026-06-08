@@ -807,6 +807,8 @@ class V2SpO2Worker(QObject):
                 out_dir=Path(out_dir) / "figures",
             )
             payload = {"report": report, "figures": figures, "result": result}
+            if "full_trace_png" in figures:
+                self.log.emit(f"SpO2 full trace PNG: {figures['full_trace_png']}")
             self.log.emit(f"血氧 JSON：{report['json']}")
             self.log.emit(f"血氧 CSV：{report['csv']}")
             self.log.emit(f"血氧趋势图：{figures['trend_png']}")

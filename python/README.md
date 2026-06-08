@@ -15,7 +15,7 @@ Python 实现，包含 v1（MATLAB 等价移植）与 v2（统一参考路径）
 - **最长运动段检测**：以单一最长连续运动段替代逐窗口运动判定，避免运动段内部反复启停
 - **恢复段机制**：运动结束后自动检测 LMS 收敛状态，必要时延长自适应路径直至与 FFT 自然交叉，消除过早切换导致的末端心率跳变
 - **参数泛化评估**：按运动类型组织多次实验，支持 `all_train` 和 `leave_one_group_out`，评估同一组参数跨样本重放的效果。
-- **血氧计算页面**：使用 100 Hz 红光/红外光 PPG，经幅值保持因果 LMS 清洗后计算 SpO2，并导出滤波前后趋势图与带峰谷标注的静息/运动窗口切片 PNG
+- **血氧计算页面**：使用 100 Hz 红光/红外光 PPG，经连续运动段自适应恢复后计算 SpO2，并导出整段恢复、血氧趋势与带峰谷标注的静息/运动窗口切片 PNG
 
 **共享基础设施：**
 - 优化结果的双子图结果分析（HF / ACC 两路融合曲线 + 误差表 + 参数表 + 心率结果表）
@@ -386,13 +386,9 @@ v2 求解器通过 `V2RunConfig` 配置，CLI 和 GUI 均支持 v1/v2 切换。
 
 ### 4.4 v2 血氧饱和度计算
 
-v2 血氧计算使用 100 Hz `PPG_Red` 与 `PPG_IR` 原始信号，默认认为输入 CSV 已经完成时间轴补齐，不再查找 `_timeline.csv`。算法先按 HF/CF/ACC 参考组在每个 4 s 窗口内做 `±20` 样本时延搜索，用时延绝对值决定窗口内 LMS 阶数，最大阶数为 20；步长沿用心率路线：
+v2 血氧计算使用 100 Hz `PPG_Red` 与 `PPG_IR` 原始信号，默认认为输入 CSV 已经完成时间轴补齐，不再查找 `_timeline.csv`。新版流程先对 Red/IR、Ut1/Ut2、CF 与 ACC 参考通道做鲁棒去毛刺，只替换孤立尖峰，不抹平连续运动导致的基线漂移。默认只启用 HF 组的 Ut1/Ut2 桥顶电压作为运动伪影参考，并在进入自适应滤波前对 Ut1/Ut2 做 3 Hz 低通，以避免参考信号高频噪声被注入恢复后的 PPG。随后用加速度窗口评分自适应识别运动段，并在运动段前后加入缓冲后连续恢复 Red/IR 波形；恢复完成后再切回 4 s 窗口计算 SpO2。
 
-```text
-mu = max(mu_min, mu_base - corr / 100)
-```
-
-首版血氧只实现因果、幅值保持的 LMS 清洗，不使用 v2 心率默认的非因果滤波。清洗后和清洗前会分别进入同一套 MAX30101 风格比值法：
+血氧页的自适应滤波算法可选 `lms`、`as_lms`、`klms`、`volterra`、`noncausal_lms`、`rff_lms`，默认 `lms`。参考信号组仍可按 HF/CF/ACC 的用户选择顺序级联，但默认只勾选 HF；组内按 Red/IR 联合相关性排序。默认 LMS 在运动段前后静息上下文估计出的基线桥上做残差域恢复，固定步长 `mu_base=0.12`，相关性只用于 Ut1/Ut2 排序，不再缩小步长。恢复后和恢复前会分别进入同一套 MAX30101 风格比值法：
 
 1. IR 带通检测信号确定心搏周期；
 2. Red 在同一 IR 周期内做局部峰谷修正；
@@ -400,11 +396,11 @@ mu = max(mu_min, mu_base - corr / 100)
 4. 单搏 `R = (ACred/DCred)/(ACir/DCir)`，窗口内取中位数；
 5. 默认二次公式计算 SpO2，并对最终窗口序列做 7 s 居中平均以抑制毛刺，输出 `raw_spo2` 与 `adaptive_spo2`。
 
-静息窗口由 `motion_score <= rest_motion_score_threshold` 判定，默认不采用自适应滤波结果：该窗口的 `adaptive_spo2` 与最终 `spo2` 会回落为 `raw_spo2`，并写入 `adaptive_applied=false`。运动窗口才使用自适应滤波后的血氧值。
+静息窗口默认不采用自适应滤波结果：该窗口的 `adaptive_spo2` 与最终 `spo2` 会回落为 `raw_spo2`，并写入 `adaptive_applied=false`。运动窗口使用连续恢复后的 Red/IR 计算血氧值。报告中会记录 `artifact_rejection`、`reference_lowpass_cutoff_hz`、`motion_threshold`、`motion_segments`、`continuous_recovery_segments`、`recovery_stage_rows` 和 `spo2_stability_summary`，用于判断运动段 SpO2 是否回到前后静息范围。
 
-当前版本尚未接入脉搏血氧仪真值数据，因此不进行 SpO2 贝叶斯优化，也不报告绝对精度指标。报告字段中的 `raw_valid_beat_count`、`adaptive_valid_beat_count`、`motion_score`、`missing_ratio` 和滤波阶段信息用于后续质控与标定。
+当前版本尚未接入脉搏血氧仪真值数据，因此不进行 SpO2 贝叶斯优化，也不报告绝对精度指标。报告字段中的 `raw_valid_beat_count`、`adaptive_valid_beat_count`、`motion_score`、`missing_ratio`、滤波阶段信息和运动段相对静息偏差用于后续质控与标定。
 
-可视化只生成 600 dpi PNG：一张整段滤波前/后 SpO2 曲线，以及运动前静息、运动段内 4 个时间上均匀分布的窗口、运动后静息窗口切片图。静息切片只展示原始 Red/IR 波形和原始 SpO2；运动切片展示 Red/IR 滤波前后波形，并在图例中标注该窗口滤波前/后的 SpO2。切片图会把窗口内识别到的 IR/Red 波峰、波谷位置用三角标记标出。
+验证阶段可视化只生成 600 dpi PNG：一张整段 Red/IR 恢复前后波形与 Ut1/Ut2/运动评分图，一张恢复前后 SpO2 趋势图，以及运动前静息、运动段内 4 个时间上均匀分布的窗口、运动后静息窗口切片图。静息切片只展示原始 Red/IR 波形和原始 SpO2；运动切片展示 Red/IR 滤波前后波形，并在图例中标注该窗口滤波前/后的 SpO2。切片图会把窗口内识别到的 IR/Red 波峰、波谷位置用三角标记标出。
 
 ---
 

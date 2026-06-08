@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 from scipy.signal import butter, filtfilt, find_peaks
 
+from ..core.adaptive_filter import apply_adaptive_cascade
 from .preprocess import RAW_COLUMNS, safe_cf_ratio
 from .reference_groups import channel_names_for_group, normalise_reference_order
 
@@ -27,16 +28,35 @@ class V2SpO2Coefficients:
 class V2SpO2Config:
     data_path: Path
     output_dir: Path | None = None
-    reference_groups_order: tuple[str, ...] = ("HF", "CF", "ACC")
+    reference_groups_order: tuple[str, ...] = ("HF",)
     fs_origin: int = 100
     window_seconds: float = 4.0
     window_step_seconds: float = 1.0
     delay_search_samples: int = 20
     max_order: int = 20
     min_order: int = 1
-    lms_mu_base: float = 0.01
+    adaptive_filter: str = "lms"
+    lms_mu_base: float = 0.12
     lms_mu_min: float = 1e-6
+    M_base: int = 1
+    C_scale: float = 1.0
+    K_max: int = 16
+    klms_step_size: float = 0.1
+    klms_sigma: float = 1.0
+    klms_epsilon: float = 0.1
+    as_lms_rho: float = 1e-4
+    as_lms_mu_max: float = 0.05
+    volterra_max_order_vol: int = 3
+    rff_D: int = 100
+    rff_sigma: float = 1.0
+    rff_seed: int = 42
     adaptive_enabled: bool = True
+    deglitch_enabled: bool = True
+    deglitch_window_seconds: float = 0.25
+    deglitch_n_sigmas: float = 6.0
+    reference_lowpass_enabled: bool = True
+    reference_lowpass_cutoff_hz: float = 3.0
+    reference_lowpass_order: int = 3
     bp_low_hz: float = 0.5
     bp_high_hz: float = 5.0
     lp_cutoff_hz: float = 8.0
@@ -47,6 +67,11 @@ class V2SpO2Config:
     smooth_seconds: float = 0.06
     spo2_smooth_seconds: float = 7.0
     rest_motion_score_threshold: float = 0.02
+    motion_threshold_mode: str = "adaptive"
+    motion_threshold_quantile: float = 0.35
+    motion_threshold_mad_scale: float = 6.0
+    motion_threshold_min_delta: float = 0.005
+    motion_context_seconds: float = 2.0
     r_min: float = 0.05
     r_max: float = 3.0
     coefficients: V2SpO2Coefficients = field(default_factory=V2SpO2Coefficients)
@@ -69,6 +94,9 @@ class SpO2RawSignals:
     ir: np.ndarray
     references: dict[str, np.ndarray]
     valid_mask: np.ndarray
+    red_original: np.ndarray
+    ir_original: np.ndarray
+    artifact_rejection: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 @dataclass
@@ -109,9 +137,6 @@ def solve_spo2_v2(config: V2SpO2Config) -> V2SpO2Result:
             f"{signals.red.size / fs:.2f}s"
         )
 
-    red_accum = np.zeros_like(signals.red, dtype=float)
-    ir_accum = np.zeros_like(signals.ir, dtype=float)
-    overlap = np.zeros_like(signals.red, dtype=float)
     spo2_table: list[dict[str, Any]] = []
     beat_table: list[dict[str, Any]] = []
     adaptive_stage_rows: list[list[dict[str, Any]]] = []
@@ -120,32 +145,57 @@ def solve_spo2_v2(config: V2SpO2Config) -> V2SpO2Result:
         + signals.references["accy"] ** 2
         + signals.references["accz"] ** 2
     )
-    last_raw_spo2 = float("nan")
-    last_adaptive_spo2 = float("nan")
-
+    window_rows: list[dict[str, Any]] = []
     for window_idx, start in enumerate(range(0, signals.red.size - window_len + 1, step_len)):
         end = start + window_len
         motion_score = float(np.std(acc_mag[start:end], ddof=1))
-        adaptive_applied = bool(motion_score > float(cfg.rest_motion_score_threshold))
+        window_rows.append(
+            {
+                "window_idx": int(window_idx),
+                "start": int(start),
+                "end": int(end),
+                "start_s": float(signals.time_s[start]),
+                "end_s": float(signals.time_s[end - 1]),
+                "center_s": float(signals.time_s[start] + cfg.window_seconds / 2.0),
+                "motion_score": motion_score,
+            }
+        )
+    motion_segments, recovery_segments, motion_threshold = _detect_motion_segments(
+        window_rows,
+        total_samples=int(signals.red.size),
+        fs=fs,
+        cfg=cfg,
+    )
+    red_recovered, ir_recovered, recovery_stage_rows = _recover_motion_segments_continuous(
+        signals.red,
+        signals.ir,
+        signals.references,
+        recovery_segments,
+        fs=fs,
+        cfg=cfg,
+    )
+    last_raw_spo2 = float("nan")
+    last_adaptive_spo2 = float("nan")
+
+    for spec in window_rows:
+        window_idx = int(spec["window_idx"])
+        start = int(spec["start"])
+        end = int(spec["end"])
+        motion_score = float(spec["motion_score"])
+        adaptive_applied = _window_overlaps_segments(start, end, motion_segments)
         if adaptive_applied:
-            cleaned = _clean_red_ir_adaptive(
-                signals.red,
-                signals.ir,
-                signals.references,
-                start=start,
-                end=end,
-                cfg=cfg,
-            )
+            adaptive_red = red_recovered[start:end]
+            adaptive_ir = ir_recovered[start:end]
+            window_stages = [
+                stage
+                for stage in recovery_stage_rows
+                if start < int(stage["end"]) and end > int(stage["start"])
+            ]
         else:
-            cleaned = CleanedSpO2Signals(
-                red_clean=signals.red[start:end].copy(),
-                ir_clean=signals.ir[start:end].copy(),
-                stages=[],
-            )
-        red_accum[start:end] += cleaned.red_clean
-        ir_accum[start:end] += cleaned.ir_clean
-        overlap[start:end] += 1.0
-        adaptive_stage_rows.append(cleaned.stages)
+            adaptive_red = signals.red[start:end]
+            adaptive_ir = signals.ir[start:end]
+            window_stages = []
+        adaptive_stage_rows.append(window_stages)
 
         raw_out = _compute_spo2_window(
             red=signals.red[start:end],
@@ -155,8 +205,8 @@ def solve_spo2_v2(config: V2SpO2Config) -> V2SpO2Result:
             scheme="raw",
         )
         adaptive_out = _compute_spo2_window(
-            red=cleaned.red_clean,
-            ir=cleaned.ir_clean,
+            red=adaptive_red,
+            ir=adaptive_ir,
             fs=fs,
             cfg=cfg,
             scheme="adaptive",
@@ -178,11 +228,11 @@ def solve_spo2_v2(config: V2SpO2Config) -> V2SpO2Result:
             adaptive_carried = True
 
         missing_ratio = 1.0 - float(np.mean(signals.valid_mask[start:end]))
-        center_s = float(signals.time_s[start] + cfg.window_seconds / 2.0)
+        center_s = float(spec["center_s"])
         row = {
             "window_idx": int(window_idx),
-            "start_s": float(signals.time_s[start]),
-            "end_s": float(signals.time_s[end - 1]),
+            "start_s": float(spec["start_s"]),
+            "end_s": float(spec["end_s"]),
             "center_s": center_s,
             "motion_score": motion_score,
             "adaptive_applied": adaptive_applied,
@@ -211,20 +261,9 @@ def solve_spo2_v2(config: V2SpO2Config) -> V2SpO2Result:
                 }
             )
 
-    red_clean = np.divide(
-        red_accum,
-        overlap,
-        out=signals.red.copy(),
-        where=overlap > 0,
-    )
-    ir_clean = np.divide(
-        ir_accum,
-        overlap,
-        out=signals.ir.copy(),
-        where=overlap > 0,
-    )
     _smooth_spo2_table(spo2_table, cfg)
     _apply_rest_adaptive_policy(spo2_table, cfg)
+    stability_summary = _spo2_stability_summary(spo2_table, motion_segments)
 
     metadata = {
         "schema_version": "v2_spo2",
@@ -237,16 +276,38 @@ def solve_spo2_v2(config: V2SpO2Config) -> V2SpO2Result:
         "delay_search_samples": int(cfg.delay_search_samples),
         "max_order": int(cfg.max_order),
         "reference_groups_order": list(cfg.reference_groups_order),
+        "adaptive_filter": str(cfg.adaptive_filter),
         "adaptive_enabled": bool(cfg.adaptive_enabled),
+        "reference_lowpass_enabled": bool(cfg.reference_lowpass_enabled),
+        "reference_lowpass_cutoff_hz": float(cfg.reference_lowpass_cutoff_hz),
+        "reference_lowpass_order": int(cfg.reference_lowpass_order),
+        "artifact_rejection": signals.artifact_rejection,
+        "motion_threshold": float(motion_threshold),
+        "motion_segments": motion_segments,
+        "continuous_recovery_segments": recovery_segments,
+        "recovery_stage_rows": recovery_stage_rows,
+        "spo2_stability_summary": stability_summary,
         "adaptive_stage_rows": adaptive_stage_rows,
     }
     waveforms = {
         "time_s": signals.time_s,
-        "red_raw": signals.red,
-        "ir_raw": signals.ir,
-        "red_clean": red_clean,
-        "ir_clean": ir_clean,
+        "red_raw": signals.red_original,
+        "ir_raw": signals.ir_original,
+        "red_despiked": signals.red,
+        "ir_despiked": signals.ir,
+        "red_clean": red_recovered,
+        "ir_clean": ir_recovered,
         "acc_mag": acc_mag,
+        "motion_window_center_s": np.asarray(
+            [row["center_s"] for row in window_rows],
+            dtype=float,
+        ),
+        "motion_score": np.asarray(
+            [row["motion_score"] for row in window_rows],
+            dtype=float,
+        ),
+        "ut1": signals.references.get("hf1", np.asarray([], dtype=float)),
+        "ut2": signals.references.get("hf2", np.asarray([], dtype=float)),
     }
     return V2SpO2Result(
         spo2_table=spo2_table,
@@ -367,6 +428,63 @@ def _apply_rest_adaptive_policy(
         )
 
 
+def _finite_mean(values: list[float]) -> float:
+    arr = np.asarray(values, dtype=float)
+    finite = arr[np.isfinite(arr)]
+    return float(np.mean(finite)) if finite.size else float("nan")
+
+
+def _spo2_stability_summary(
+    rows: list[dict[str, Any]],
+    motion_segments: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if not rows or not motion_segments:
+        return {
+            "has_motion": False,
+            "raw_motion_mean": float("nan"),
+            "adaptive_motion_mean": float("nan"),
+            "rest_reference_mean": float("nan"),
+            "raw_motion_delta_vs_rest": float("nan"),
+            "adaptive_motion_delta_vs_rest": float("nan"),
+        }
+    first_start = float(motion_segments[0]["start_s"])
+    last_end = float(motion_segments[-1]["end_s"])
+    pre_rest = [row for row in rows if float(row.get("center_s", 0.0)) < first_start]
+    post_rest = [row for row in rows if float(row.get("center_s", 0.0)) > last_end]
+    motion_rows = [
+        row
+        for row in rows
+        if first_start <= float(row.get("center_s", 0.0)) <= last_end
+    ]
+    rest_reference = _finite_mean(
+        [float(row.get("raw_spo2", float("nan"))) for row in pre_rest + post_rest]
+    )
+    raw_motion = _finite_mean(
+        [float(row.get("raw_spo2", float("nan"))) for row in motion_rows]
+    )
+    adaptive_motion = _finite_mean(
+        [float(row.get("adaptive_spo2", float("nan"))) for row in motion_rows]
+    )
+    return {
+        "has_motion": True,
+        "motion_start_s": first_start,
+        "motion_end_s": last_end,
+        "raw_motion_mean": raw_motion,
+        "adaptive_motion_mean": adaptive_motion,
+        "rest_reference_mean": rest_reference,
+        "raw_motion_delta_vs_rest": (
+            abs(raw_motion - rest_reference)
+            if np.isfinite(raw_motion) and np.isfinite(rest_reference)
+            else float("nan")
+        ),
+        "adaptive_motion_delta_vs_rest": (
+            abs(adaptive_motion - rest_reference)
+            if np.isfinite(adaptive_motion) and np.isfinite(rest_reference)
+            else float("nan")
+        ),
+    }
+
+
 def _clean_numeric_array(values: pd.Series | np.ndarray) -> np.ndarray:
     arr = pd.to_numeric(pd.Series(values), errors="coerce").to_numpy(
         dtype=float,
@@ -395,6 +513,101 @@ def _valid_mask_from_raw(raw: pd.DataFrame) -> np.ndarray:
     return finite
 
 
+def _hampel_deglitch(
+    values: np.ndarray,
+    *,
+    window: int,
+    n_sigmas: float,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    arr = np.asarray(values, dtype=float).copy()
+    out = arr.copy()
+    n = arr.size
+    width = max(3, int(window))
+    if width % 2 == 0:
+        width += 1
+    half = width // 2
+    replaced: list[int] = []
+    sigma_scale = max(float(n_sigmas), 0.0)
+    for idx in range(n):
+        lo = max(0, idx - half)
+        hi = min(n, idx + half + 1)
+        segment = arr[lo:hi]
+        finite = segment[np.isfinite(segment)]
+        if finite.size < 3 or not np.isfinite(arr[idx]):
+            continue
+        med = float(np.median(finite))
+        mad = float(np.median(np.abs(finite - med)))
+        diff = abs(float(arr[idx]) - med)
+        robust_sigma = 1.4826 * mad
+        if robust_sigma <= 1e-12:
+            is_spike = diff > sigma_scale
+        else:
+            is_spike = diff > sigma_scale * robust_sigma
+        if is_spike:
+            out[idx] = med
+            replaced.append(idx)
+    return out, {
+        "enabled": True,
+        "window": int(width),
+        "n_sigmas": float(n_sigmas),
+        "replaced_count": int(len(replaced)),
+        "replaced_ratio": float(len(replaced) / n) if n else 0.0,
+    }
+
+
+def _maybe_deglitch_channel(
+    values: np.ndarray,
+    *,
+    label: str,
+    cfg: V2SpO2Config,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    if not bool(cfg.deglitch_enabled):
+        return np.asarray(values, dtype=float).copy(), {
+            "enabled": False,
+            "window": 0,
+            "n_sigmas": float(cfg.deglitch_n_sigmas),
+            "replaced_count": 0,
+            "replaced_ratio": 0.0,
+        }
+    window = max(3, int(round(float(cfg.deglitch_window_seconds) * int(cfg.fs_origin))))
+    cleaned, info = _hampel_deglitch(
+        np.asarray(values, dtype=float),
+        window=window,
+        n_sigmas=float(cfg.deglitch_n_sigmas),
+    )
+    return cleaned, {"channel": label, **info}
+
+
+def _lowpass_reference_signal(
+    values: np.ndarray,
+    *,
+    fs: int,
+    cutoff_hz: float,
+    order: int,
+    enabled: bool,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    arr = np.asarray(values, dtype=float).copy()
+    info = {
+        "enabled": bool(enabled),
+        "cutoff_hz": float(cutoff_hz),
+        "order": int(order),
+    }
+    if not bool(enabled):
+        return arr, info
+    if arr.size < 16:
+        return arr, {**info, "applied": False, "reason": "too_short"}
+    nyq = fs / 2.0
+    cutoff = float(cutoff_hz) / nyq
+    if not (0.0 < cutoff < 1.0):
+        return arr, {**info, "applied": False, "reason": "invalid_cutoff"}
+    try:
+        b, a = butter(max(1, int(order)), cutoff, btype="lowpass")
+        filtered = filtfilt(b, a, arr)
+    except ValueError:
+        return arr, {**info, "applied": False, "reason": "filter_error"}
+    return filtered, {**info, "applied": True}
+
+
 def _load_spo2_raw_signals(cfg: V2SpO2Config) -> SpO2RawSignals:
     raw = pd.read_csv(cfg.data_path)
     missing = [name for name in RAW_COLUMNS.values() if name not in raw.columns]
@@ -409,26 +622,95 @@ def _load_spo2_raw_signals(cfg: V2SpO2Config) -> SpO2RawSignals:
     else:
         time_s = np.arange(len(raw), dtype=float) / float(fs)
 
-    uc1 = _clean_numeric_array(raw[RAW_COLUMNS["uc1"]])
-    uc2 = _clean_numeric_array(raw[RAW_COLUMNS["uc2"]])
-    ut1 = _clean_numeric_array(raw[RAW_COLUMNS["ut1"]])
-    ut2 = _clean_numeric_array(raw[RAW_COLUMNS["ut2"]])
+    uc1_raw = _clean_numeric_array(raw[RAW_COLUMNS["uc1"]])
+    uc2_raw = _clean_numeric_array(raw[RAW_COLUMNS["uc2"]])
+    ut1_raw = _clean_numeric_array(raw[RAW_COLUMNS["ut1"]])
+    ut2_raw = _clean_numeric_array(raw[RAW_COLUMNS["ut2"]])
+    red_raw = _clean_numeric_array(raw[RAW_COLUMNS["ppg_red"]])
+    ir_raw = _clean_numeric_array(raw[RAW_COLUMNS["ppg_ir"]])
+    accx_raw = _clean_numeric_array(raw[RAW_COLUMNS["accx"]])
+    accy_raw = _clean_numeric_array(raw[RAW_COLUMNS["accy"]])
+    accz_raw = _clean_numeric_array(raw[RAW_COLUMNS["accz"]])
+
+    artifact_rejection: dict[str, dict[str, Any]] = {}
+    red, artifact_rejection[RAW_COLUMNS["ppg_red"]] = _maybe_deglitch_channel(
+        red_raw,
+        label=RAW_COLUMNS["ppg_red"],
+        cfg=cfg,
+    )
+    ir, artifact_rejection[RAW_COLUMNS["ppg_ir"]] = _maybe_deglitch_channel(
+        ir_raw,
+        label=RAW_COLUMNS["ppg_ir"],
+        cfg=cfg,
+    )
+    uc1, artifact_rejection[RAW_COLUMNS["uc1"]] = _maybe_deglitch_channel(
+        uc1_raw,
+        label=RAW_COLUMNS["uc1"],
+        cfg=cfg,
+    )
+    uc2, artifact_rejection[RAW_COLUMNS["uc2"]] = _maybe_deglitch_channel(
+        uc2_raw,
+        label=RAW_COLUMNS["uc2"],
+        cfg=cfg,
+    )
+    ut1, artifact_rejection[RAW_COLUMNS["ut1"]] = _maybe_deglitch_channel(
+        ut1_raw,
+        label=RAW_COLUMNS["ut1"],
+        cfg=cfg,
+    )
+    ut2, artifact_rejection[RAW_COLUMNS["ut2"]] = _maybe_deglitch_channel(
+        ut2_raw,
+        label=RAW_COLUMNS["ut2"],
+        cfg=cfg,
+    )
+    accx, artifact_rejection[RAW_COLUMNS["accx"]] = _maybe_deglitch_channel(
+        accx_raw,
+        label=RAW_COLUMNS["accx"],
+        cfg=cfg,
+    )
+    accy, artifact_rejection[RAW_COLUMNS["accy"]] = _maybe_deglitch_channel(
+        accy_raw,
+        label=RAW_COLUMNS["accy"],
+        cfg=cfg,
+    )
+    accz, artifact_rejection[RAW_COLUMNS["accz"]] = _maybe_deglitch_channel(
+        accz_raw,
+        label=RAW_COLUMNS["accz"],
+        cfg=cfg,
+    )
     references = {
         "hf1": ut1,
         "hf2": ut2,
         "cf1": safe_cf_ratio(uc1, ut1),
         "cf2": safe_cf_ratio(uc2, ut2),
-        "accx": _clean_numeric_array(raw[RAW_COLUMNS["accx"]]),
-        "accy": _clean_numeric_array(raw[RAW_COLUMNS["accy"]]),
-        "accz": _clean_numeric_array(raw[RAW_COLUMNS["accz"]]),
+        "accx": accx,
+        "accy": accy,
+        "accz": accz,
     }
+    for key in ("cf1", "cf2"):
+        references[key], artifact_rejection[key] = _maybe_deglitch_channel(
+            references[key],
+            label=key,
+            cfg=cfg,
+        )
+    for key in ("hf1", "hf2"):
+        references[key], artifact_rejection[f"{key}_lowpass"] = _lowpass_reference_signal(
+            references[key],
+            fs=fs,
+            cutoff_hz=float(cfg.reference_lowpass_cutoff_hz),
+            order=int(cfg.reference_lowpass_order),
+            enabled=bool(cfg.reference_lowpass_enabled),
+        )
     return SpO2RawSignals(
         fs=fs,
         time_s=time_s,
-        red=_clean_numeric_array(raw[RAW_COLUMNS["ppg_red"]]),
-        ir=_clean_numeric_array(raw[RAW_COLUMNS["ppg_ir"]]),
+        red=red,
+        ir=ir,
         references=references,
         valid_mask=_valid_mask_from_raw(raw),
+        red_original=red_raw,
+        ir_original=ir_raw,
+        artifact_rejection=artifact_rejection,
     )
 
 
@@ -446,6 +728,95 @@ def _ordered_references(
 
 def _delay_to_order(delay_samples: int, cfg: V2SpO2Config) -> int:
     return int(np.clip(abs(int(delay_samples)), int(cfg.min_order), int(cfg.max_order)))
+
+
+def _estimate_motion_threshold(
+    scores: np.ndarray,
+    cfg: V2SpO2Config,
+) -> float:
+    arr = np.asarray(scores, dtype=float)
+    finite = arr[np.isfinite(arr)]
+    fixed = float(cfg.rest_motion_score_threshold)
+    if finite.size == 0 or str(cfg.motion_threshold_mode).lower() != "adaptive":
+        return fixed
+    q = float(np.clip(cfg.motion_threshold_quantile, 0.05, 0.80))
+    cutoff = float(np.quantile(finite, q))
+    baseline_values = finite[finite <= cutoff]
+    if baseline_values.size == 0:
+        baseline_values = finite
+    baseline = float(np.median(baseline_values))
+    mad = float(np.median(np.abs(baseline_values - baseline)))
+    adaptive = baseline + max(
+        float(cfg.motion_threshold_min_delta),
+        float(cfg.motion_threshold_mad_scale) * 1.4826 * mad,
+    )
+    if not np.isfinite(adaptive):
+        return fixed
+    return float(min(fixed, adaptive))
+
+
+def _detect_motion_segments(
+    window_rows: list[dict[str, Any]],
+    *,
+    total_samples: int,
+    fs: int,
+    cfg: V2SpO2Config,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], float]:
+    if not window_rows:
+        return [], [], float(cfg.rest_motion_score_threshold)
+    scores = np.asarray(
+        [float(row.get("motion_score", float("nan"))) for row in window_rows],
+        dtype=float,
+    )
+    threshold = _estimate_motion_threshold(scores, cfg)
+    motion_mask = np.isfinite(scores) & (scores > threshold)
+    motion_segments: list[dict[str, Any]] = []
+    idx = 0
+    while idx < len(window_rows):
+        if not motion_mask[idx]:
+            idx += 1
+            continue
+        start_idx = idx
+        while idx + 1 < len(window_rows) and motion_mask[idx + 1]:
+            idx += 1
+        end_idx = idx
+        start = int(window_rows[start_idx]["start"])
+        end = int(window_rows[end_idx]["end"])
+        motion_segments.append(
+            {
+                "start": start,
+                "end": end,
+                "start_s": start / float(fs),
+                "end_s": end / float(fs),
+                "start_window_idx": int(window_rows[start_idx]["window_idx"]),
+                "end_window_idx": int(window_rows[end_idx]["window_idx"]),
+                "max_motion_score": float(np.nanmax(scores[start_idx : end_idx + 1])),
+            }
+        )
+        idx += 1
+
+    context = max(0, int(round(float(cfg.motion_context_seconds) * fs)))
+    recovery_segments = [
+        {
+            **segment,
+            "start": max(0, int(segment["start"]) - context),
+            "end": min(int(total_samples), int(segment["end"]) + context),
+            "start_s": max(0, int(segment["start"]) - context) / float(fs),
+            "end_s": min(int(total_samples), int(segment["end"]) + context) / float(fs),
+            "motion_start": int(segment["start"]),
+            "motion_end": int(segment["end"]),
+        }
+        for segment in motion_segments
+    ]
+    return motion_segments, recovery_segments, float(threshold)
+
+
+def _window_overlaps_segments(
+    start: int,
+    end: int,
+    segments: list[dict[str, Any]],
+) -> bool:
+    return any(start < int(segment["end"]) and end > int(segment["start"]) for segment in segments)
 
 
 def _safe_corr(a: np.ndarray, b: np.ndarray) -> float:
@@ -501,10 +872,494 @@ def _rank_references_for_window(
     return sorted(ranked, key=lambda row: row["corr"], reverse=True)
 
 
+def _best_delay_corr(
+    target: np.ndarray,
+    reference: np.ndarray,
+    *,
+    max_lag: int,
+) -> tuple[float, int]:
+    target_arr = np.asarray(target, dtype=float)
+    ref_arr = np.asarray(reference, dtype=float)
+    n = min(target_arr.size, ref_arr.size)
+    if n < 4:
+        return 0.0, 0
+    target_arr = target_arr[:n]
+    ref_arr = ref_arr[:n]
+    best_corr = 0.0
+    best_delay = 0
+    rel = np.arange(n)
+    for delay in range(-int(max_lag), int(max_lag) + 1):
+        ref_idx = rel + delay
+        valid = (ref_idx >= 0) & (ref_idx < n)
+        if int(np.count_nonzero(valid)) < 4:
+            continue
+        corr = _safe_corr(target_arr[valid], ref_arr[ref_idx[valid]])
+        if abs(corr) > abs(best_corr):
+            best_corr = corr
+            best_delay = delay
+    return float(best_corr), int(best_delay)
+
+
+def _rank_joint_references_for_segment(
+    *,
+    red: np.ndarray,
+    ir: np.ndarray,
+    references: dict[str, np.ndarray],
+    channels: tuple[str, ...],
+    start: int,
+    end: int,
+    cfg: V2SpO2Config,
+) -> list[dict[str, Any]]:
+    red_seg = np.asarray(red[start:end], dtype=float)
+    ir_seg = np.asarray(ir[start:end], dtype=float)
+    ranked: list[dict[str, Any]] = []
+    for channel in channels:
+        if channel not in references:
+            continue
+        ref_seg = np.asarray(references[channel][start:end], dtype=float)
+        red_corr, red_delay = _best_delay_corr(
+            red_seg,
+            ref_seg,
+            max_lag=int(cfg.delay_search_samples),
+        )
+        ir_corr, ir_delay = _best_delay_corr(
+            ir_seg,
+            ref_seg,
+            max_lag=int(cfg.delay_search_samples),
+        )
+        score = float(np.median([abs(red_corr), abs(ir_corr)]))
+        if abs(ir_corr) >= abs(red_corr):
+            signed_corr = ir_corr
+            delay = ir_delay
+        else:
+            signed_corr = red_corr
+            delay = red_delay
+        ranked.append(
+            {
+                "channel": channel,
+                "corr": score,
+                "signed_corr": float(signed_corr),
+                "delay_samples": int(delay),
+                "order": _delay_to_order(delay, cfg),
+            }
+        )
+    return sorted(ranked, key=lambda row: row["corr"], reverse=True)
+
+
+def _cascade_forward_taps(group: str, cfg: V2SpO2Config) -> int:
+    if str(group).upper() in {"HF", "CF"}:
+        return 0
+    if str(group).upper() == "ACC":
+        return max(0, min(int(cfg.K_max), 1))
+    return 0
+
+
+def _normalised_reference(values: np.ndarray) -> np.ndarray:
+    arr = np.asarray(values, dtype=float).copy()
+    arr[~np.isfinite(arr)] = 0.0
+    centered = arr - float(np.mean(arr)) if arr.size else arr
+    sd = float(np.std(centered, ddof=1)) if centered.size > 1 else 0.0
+    if sd <= 1e-12 or not np.isfinite(sd):
+        return centered
+    return centered / sd
+
+
+def _reference_quiet_mask(
+    references: dict[str, np.ndarray],
+    *,
+    start: int,
+    end: int,
+) -> np.ndarray:
+    n = max(0, int(end) - int(start))
+    if n == 0:
+        return np.asarray([], dtype=bool)
+    envelopes: list[np.ndarray] = []
+    for values in references.values():
+        segment = np.asarray(values[start:end], dtype=float)
+        if segment.size != n:
+            continue
+        finite = segment[np.isfinite(segment)]
+        if finite.size == 0:
+            continue
+        median = float(np.median(finite))
+        mad = float(np.median(np.abs(finite - median)))
+        if mad > 1e-12 and np.isfinite(mad):
+            envelopes.append(np.abs(segment - median) / (1.4826 * mad))
+            continue
+        sd = float(np.std(segment, ddof=1)) if segment.size > 1 else 0.0
+        if sd > 1e-12 and np.isfinite(sd):
+            envelopes.append(np.abs(segment - float(np.mean(segment))) / sd)
+        else:
+            envelopes.append(np.zeros(n, dtype=float))
+    if not envelopes:
+        return np.ones(n, dtype=bool)
+    envelope = np.nanmax(np.vstack(envelopes), axis=0)
+    finite = envelope[np.isfinite(envelope)]
+    if finite.size == 0:
+        return np.ones(n, dtype=bool)
+    cutoff = float(np.quantile(finite, 0.25))
+    return np.isfinite(envelope) & (envelope <= cutoff)
+
+
+def _baseline_from_anchor_masks(
+    values: np.ndarray,
+    *,
+    left_mask: np.ndarray,
+    right_mask: np.ndarray,
+    fs: int,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    local = np.asarray(values, dtype=float)
+    n = local.size
+    if n == 0:
+        return local.copy(), {"mode": "empty", "left_anchor_count": 0, "right_anchor_count": 0}
+    width = max(3, int(round(1.0 * fs)))
+    left_idx = np.flatnonzero(np.asarray(left_mask, dtype=bool))
+    right_idx = np.flatnonzero(np.asarray(right_mask, dtype=bool))
+    left_anchor_count = int(left_idx.size)
+    right_anchor_count = int(right_idx.size)
+
+    if left_idx.size:
+        use = left_idx[-width:]
+        left_x = float(np.median(use))
+        left_y = float(np.median(local[use]))
+    else:
+        left_x = float("nan")
+        left_y = float("nan")
+    if right_idx.size:
+        use = right_idx[:width]
+        right_x = float(np.median(use))
+        right_y = float(np.median(local[use]))
+    else:
+        right_x = float("nan")
+        right_y = float("nan")
+
+    rel = np.arange(n, dtype=float)
+    if np.isfinite(left_y) and np.isfinite(right_y) and right_x > left_x:
+        baseline = np.interp(rel, [left_x, right_x], [left_y, right_y])
+        mode = "linear_bridge"
+    elif np.isfinite(left_y):
+        baseline = np.full(n, left_y, dtype=float)
+        mode = "left_constant"
+    elif np.isfinite(right_y):
+        baseline = np.full(n, right_y, dtype=float)
+        mode = "right_constant"
+    else:
+        finite = local[np.isfinite(local)]
+        fallback = float(np.median(finite)) if finite.size else 0.0
+        baseline = np.full(n, fallback, dtype=float)
+        mode = "segment_median"
+    return baseline, {
+        "mode": mode,
+        "left_anchor_count": left_anchor_count,
+        "right_anchor_count": right_anchor_count,
+        "start_value": float(baseline[0]),
+        "end_value": float(baseline[-1]),
+    }
+
+
+def _estimate_recovery_baseline(
+    values: np.ndarray,
+    references: dict[str, np.ndarray],
+    segment: dict[str, Any],
+    *,
+    start: int,
+    end: int,
+    fs: int,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    local = np.asarray(values[start:end], dtype=float)
+    n = local.size
+    if n == 0:
+        return local.copy(), {"mode": "empty", "left_anchor_count": 0, "right_anchor_count": 0}
+
+    rel = np.arange(n)
+    motion_start = int(segment.get("motion_start", start))
+    motion_end = int(segment.get("motion_end", end))
+    left_mask = rel < max(0, motion_start - start)
+    right_mask = rel >= min(n, max(0, motion_end - start))
+
+    min_anchor = max(3, int(round(0.5 * fs)))
+    if int(np.count_nonzero(left_mask)) < min_anchor and int(np.count_nonzero(right_mask)) < min_anchor:
+        quiet = _reference_quiet_mask(references, start=start, end=end)
+        left_mask = quiet & (rel < n // 2)
+        right_mask = quiet & (rel >= n // 2)
+
+    return _baseline_from_anchor_masks(
+        local,
+        left_mask=left_mask,
+        right_mask=right_mask,
+        fs=fs,
+    )
+
+
+def _run_adc_scale_lms_stage(
+    *,
+    desired: np.ndarray,
+    reference: np.ndarray,
+    order: int,
+    K: int,
+    mu: float,
+) -> np.ndarray:
+    d = np.asarray(desired, dtype=float).copy()
+    u = _normalised_reference(reference)
+    n = min(d.size, u.size)
+    if n == 0:
+        return d
+    d = d[:n]
+    u = u[:n]
+    m = max(1, int(order))
+    k = max(0, int(K))
+    span = m + k
+    if n - k < m:
+        return d.copy()
+    out = d.copy()
+    weights = np.zeros(span, dtype=float)
+    step = max(float(mu), 1e-12)
+    eps = 1e-9
+    for idx in range(m - 1, n - k):
+        x_vec = u[idx - m + 1 : idx + k + 1][::-1]
+        estimate = float(weights @ x_vec)
+        err = float(d[idx] - estimate)
+        out[idx] = err
+        weights += (2.0 * step * err / (float(x_vec @ x_vec) + eps)) * x_vec
+    out[~np.isfinite(out)] = d[~np.isfinite(out)]
+    return out
+
+
+def _run_adc_scale_as_lms_stage(
+    *,
+    desired: np.ndarray,
+    reference: np.ndarray,
+    order: int,
+    K: int,
+    cfg: V2SpO2Config,
+) -> np.ndarray:
+    d = np.asarray(desired, dtype=float).copy()
+    u = _normalised_reference(reference)
+    n = min(d.size, u.size)
+    if n == 0:
+        return d
+    d = d[:n]
+    u = u[:n]
+    m = max(1, int(order))
+    k = max(0, int(K))
+    span = m + k
+    if n - k < m:
+        return d.copy()
+    out = d.copy()
+    weights = np.zeros(span, dtype=float)
+    gamma = np.zeros(span, dtype=float)
+    mu = float(np.clip(cfg.lms_mu_base, cfg.lms_mu_min, cfg.as_lms_mu_max))
+    rho = max(0.0, float(cfg.as_lms_rho))
+    for idx in range(m - 1, n - k):
+        x_vec = u[idx - m + 1 : idx + k + 1][::-1]
+        estimate = float(weights @ x_vec)
+        err = float(d[idx] - estimate)
+        out[idx] = err
+        gamma_dot_u = float(gamma @ x_vec)
+        step = 2.0 * mu
+        weights += step * x_vec * err
+        gamma += 2.0 * err * x_vec - step * x_vec * gamma_dot_u
+        mu = float(np.clip(mu + rho * err * gamma_dot_u, cfg.lms_mu_min, cfg.as_lms_mu_max))
+    out[~np.isfinite(out)] = d[~np.isfinite(out)]
+    return out
+
+
+def _restore_standardised_output(
+    candidate: np.ndarray,
+    desired: np.ndarray,
+) -> np.ndarray:
+    cand = np.asarray(candidate, dtype=float)
+    d = np.asarray(desired, dtype=float)
+    if cand.size == 0:
+        return d.copy()
+    finite = d[np.isfinite(d)]
+    mean = float(np.mean(finite)) if finite.size else 0.0
+    sd = float(np.std(finite, ddof=1)) if finite.size > 1 else 1.0
+    if not np.isfinite(sd) or sd <= 1e-12:
+        sd = 1.0
+    out = cand * sd + mean
+    out[~np.isfinite(out)] = mean
+    return out
+
+
+def _align_stage_output(previous: np.ndarray, candidate: np.ndarray) -> np.ndarray:
+    prev = np.asarray(previous, dtype=float)
+    cand = np.asarray(candidate, dtype=float)
+    if cand.size == prev.size:
+        return cand.copy()
+    out = prev.copy()
+    n = min(out.size, cand.size)
+    if n > 0:
+        out[:n] = cand[:n]
+    return out
+
+
+def _run_spo2_adaptive_stage(
+    *,
+    desired: np.ndarray,
+    reference: np.ndarray,
+    group: str,
+    order: int,
+    K: int,
+    corr: float,
+    cfg: V2SpO2Config,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    strategy = str(cfg.adaptive_filter).strip().lower()
+    mu = _adaptive_mu(corr, cfg)
+    scale_restored = False
+    if strategy == "lms":
+        candidate = _run_adc_scale_lms_stage(
+            desired=desired,
+            reference=reference,
+            order=order,
+            K=K,
+            mu=mu,
+        )
+    elif strategy == "as_lms":
+        candidate = _run_adc_scale_as_lms_stage(
+            desired=desired,
+            reference=reference,
+            order=order,
+            K=K,
+            cfg=cfg,
+        )
+    else:
+        cascade_mu_base = min(float(cfg.lms_mu_base), 0.01)
+        candidate = apply_adaptive_cascade(
+            strategy=strategy,
+            mu_base=cascade_mu_base,
+            corr=float(corr),
+            order=int(order),
+            K=int(K),
+            u=np.asarray(reference, dtype=float),
+            d=np.asarray(desired, dtype=float),
+            params=cfg,  # type: ignore[arg-type]
+        )
+        candidate = _restore_standardised_output(candidate, desired)
+        mu = max(float(cfg.lms_mu_min), cascade_mu_base - abs(float(corr)) / 100.0)
+        scale_restored = True
+    aligned = _align_stage_output(desired, candidate)
+    return aligned, {
+        "filter_type": strategy,
+        "sensor_type": str(group),
+        "M": int(order),
+        "K": int(K),
+        "mu": float(mu),
+        "scale_restored": bool(scale_restored),
+        "input_len": int(np.asarray(desired).size),
+        "output_len": int(np.asarray(candidate).size),
+    }
+
+
+def _recover_motion_segments_continuous(
+    red: np.ndarray,
+    ir: np.ndarray,
+    references: dict[str, np.ndarray],
+    recovery_segments: list[dict[str, Any]],
+    *,
+    fs: int,
+    cfg: V2SpO2Config,
+) -> tuple[np.ndarray, np.ndarray, list[dict[str, Any]]]:
+    red_out = np.asarray(red, dtype=float).copy()
+    ir_out = np.asarray(ir, dtype=float).copy()
+    stages: list[dict[str, Any]] = []
+    if not bool(cfg.adaptive_enabled):
+        return red_out, ir_out, stages
+    for segment_idx, segment in enumerate(recovery_segments):
+        start = max(0, int(segment["start"]))
+        end = min(red_out.size, ir_out.size, int(segment["end"]))
+        if end <= start + 3:
+            continue
+        red_baseline, red_baseline_info = _estimate_recovery_baseline(
+            red_out,
+            references,
+            segment,
+            start=start,
+            end=end,
+            fs=fs,
+        )
+        ir_baseline, ir_baseline_info = _estimate_recovery_baseline(
+            ir_out,
+            references,
+            segment,
+            start=start,
+            end=end,
+            fs=fs,
+        )
+        red_seg = red_out[start:end].copy() - red_baseline
+        ir_seg = ir_out[start:end].copy() - ir_baseline
+        for group in normalise_reference_order(cfg.reference_groups_order):
+            channels = channel_names_for_group(group)
+            ranked = _rank_joint_references_for_segment(
+                red=red_out,
+                ir=ir_out,
+                references=references,
+                channels=channels,
+                start=start,
+                end=end,
+                cfg=cfg,
+            )
+            for row in ranked:
+                corr = float(row["corr"])
+                if corr <= 1e-12:
+                    continue
+                channel = str(row["channel"])
+                ref_segment = np.asarray(references[channel][start:end], dtype=float)
+                order = int(row["order"])
+                K = _cascade_forward_taps(group, cfg)
+                red_seg, red_diag = _run_spo2_adaptive_stage(
+                    desired=red_seg,
+                    reference=ref_segment,
+                    group=group,
+                    order=order,
+                    K=K,
+                    corr=corr,
+                    cfg=cfg,
+                )
+                ir_seg, ir_diag = _run_spo2_adaptive_stage(
+                    desired=ir_seg,
+                    reference=ref_segment,
+                    group=group,
+                    order=order,
+                    K=K,
+                    corr=corr,
+                    cfg=cfg,
+                )
+                stage = {
+                    **red_diag,
+                    "segment_idx": int(segment_idx),
+                    "channel": channel,
+                    "corr": corr,
+                    "signed_corr": float(row["signed_corr"]),
+                    "delay_samples": int(row["delay_samples"]),
+                    "start": int(start),
+                    "end": int(end),
+                    "start_s": float(start / float(fs)),
+                    "end_s": float(end / float(fs)),
+                    "red_output_len": int(red_diag["output_len"]),
+                    "ir_output_len": int(ir_diag["output_len"]),
+                    "red_baseline_mode": str(red_baseline_info["mode"]),
+                    "ir_baseline_mode": str(ir_baseline_info["mode"]),
+                    "red_baseline_start": float(red_baseline_info["start_value"]),
+                    "red_baseline_end": float(red_baseline_info["end_value"]),
+                    "ir_baseline_start": float(ir_baseline_info["start_value"]),
+                    "ir_baseline_end": float(ir_baseline_info["end_value"]),
+                }
+                stages.append(stage)
+        red_out[start:end] = red_baseline + _align_stage_output(
+            red_out[start:end] - red_baseline,
+            red_seg,
+        )
+        ir_out[start:end] = ir_baseline + _align_stage_output(
+            ir_out[start:end] - ir_baseline,
+            ir_seg,
+        )
+    return red_out, ir_out, stages
+
+
 def _adaptive_mu(corr: float, cfg: V2SpO2Config) -> float:
-    corr_abs = abs(float(corr))
-    corr_for_formula = corr_abs / 100.0 if corr_abs > 1.0 else corr_abs
-    return max(float(cfg.lms_mu_min), float(cfg.lms_mu_base) - corr_for_formula / 100.0)
+    del corr
+    return max(float(cfg.lms_mu_min), float(cfg.lms_mu_base))
 
 
 def _amplitude_preserving_lms(

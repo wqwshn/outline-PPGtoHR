@@ -189,9 +189,16 @@ def test_v2_spo2_page_exposes_reference_order_controls() -> None:
     app = QApplication.instance() or QApplication([])
     page = V2SpO2Page()
     try:
-        assert page.selected_reference_order() == ("HF", "CF", "ACC")
+        assert page.selected_reference_order() == ("HF",)
         assert page._delay_samples.value() == 20
         assert page._max_order.value() == 20
+        assert page._mu_base.value() == pytest.approx(0.12)
+        filters = [
+            str(page._filter_combo.itemData(i))
+            for i in range(page._filter_combo.count())
+        ]
+        assert filters == ["lms", "as_lms", "klms", "volterra", "noncausal_lms", "rff_lms"]
+        assert page._filter_combo.currentData() == "lms"
     finally:
         page.deleteLater()
         app.processEvents()

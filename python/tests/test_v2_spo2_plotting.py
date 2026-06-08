@@ -68,9 +68,15 @@ def _spo2_plot_result() -> V2SpO2Result:
             "time_s": t,
             "red_raw": 900.0 - 20.0 * pulse + 8.0 * artifact,
             "ir_raw": 800.0 - 24.0 * pulse + 7.0 * artifact,
+            "red_despiked": 900.0 - 20.0 * pulse + 8.0 * artifact,
+            "ir_despiked": 800.0 - 24.0 * pulse + 7.0 * artifact,
             "red_clean": 900.0 - 20.0 * pulse,
             "ir_clean": 800.0 - 24.0 * pulse,
             "acc_mag": 1.0 + artifact,
+            "ut1": 2.0 + artifact,
+            "ut2": 1.5 + 0.5 * artifact,
+            "motion_window_center_s": centers,
+            "motion_score": np.asarray([row["motion_score"] for row in table]),
         },
     )
 
@@ -86,6 +92,8 @@ def test_render_spo2_report_outputs_png_trend_and_window_slices(
 
     plotted = render_spo2_report(report["json"], out_dir=tmp_path / "figures")
 
+    assert plotted["full_trace_png"].is_file()
+    assert plotted["full_trace_png"].suffix == ".png"
     assert plotted["trend_png"].is_file()
     assert plotted["trend_png"].suffix == ".png"
     assert len(plotted["slice_pngs"]) >= 6
