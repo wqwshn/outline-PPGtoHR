@@ -15,6 +15,26 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 
+from .spo2 import _ppg_adc_to_ua
+
+
+COLOR_PREPROCESSED = "#7A7F87"
+COLOR_UT1 = "#2878B5"
+COLOR_UT2 = "#D95F4C"
+
+
+def _compact_legend(ax, **kwargs):
+    defaults = {
+        "frameon": False,
+        "fontsize": 5.2,
+        "handlelength": 1.7,
+        "handletextpad": 0.45,
+        "columnspacing": 0.8,
+        "borderaxespad": 0.25,
+    }
+    defaults.update(kwargs)
+    return ax.legend(**defaults)
+
 
 def _publication_scripts_dir() -> Path:
     return Path(__file__).resolve().parents[4] / "skills" / "publication-plotting" / "scripts"
@@ -54,6 +74,23 @@ def _finite_or_label(value: float) -> str:
     return f"{value:.1f}%" if np.isfinite(value) else "NaN"
 
 
+def _style_boxed_axis(ax, *, y_ticks: str = "left") -> None:
+    for spine in ax.spines.values():
+        spine.set_visible(True)
+        spine.set_color("black")
+        spine.set_linewidth(0.65)
+    ax.tick_params(
+        axis="both",
+        which="both",
+        direction="in",
+        top=False,
+        right=y_ticks == "right",
+        left=y_ticks == "left",
+        labelright=y_ticks == "right",
+        labelleft=y_ticks == "left",
+    )
+
+
 def _select_slice_rows(
     table: list[dict[str, Any]],
     *,
@@ -63,13 +100,14 @@ def _select_slice_rows(
         row
         for row in table
         if np.isfinite(float(row.get("raw_spo2", float("nan"))))
-        and np.isfinite(float(row.get("adaptive_spo2", float("nan"))))
+        and np.isfinite(float(row.get("spo2_ut1", float("nan"))))
+        and np.isfinite(float(row.get("spo2_ut2", float("nan"))))
     ]
     if not valid:
         return []
     ordered = sorted(valid, key=lambda row: float(row.get("center_s", 0.0)))
-    if any("adaptive_applied" in row for row in ordered):
-        motion_rows = [row for row in ordered if bool(row.get("adaptive_applied", False))]
+    if any("recovery_applied" in row for row in ordered):
+        motion_rows = [row for row in ordered if bool(row.get("recovery_applied", False))]
     else:
         scores = np.asarray(
             [float(row.get("motion_score", 0.0)) for row in ordered],
@@ -216,40 +254,55 @@ def _draw_peak_valley_markers(
 def _plot_trend(report_stem: str, out: Path, table: list[dict[str, Any]]) -> Path:
     t = np.asarray([row["center_s"] for row in table], dtype=float)
     raw = np.asarray([row.get("raw_spo2", np.nan) for row in table], dtype=float)
-    adaptive = np.asarray(
-        [row.get("adaptive_spo2", np.nan) for row in table],
+    ut1 = np.asarray(
+        [row.get("spo2_ut1", np.nan) for row in table],
         dtype=float,
     )
-    fig, ax = plt.subplots(figsize=(6.8, 2.8))
+    ut2 = np.asarray(
+        [row.get("spo2_ut2", np.nan) for row in table],
+        dtype=float,
+    )
+    fig, ax = plt.subplots(figsize=(3.54, 2.45))
     ax.plot(
         t,
         raw,
-        color="#A8ADB3",
+        color=COLOR_PREPROCESSED,
         linestyle=(0, (2.0, 1.6)),
         linewidth=0.95,
-        label="Before adaptive",
+        label="Preprocessed",
     )
     ax.plot(
         t,
-        adaptive,
-        color="#2A6FBB",
-        linewidth=1.35,
+        ut1,
+        color=COLOR_UT1,
+        linewidth=1.15,
         marker="o",
-        markersize=2.0,
+        markersize=1.8,
         markevery=max(1, len(t) // 20),
-        label="After adaptive",
+        label="Ut1 recovery",
+    )
+    ax.plot(
+        t,
+        ut2,
+        color=COLOR_UT2,
+        linewidth=1.15,
+        marker="s",
+        markersize=1.7,
+        markevery=max(1, len(t) // 20),
+        label="Ut2 recovery",
     )
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("SpO2 (%)")
-    finite = np.concatenate([raw[np.isfinite(raw)], adaptive[np.isfinite(adaptive)]])
+    finite = np.concatenate(
+        [raw[np.isfinite(raw)], ut1[np.isfinite(ut1)], ut2[np.isfinite(ut2)]]
+    )
     if finite.size:
         ax.set_ylim(max(70.0, float(finite.min()) - 2.0), min(101.0, float(finite.max()) + 2.0))
     else:
         ax.set_ylim(80.0, 101.0)
     ax.grid(True, axis="y", alpha=0.14, linewidth=0.45)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    ax.legend(frameon=False, loc="lower right")
+    _style_boxed_axis(ax)
+    _compact_legend(ax, loc="upper center", ncol=3)
     path = _export_png(fig, out / f"{report_stem}-spo2-trend.png")
     plt.close(fig)
     return path
@@ -267,7 +320,7 @@ def _motion_spans(
             continue
     if spans:
         return spans
-    motion_rows = [row for row in table if bool(row.get("adaptive_applied", False))]
+    motion_rows = [row for row in table if bool(row.get("recovery_applied", False))]
     if not motion_rows:
         return []
     start = min(float(row.get("start_s", 0.0)) for row in motion_rows)
@@ -289,71 +342,103 @@ def _plot_full_trace_recovery(
     time_s: np.ndarray,
     wave: dict[str, Any],
 ) -> Path:
-    red_raw = np.asarray(wave.get("red_raw", []), dtype=float)
-    ir_raw = np.asarray(wave.get("ir_raw", []), dtype=float)
-    red_despiked = np.asarray(wave.get("red_despiked", red_raw), dtype=float)
-    ir_despiked = np.asarray(wave.get("ir_despiked", ir_raw), dtype=float)
-    red_clean = np.asarray(wave.get("red_clean", []), dtype=float)
-    ir_clean = np.asarray(wave.get("ir_clean", []), dtype=float)
+    red_preprocessed = _ppg_adc_to_ua(
+        np.asarray(wave.get("red_preprocessed", []), dtype=float)
+    )
+    ir_preprocessed = _ppg_adc_to_ua(
+        np.asarray(wave.get("ir_preprocessed", []), dtype=float)
+    )
+    red_ut1 = _ppg_adc_to_ua(np.asarray(wave.get("red_ut1", []), dtype=float))
+    ir_ut1 = _ppg_adc_to_ua(np.asarray(wave.get("ir_ut1", []), dtype=float))
+    red_ut2 = _ppg_adc_to_ua(np.asarray(wave.get("red_ut2", []), dtype=float))
+    ir_ut2 = _ppg_adc_to_ua(np.asarray(wave.get("ir_ut2", []), dtype=float))
     ut1 = np.asarray(wave.get("ut1", []), dtype=float)
     ut2 = np.asarray(wave.get("ut2", []), dtype=float)
-    score_t = np.asarray(wave.get("motion_window_center_s", []), dtype=float)
-    scores = np.asarray(wave.get("motion_score", []), dtype=float)
     spans = _motion_spans(metadata, table)
 
-    fig, axes = plt.subplots(3, 1, figsize=(7.2, 4.8), sharex=True)
+    fig, axes = plt.subplots(3, 1, figsize=(3.54, 4.8), sharex=True)
     for axis in axes:
         _shade_motion(axis, spans)
-        axis.spines["top"].set_visible(False)
-        axis.spines["right"].set_visible(False)
         axis.grid(True, axis="y", alpha=0.10, linewidth=0.4)
+        _style_boxed_axis(axis)
 
-    axes[0].plot(time_s, ir_raw, color="#B6BAC0", linewidth=0.55, label="IR raw")
     axes[0].plot(
         time_s,
-        ir_despiked,
-        color="#7E8792",
+        ir_preprocessed,
+        color=COLOR_PREPROCESSED,
         linewidth=0.65,
-        alpha=0.80,
-        label="IR deglitched",
+        label="Preprocessed",
     )
-    axes[0].plot(time_s, ir_clean, color="#2A6FBB", linewidth=0.90, label="IR recovered")
-    axes[0].set_ylabel("IR ADC")
-    axes[0].legend(frameon=False, loc="upper right", ncol=3)
+    axes[0].plot(
+        time_s,
+        ir_ut1,
+        color=COLOR_UT1,
+        linewidth=0.85,
+        label="Ut1 recovery",
+    )
+    axes[0].plot(
+        time_s,
+        ir_ut2,
+        color=COLOR_UT2,
+        linewidth=0.85,
+        label="Ut2 recovery",
+    )
+    axes[0].set_ylabel(r"IR photocurrent ($\mu$A)")
 
-    axes[1].plot(time_s, red_raw, color="#B6BAC0", linewidth=0.55, label="Red raw")
     axes[1].plot(
         time_s,
-        red_despiked,
-        color="#7E8792",
+        red_preprocessed,
+        color=COLOR_PREPROCESSED,
         linewidth=0.65,
-        alpha=0.80,
-        label="Red deglitched",
+        label="Preprocessed",
     )
-    axes[1].plot(time_s, red_clean, color="#D43F3A", linewidth=0.90, label="Red recovered")
-    axes[1].set_ylabel("Red ADC")
-    axes[1].legend(frameon=False, loc="upper right", ncol=3)
+    axes[1].plot(
+        time_s,
+        red_ut1,
+        color=COLOR_UT1,
+        linewidth=0.85,
+        label="Ut1 recovery",
+    )
+    axes[1].plot(
+        time_s,
+        red_ut2,
+        color=COLOR_UT2,
+        linewidth=0.85,
+        label="Ut2 recovery",
+    )
+    axes[1].set_ylabel(r"Red photocurrent ($\mu$A)")
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(
+        handles,
+        labels,
+        loc="upper center",
+        ncol=3,
+        frameon=False,
+        fontsize=5.2,
+        handlelength=1.7,
+        handletextpad=0.45,
+        columnspacing=0.8,
+        bbox_to_anchor=(0.5, 0.995),
+    )
 
     if ut1.size == time_s.size:
-        axes[2].plot(time_s, ut1, color="#6AAA8B", linewidth=0.75, label="Ut1")
+        axes[2].plot(time_s, ut1, color=COLOR_UT1, linewidth=0.75, label="Ut1")
+    ax_ut2 = axes[2].twinx()
     if ut2.size == time_s.size:
-        axes[2].plot(time_s, ut2, color="#5B8FC0", linewidth=0.75, label="Ut2")
-    if scores.size and score_t.size == scores.size:
-        ax_score = axes[2].twinx()
-        ax_score.plot(
-            score_t,
-            scores,
-            color="#3E4349",
-            linewidth=0.75,
-            linestyle=(0, (2.0, 1.5)),
-            label="Motion score",
-        )
-        ax_score.set_ylabel("Motion score")
-        ax_score.spines["top"].set_visible(False)
-        ax_score.legend(frameon=False, loc="upper right")
-    axes[2].set_ylabel("Reference")
+        ax_ut2.plot(time_s, ut2, color=COLOR_UT2, linewidth=0.75, label="Ut2")
+    _style_boxed_axis(ax_ut2, y_ticks="right")
+    axes[2].set_ylabel("Ut1 (mV)", color=COLOR_UT1)
+    ax_ut2.set_ylabel("Ut2 (mV)", color=COLOR_UT2)
     axes[2].set_xlabel("Time (s)")
-    axes[2].legend(frameon=False, loc="upper left", ncol=2)
+    ut_handles = axes[2].get_lines() + ax_ut2.get_lines()
+    _compact_legend(
+        axes[2],
+        handles=ut_handles,
+        labels=["Ut1", "Ut2"],
+        loc="upper center",
+        ncol=2,
+    )
+    fig.subplots_adjust(top=0.93, hspace=0.14)
 
     path = _export_png(fig, out / f"{report_stem}-full-trace-recovery.png")
     plt.close(fig)
@@ -368,110 +453,87 @@ def _plot_slice(
     idx: int,
     row: dict[str, Any],
     time_s: np.ndarray,
-    red_raw: np.ndarray,
-    ir_raw: np.ndarray,
-    red_clean: np.ndarray,
-    ir_clean: np.ndarray,
+    red_preprocessed: np.ndarray,
+    ir_preprocessed: np.ndarray,
+    red_ut1: np.ndarray,
+    ir_ut1: np.ndarray,
+    red_ut2: np.ndarray,
+    ir_ut2: np.ndarray,
     beat_table: list[dict[str, Any]],
     fs: int,
 ) -> Path:
     center_s = float(row["center_s"])
     mask = _slice_mask(time_s, center_s, duration_s=4.0)
     raw_spo2 = _finite_or_label(float(row.get("raw_spo2", float("nan"))))
-    adaptive_spo2 = _finite_or_label(float(row.get("adaptive_spo2", float("nan"))))
-    adaptive_applied = bool(row.get("adaptive_applied", label == "motion"))
-    fig, axes = plt.subplots(2, 1, figsize=(6.8, 3.2), sharex=True)
-    axes[0].plot(
-        time_s[mask],
-        ir_raw[mask],
-        color="#A8ADB3",
-        linestyle=(0, (2.0, 1.6)),
-        linewidth=0.9,
-        label=(
-            f"Before adaptive, SpO2={raw_spo2}"
-            if adaptive_applied
-            else f"Raw rest window, SpO2={raw_spo2}"
-        ),
+    ut1_spo2 = _finite_or_label(float(row.get("spo2_ut1", float("nan"))))
+    ut2_spo2 = _finite_or_label(float(row.get("spo2_ut2", float("nan"))))
+    fig, axes = plt.subplots(2, 1, figsize=(3.54, 3.25), sharex=True)
+    series = (
+        ("raw", ir_preprocessed, red_preprocessed, COLOR_PREPROCESSED, raw_spo2),
+        ("ut1", ir_ut1, red_ut1, COLOR_UT1, ut1_spo2),
+        ("ut2", ir_ut2, red_ut2, COLOR_UT2, ut2_spo2),
     )
-    axes[1].plot(
-        time_s[mask],
-        red_raw[mask],
-        color="#A8ADB3",
-        linestyle=(0, (2.0, 1.6)),
-        linewidth=0.9,
-        label=(
-            f"Before adaptive, SpO2={raw_spo2}"
-            if adaptive_applied
-            else f"Raw rest window, SpO2={raw_spo2}"
-        ),
-    )
-    raw_points = _marker_points_for_window(
-        row=row,
-        beat_table=beat_table,
-        scheme="raw",
-        fs=fs,
-    )
-    _draw_peak_valley_markers(
-        axes[0],
-        time_s=time_s,
-        values=ir_raw,
-        peak_times=raw_points["ir_peaks_s"],
-        valley_times=raw_points["ir_valleys_s"],
-        color="#6E747C",
-    )
-    _draw_peak_valley_markers(
-        axes[1],
-        time_s=time_s,
-        values=red_raw,
-        peak_times=raw_points["red_peaks_s"],
-        valley_times=raw_points["red_valleys_s"],
-        color="#6E747C",
-    )
-    if adaptive_applied:
+    for scheme, ir_values, red_values, color, spo2_label in series:
+        line_style = (0, (2.0, 1.6)) if scheme == "raw" else "-"
+        display_name = "Pre" if scheme == "raw" else scheme.upper()
         axes[0].plot(
             time_s[mask],
-            ir_clean[mask],
-            color="#2A6FBB",
-            linewidth=1.2,
-            label=f"After adaptive, SpO2={adaptive_spo2}",
+            ir_values[mask],
+            color=color,
+            linestyle=line_style,
+            linewidth=0.9 if scheme == "raw" else 1.05,
+            label=f"{display_name} {spo2_label}",
         )
         axes[1].plot(
             time_s[mask],
-            red_clean[mask],
-            color="#D43F3A",
-            linewidth=1.2,
-            label=f"After adaptive, SpO2={adaptive_spo2}",
+            red_values[mask],
+            color=color,
+            linestyle=line_style,
+            linewidth=0.9 if scheme == "raw" else 1.05,
+            label=f"{display_name} {spo2_label}",
         )
-        adaptive_points = _marker_points_for_window(
+        points = _marker_points_for_window(
             row=row,
             beat_table=beat_table,
-            scheme="adaptive",
+            scheme=scheme,
             fs=fs,
         )
         _draw_peak_valley_markers(
             axes[0],
             time_s=time_s,
-            values=ir_clean,
-            peak_times=adaptive_points["ir_peaks_s"],
-            valley_times=adaptive_points["ir_valleys_s"],
-            color="#2A6FBB",
+            values=ir_values,
+            peak_times=points["ir_peaks_s"],
+            valley_times=points["ir_valleys_s"],
+            color=color,
         )
         _draw_peak_valley_markers(
             axes[1],
             time_s=time_s,
-            values=red_clean,
-            peak_times=adaptive_points["red_peaks_s"],
-            valley_times=adaptive_points["red_valleys_s"],
-            color="#D43F3A",
+            values=red_values,
+            peak_times=points["red_peaks_s"],
+            valley_times=points["red_valleys_s"],
+            color=color,
         )
-    axes[0].set_ylabel("IR ADC")
-    axes[1].set_ylabel("Red ADC")
+    axes[0].set_ylabel(r"IR photocurrent ($\mu$A)")
+    axes[1].set_ylabel(r"Red photocurrent ($\mu$A)")
     axes[1].set_xlabel("Time (s)")
     for axis in axes:
         axis.grid(True, axis="y", alpha=0.12, linewidth=0.45)
-        axis.spines["top"].set_visible(False)
-        axis.spines["right"].set_visible(False)
-        axis.legend(frameon=False, loc="upper right")
+        _style_boxed_axis(axis)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(
+        handles,
+        labels,
+        loc="upper center",
+        ncol=3,
+        frameon=False,
+        fontsize=5.2,
+        handlelength=1.7,
+        handletextpad=0.45,
+        columnspacing=0.8,
+        bbox_to_anchor=(0.5, 0.995),
+    )
+    fig.subplots_adjust(top=0.89, hspace=0.16)
     path = _export_png(fig, out / f"{report_stem}-{label}-slice-{idx:02d}.png")
     plt.close(fig)
     return path
@@ -495,10 +557,16 @@ def render_spo2_report(
     metadata = payload.get("metadata", {})
     fs = int(metadata.get("fs", 100))
     time_s = np.asarray(wave.get("time_s", []), dtype=float)
-    red_raw = np.asarray(wave.get("red_raw", []), dtype=float)
-    ir_raw = np.asarray(wave.get("ir_raw", []), dtype=float)
-    red_clean = np.asarray(wave.get("red_clean", []), dtype=float)
-    ir_clean = np.asarray(wave.get("ir_clean", []), dtype=float)
+    red_preprocessed = _ppg_adc_to_ua(
+        np.asarray(wave.get("red_preprocessed", []), dtype=float)
+    )
+    ir_preprocessed = _ppg_adc_to_ua(
+        np.asarray(wave.get("ir_preprocessed", []), dtype=float)
+    )
+    red_ut1 = _ppg_adc_to_ua(np.asarray(wave.get("red_ut1", []), dtype=float))
+    ir_ut1 = _ppg_adc_to_ua(np.asarray(wave.get("ir_ut1", []), dtype=float))
+    red_ut2 = _ppg_adc_to_ua(np.asarray(wave.get("red_ut2", []), dtype=float))
+    ir_ut2 = _ppg_adc_to_ua(np.asarray(wave.get("ir_ut2", []), dtype=float))
 
     full_trace_png = _plot_full_trace_recovery(
         report_stem=report.stem,
@@ -521,10 +589,12 @@ def render_spo2_report(
                 idx=label_counts[label],
                 row=row,
                 time_s=time_s,
-                red_raw=red_raw,
-                ir_raw=ir_raw,
-                red_clean=red_clean,
-                ir_clean=ir_clean,
+                red_preprocessed=red_preprocessed,
+                ir_preprocessed=ir_preprocessed,
+                red_ut1=red_ut1,
+                ir_ut1=ir_ut1,
+                red_ut2=red_ut2,
+                ir_ut2=ir_ut2,
                 beat_table=beat_table,
                 fs=fs,
             )

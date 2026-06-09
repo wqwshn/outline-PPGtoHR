@@ -31,17 +31,18 @@ def _spo2_plot_result() -> V2SpO2Result:
                 "center_s": center,
                 "motion_score": motion,
                 "raw_spo2": 94.0 - 0.4 * idx,
-                "adaptive_spo2": 96.0 - 0.2 * idx,
-                "spo2": 96.0 - 0.2 * idx,
+                "spo2_ut1": 96.0 - 0.2 * idx,
+                "spo2_ut2": 95.0 - 0.1 * idx,
                 "raw_valid_beat_count": 3,
-                "adaptive_valid_beat_count": 3,
-                "adaptive_applied": is_motion,
+                "valid_beat_count_ut1": 3,
+                "valid_beat_count_ut2": 3,
+                "recovery_applied": is_motion,
             }
         )
     beat_table = [
         {
             "window_idx": 6,
-            "scheme": "adaptive",
+            "scheme": "ut1",
             "v1_ir": 20,
             "p_ir": 50,
             "v2_ir": 92,
@@ -59,6 +60,16 @@ def _spo2_plot_result() -> V2SpO2Result:
             "p_red": 50,
             "v2_red": 91,
         },
+        {
+            "window_idx": 6,
+            "scheme": "ut2",
+            "v1_ir": 21,
+            "p_ir": 51,
+            "v2_ir": 93,
+            "v1_red": 23,
+            "p_red": 53,
+            "v2_red": 95,
+        },
     ]
     return V2SpO2Result(
         spo2_table=table,
@@ -66,12 +77,12 @@ def _spo2_plot_result() -> V2SpO2Result:
         metadata={"schema_version": "v2_spo2", "fs": fs},
         waveforms={
             "time_s": t,
-            "red_raw": 900.0 - 20.0 * pulse + 8.0 * artifact,
-            "ir_raw": 800.0 - 24.0 * pulse + 7.0 * artifact,
-            "red_despiked": 900.0 - 20.0 * pulse + 8.0 * artifact,
-            "ir_despiked": 800.0 - 24.0 * pulse + 7.0 * artifact,
-            "red_clean": 900.0 - 20.0 * pulse,
-            "ir_clean": 800.0 - 24.0 * pulse,
+            "red_preprocessed": 900.0 - 20.0 * pulse + 8.0 * artifact,
+            "ir_preprocessed": 800.0 - 24.0 * pulse + 7.0 * artifact,
+            "red_ut1": 900.0 - 20.0 * pulse,
+            "ir_ut1": 800.0 - 24.0 * pulse,
+            "red_ut2": 900.0 - 20.0 * pulse + 2.0 * artifact,
+            "ir_ut2": 800.0 - 24.0 * pulse + 1.5 * artifact,
             "acc_mag": 1.0 + artifact,
             "ut1": 2.0 + artifact,
             "ut2": 1.5 + 0.5 * artifact,
@@ -129,7 +140,7 @@ def test_marker_points_for_window_extracts_peak_and_valley_times() -> None:
     points = _marker_points_for_window(
         row=row,
         beat_table=result.beat_table,
-        scheme="adaptive",
+        scheme="ut1",
         fs=100,
     )
 
