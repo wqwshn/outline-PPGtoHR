@@ -25,6 +25,7 @@ from ppg_hr.v2.spo2 import (
     _ppg_adc_to_ua,
     _rank_references_for_window,
     _recover_motion_segments_continuous,
+    _recover_motion_segments_single_reference,
     _smooth_spo2_table,
     load_spo2_report,
     save_spo2_report,
@@ -45,7 +46,7 @@ def test_spo2_config_defaults_use_100hz_and_causal_lms(tmp_path: Path) -> None:
     assert cfg.lms_mu_min == pytest.approx(1e-6)
     assert cfg.reference_groups_order == ("HF",)
     assert cfg.reference_lowpass_enabled is True
-    assert cfg.reference_lowpass_cutoff_hz == pytest.approx(3.0)
+    assert cfg.reference_lowpass_cutoff_hz == pytest.approx(5.0)
     assert cfg.adaptive_enabled is True
 
 
@@ -360,6 +361,59 @@ def test_continuous_recovery_keeps_ppg_adc_scale_for_spo2_ratio() -> None:
     assert np.mean(ir_clean[motion]) == pytest.approx(np.mean(clean_ir[motion]), abs=8.0)
 
 
+def test_ut1_and_ut2_recovery_chains_are_independent() -> None:
+    fs = 100
+    t = np.arange(20 * fs, dtype=float) / fs
+    pulse = np.sin(2 * np.pi * 1.2 * t)
+    ut1 = np.sin(2 * np.pi * 0.7 * t)
+    ut2 = np.cos(2 * np.pi * 0.5 * t)
+    red = 900.0 + 18.0 * pulse + 20.0 * ut1 + 12.0 * ut2
+    ir = 800.0 + 24.0 * pulse + 16.0 * ut1 + 10.0 * ut2
+    segments = [
+        {
+            "start": 4 * fs,
+            "end": 16 * fs,
+            "motion_start": 5 * fs,
+            "motion_end": 15 * fs,
+        }
+    ]
+    cfg = V2SpO2Config(data_path=Path("x.csv"))
+
+    red_ut1_a, ir_ut1_a, _ = _recover_motion_segments_single_reference(
+        red,
+        ir,
+        ut1,
+        segments,
+        channel="hf1",
+        fs=fs,
+        cfg=cfg,
+    )
+    red_ut1_b, ir_ut1_b, _ = _recover_motion_segments_single_reference(
+        red,
+        ir,
+        ut1,
+        segments,
+        channel="hf1",
+        fs=fs,
+        cfg=cfg,
+    )
+    red_ut2, ir_ut2, stages_ut2 = _recover_motion_segments_single_reference(
+        red,
+        ir,
+        ut2,
+        segments,
+        channel="hf2",
+        fs=fs,
+        cfg=cfg,
+    )
+
+    np.testing.assert_allclose(red_ut1_a, red_ut1_b)
+    np.testing.assert_allclose(ir_ut1_a, ir_ut1_b)
+    assert not np.allclose(red_ut1_a, red_ut2)
+    assert not np.allclose(ir_ut1_a, ir_ut2)
+    assert stages_ut2[0]["channel"] == "hf2"
+
+
 @pytest.mark.parametrize(
     "strategy",
     ["lms", "as_lms", "klms", "volterra", "noncausal_lms", "rff_lms"],
@@ -428,16 +482,17 @@ def test_solve_spo2_v2_outputs_one_second_spo2_windows(tmp_path: Path) -> None:
     result = solve_spo2_v2(cfg)
 
     assert len(result.spo2_table) == 9
-    first_valid = next(
-        row for row in result.spo2_table if np.isfinite(row["adaptive_spo2"])
-    )
+    first_valid = next(row for row in result.spo2_table if np.isfinite(row["spo2_ut1"]))
     assert 0.0 <= first_valid["raw_spo2"] <= 100.0
-    assert 0.0 <= first_valid["adaptive_spo2"] <= 100.0
-    assert first_valid["spo2"] == first_valid["adaptive_spo2"]
+    assert 0.0 <= first_valid["spo2_ut1"] <= 100.0
+    assert 0.0 <= first_valid["spo2_ut2"] <= 100.0
     assert first_valid["raw_valid_beat_count"] >= 1
-    assert first_valid["adaptive_valid_beat_count"] >= 1
-    assert result.waveforms["red_raw"].shape == result.waveforms["red_clean"].shape
-    assert result.waveforms["ir_raw"].shape == result.waveforms["ir_clean"].shape
+    assert first_valid["valid_beat_count_ut1"] >= 1
+    assert first_valid["valid_beat_count_ut2"] >= 1
+    assert "adaptive_spo2" not in first_valid
+    assert "spo2" not in first_valid
+    assert result.waveforms["red_preprocessed"].shape == result.waveforms["red_ut1"].shape
+    assert result.waveforms["ir_preprocessed"].shape == result.waveforms["ir_ut2"].shape
     assert result.metadata["fs"] == 100
     assert result.metadata["spo2_smooth_seconds"] == pytest.approx(7.0)
 
@@ -457,10 +512,12 @@ def test_solve_spo2_v2_reports_continuous_recovery_metadata(tmp_path: Path) -> N
     assert result.metadata["adaptive_filter"] == "lms"
     assert "motion_threshold" in result.metadata
     assert "continuous_recovery_segments" in result.metadata
-    assert "recovery_stage_rows" in result.metadata
+    assert "recovery_stage_rows_ut1" in result.metadata
+    assert "recovery_stage_rows_ut2" in result.metadata
     assert "artifact_rejection" in result.metadata
-    assert "red_despiked" in result.waveforms
-    assert result.waveforms["red_clean"].shape == result.waveforms["red_raw"].shape
+    assert "red_preprocessed" in result.waveforms
+    assert result.waveforms["red_ut1"].shape == result.waveforms["red_preprocessed"].shape
+    assert result.waveforms["red_ut2"].shape == result.waveforms["red_preprocessed"].shape
 
 
 def test_real_spo2_recovery_csv_smoke_runs_when_available() -> None:
@@ -476,15 +533,18 @@ def test_real_spo2_recovery_csv_smoke_runs_when_available() -> None:
     assert result.metadata["reference_groups_order"] == ["HF"]
     assert result.metadata["artifact_rejection"]["hf1_lowpass"]["applied"] is True
     summary = result.metadata["spo2_stability_summary"]
-    assert summary["adaptive_motion_delta_vs_rest"] <= summary["raw_motion_delta_vs_rest"]
+    assert summary["has_motion"] is True
+    assert np.isfinite(summary["raw"]["motion_delta_vs_rest"])
+    assert np.isfinite(summary["ut1"]["motion_delta_vs_rest"])
+    assert np.isfinite(summary["ut2"]["motion_delta_vs_rest"])
 
 
 def test_spo2_table_applies_7s_average_to_remove_spikes() -> None:
     rows = [
         {
             "raw_spo2": value,
-            "adaptive_spo2": value,
-            "spo2": value,
+            "spo2_ut1": value,
+            "spo2_ut2": value,
             "motion_score": 1.0,
         }
         for value in [96.0, 96.0, 96.0, 80.0, 96.0, 96.0, 96.0]
@@ -493,51 +553,68 @@ def test_spo2_table_applies_7s_average_to_remove_spikes() -> None:
 
     _smooth_spo2_table(rows, cfg)
 
-    assert rows[3]["adaptive_spo2_unsmoothed"] == pytest.approx(80.0)
-    assert rows[3]["adaptive_spo2"] == pytest.approx(np.mean([96.0] * 6 + [80.0]))
-    assert rows[3]["spo2"] == rows[3]["adaptive_spo2"]
+    expected = np.mean([96.0] * 6 + [80.0])
+    assert rows[3]["spo2_ut1_unsmoothed"] == pytest.approx(80.0)
+    assert rows[3]["spo2_ut2_unsmoothed"] == pytest.approx(80.0)
+    assert rows[3]["spo2_ut1"] == pytest.approx(expected)
+    assert rows[3]["spo2_ut2"] == pytest.approx(expected)
 
 
 def test_rest_windows_use_raw_spo2_without_adaptive_comparison() -> None:
     rows = [
         {
             "raw_spo2": 96.0,
-            "adaptive_spo2": 94.0,
-            "spo2": 94.0,
+            "spo2_ut1": 94.0,
+            "spo2_ut2": 93.0,
             "raw_r_median": 0.7,
-            "adaptive_r_median": 0.8,
+            "r_median_ut1": 0.8,
+            "r_median_ut2": 0.9,
             "raw_valid_beat_count": 3,
-            "adaptive_valid_beat_count": 2,
+            "valid_beat_count_ut1": 2,
+            "valid_beat_count_ut2": 1,
             "raw_carried_forward": False,
-            "adaptive_carried_forward": False,
+            "carried_forward_ut1": False,
+            "carried_forward_ut2": True,
             "motion_score": 0.001,
-            "reliable": True,
+            "reliable_raw": True,
+            "reliable_ut1": True,
+            "reliable_ut2": False,
+            "recovery_applied": False,
         },
         {
             "raw_spo2": 92.0,
-            "adaptive_spo2": 95.0,
-            "spo2": 95.0,
+            "spo2_ut1": 95.0,
+            "spo2_ut2": 94.0,
             "raw_r_median": 0.9,
-            "adaptive_r_median": 0.6,
+            "r_median_ut1": 0.6,
+            "r_median_ut2": 0.65,
             "raw_valid_beat_count": 3,
-            "adaptive_valid_beat_count": 3,
+            "valid_beat_count_ut1": 3,
+            "valid_beat_count_ut2": 3,
             "raw_carried_forward": False,
-            "adaptive_carried_forward": False,
+            "carried_forward_ut1": False,
+            "carried_forward_ut2": False,
             "motion_score": 0.2,
-            "reliable": True,
+            "reliable_raw": True,
+            "reliable_ut1": True,
+            "reliable_ut2": True,
+            "recovery_applied": True,
         },
     ]
     cfg = V2SpO2Config(data_path=Path("x.csv"), rest_motion_score_threshold=0.02)
 
     _apply_rest_adaptive_policy(rows, cfg)
 
-    assert rows[0]["adaptive_applied"] is False
-    assert rows[0]["adaptive_spo2"] == rows[0]["raw_spo2"]
-    assert rows[0]["spo2"] == rows[0]["raw_spo2"]
-    assert rows[0]["adaptive_r_median"] == rows[0]["raw_r_median"]
-    assert rows[0]["adaptive_valid_beat_count"] == rows[0]["raw_valid_beat_count"]
-    assert rows[1]["adaptive_applied"] is True
-    assert rows[1]["spo2"] == rows[1]["adaptive_spo2"]
+    assert rows[0]["recovery_applied"] is False
+    assert rows[0]["spo2_ut1"] == rows[0]["raw_spo2"]
+    assert rows[0]["spo2_ut2"] == rows[0]["raw_spo2"]
+    assert rows[0]["r_median_ut1"] == rows[0]["raw_r_median"]
+    assert rows[0]["r_median_ut2"] == rows[0]["raw_r_median"]
+    assert rows[0]["valid_beat_count_ut1"] == rows[0]["raw_valid_beat_count"]
+    assert rows[0]["valid_beat_count_ut2"] == rows[0]["raw_valid_beat_count"]
+    assert rows[1]["recovery_applied"] is True
+    assert rows[1]["spo2_ut1"] == pytest.approx(95.0)
+    assert rows[1]["spo2_ut2"] == pytest.approx(94.0)
 
 
 def test_solver_skips_adaptive_filtering_for_static_rest_windows(tmp_path: Path) -> None:
@@ -568,10 +645,25 @@ def test_solver_skips_adaptive_filtering_for_static_rest_windows(tmp_path: Path)
 
     result = solve_spo2_v2(V2SpO2Config(data_path=data, output_dir=tmp_path))
 
-    assert all(row["adaptive_applied"] is False for row in result.spo2_table)
-    assert all(not stages for stages in result.metadata["adaptive_stage_rows"])
-    assert np.allclose(result.waveforms["red_clean"], result.waveforms["red_raw"])
-    assert np.allclose(result.waveforms["ir_clean"], result.waveforms["ir_raw"])
+    assert all(row["recovery_applied"] is False for row in result.spo2_table)
+    assert not result.metadata["recovery_stage_rows_ut1"]
+    assert not result.metadata["recovery_stage_rows_ut2"]
+    assert np.allclose(
+        result.waveforms["red_ut1"],
+        result.waveforms["red_preprocessed"],
+    )
+    assert np.allclose(
+        result.waveforms["red_ut2"],
+        result.waveforms["red_preprocessed"],
+    )
+    assert np.allclose(
+        result.waveforms["ir_ut1"],
+        result.waveforms["ir_preprocessed"],
+    )
+    assert np.allclose(
+        result.waveforms["ir_ut2"],
+        result.waveforms["ir_preprocessed"],
+    )
 
 
 def test_save_and_load_spo2_report_writes_json_csv_and_waveforms(
@@ -584,11 +676,35 @@ def test_save_and_load_spo2_report_writes_json_csv_and_waveforms(
     outputs = save_spo2_report(result, out_dir=tmp_path, output_prefix="sample")
     payload = load_spo2_report(outputs["json"])
     csv_frame = pd.read_csv(outputs["csv"])
+    waveform_frame = pd.read_csv(outputs["waveform_csv"])
 
     assert outputs["json"].is_file()
     assert outputs["csv"].is_file()
+    assert outputs["waveform_csv"].is_file()
     assert payload["schema_version"] == "v2_spo2"
     assert len(payload["spo2_table"]) == len(result.spo2_table)
-    assert len(payload["waveforms"]["red_raw"]) == result.waveforms["red_raw"].size
-    assert {"raw_spo2", "adaptive_spo2", "motion_score"}.issubset(csv_frame.columns)
+    assert (
+        len(payload["waveforms"]["red_preprocessed"])
+        == result.waveforms["red_preprocessed"].size
+    )
+    assert {"raw_spo2", "spo2_ut1", "spo2_ut2", "motion_score"}.issubset(
+        csv_frame.columns
+    )
+    assert list(waveform_frame.columns) == [
+        "time_s",
+        "red_preprocessed_ua",
+        "ir_preprocessed_ua",
+        "red_ut1_ua",
+        "ir_ut1_ua",
+        "red_ut2_ua",
+        "ir_ut2_ua",
+        "ut1_mv",
+        "ut2_mv",
+        "motion_score",
+    ]
+    np.testing.assert_allclose(
+        waveform_frame["red_preprocessed_ua"],
+        _ppg_adc_to_ua(result.waveforms["red_preprocessed"]),
+    )
+    assert not any("adc" in column.lower() for column in waveform_frame.columns)
     assert json.loads(outputs["json"].read_text(encoding="utf-8"))["metadata"]["fs"] == 100

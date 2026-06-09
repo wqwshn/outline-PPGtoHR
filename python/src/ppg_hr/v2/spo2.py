@@ -1,4 +1,4 @@
-"""v2 SpO2 computation from Red/IR PPG with amplitude-preserving LMS cleanup."""
+"""v2 SpO2 computation with independent Ut1/Ut2 PPG recovery paths."""
 
 from __future__ import annotations
 
@@ -150,7 +150,8 @@ def solve_spo2_v2(config: V2SpO2Config) -> V2SpO2Result:
 
     spo2_table: list[dict[str, Any]] = []
     beat_table: list[dict[str, Any]] = []
-    adaptive_stage_rows: list[list[dict[str, Any]]] = []
+    stage_rows_ut1: list[list[dict[str, Any]]] = []
+    stage_rows_ut2: list[list[dict[str, Any]]] = []
     acc_mag = np.sqrt(
         signals.references["accx"] ** 2
         + signals.references["accy"] ** 2
@@ -177,36 +178,58 @@ def solve_spo2_v2(config: V2SpO2Config) -> V2SpO2Result:
         fs=fs,
         cfg=cfg,
     )
-    red_recovered, ir_recovered, recovery_stage_rows = _recover_motion_segments_continuous(
+    red_ut1, ir_ut1, recovery_stages_ut1 = _recover_motion_segments_single_reference(
         signals.red,
         signals.ir,
-        signals.references,
+        signals.references["hf1"],
         recovery_segments,
+        channel="hf1",
+        fs=fs,
+        cfg=cfg,
+    )
+    red_ut2, ir_ut2, recovery_stages_ut2 = _recover_motion_segments_single_reference(
+        signals.red,
+        signals.ir,
+        signals.references["hf2"],
+        recovery_segments,
+        channel="hf2",
         fs=fs,
         cfg=cfg,
     )
     last_raw_spo2 = float("nan")
-    last_adaptive_spo2 = float("nan")
+    last_spo2_ut1 = float("nan")
+    last_spo2_ut2 = float("nan")
 
     for spec in window_rows:
         window_idx = int(spec["window_idx"])
         start = int(spec["start"])
         end = int(spec["end"])
         motion_score = float(spec["motion_score"])
-        adaptive_applied = _window_overlaps_segments(start, end, motion_segments)
-        if adaptive_applied:
-            adaptive_red = red_recovered[start:end]
-            adaptive_ir = ir_recovered[start:end]
-            window_stages = [
+        recovery_applied = _window_overlaps_segments(start, end, motion_segments)
+        if recovery_applied:
+            window_red_ut1 = red_ut1[start:end]
+            window_ir_ut1 = ir_ut1[start:end]
+            window_red_ut2 = red_ut2[start:end]
+            window_ir_ut2 = ir_ut2[start:end]
+            window_stages_ut1 = [
                 stage
-                for stage in recovery_stage_rows
+                for stage in recovery_stages_ut1
+                if start < int(stage["end"]) and end > int(stage["start"])
+            ]
+            window_stages_ut2 = [
+                stage
+                for stage in recovery_stages_ut2
                 if start < int(stage["end"]) and end > int(stage["start"])
             ]
         else:
-            adaptive_red = signals.red[start:end]
-            adaptive_ir = signals.ir[start:end]
-            window_stages = []
-        adaptive_stage_rows.append(window_stages)
+            window_red_ut1 = signals.red[start:end]
+            window_ir_ut1 = signals.ir[start:end]
+            window_red_ut2 = signals.red[start:end]
+            window_ir_ut2 = signals.ir[start:end]
+            window_stages_ut1 = []
+            window_stages_ut2 = []
+        stage_rows_ut1.append(window_stages_ut1)
+        stage_rows_ut2.append(window_stages_ut2)
 
         raw_out = _compute_spo2_window(
             red=signals.red[start:end],
@@ -215,28 +238,42 @@ def solve_spo2_v2(config: V2SpO2Config) -> V2SpO2Result:
             cfg=cfg,
             scheme="raw",
         )
-        adaptive_out = _compute_spo2_window(
-            red=adaptive_red,
-            ir=adaptive_ir,
+        ut1_out = _compute_spo2_window(
+            red=window_red_ut1,
+            ir=window_ir_ut1,
             fs=fs,
             cfg=cfg,
-            scheme="adaptive",
+            scheme="ut1",
+        )
+        ut2_out = _compute_spo2_window(
+            red=window_red_ut2,
+            ir=window_ir_ut2,
+            fs=fs,
+            cfg=cfg,
+            scheme="ut2",
         )
 
         raw_spo2 = float(raw_out["spo2"])
-        adaptive_spo2 = float(adaptive_out["spo2"])
+        spo2_ut1 = float(ut1_out["spo2"])
+        spo2_ut2 = float(ut2_out["spo2"])
         raw_carried = False
-        adaptive_carried = False
+        carried_ut1 = False
+        carried_ut2 = False
         if np.isfinite(raw_spo2):
             last_raw_spo2 = raw_spo2
         elif np.isfinite(last_raw_spo2):
             raw_spo2 = last_raw_spo2
             raw_carried = True
-        if np.isfinite(adaptive_spo2):
-            last_adaptive_spo2 = adaptive_spo2
-        elif np.isfinite(last_adaptive_spo2):
-            adaptive_spo2 = last_adaptive_spo2
-            adaptive_carried = True
+        if np.isfinite(spo2_ut1):
+            last_spo2_ut1 = spo2_ut1
+        elif np.isfinite(last_spo2_ut1):
+            spo2_ut1 = last_spo2_ut1
+            carried_ut1 = True
+        if np.isfinite(spo2_ut2):
+            last_spo2_ut2 = spo2_ut2
+        elif np.isfinite(last_spo2_ut2):
+            spo2_ut2 = last_spo2_ut2
+            carried_ut2 = True
 
         missing_ratio = 1.0 - float(np.mean(signals.valid_mask[start:end]))
         center_s = float(spec["center_s"])
@@ -246,24 +283,35 @@ def solve_spo2_v2(config: V2SpO2Config) -> V2SpO2Result:
             "end_s": float(spec["end_s"]),
             "center_s": center_s,
             "motion_score": motion_score,
-            "adaptive_applied": adaptive_applied,
-            "spo2": adaptive_spo2,
+            "recovery_applied": recovery_applied,
             "raw_spo2": raw_spo2,
-            "adaptive_spo2": adaptive_spo2,
+            "spo2_ut1": spo2_ut1,
+            "spo2_ut2": spo2_ut2,
             "raw_r_median": float(raw_out["r_median"]),
-            "adaptive_r_median": float(adaptive_out["r_median"]),
+            "r_median_ut1": float(ut1_out["r_median"]),
+            "r_median_ut2": float(ut2_out["r_median"]),
             "raw_valid_beat_count": int(raw_out["valid_beat_count"]),
-            "adaptive_valid_beat_count": int(adaptive_out["valid_beat_count"]),
+            "valid_beat_count_ut1": int(ut1_out["valid_beat_count"]),
+            "valid_beat_count_ut2": int(ut2_out["valid_beat_count"]),
             "raw_carried_forward": raw_carried,
-            "adaptive_carried_forward": adaptive_carried,
+            "carried_forward_ut1": carried_ut1,
+            "carried_forward_ut2": carried_ut2,
             "missing_ratio": missing_ratio,
-            "reliable": bool(
+            "reliable_raw": bool(
                 missing_ratio <= 0.20
-                and int(adaptive_out["valid_beat_count"]) > 0
+                and int(raw_out["valid_beat_count"]) > 0
+            ),
+            "reliable_ut1": bool(
+                missing_ratio <= 0.20
+                and int(ut1_out["valid_beat_count"]) > 0
+            ),
+            "reliable_ut2": bool(
+                missing_ratio <= 0.20
+                and int(ut2_out["valid_beat_count"]) > 0
             ),
         }
         spo2_table.append(row)
-        for beat in raw_out["beat_rows"] + adaptive_out["beat_rows"]:
+        for beat in raw_out["beat_rows"] + ut1_out["beat_rows"] + ut2_out["beat_rows"]:
             beat_table.append(
                 {
                     "window_idx": int(window_idx),
@@ -289,6 +337,9 @@ def solve_spo2_v2(config: V2SpO2Config) -> V2SpO2Result:
         "reference_groups_order": list(cfg.reference_groups_order),
         "adaptive_filter": str(cfg.adaptive_filter),
         "adaptive_enabled": bool(cfg.adaptive_enabled),
+        "ppg_lowpass_enabled": bool(cfg.ppg_lowpass_enabled),
+        "ppg_lowpass_cutoff_hz": float(cfg.ppg_lowpass_cutoff_hz),
+        "ppg_lowpass_order": int(cfg.ppg_lowpass_order),
         "reference_lowpass_enabled": bool(cfg.reference_lowpass_enabled),
         "reference_lowpass_cutoff_hz": float(cfg.reference_lowpass_cutoff_hz),
         "reference_lowpass_order": int(cfg.reference_lowpass_order),
@@ -296,18 +347,20 @@ def solve_spo2_v2(config: V2SpO2Config) -> V2SpO2Result:
         "motion_threshold": float(motion_threshold),
         "motion_segments": motion_segments,
         "continuous_recovery_segments": recovery_segments,
-        "recovery_stage_rows": recovery_stage_rows,
+        "recovery_stage_rows_ut1": recovery_stages_ut1,
+        "recovery_stage_rows_ut2": recovery_stages_ut2,
         "spo2_stability_summary": stability_summary,
-        "adaptive_stage_rows": adaptive_stage_rows,
+        "stage_rows_ut1": stage_rows_ut1,
+        "stage_rows_ut2": stage_rows_ut2,
     }
     waveforms = {
         "time_s": signals.time_s,
-        "red_raw": signals.red_original,
-        "ir_raw": signals.ir_original,
-        "red_despiked": signals.red,
-        "ir_despiked": signals.ir,
-        "red_clean": red_recovered,
-        "ir_clean": ir_recovered,
+        "red_preprocessed": signals.red,
+        "ir_preprocessed": signals.ir,
+        "red_ut1": red_ut1,
+        "ir_ut1": ir_ut1,
+        "red_ut2": red_ut2,
+        "ir_ut2": ir_ut2,
         "acc_mag": acc_mag,
         "motion_window_center_s": np.asarray(
             [row["center_s"] for row in window_rows],
@@ -339,6 +392,7 @@ def save_spo2_report(
     prefix = str(output_prefix).strip() or "spo2"
     json_path = out / f"{prefix}-spo2.json"
     csv_path = out / f"{prefix}-spo2.csv"
+    waveform_csv_path = out / f"{prefix}-spo2-waveforms.csv"
     payload = {
         "schema_version": "v2_spo2",
         "metadata": _jsonify(result.metadata),
@@ -358,7 +412,70 @@ def save_spo2_report(
         writer.writeheader()
         for row in rows:
             writer.writerow({key: row.get(key, "") for key in fieldnames})
-    return {"json": json_path, "csv": csv_path}
+
+    time_s = np.asarray(result.waveforms["time_s"], dtype=float)
+    sample_count = int(time_s.size)
+
+    def waveform(name: str) -> np.ndarray:
+        values = np.asarray(result.waveforms[name], dtype=float)
+        if values.size != sample_count:
+            raise ValueError(
+                f"Waveform {name!r} has {values.size} samples; expected {sample_count}"
+            )
+        return values
+
+    motion_center_s = np.asarray(
+        result.waveforms.get("motion_window_center_s", []),
+        dtype=float,
+    )
+    motion_values = np.asarray(result.waveforms.get("motion_score", []), dtype=float)
+    if motion_center_s.size and motion_center_s.size == motion_values.size:
+        sample_motion_score = np.interp(
+            time_s,
+            motion_center_s,
+            motion_values,
+            left=float(motion_values[0]),
+            right=float(motion_values[-1]),
+        )
+    else:
+        sample_motion_score = np.full(sample_count, float("nan"), dtype=float)
+
+    waveform_columns = [
+        "time_s",
+        "red_preprocessed_ua",
+        "ir_preprocessed_ua",
+        "red_ut1_ua",
+        "ir_ut1_ua",
+        "red_ut2_ua",
+        "ir_ut2_ua",
+        "ut1_mv",
+        "ut2_mv",
+        "motion_score",
+    ]
+    waveform_matrix = np.column_stack(
+        [
+            time_s,
+            _ppg_adc_to_ua(waveform("red_preprocessed")),
+            _ppg_adc_to_ua(waveform("ir_preprocessed")),
+            _ppg_adc_to_ua(waveform("red_ut1")),
+            _ppg_adc_to_ua(waveform("ir_ut1")),
+            _ppg_adc_to_ua(waveform("red_ut2")),
+            _ppg_adc_to_ua(waveform("ir_ut2")),
+            waveform("ut1"),
+            waveform("ut2"),
+            sample_motion_score,
+        ]
+    )
+    with waveform_csv_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(waveform_columns)
+        writer.writerows(waveform_matrix)
+
+    return {
+        "json": json_path,
+        "csv": csv_path,
+        "waveform_csv": waveform_csv_path,
+    }
 
 
 def load_spo2_report(path: str | Path) -> dict[str, Any]:
@@ -405,38 +522,34 @@ def _smooth_spo2_table(rows: list[dict[str, Any]], cfg: V2SpO2Config) -> None:
     if width % 2 == 0:
         width += 1
 
-    for key in ("raw_spo2", "adaptive_spo2"):
+    for key in ("raw_spo2", "spo2_ut1", "spo2_ut2"):
         values = np.asarray([float(row.get(key, float("nan"))) for row in rows])
         smoothed = _centered_finite_moving_average(values, width)
         for row, value, original in zip(rows, smoothed, values, strict=True):
             row.setdefault(f"{key}_unsmoothed", float(original))
             row[key] = float(value)
 
-    for row in rows:
-        row["spo2"] = float(row.get("adaptive_spo2", float("nan")))
-
 
 def _apply_rest_adaptive_policy(
     rows: list[dict[str, Any]],
     cfg: V2SpO2Config,
 ) -> None:
-    threshold = float(cfg.rest_motion_score_threshold)
     for row in rows:
-        motion_score = float(row.get("motion_score", float("nan")))
-        adaptive_applied = bool(np.isfinite(motion_score) and motion_score > threshold)
-        row["adaptive_applied"] = adaptive_applied
-        if adaptive_applied:
-            row["spo2"] = float(row.get("adaptive_spo2", float("nan")))
+        recovery_applied = bool(row.get("recovery_applied", False))
+        if recovery_applied:
             continue
-        row["adaptive_spo2"] = float(row.get("raw_spo2", float("nan")))
-        row["adaptive_r_median"] = float(row.get("raw_r_median", float("nan")))
-        row["adaptive_valid_beat_count"] = int(row.get("raw_valid_beat_count", 0))
-        row["adaptive_carried_forward"] = bool(row.get("raw_carried_forward", False))
-        row["spo2"] = float(row.get("raw_spo2", float("nan")))
-        row["reliable"] = bool(
-            row.get("missing_ratio", 0.0) <= 0.20
-            and int(row.get("raw_valid_beat_count", 0)) > 0
-        )
+        for suffix in ("ut1", "ut2"):
+            row[f"spo2_{suffix}"] = float(row.get("raw_spo2", float("nan")))
+            row[f"r_median_{suffix}"] = float(
+                row.get("raw_r_median", float("nan"))
+            )
+            row[f"valid_beat_count_{suffix}"] = int(
+                row.get("raw_valid_beat_count", 0)
+            )
+            row[f"carried_forward_{suffix}"] = bool(
+                row.get("raw_carried_forward", False)
+            )
+            row[f"reliable_{suffix}"] = bool(row.get("reliable_raw", False))
 
 
 def _finite_mean(values: list[float]) -> float:
@@ -450,14 +563,12 @@ def _spo2_stability_summary(
     motion_segments: list[dict[str, Any]],
 ) -> dict[str, Any]:
     if not rows or not motion_segments:
-        return {
-            "has_motion": False,
-            "raw_motion_mean": float("nan"),
-            "adaptive_motion_mean": float("nan"),
+        empty = {
+            "motion_mean": float("nan"),
             "rest_reference_mean": float("nan"),
-            "raw_motion_delta_vs_rest": float("nan"),
-            "adaptive_motion_delta_vs_rest": float("nan"),
+            "motion_delta_vs_rest": float("nan"),
         }
+        return {"has_motion": False, "raw": empty, "ut1": empty, "ut2": empty}
     first_start = float(motion_segments[0]["start_s"])
     last_end = float(motion_segments[-1]["end_s"])
     pre_rest = [row for row in rows if float(row.get("center_s", 0.0)) < first_start]
@@ -470,30 +581,29 @@ def _spo2_stability_summary(
     rest_reference = _finite_mean(
         [float(row.get("raw_spo2", float("nan"))) for row in pre_rest + post_rest]
     )
-    raw_motion = _finite_mean(
-        [float(row.get("raw_spo2", float("nan"))) for row in motion_rows]
-    )
-    adaptive_motion = _finite_mean(
-        [float(row.get("adaptive_spo2", float("nan"))) for row in motion_rows]
-    )
-    return {
+    result: dict[str, Any] = {
         "has_motion": True,
         "motion_start_s": first_start,
         "motion_end_s": last_end,
-        "raw_motion_mean": raw_motion,
-        "adaptive_motion_mean": adaptive_motion,
-        "rest_reference_mean": rest_reference,
-        "raw_motion_delta_vs_rest": (
-            abs(raw_motion - rest_reference)
-            if np.isfinite(raw_motion) and np.isfinite(rest_reference)
-            else float("nan")
-        ),
-        "adaptive_motion_delta_vs_rest": (
-            abs(adaptive_motion - rest_reference)
-            if np.isfinite(adaptive_motion) and np.isfinite(rest_reference)
-            else float("nan")
-        ),
     }
+    for label, key in (
+        ("raw", "raw_spo2"),
+        ("ut1", "spo2_ut1"),
+        ("ut2", "spo2_ut2"),
+    ):
+        motion_mean = _finite_mean(
+            [float(row.get(key, float("nan"))) for row in motion_rows]
+        )
+        result[label] = {
+            "motion_mean": motion_mean,
+            "rest_reference_mean": rest_reference,
+            "motion_delta_vs_rest": (
+                abs(motion_mean - rest_reference)
+                if np.isfinite(motion_mean) and np.isfinite(rest_reference)
+                else float("nan")
+            ),
+        }
+    return result
 
 
 def _clean_numeric_array(values: pd.Series | np.ndarray) -> np.ndarray:
@@ -1395,6 +1505,111 @@ def _recover_motion_segments_continuous(
         ir_out[start:end] = ir_baseline + _align_stage_output(
             ir_out[start:end] - ir_baseline,
             ir_seg,
+        )
+    return red_out, ir_out, stages
+
+
+def _recover_motion_segments_single_reference(
+    red: np.ndarray,
+    ir: np.ndarray,
+    reference: np.ndarray,
+    recovery_segments: list[dict[str, Any]],
+    *,
+    channel: str,
+    fs: int,
+    cfg: V2SpO2Config,
+) -> tuple[np.ndarray, np.ndarray, list[dict[str, Any]]]:
+    red_out = np.asarray(red, dtype=float).copy()
+    ir_out = np.asarray(ir, dtype=float).copy()
+    ref = np.asarray(reference, dtype=float)
+    stages: list[dict[str, Any]] = []
+    if not bool(cfg.adaptive_enabled):
+        return red_out, ir_out, stages
+
+    references = {str(channel): ref}
+    for segment_idx, segment in enumerate(recovery_segments):
+        start = max(0, int(segment["start"]))
+        end = min(red_out.size, ir_out.size, ref.size, int(segment["end"]))
+        if end <= start + 3:
+            continue
+        red_baseline, red_baseline_info = _estimate_recovery_baseline(
+            red_out,
+            references,
+            segment,
+            start=start,
+            end=end,
+            fs=fs,
+        )
+        ir_baseline, ir_baseline_info = _estimate_recovery_baseline(
+            ir_out,
+            references,
+            segment,
+            start=start,
+            end=end,
+            fs=fs,
+        )
+        ranked = _rank_joint_references_for_segment(
+            red=red_out,
+            ir=ir_out,
+            references=references,
+            channels=(str(channel),),
+            start=start,
+            end=end,
+            cfg=cfg,
+        )
+        if not ranked or float(ranked[0]["corr"]) <= 1e-12:
+            continue
+        row = ranked[0]
+        corr = float(row["corr"])
+        order = int(row["order"])
+        ref_segment = ref[start:end]
+        red_seg, red_diag = _run_spo2_adaptive_stage(
+            desired=red_out[start:end] - red_baseline,
+            reference=ref_segment,
+            group="HF",
+            order=order,
+            K=0,
+            corr=corr,
+            cfg=cfg,
+        )
+        ir_seg, ir_diag = _run_spo2_adaptive_stage(
+            desired=ir_out[start:end] - ir_baseline,
+            reference=ref_segment,
+            group="HF",
+            order=order,
+            K=0,
+            corr=corr,
+            cfg=cfg,
+        )
+        red_out[start:end] = red_baseline + _align_stage_output(
+            red_out[start:end] - red_baseline,
+            red_seg,
+        )
+        ir_out[start:end] = ir_baseline + _align_stage_output(
+            ir_out[start:end] - ir_baseline,
+            ir_seg,
+        )
+        stages.append(
+            {
+                **red_diag,
+                "segment_idx": int(segment_idx),
+                "channel": str(channel),
+                "corr": corr,
+                "signed_corr": float(row["signed_corr"]),
+                "delay_samples": int(row["delay_samples"]),
+                "start": int(start),
+                "end": int(end),
+                "start_s": float(start / float(fs)),
+                "end_s": float(end / float(fs)),
+                "red_output_len": int(red_diag["output_len"]),
+                "ir_output_len": int(ir_diag["output_len"]),
+                "red_baseline_mode": str(red_baseline_info["mode"]),
+                "ir_baseline_mode": str(ir_baseline_info["mode"]),
+                "red_baseline_start": float(red_baseline_info["start_value"]),
+                "red_baseline_end": float(red_baseline_info["end_value"]),
+                "ir_baseline_start": float(ir_baseline_info["start_value"]),
+                "ir_baseline_end": float(ir_baseline_info["end_value"]),
+            }
         )
     return red_out, ir_out, stages
 
