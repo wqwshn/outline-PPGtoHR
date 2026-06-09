@@ -193,6 +193,7 @@ def test_v2_spo2_page_exposes_reference_order_controls() -> None:
         assert page._delay_samples.value() == 20
         assert page._max_order.value() == 20
         assert page._mu_base.value() == pytest.approx(0.12)
+        assert "Ut1、Ut2 两条独立恢复" in page._ref_list.toolTip()
         filters = [
             str(page._filter_combo.itemData(i))
             for i in range(page._filter_combo.count())

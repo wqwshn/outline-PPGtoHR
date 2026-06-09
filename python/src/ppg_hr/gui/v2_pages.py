@@ -931,7 +931,7 @@ class V2SpO2Page(_PageBase):
     def __init__(self):
         super().__init__(
             "v2 血氧计算",
-            "红光/红外光 PPG 自适应滤波后计算 SpO2",
+            "Red/IR 预处理后分别用 Ut1、Ut2 独立恢复并计算 SpO2",
             two_column=True,
         )
         self._worker_holder: WorkerThread | None = None
@@ -982,6 +982,9 @@ class V2SpO2Page(_PageBase):
         self._ref_list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
         self._ref_list.setDefaultDropAction(Qt.DropAction.MoveAction)
         self._ref_list.setMaximumHeight(100)
+        self._ref_list.setToolTip(
+            "默认 HF 模式同时输出 Ut1、Ut2 两条独立恢复结果，不进行级联滤波。"
+        )
         for group in ("HF", "CF", "ACC"):
             item = QListWidgetItem(group)
             item.setCheckState(

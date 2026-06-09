@@ -811,6 +811,7 @@ class V2SpO2Worker(QObject):
                 self.log.emit(f"SpO2 full trace PNG: {figures['full_trace_png']}")
             self.log.emit(f"血氧 JSON：{report['json']}")
             self.log.emit(f"血氧 CSV：{report['csv']}")
+            self.log.emit(f"血氧波形 CSV：{report['waveform_csv']}")
             self.log.emit(f"血氧趋势图：{figures['trend_png']}")
             self.finished.emit(payload)
         except Exception as exc:  # pragma: no cover
