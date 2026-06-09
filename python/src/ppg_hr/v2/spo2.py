@@ -16,6 +16,10 @@ from ..core.adaptive_filter import apply_adaptive_cascade
 from .preprocess import RAW_COLUMNS, safe_cf_ratio
 from .reference_groups import channel_names_for_group, normalise_reference_order
 
+MAX30101_FULL_SCALE_NA = 16384.0
+MAX30101_ADC_LEVELS = float(2**18)
+MAX30101_UA_PER_COUNT = (MAX30101_FULL_SCALE_NA / MAX30101_ADC_LEVELS) / 1000.0
+
 
 @dataclass(frozen=True)
 class V2SpO2Coefficients:
@@ -54,8 +58,11 @@ class V2SpO2Config:
     deglitch_enabled: bool = True
     deglitch_window_seconds: float = 0.25
     deglitch_n_sigmas: float = 6.0
+    ppg_lowpass_enabled: bool = True
+    ppg_lowpass_cutoff_hz: float = 8.0
+    ppg_lowpass_order: int = 3
     reference_lowpass_enabled: bool = True
-    reference_lowpass_cutoff_hz: float = 3.0
+    reference_lowpass_cutoff_hz: float = 5.0
     reference_lowpass_order: int = 3
     bp_low_hz: float = 0.5
     bp_high_hz: float = 5.0
@@ -114,6 +121,10 @@ def spo2_from_r(
     values = np.asarray(r, dtype=float)
     raw = coeffs.a * values**2 + coeffs.b * values + coeffs.c
     return np.clip(raw, 0.0, 100.0)
+
+
+def _ppg_adc_to_ua(values: np.ndarray) -> np.ndarray:
+    return np.asarray(values, dtype=float) * MAX30101_UA_PER_COUNT
 
 
 def solve_spo2_v2(config: V2SpO2Config) -> V2SpO2Result:
@@ -608,6 +619,23 @@ def _lowpass_reference_signal(
     return filtered, {**info, "applied": True}
 
 
+def _lowpass_ppg_signal(
+    values: np.ndarray,
+    *,
+    fs: int,
+    cutoff_hz: float,
+    order: int,
+    enabled: bool,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    return _lowpass_reference_signal(
+        values,
+        fs=fs,
+        cutoff_hz=cutoff_hz,
+        order=order,
+        enabled=enabled,
+    )
+
+
 def _load_spo2_raw_signals(cfg: V2SpO2Config) -> SpO2RawSignals:
     raw = pd.read_csv(cfg.data_path)
     missing = [name for name in RAW_COLUMNS.values() if name not in raw.columns]
@@ -642,6 +670,20 @@ def _load_spo2_raw_signals(cfg: V2SpO2Config) -> SpO2RawSignals:
         ir_raw,
         label=RAW_COLUMNS["ppg_ir"],
         cfg=cfg,
+    )
+    red, artifact_rejection["PPG_Red_lowpass"] = _lowpass_ppg_signal(
+        red,
+        fs=fs,
+        cutoff_hz=float(cfg.ppg_lowpass_cutoff_hz),
+        order=int(cfg.ppg_lowpass_order),
+        enabled=bool(cfg.ppg_lowpass_enabled),
+    )
+    ir, artifact_rejection["PPG_IR_lowpass"] = _lowpass_ppg_signal(
+        ir,
+        fs=fs,
+        cutoff_hz=float(cfg.ppg_lowpass_cutoff_hz),
+        order=int(cfg.ppg_lowpass_order),
+        enabled=bool(cfg.ppg_lowpass_enabled),
     )
     uc1, artifact_rejection[RAW_COLUMNS["uc1"]] = _maybe_deglitch_channel(
         uc1_raw,

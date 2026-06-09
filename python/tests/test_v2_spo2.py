@@ -20,7 +20,9 @@ from ppg_hr.v2.spo2 import (
     _hampel_deglitch,
     _delay_to_order,
     _lowpass_reference_signal,
+    _lowpass_ppg_signal,
     _load_spo2_raw_signals,
+    _ppg_adc_to_ua,
     _rank_references_for_window,
     _recover_motion_segments_continuous,
     _smooth_spo2_table,
@@ -52,6 +54,33 @@ def test_spo2_lms_uses_fixed_step_independent_of_reference_correlation() -> None
 
     assert _adaptive_mu(0.05, cfg) == pytest.approx(0.12)
     assert _adaptive_mu(0.95, cfg) == pytest.approx(0.12)
+
+
+def test_max30101_adc_counts_convert_to_microamps() -> None:
+    counts = np.array([0.0, 1.0, 110000.0, 160000.0])
+
+    out = _ppg_adc_to_ua(counts)
+
+    np.testing.assert_allclose(out, counts * 0.0000625)
+
+
+def test_ppg_lowpass_preserves_pulse_and_suppresses_hf_noise() -> None:
+    fs = 100
+    t = np.arange(8 * fs, dtype=float) / fs
+    pulse = np.sin(2 * np.pi * 1.2 * t)
+    hf_noise = 0.5 * np.sin(2 * np.pi * 15.0 * t)
+
+    filtered, info = _lowpass_ppg_signal(
+        pulse + hf_noise,
+        fs=fs,
+        cutoff_hz=8.0,
+        order=3,
+        enabled=True,
+    )
+
+    assert info["applied"] is True
+    assert abs(np.corrcoef(filtered, pulse)[0, 1]) > 0.98
+    assert np.std(filtered - pulse, ddof=1) < 0.25 * np.std(hf_noise, ddof=1)
 
 
 def test_spo2_from_r_uses_max30101_quadratic_coefficients() -> None:
