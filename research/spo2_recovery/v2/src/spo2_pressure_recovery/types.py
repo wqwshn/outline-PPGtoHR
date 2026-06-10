@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Mapping
 
 import numpy as np
 
@@ -43,6 +43,14 @@ class DecisionThresholds:
     maximum_false_peak_increase: float = 0.05
     maximum_ratio_relative_error: float = 0.15
     maximum_boundary_jump_ac_fraction: float = 0.25
+
+
+@dataclass(frozen=True)
+class CandidateDecision:
+    accepted: bool
+    rejection_reasons: tuple[str, ...]
+    score: float
+    components: Mapping[str, float]
 
 
 @dataclass(frozen=True)
