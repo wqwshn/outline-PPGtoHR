@@ -835,3 +835,80 @@ Phase 2 新增：
 4. `Boundary / local AC`：越小表示按压进入/松开边界越平滑，双肩峰风险越低。
 
 图中绿色候选表示通过当前门槛，灰色候选表示至少触发一个拒绝原因。该图不替代事件放大图，而是帮助快速筛选值得进一步视觉检查的候选算法和输入组。
+
+### 11.6 Phase 2 首轮真实数据结果
+
+使用 `data-按压干扰实验.csv` 运行 Phase 2 后，共检测到 7 个按压事件，输出 31 个候选结果。当前综合分最高候选为：
+
+```text
+regularized_batch_adaptive:ut2_only:dc_ac
+```
+
+关键指标：
+
+| 指标 | 数值 |
+|---|---:|
+| pseudo NRMSE | 0.001010 |
+| R event shift | 0.026946 |
+| SpO2 event shift | 0.892078 |
+| peak interval CV | 0.042099 |
+| extra peak count | 1.142857 |
+| boundary / local AC | 0.266527 |
+| accepted | False |
+| rejection reasons | false_peak_increase; boundary_discontinuity |
+
+当前门槛下没有候选被接受。主要拒绝原因集中在：
+
+1. `false_peak_increase`：恢复后按压段仍可能引入额外峰或肩峰。
+2. `boundary_discontinuity`：按压进入/松开边界处跳变仍超过局部 AC 门槛。
+
+这说明 Phase 2 指标确实捕捉到了此前视觉检查中担心的问题：即使某些候选的 pseudo NRMSE 较小，仍可能在峰结构或边界连续性上不合格。
+
+#### 11.6.1 与 raw observed 的对比
+
+原始未恢复信号 `raw` 的结果：
+
+| 指标 | 数值 |
+|---|---:|
+| R event shift | 0.112670 |
+| SpO2 event shift | 3.489437 |
+| peak interval CV | 0.076231 |
+| extra peak count | 0.000000 |
+| boundary / local AC | 0.323516 |
+| accepted | False |
+
+与 raw 相比，综合最高候选 `regularized_batch_adaptive:ut2_only` 将 SpO2 偏移从约 `3.49` 降到约 `0.89`，R 偏移从约 `0.113` 降到约 `0.027`，说明热式压力信号确实能显著改善下游血氧相关特征。但它同时增加了额外峰风险，说明恢复算法还没有同时满足波形形态约束。
+
+#### 11.6.2 不同目标下的最佳候选
+
+不同指标最优候选并不相同：
+
+| 目标 | 最优候选 | 结果 |
+|---|---|---:|
+| 综合 score | `regularized_batch_adaptive:ut2_only:dc_ac` | 0.694156 |
+| 最小 SpO2 event shift | `nlms_adaptive:common_only:dc_ac` | 0.190239 |
+| 最小 R event shift | `nlms_adaptive:common_only:dc_ac` | 0.005880 |
+| 最小 boundary / local AC | `rls_adaptive:difference_only:dc_ac` | 0.251783 |
+| 最小 extra peak count | `raw` | 0.000000 |
+
+这说明当前目标之间存在冲突：改善 SpO2/R 稳定性的候选，未必具有最好的边界连续性和峰结构稳定性。因此下一轮算法不宜只优化单一指标，而应把 `R/SpO2 shift`、`extra_peak_count` 和 `boundary_jump_ac_fraction` 作为联合目标。
+
+#### 11.6.3 输入组初步判断
+
+首轮结果支持“单路 Ut 可能已经有效”的判断。综合最高候选使用 `ut2_only`，而不是双路或 `common_difference`。同时，`common_only` 在最小 R/SpO2 偏移上表现最好，说明整体接触压力仍是主要解释变量。
+
+目前不能简单断言 `Ut2` 一定优于 `Ut1`，因为综合分包含峰/边界惩罚，而不同模型的正则化与收敛行为也会影响结果。更稳妥的阶段性结论是：
+
+1. 单路 Ut 与 common 信号都能明显改善血氧相关特征。
+2. `difference_only` 对边界指标可能有帮助，但对 SpO2 偏移不是最优。
+3. `raw_pair` 和 `common_difference` 没有在本轮表现出稳定优势，可能需要更强正则化或更明确的多输入约束，避免自由度过高造成边界和伪峰问题。
+
+#### 11.6.4 下一步算法方向
+
+下一轮应从“单纯拟合压力伪影”转向“受约束的下游特征恢复”：
+
+1. 以 `common_only`、`ut2_only` 和少量 `difference_only` 作为重点输入组，减少全组合搜索。
+2. 对 `nlms_adaptive:common_only` 增加边界平滑和伪峰抑制约束，保留其 SpO2/R 稳定优势。
+3. 对 `regularized_batch_adaptive:ut2_only` 加强峰结构约束，降低 `extra_peak_count`。
+4. 重新审视 `false_peak_increase` 的定义：当前以 recovered 相对 observed IR 主峰为参考，能够捕捉伪峰，但也可能把 observed 中被伪影淹没的真实峰暴露误判为 extra peak。下一轮需要结合峰显著性、局部心率连续性和 Red/IR 配对一致性进一步区分。
+5. 继续保留 pseudo NRMSE 作为参考列，但不作为算法选择的决定性指标。
