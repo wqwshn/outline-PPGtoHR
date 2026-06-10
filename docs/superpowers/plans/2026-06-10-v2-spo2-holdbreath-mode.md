@@ -33,7 +33,9 @@ def test_find_holdbreath_truth_path_uses_stem_ref_suffix(tmp_path: Path) -> None
 ```python
 def test_load_holdbreath_truth_accepts_excel_content_with_csv_suffix(tmp_path: Path) -> None:
     path = tmp_path / "Spo2_HB1_ref.csv"
-    pd.DataFrame({"clock": ["21:30:16", "21:30:17"], "spo2": [98, 99]}).to_excel(path, index=False)
+    buffer = io.BytesIO()
+    pd.DataFrame({"clock": ["21:30:16", "21:30:17"], "spo2": [98, 99]}).to_excel(buffer, index=False)
+    path.write_bytes(buffer.getvalue())
     truth = load_holdbreath_truth(path)
     assert truth.time_s.tolist() == [0.0, 1.0]
     assert truth.spo2.tolist() == [98.0, 99.0]
@@ -281,6 +283,9 @@ def test_v2_spo2_page_builds_holdbreath_config(monkeypatch, tmp_path: Path) -> N
     data = tmp_path / "Spo2_HB1.csv"
     data.write_text("Time(s),PPG_Red,PPG_IR,ValidFlag\n0,1,1,1\n", encoding="utf-8")
     captured = {}
+    class FakeSignal:
+        def connect(self, _slot):
+            return None
     class FakeWorker:
         def __init__(self, cfg, output_prefix):
             captured["cfg"] = cfg
