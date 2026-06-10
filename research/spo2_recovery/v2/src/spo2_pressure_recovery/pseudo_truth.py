@@ -129,13 +129,15 @@ def _synthesise_channel(
     post_values = np.interp(phase, template_phase, post_template, period=1.0)
     shape = (1.0 - blend) * pre_values + blend * post_values
     synthetic = dc + 2.0 * envelope * shape
-    endpoint_error = np.linspace(
-        float(observed[start] - synthetic[0]),
-        float(observed[end] - synthetic[-1]),
-        n,
-    )
-    synthetic += endpoint_error
-    dc += endpoint_error
+    if pseudo_config.endpoint_anchor_weight > 0.0:
+        endpoint_error = np.linspace(
+            float(observed[start] - synthetic[0]),
+            float(observed[end] - synthetic[-1]),
+            n,
+        )
+        weight = float(pseudo_config.endpoint_anchor_weight)
+        synthetic += weight * endpoint_error
+        dc += weight * endpoint_error
     return synthetic, dc, envelope, pre_count, post_count
 
 
@@ -152,8 +154,17 @@ def build_event_pseudo_truth(
 
     start = index(event.loading_start_s)
     end = index(event.post_rest_start_s)
-    pre_slice = slice(index(event.pre_rest_start_s), start)
-    post_slice = slice(end + 1, min(n, index(event.post_rest_end_s) + 1))
+    guard = max(0, int(round(float(config.rest_guard_s) * fs)))
+    pre_start = index(event.pre_rest_start_s)
+    pre_stop = max(pre_start, start - guard)
+    post_start = min(n, end + 1 + guard)
+    post_stop = min(n, index(event.post_rest_end_s) + 1)
+    if pre_stop <= pre_start:
+        pre_stop = start
+    if post_stop <= post_start:
+        post_start = end + 1
+    pre_slice = slice(pre_start, pre_stop)
+    post_slice = slice(post_start, post_stop)
     decomp_config = DecompositionConfig(fs_hz=fs)
     red, red_dc, red_envelope, red_pre, red_post = _synthesise_channel(
         record.red_adc,

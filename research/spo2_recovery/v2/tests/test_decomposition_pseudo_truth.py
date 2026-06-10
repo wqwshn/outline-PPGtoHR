@@ -62,7 +62,7 @@ def test_robust_beat_template_rejects_inverted_outlier() -> None:
     assert np.corrcoef(template, expected)[0, 1] > 0.99
 
 
-def test_build_event_pseudo_truth_is_finite_and_boundary_continuous() -> None:
+def test_build_event_pseudo_truth_is_finite_and_avoids_observed_press_endpoints() -> None:
     fs = 100.0
     t = np.arange(0.0, 21.0, 1.0 / fs)
     phase = 2.0 * np.pi * 1.1 * t
@@ -112,5 +112,5 @@ def test_build_event_pseudo_truth_is_finite_and_boundary_continuous() -> None:
     assert np.all(np.isfinite(truth.red))
     assert np.all(np.isfinite(truth.ir))
     assert truth.quality["usable"] == 1.0
-    assert abs(truth.red[0] - red_observed[800]) < 1e-6
-    assert abs(truth.red[-1] - red_observed[1200]) < 1e-6
+    assert abs(truth.red[0] - red_clean[800]) < abs(red_observed[800] - red_clean[800])
+    assert abs(truth.red[-1] - red_clean[1200]) < abs(red_observed[1200] - red_clean[1200])
