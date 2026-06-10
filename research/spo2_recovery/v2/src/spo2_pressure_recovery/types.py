@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 import numpy as np
@@ -64,6 +64,16 @@ class EventConfig:
     merge_gap_s: float = 0.50
     context_s: float = 4.0
     off_center_ratio: float = 0.45
+
+
+@dataclass(frozen=True)
+class ExperimentConfig:
+    preprocess: PreprocessConfig = field(default_factory=PreprocessConfig)
+    events: EventConfig = field(default_factory=EventConfig)
+    decomposition: DecompositionConfig = field(default_factory=DecompositionConfig)
+    pseudo_truth: PseudoTruthConfig = field(default_factory=PseudoTruthConfig)
+    decision: DecisionThresholds = field(default_factory=DecisionThresholds)
+    random_seed: int = 42
 
 
 @dataclass(frozen=True)
