@@ -14,7 +14,15 @@ def _apply_style() -> None:
         {
             "font.family": "sans-serif",
             "font.sans-serif": ["Arial", "DejaVu Sans"],
-            "font.size": 8,
+            "font.size": 10,
+            "font.weight": "bold",
+            "axes.labelsize": 10,
+            "axes.labelweight": "bold",
+            "axes.titlesize": 13,
+            "axes.titleweight": "bold",
+            "legend.fontsize": 10,
+            "xtick.labelsize": 9,
+            "ytick.labelsize": 9,
             "axes.linewidth": 0.8,
             "xtick.direction": "in",
             "ytick.direction": "in",
@@ -24,12 +32,21 @@ def _apply_style() -> None:
     )
 
 
+def _bold_axis_text(ax) -> None:
+    ax.title.set_fontweight("bold")
+    ax.xaxis.label.set_fontweight("bold")
+    ax.yaxis.label.set_fontweight("bold")
+    for label in (*ax.get_xticklabels(), *ax.get_yticklabels()):
+        label.set_fontweight("bold")
+
+
 def _style_axis(ax) -> None:
     for spine in ax.spines.values():
         spine.set_visible(True)
         spine.set_color("black")
         spine.set_linewidth(0.8)
     ax.tick_params(top=False, right=False, labeltop=False, labelright=False)
+    _bold_axis_text(ax)
 
 
 def _style_twin_axis(ax) -> None:
@@ -38,6 +55,14 @@ def _style_twin_axis(ax) -> None:
         spine.set_color("black")
         spine.set_linewidth(0.8)
     ax.tick_params(top=False, right=True, labeltop=False, labelright=True)
+    _bold_axis_text(ax)
+
+
+def _style_right_y_axis(ax) -> None:
+    ax.yaxis.set_label_position("right")
+    ax.yaxis.tick_right()
+    ax.tick_params(left=False, labelleft=False, right=True, labelright=True)
+    _bold_axis_text(ax)
 
 
 def _shade_events(ax, events) -> None:
@@ -62,13 +87,35 @@ def _save(fig, path: Path) -> Path:
 def _merge_legends(ax, twin) -> None:
     handles, labels = ax.get_legend_handles_labels()
     twin_handles, twin_labels = twin.get_legend_handles_labels()
-    ax.legend(
+    legend = ax.legend(
         handles + twin_handles,
         labels + twin_labels,
         loc="upper right",
         frameon=False,
         ncol=2,
     )
+    _bold_legend(legend)
+
+
+def _bold_legend(legend) -> None:
+    if legend is None:
+        return
+    for text in legend.get_texts():
+        text.set_fontweight("bold")
+
+
+def _unique_legend_items(axes) -> tuple[list, list[str]]:
+    handles: list = []
+    labels: list[str] = []
+    seen: set[str] = set()
+    for ax in np.ravel(axes):
+        ax_handles, ax_labels = ax.get_legend_handles_labels()
+        for handle, label in zip(ax_handles, ax_labels, strict=True):
+            if label and label not in seen:
+                handles.append(handle)
+                labels.append(label)
+                seen.add(label)
+    return handles, labels
 
 
 def _fs_hz(result: ExperimentResult) -> float:
@@ -146,11 +193,9 @@ def _plot_best_diagnostics(result: ExperimentResult, out: Path) -> Path:
     fig, axes = plt.subplots(3, 1, figsize=(7.2, 4.8), sharex=True)
     axes[0].plot(t, result.waveforms["ir_observed"], color="#7A8088", lw=0.65, label="IR observed")
     axes[0].plot(t, result.waveforms["ir_recovered"], color="#007C89", lw=0.75, label="IR recovered")
-    axes[0].plot(t, result.waveforms["ir_pseudo"], color="#2CA9B7", lw=0.8, ls="--", label="IR pseudo")
     axes[0].set_ylabel("IR ADC")
     axes[1].plot(t, result.waveforms["red_observed"], color="#7A8088", lw=0.65, label="Red observed")
     axes[1].plot(t, result.waveforms["red_recovered"], color="#D65F4A", lw=0.75, label="Red recovered")
-    axes[1].plot(t, result.waveforms["red_pseudo"], color="#F09A8A", lw=0.8, ls="--", label="Red pseudo")
     axes[1].set_ylabel("Red ADC")
     axes[2].plot(t, ir_residual, color="#007C89", lw=0.65, label="IR residual")
     axes[2].plot(t, red_residual, color="#D65F4A", lw=0.65, label="Red residual")
@@ -159,7 +204,19 @@ def _plot_best_diagnostics(result: ExperimentResult, out: Path) -> Path:
     for ax in axes:
         _shade_events(ax, result.events)
         _style_axis(ax)
-        ax.legend(loc="upper right", frameon=False, ncol=3)
+    handles, labels = _unique_legend_items(axes)
+    legend = fig.legend(
+        handles,
+        labels,
+        loc="upper left",
+        bbox_to_anchor=(0.02, 0.995),
+        frameon=False,
+        ncol=3,
+        handlelength=2.0,
+        columnspacing=1.1,
+    )
+    _bold_legend(legend)
+    fig.subplots_adjust(top=0.84, hspace=0.22)
     return _save(fig, out / "03-best-model-diagnostics.png")
 
 
@@ -322,7 +379,6 @@ def _plot_waveform_recovery_spo2_event_zoom(
         ):
             observed = result.waveforms[f"{channel}_observed"]
             recovered = result.waveforms[f"{channel}_recovered"]
-            pseudo = result.waveforms[f"{channel}_pseudo"]
             if transition_s > 0.0:
                 ax.axvspan(
                     support_start,
@@ -342,15 +398,27 @@ def _plot_waveform_recovery_spo2_event_zoom(
             )
             ax.plot(t[mask], observed[mask], color="#7A8088", lw=0.75, label="Observed")
             ax.plot(t[mask], recovered[mask], color=color, lw=0.90, label="Recovered")
-            ax.plot(t[mask], pseudo[mask], color=color, lw=0.75, ls="--", alpha=0.55, label="Pseudo")
             ax.set_ylabel(f"E{int(event.event_id)}\n{channel.upper()}")
             _style_axis(ax)
-    axes[0, 0].set_title("IR waveform recovery")
-    axes[0, 1].set_title("Red waveform recovery")
+            if channel == "red":
+                _style_right_y_axis(ax)
+    fig.text(0.28, 0.985, "IR waveform recovery", ha="center", va="top", fontsize=13, fontweight="bold")
+    fig.text(0.74, 0.985, "Red waveform recovery", ha="center", va="top", fontsize=13, fontweight="bold")
     axes[-1, 0].set_xlabel("Time (s)")
     axes[-1, 1].set_xlabel("Time (s)")
-    axes[0, 1].legend(loc="upper right", frameon=False, ncol=3)
-    fig.subplots_adjust(hspace=0.34, wspace=0.20)
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    legend = fig.legend(
+        handles,
+        labels,
+        loc="upper center",
+        bbox_to_anchor=(0.51, 0.962),
+        frameon=False,
+        ncol=2,
+        handlelength=2.2,
+        columnspacing=1.4,
+    )
+    _bold_legend(legend)
+    fig.subplots_adjust(top=0.91, hspace=0.34, wspace=0.20)
     return _save(fig, out / "07-waveform-recovery-spo2-event-zoom.png")
 
 
@@ -366,8 +434,7 @@ def _plot_spo2_r_timeseries(result: ExperimentResult, out: Path) -> Path:
         result.waveforms["ir_recovered"],
         fs_hz=fs,
     )
-    t = result.waveforms["time_s"]
-    fig, axes = plt.subplots(3, 1, figsize=(7.2, 5.4), sharex=False)
+    fig, axes = plt.subplots(2, 1, figsize=(7.2, 4.1), sharex=True)
     axes[0].plot(raw["time_s"], raw["r"], color="#7A8088", marker="o", ms=2.5, lw=0.75, label="Raw")
     axes[0].plot(
         recovered["time_s"],
@@ -390,19 +457,23 @@ def _plot_spo2_r_timeseries(result: ExperimentResult, out: Path) -> Path:
         label="Recovered",
     )
     axes[1].set_ylabel("SpO2 (%)")
-    ut_axis = axes[2].twinx()
-    axes[2].plot(t, result.waveforms["ut_common_mv"], color="#2B2B2B", lw=0.7, label="Common")
-    ut_axis.plot(t, result.waveforms["ut_difference_mv"], color="#9467BD", lw=0.7, label="Difference")
-    axes[2].set_ylabel("Common (mV)", color="#2B2B2B")
-    ut_axis.set_ylabel("Difference (mV)", color="#9467BD")
-    axes[2].set_xlabel("Time (s)")
+    axes[1].set_xlabel("Time (s)")
     for ax in axes:
         _shade_events(ax, result.events)
         _style_axis(ax)
-    _style_twin_axis(ut_axis)
-    axes[0].legend(loc="upper right", frameon=False, ncol=2)
-    axes[1].legend(loc="upper right", frameon=False, ncol=2)
-    _merge_legends(axes[2], ut_axis)
+    handles, labels = axes[0].get_legend_handles_labels()
+    legend = fig.legend(
+        handles,
+        labels,
+        loc="lower center",
+        bbox_to_anchor=(0.5, 0.015),
+        frameon=False,
+        ncol=2,
+        handlelength=2.2,
+        columnspacing=1.4,
+    )
+    _bold_legend(legend)
+    fig.subplots_adjust(bottom=0.20, hspace=0.26)
     return _save(fig, out / "08-spo2-r-timeseries.png")
 
 
