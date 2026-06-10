@@ -133,6 +133,7 @@ def test_render_experiment_figures_writes_png_files(tmp_path) -> None:
         "02-candidate-comparison.png",
         "03-best-model-diagnostics.png",
         "04-pseudo-truth-event-zoom.png",
+        "05-pseudo-truth-dc-envelope-quality.png",
     }
     assert expected <= {file.name for file in files}
     assert all(file.suffix == ".png" and file.stat().st_size > 10_000 for file in files)

@@ -178,6 +178,74 @@ def _plot_pseudo_truth_zoom(result: ExperimentResult, out: Path) -> Path:
     return _save(fig, out / "04-pseudo-truth-event-zoom.png")
 
 
+def _plot_pseudo_truth_components(result: ExperimentResult, out: Path) -> Path:
+    t = result.waveforms["time_s"]
+    quality = result.pseudo_quality.copy()
+    fig, axes = plt.subplots(4, 1, figsize=(7.2, 6.0), sharex=False)
+    red_dc_axis = axes[0].twinx()
+    axes[0].plot(t, result.waveforms["ir_pseudo_dc"], color="#007C89", lw=0.75, label="IR pseudo DC")
+    red_dc_axis.plot(t, result.waveforms["red_pseudo_dc"], color="#D65F4A", lw=0.75, label="Red pseudo DC")
+    axes[0].set_ylabel("IR pseudo DC", color="#007C89")
+    red_dc_axis.set_ylabel("Red pseudo DC", color="#D65F4A")
+    ut_axis = axes[1].twinx()
+    axes[1].plot(t, result.waveforms["ut_common_mv"], color="#2B2B2B", lw=0.7, label="Common")
+    ut_axis.plot(t, result.waveforms["ut_difference_mv"], color="#9467BD", lw=0.7, label="Difference")
+    axes[1].set_ylabel("Common (mV)", color="#2B2B2B")
+    ut_axis.set_ylabel("Difference (mV)", color="#9467BD")
+    for ax in axes[:2]:
+        _shade_events(ax, result.events)
+        _style_axis(ax)
+    _style_twin_axis(red_dc_axis)
+    _style_twin_axis(ut_axis)
+    _merge_legends(axes[0], red_dc_axis)
+    _merge_legends(axes[1], ut_axis)
+
+    if not quality.empty:
+        event_ids = quality["event_id"].to_numpy(dtype=float)
+        width = 0.18
+        axes[2].bar(
+            event_ids - width,
+            quality["red_boundary_jump_fraction"].to_numpy(dtype=float),
+            width=width,
+            color="#D65F4A",
+            label="Red boundary",
+        )
+        axes[2].bar(
+            event_ids,
+            quality["ir_boundary_jump_fraction"].to_numpy(dtype=float),
+            width=width,
+            color="#007C89",
+            label="IR boundary",
+        )
+        axes[2].axhline(0.35, color="#2B2B2B", lw=0.65, ls="--", label="Gate")
+        usable_colors = np.where(quality["usable"].astype(bool), "#4C9A2A", "#B6B6B6")
+        axes[2].bar(event_ids + width, quality["usable"].astype(float), width=width, color=usable_colors, label="Usable")
+        axes[3].bar(
+            event_ids - width / 2.0,
+            quality["red_pressure_corr"].to_numpy(dtype=float),
+            width=width,
+            color="#D65F4A",
+            label="Red corr",
+        )
+        axes[3].bar(
+            event_ids + width / 2.0,
+            quality["ir_pressure_corr"].to_numpy(dtype=float),
+            width=width,
+            color="#007C89",
+            label="IR corr",
+        )
+        axes[3].axhline(0.50, color="#2B2B2B", lw=0.65, ls="--", label="Gate")
+        axes[2].set_xticks(event_ids)
+        axes[3].set_xticks(event_ids)
+    axes[2].set_ylabel("Boundary\nfraction")
+    axes[3].set_ylabel("|Pseudo DC,\nUt common corr|")
+    axes[3].set_xlabel("Event ID")
+    for ax in axes[2:]:
+        _style_axis(ax)
+        ax.legend(loc="upper right", frameon=False, ncol=3)
+    return _save(fig, out / "05-pseudo-truth-dc-envelope-quality.png")
+
+
 def render_experiment_figures(
     result: ExperimentResult,
     output_dir: Path | str,
@@ -189,4 +257,5 @@ def render_experiment_figures(
         _plot_candidate_comparison(result, out),
         _plot_best_diagnostics(result, out),
         _plot_pseudo_truth_zoom(result, out),
+        _plot_pseudo_truth_components(result, out),
     ]
