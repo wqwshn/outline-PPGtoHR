@@ -81,6 +81,12 @@ def test_detect_pressure_events_finds_seven_synthetic_events() -> None:
 
     assert len(events) == 7
     np.testing.assert_allclose([event.peak_s for event in events], centers, atol=0.7)
+    assert all(
+        event.loading_start_s - event.pre_rest_start_s >= 3.5 for event in events
+    )
+    assert all(
+        event.post_rest_end_s - event.post_rest_start_s >= 3.5 for event in events
+    )
 
 
 def test_detect_pressure_events_marks_bilateral_and_off_center_events() -> None:

@@ -33,8 +33,8 @@ class DecompositionConfig:
 class PseudoTruthConfig:
     fs_hz: float = 100.0
     phase_samples: int = 128
-    minimum_beats_per_side: int = 3
-    minimum_template_correlation: float = 0.85
+    minimum_beats_per_side: int = 2
+    minimum_template_correlation: float = 0.65
 
 
 @dataclass(frozen=True)
@@ -54,7 +54,7 @@ class EventConfig:
     minimum_response_mv: float = 0.45
     minimum_duration_s: float = 0.45
     merge_gap_s: float = 0.50
-    context_s: float = 2.0
+    context_s: float = 4.0
     off_center_ratio: float = 0.45
 
 

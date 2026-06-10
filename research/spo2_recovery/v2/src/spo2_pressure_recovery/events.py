@@ -96,6 +96,7 @@ def detect_pressure_events(
     )
     events: list[PressureEvent] = []
     context = int(round(config.context_s * fs))
+    guard = max(1, int(round(0.20 * fs)))
     for event_id, (start, end) in enumerate(runs, start=1):
         local = response1[start:end]
         if local.size == 0:
@@ -108,15 +109,19 @@ def detect_pressure_events(
         asymmetry = difference_peak / max(abs(common_delta), 1e-12)
         same_direction = ut1_delta * ut2_delta > 0.0
         bilateral = bool(same_direction and asymmetry <= config.off_center_ratio)
+        previous_end = runs[event_id - 2][1] if event_id > 1 else 0
+        next_start = runs[event_id][0] if event_id < len(runs) else n - 1
+        pre_start = max(0, start - context, previous_end + guard)
+        post_end = min(n - 1, end + context, next_start - guard)
         events.append(
             PressureEvent(
                 event_id=event_id,
-                pre_rest_start_s=float(time[max(0, start - context)]),
+                pre_rest_start_s=float(time[pre_start]),
                 loading_start_s=float(time[start]),
                 peak_s=float(time[peak]),
                 release_start_s=float(time[peak]),
                 post_rest_start_s=float(time[min(n - 1, end)]),
-                post_rest_end_s=float(time[min(n - 1, end + context)]),
+                post_rest_end_s=float(time[post_end]),
                 ut1_delta_mv=float(ut1_delta),
                 ut2_delta_mv=float(ut2_delta),
                 common_delta_mv=float(common_delta),
