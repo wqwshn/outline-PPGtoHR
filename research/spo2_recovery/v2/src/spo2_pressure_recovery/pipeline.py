@@ -440,7 +440,7 @@ def run_experiment(data_path: Path | str, config: ExperimentConfig) -> Experimen
     event_rows.extend({"candidate": "raw", **row} for row in raw_event_rows)
 
     best_waveforms = {"red": record.red_adc.copy(), "ir": record.ir_adc.copy()}
-    best_score = float(raw_metrics["score"])
+    best_rank = (bool(raw_metrics["accepted"]), float(raw_metrics["score"]))
     for feature_group in config.phase2.feature_groups:
         features = build_pressure_features(
             record.ut1_mv,
@@ -527,8 +527,9 @@ def run_experiment(data_path: Path | str, config: ExperimentConfig) -> Experimen
                 "ir_dc": ir_dc_params,
                 "ir_gain": ir_gain_params,
             }
-            if bool(metrics["accepted"]) and float(metrics["score"]) >= best_score:
-                best_score = float(metrics["score"])
+            rank = (bool(metrics["accepted"]), float(metrics["score"]))
+            if rank >= best_rank:
+                best_rank = rank
                 best_waveforms = {"red": red_rec.recovered, "ir": ir_rec.recovered}
 
     candidate_metrics = pd.DataFrame(candidates).sort_values(

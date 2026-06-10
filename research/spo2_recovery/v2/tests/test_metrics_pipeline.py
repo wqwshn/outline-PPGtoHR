@@ -168,6 +168,49 @@ def test_run_experiment_outputs_minimum_end_to_end_result(tmp_path) -> None:
     assert files["summary"].exists()
 
 
+def test_run_experiment_uses_top_scoring_waveform_when_all_candidates_rejected(
+    tmp_path,
+) -> None:
+    fs = 100.0
+    t = np.arange(0.0, 24.0, 1.0 / fs)
+    ut1 = 2000.0 + np.zeros_like(t)
+    ut2 = 1720.0 + np.zeros_like(t)
+    for center in (8.0, 16.0):
+        pulse = 2.0 * np.exp(-0.5 * ((t - center) / 0.7) ** 4)
+        ut1 += pulse
+        ut2 += 0.8 * pulse
+    event_signal = ((t > 7.0) & (t < 9.0)) | ((t > 15.0) & (t < 17.0))
+    red = 1000.0 + 8.0 * np.sin(2.0 * np.pi * 1.0 * t)
+    ir = 1500.0 + 12.0 * np.sin(2.0 * np.pi * 1.0 * t + 0.05)
+    red[event_signal] += 30.0
+    ir[event_signal] += 50.0
+    path = tmp_path / "synthetic.csv"
+    pd.DataFrame(
+        {
+            "Time(s)": t,
+            "Ut1(mV)": ut1,
+            "Ut2(mV)": ut2,
+            "PPG_Red": red,
+            "PPG_IR": ir,
+        }
+    ).to_csv(path, index=False)
+    config = ExperimentConfig(
+        decision=DecisionThresholds(
+            maximum_rest_nrmse=-1.0,
+            maximum_false_peak_increase=-1.0,
+            maximum_ratio_relative_error=-1.0,
+            maximum_boundary_jump_ac_fraction=-1.0,
+        )
+    )
+
+    result = run_experiment(path, config)
+
+    assert result.best_candidate["accepted"] is False
+    assert result.best_candidate["candidate"] != "raw"
+    assert np.max(np.abs(result.waveforms["red_recovered"] - result.waveforms["red_observed"])) > 0.0
+    assert np.max(np.abs(result.waveforms["ir_recovered"] - result.waveforms["ir_observed"])) > 0.0
+
+
 def test_render_experiment_figures_writes_png_files(tmp_path) -> None:
     fs = 100.0
     t = np.arange(0.0, 24.0, 1.0 / fs)
