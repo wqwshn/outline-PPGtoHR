@@ -105,6 +105,25 @@ def _lag_matrix(values: np.ndarray, taps: int) -> np.ndarray:
     return out
 
 
+def _standardized_lag_matrix(
+    values: np.ndarray,
+    taps: int,
+    *,
+    center: np.ndarray | None = None,
+    scale: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    design = _lag_matrix(np.asarray(values, dtype=float), taps)
+    if center is None:
+        center = np.nanmedian(design, axis=0)
+    centered = design - center
+    if scale is None:
+        mad = np.nanmedian(np.abs(centered), axis=0)
+        std = np.nanstd(centered, axis=0)
+        scale = np.where(mad > 1e-12, 1.4826 * mad, std)
+    scale = np.where(np.asarray(scale, dtype=float) > 1e-12, scale, 1.0)
+    return centered / scale, np.asarray(center, dtype=float), np.asarray(scale, dtype=float)
+
+
 class RidgeFIRModel:
     name = "ridge_fir"
 
@@ -256,6 +275,187 @@ class HammersteinFIRModel:
         return {
             "name": self.name,
             "n_knots": self.n_knots,
+            "taps": self.taps,
+            "alpha": self.alpha,
+            "feature_names": list(self._feature_names),
+            "intercept": float(self._model.intercept_),
+            "coefficients": np.asarray(self._model.coef_, dtype=float).tolist(),
+        }
+
+
+class NLMSAdaptiveModel:
+    name = "nlms_adaptive"
+
+    def __init__(
+        self,
+        *,
+        taps: int = 5,
+        mu: float = 0.25,
+        leakage: float = 1e-4,
+        epsilon: float = 1e-6,
+    ) -> None:
+        self.taps = max(1, int(taps))
+        self.mu = float(mu)
+        self.leakage = float(leakage)
+        self.epsilon = float(epsilon)
+        self._feature_names: tuple[str, ...] = ()
+        self._center: np.ndarray = np.array([], dtype=float)
+        self._scale: np.ndarray = np.array([], dtype=float)
+        self._weights: np.ndarray = np.array([], dtype=float)
+        self._bias = 0.0
+        self._final_error = 0.0
+
+    def fit(
+        self,
+        features: PressureFeatures,
+        target: np.ndarray,
+        state: np.ndarray,
+    ) -> "NLMSAdaptiveModel":
+        del state
+        x, self._center, self._scale = _standardized_lag_matrix(features.values, self.taps)
+        y = interpolate_nonfinite(target)
+        self._feature_names = features.names
+        self._weights = np.zeros(x.shape[1], dtype=float)
+        self._bias = float(np.median(y[np.isfinite(y)])) if np.any(np.isfinite(y)) else 0.0
+        for row, expected in zip(x, y, strict=True):
+            prediction = float(row @ self._weights + self._bias)
+            error = float(expected - prediction)
+            norm = float(row @ row)
+            step = self.mu * error / (self.epsilon + norm)
+            self._weights = (1.0 - self.leakage) * self._weights + step * row
+            self._bias += self.mu * error / max(1.0, x.shape[0])
+            self._final_error = error
+        return self
+
+    def predict(self, features: PressureFeatures, state: np.ndarray) -> np.ndarray:
+        del state
+        x, _, _ = _standardized_lag_matrix(
+            features.values,
+            self.taps,
+            center=self._center,
+            scale=self._scale,
+        )
+        return np.asarray(x @ self._weights + self._bias, dtype=float)
+
+    def parameters(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "taps": self.taps,
+            "mu": self.mu,
+            "leakage": self.leakage,
+            "epsilon": self.epsilon,
+            "feature_names": list(self._feature_names),
+            "bias": self._bias,
+            "final_error": self._final_error,
+            "coefficients": self._weights.tolist(),
+        }
+
+
+class RLSAdaptiveModel:
+    name = "rls_adaptive"
+
+    def __init__(
+        self,
+        *,
+        taps: int = 5,
+        forgetting_factor: float = 0.995,
+        delta: float = 10.0,
+    ) -> None:
+        self.taps = max(1, int(taps))
+        self.forgetting_factor = float(np.clip(forgetting_factor, 0.90, 1.0))
+        self.delta = max(float(delta), 1e-6)
+        self._feature_names: tuple[str, ...] = ()
+        self._center: np.ndarray = np.array([], dtype=float)
+        self._scale: np.ndarray = np.array([], dtype=float)
+        self._weights: np.ndarray = np.array([], dtype=float)
+        self._bias = 0.0
+        self._final_error = 0.0
+
+    def fit(
+        self,
+        features: PressureFeatures,
+        target: np.ndarray,
+        state: np.ndarray,
+    ) -> "RLSAdaptiveModel":
+        del state
+        x0, self._center, self._scale = _standardized_lag_matrix(features.values, self.taps)
+        x = np.column_stack([np.ones(x0.shape[0]), x0])
+        y = interpolate_nonfinite(target)
+        self._feature_names = features.names
+        weights = np.zeros(x.shape[1], dtype=float)
+        weights[0] = float(np.median(y[np.isfinite(y)])) if np.any(np.isfinite(y)) else 0.0
+        p = np.eye(x.shape[1], dtype=float) * self.delta
+        lam = self.forgetting_factor
+        for row, expected in zip(x, y, strict=True):
+            px = p @ row
+            gain = px / (lam + float(row @ px))
+            error = float(expected - row @ weights)
+            weights = weights + gain * error
+            p = (p - np.outer(gain, row) @ p) / lam
+            self._final_error = error
+        self._bias = float(weights[0])
+        self._weights = weights[1:]
+        return self
+
+    def predict(self, features: PressureFeatures, state: np.ndarray) -> np.ndarray:
+        del state
+        x, _, _ = _standardized_lag_matrix(
+            features.values,
+            self.taps,
+            center=self._center,
+            scale=self._scale,
+        )
+        return np.asarray(x @ self._weights + self._bias, dtype=float)
+
+    def parameters(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "taps": self.taps,
+            "forgetting_factor": self.forgetting_factor,
+            "delta": self.delta,
+            "feature_names": list(self._feature_names),
+            "bias": self._bias,
+            "final_error": self._final_error,
+            "coefficients": self._weights.tolist(),
+        }
+
+
+class RegularizedBatchAdaptiveModel:
+    name = "regularized_batch_adaptive"
+
+    def __init__(self, *, taps: int = 5, alpha: float = 1e-3) -> None:
+        self.taps = max(1, int(taps))
+        self.alpha = float(alpha)
+        self._model = Ridge(alpha=self.alpha, fit_intercept=True)
+        self._feature_names: tuple[str, ...] = ()
+        self._center: np.ndarray = np.array([], dtype=float)
+        self._scale: np.ndarray = np.array([], dtype=float)
+
+    def fit(
+        self,
+        features: PressureFeatures,
+        target: np.ndarray,
+        state: np.ndarray,
+    ) -> "RegularizedBatchAdaptiveModel":
+        del state
+        x, self._center, self._scale = _standardized_lag_matrix(features.values, self.taps)
+        self._model.fit(x, interpolate_nonfinite(target))
+        self._feature_names = features.names
+        return self
+
+    def predict(self, features: PressureFeatures, state: np.ndarray) -> np.ndarray:
+        del state
+        x, _, _ = _standardized_lag_matrix(
+            features.values,
+            self.taps,
+            center=self._center,
+            scale=self._scale,
+        )
+        return np.asarray(self._model.predict(x), dtype=float)
+
+    def parameters(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
             "taps": self.taps,
             "alpha": self.alpha,
             "feature_names": list(self._feature_names),

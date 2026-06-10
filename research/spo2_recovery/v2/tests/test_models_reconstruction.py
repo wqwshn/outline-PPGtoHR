@@ -4,7 +4,11 @@ import numpy as np
 
 from spo2_pressure_recovery.models import (
     HysteresisSplineModel,
+    NLMSAdaptiveModel,
     RidgeFIRModel,
+    RLSAdaptiveModel,
+    RegularizedBatchAdaptiveModel,
+    PressureFeatures,
     build_pressure_features,
 )
 from spo2_pressure_recovery.reconstruction import recover_channel
@@ -113,6 +117,32 @@ def test_hysteresis_spline_beats_single_linear_branch() -> None:
     hysteresis_mse = np.mean((hysteresis.predict(features, state) - target) ** 2)
 
     assert hysteresis_mse < 0.5 * linear_mse
+
+
+def test_adaptive_models_fit_short_pressure_artifact() -> None:
+    n = 160
+    t = np.linspace(0.0, 1.0, n)
+    pressure = np.column_stack(
+        [
+            np.sin(2.0 * np.pi * t),
+            np.gradient(np.sin(2.0 * np.pi * t)) * n,
+        ]
+    )
+    target = 2.0 * pressure[:, 0] - 0.05 * pressure[:, 1]
+    features = PressureFeatures(names=("p", "p_d1"), values=pressure)
+    state = np.ones(n)
+
+    for model in (
+        NLMSAdaptiveModel(taps=3, mu=0.35, leakage=1e-4),
+        RLSAdaptiveModel(taps=3, forgetting_factor=0.995, delta=10.0),
+        RegularizedBatchAdaptiveModel(taps=3, alpha=1e-3),
+    ):
+        model.fit(features, target, state)
+        prediction = model.predict(features, state)
+        assert np.corrcoef(target[5:], prediction[5:])[0, 1] > 0.95
+        params = model.parameters()
+        assert params["name"]
+        assert params["taps"] == 3
 
 
 def test_recover_channel_restores_known_dc_and_ac_artifact() -> None:
