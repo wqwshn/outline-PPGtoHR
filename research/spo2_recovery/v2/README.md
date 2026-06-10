@@ -78,7 +78,9 @@ For the mathematical construction of the current white-box pressure response
 models and their hyperparameters, see:
 
 ```text
-research/spo2_recovery/v2/model_math.md
+research/spo2_recovery/v2/docs/model_math.md
+research/spo2_recovery/v2/docs/visual_diagnostics_next_steps.md
+research/spo2_recovery/v2/docs/2026-06-10-next-round-algorithm-plan.md
 ```
 
 For the current recording, the pipeline detects seven pressure events. The

@@ -167,7 +167,7 @@ hammerstein_fir:ut2:dc_ac
 更完整的数学构造、当前超参数来源和可优化空间见：
 
 ```text
-research/spo2_recovery/v2/model_math.md
+research/spo2_recovery/v2/docs/model_math.md
 ```
 
 需要特别说明的是，当前三类候选中严格包含 FIR 滞后结构的是 `ridge_fir`
