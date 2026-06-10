@@ -4,8 +4,8 @@ from collections.abc import Mapping
 
 import numpy as np
 
-from .decomposition import detect_beats
-from .types import CandidateDecision, DecisionThresholds
+from .decomposition import decompose_ppg, detect_beats
+from .types import CandidateDecision, DecisionThresholds, DecompositionConfig
 
 
 def _finite_pair(a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -72,6 +72,131 @@ def beat_metrics(
         "timing_mae_s": float(np.mean(np.abs(timing_errors))) if timing_errors else 0.0,
         "reference_count": float(reference.size),
         "estimated_count": float(estimate.size),
+    }
+
+
+def spo2_from_ratio(r: float | np.ndarray) -> float | np.ndarray:
+    ratio = np.asarray(r, dtype=float)
+    value = 1.5958422 * ratio**2 - 34.6596622 * ratio + 112.6898759
+    value = np.clip(value, 0.0, 100.0)
+    return float(value) if value.ndim == 0 else value
+
+
+def peak_interval_stability(
+    reference_peaks: np.ndarray,
+    estimated_peaks: np.ndarray,
+    *,
+    fs_hz: float,
+) -> dict[str, float]:
+    reference = np.asarray(reference_peaks, dtype=int)
+    estimate = np.asarray(estimated_peaks, dtype=int)
+    if estimate.size >= 2:
+        intervals_s = np.diff(np.sort(estimate)) / float(fs_hz)
+        mean_interval = float(np.mean(intervals_s))
+        peak_interval_cv = (
+            float(np.std(intervals_s) / mean_interval) if mean_interval > 1e-12 else 0.0
+        )
+        min_interval = float(np.min(intervals_s))
+        max_interval_jump = (
+            float(np.max(np.abs(np.diff(intervals_s)))) if intervals_s.size >= 2 else 0.0
+        )
+    else:
+        peak_interval_cv = 0.0
+        min_interval = 0.0
+        max_interval_jump = 0.0
+    matched = beat_metrics(reference, estimate, fs_hz=fs_hz)
+    extra_peak_count = max(
+        0.0,
+        float(
+            estimate.size
+            - reference.size
+            + matched["missed_peak_rate"] * max(reference.size, 1)
+        ),
+    )
+    return {
+        "peak_interval_cv": peak_interval_cv,
+        "min_interval_s": min_interval,
+        "max_interval_jump_s": max_interval_jump,
+        "extra_peak_count": extra_peak_count,
+        "missed_peak_rate": matched["missed_peak_rate"],
+        "false_peak_rate": matched["false_peak_rate"],
+        "timing_mae_s": matched["timing_mae_s"],
+    }
+
+
+def spo2_event_metrics(
+    red: np.ndarray,
+    ir: np.ndarray,
+    event_mask: np.ndarray,
+    *,
+    fs_hz: float,
+) -> dict[str, float]:
+    red_arr = np.asarray(red, dtype=float)
+    ir_arr = np.asarray(ir, dtype=float)
+    mask = np.asarray(event_mask, dtype=bool)
+    n = min(red_arr.size, ir_arr.size, mask.size)
+    red_arr = red_arr[:n]
+    ir_arr = ir_arr[:n]
+    mask = mask[:n]
+    if n < 3 or not np.any(mask):
+        return {
+            "r_median": float("nan"),
+            "r_cv": float("nan"),
+            "spo2_median": float("nan"),
+            "spo2_cv": float("nan"),
+            "valid_beat_count": 0.0,
+        }
+    config = DecompositionConfig(fs_hz=fs_hz)
+    red_decomp = decompose_ppg(red_arr, config)
+    ir_decomp = decompose_ppg(ir_arr, config)
+    valleys = detect_beats(ir_decomp.ac, fs_hz=fs_hz)
+    ratios: list[float] = []
+    for left, right in zip(valleys[:-1], valleys[1:], strict=False):
+        if right <= left + 2:
+            continue
+        segment = slice(int(left), int(right) + 1)
+        segment_mask = mask[segment]
+        if np.mean(segment_mask) < 0.5:
+            continue
+        red_ac = float(
+            np.nanmax(red_decomp.ac[segment]) - np.nanmin(red_decomp.ac[segment])
+        )
+        ir_ac = float(
+            np.nanmax(ir_decomp.ac[segment]) - np.nanmin(ir_decomp.ac[segment])
+        )
+        red_dc = float(np.nanmedian(red_decomp.dc[segment]))
+        ir_dc = float(np.nanmedian(ir_decomp.dc[segment]))
+        if min(red_ac, ir_ac, abs(red_dc), abs(ir_dc)) <= 1e-12:
+            continue
+        ratio = (red_ac / abs(red_dc)) / (ir_ac / abs(ir_dc))
+        if np.isfinite(ratio):
+            ratios.append(float(ratio))
+    if not ratios:
+        return {
+            "r_median": float("nan"),
+            "r_cv": float("nan"),
+            "spo2_median": float("nan"),
+            "spo2_cv": float("nan"),
+            "valid_beat_count": 0.0,
+        }
+    ratio_values = np.asarray(ratios, dtype=float)
+    spo2_values = np.asarray(spo2_from_ratio(ratio_values), dtype=float)
+    r_median = float(np.median(ratio_values))
+    spo2_median = float(np.median(spo2_values))
+    return {
+        "r_median": r_median,
+        "r_cv": (
+            float(np.std(ratio_values) / abs(r_median))
+            if abs(r_median) > 1e-12
+            else 0.0
+        ),
+        "spo2_median": spo2_median,
+        "spo2_cv": (
+            float(np.std(spo2_values) / abs(spo2_median))
+            if abs(spo2_median) > 1e-12
+            else 0.0
+        ),
+        "valid_beat_count": float(ratio_values.size),
     }
 
 

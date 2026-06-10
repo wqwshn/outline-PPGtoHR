@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from spo2_pressure_recovery.metrics import (
     beat_metrics,
     decide_candidate,
+    peak_interval_stability,
+    spo2_event_metrics,
+    spo2_from_ratio,
     waveform_metrics,
 )
 from spo2_pressure_recovery.pipeline import ExperimentConfig, run_experiment, save_experiment
@@ -49,6 +53,39 @@ def test_decide_candidate_rejects_rest_damage_false_peak_and_ratio_instability()
     assert "false_peak_increase" in peaks.rejection_reasons
     assert ratio.accepted is False
     assert "ratio_instability" in ratio.rejection_reasons
+
+
+def test_spo2_from_ratio_uses_max30101_formula() -> None:
+    value = spo2_from_ratio(0.6)
+    expected = 1.5958422 * 0.6**2 - 34.6596622 * 0.6 + 112.6898759
+
+    assert value == pytest.approx(expected)
+
+
+def test_peak_interval_metrics_rejects_extra_spike() -> None:
+    fs = 100.0
+    clean = np.array([100, 200, 300, 400, 500])
+    noisy = np.array([100, 200, 235, 300, 400, 500])
+
+    metrics = peak_interval_stability(clean, noisy, fs_hz=fs)
+
+    assert metrics["peak_interval_cv"] >= 0.0
+    assert metrics["extra_peak_count"] == 1.0
+    assert metrics["min_interval_s"] < 0.5
+
+
+def test_spo2_event_metrics_are_near_stable_for_constant_ratio() -> None:
+    fs = 100.0
+    t = np.arange(0.0, 10.0, 1.0 / fs)
+    ir = 1500.0 + 20.0 * np.sin(2.0 * np.pi * 1.0 * t)
+    red = 1000.0 + 10.0 * np.sin(2.0 * np.pi * 1.0 * t)
+    mask = (t >= 3.0) & (t <= 7.0)
+
+    metrics = spo2_event_metrics(red, ir, mask, fs_hz=fs)
+
+    assert metrics["valid_beat_count"] >= 3.0
+    assert np.isfinite(metrics["r_median"])
+    assert np.isfinite(metrics["spo2_median"])
 
 
 def test_run_experiment_outputs_minimum_end_to_end_result(tmp_path) -> None:
