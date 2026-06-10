@@ -6,7 +6,8 @@ import numpy as np
 import pandas as pd
 
 from spo2_pressure_recovery.data import load_record, zero_phase_lowpass
-from spo2_pressure_recovery.types import PreprocessConfig
+from spo2_pressure_recovery.events import detect_pressure_events
+from spo2_pressure_recovery.types import EventConfig, PreprocessConfig
 
 
 def test_load_record_builds_common_and_difference(tmp_path: Path) -> None:
@@ -64,3 +65,37 @@ def test_zero_phase_lowpass_preserves_pulse_and_suppresses_hf_noise() -> None:
 
     assert np.corrcoef(filtered, pulse)[0, 1] > 0.99
     assert np.std(filtered - pulse) < 0.2 * np.std(noise)
+
+
+def test_detect_pressure_events_finds_seven_synthetic_events() -> None:
+    t = np.arange(0.0, 60.0, 0.01)
+    centers = np.array([15.0, 21.0, 26.5, 32.0, 38.0, 45.0, 52.0])
+    ut1 = 2000.0 + 0.02 * t
+    ut2 = 1720.0 - 0.01 * t
+    for idx, center in enumerate(centers):
+        pulse = np.exp(-0.5 * ((t - center) / 0.55) ** 4)
+        ut1 += (1.2 + 0.2 * idx) * pulse
+        ut2 += (0.8 + 0.1 * idx) * pulse
+
+    events = detect_pressure_events(t, ut1, ut2, EventConfig(fs_hz=100.0))
+
+    assert len(events) == 7
+    np.testing.assert_allclose([event.peak_s for event in events], centers, atol=0.7)
+
+
+def test_detect_pressure_events_marks_bilateral_and_off_center_events() -> None:
+    t = np.arange(0.0, 20.0, 0.01)
+    ut1 = np.full_like(t, 2000.0)
+    ut2 = np.full_like(t, 1720.0)
+    bilateral = 2.0 * np.exp(-0.5 * ((t - 6.0) / 0.6) ** 4)
+    one_sided = 2.2 * np.exp(-0.5 * ((t - 14.0) / 0.6) ** 4)
+    ut1 += bilateral + one_sided
+    ut2 += 1.9 * np.exp(-0.5 * ((t - 6.0) / 0.6) ** 4)
+
+    events = detect_pressure_events(t, ut1, ut2, EventConfig(fs_hz=100.0))
+
+    assert len(events) == 2
+    assert events[0].bilateral_consistent is True
+    assert events[0].off_center is False
+    assert events[1].bilateral_consistent is False
+    assert events[1].off_center is True

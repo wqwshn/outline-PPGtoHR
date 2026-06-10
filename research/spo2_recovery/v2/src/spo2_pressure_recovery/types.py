@@ -45,6 +45,36 @@ class DecisionThresholds:
     maximum_boundary_jump_ac_fraction: float = 0.25
 
 
+@dataclass(frozen=True)
+class EventConfig:
+    fs_hz: float = 100.0
+    trend_cutoff_hz: float = 0.06
+    response_cutoff_hz: float = 0.5
+    onset_threshold_mad: float = 4.0
+    minimum_response_mv: float = 0.45
+    minimum_duration_s: float = 0.45
+    merge_gap_s: float = 0.50
+    context_s: float = 2.0
+    off_center_ratio: float = 0.45
+
+
+@dataclass(frozen=True)
+class PressureEvent:
+    event_id: int
+    pre_rest_start_s: float
+    loading_start_s: float
+    peak_s: float
+    release_start_s: float
+    post_rest_start_s: float
+    post_rest_end_s: float
+    ut1_delta_mv: float
+    ut2_delta_mv: float
+    common_delta_mv: float
+    difference_peak_mv: float
+    bilateral_consistent: bool
+    off_center: bool
+
+
 @dataclass
 class PressureRecord:
     time_s: np.ndarray
