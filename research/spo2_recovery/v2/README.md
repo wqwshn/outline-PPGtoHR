@@ -74,6 +74,13 @@ The script writes tables and PNG diagnostics to `outputs/`:
 - `figures/02-candidate-comparison.png`: candidate NRMSE ranking.
 - `figures/03-best-model-diagnostics.png`: best model waveform and residuals.
 
+For the mathematical construction of the current white-box pressure response
+models and their hyperparameters, see:
+
+```text
+research/spo2_recovery/v2/model_math.md
+```
+
 For the current recording, the pipeline detects seven pressure events. The
 current best-ranked candidate is:
 

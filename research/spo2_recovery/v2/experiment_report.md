@@ -164,6 +164,16 @@ hammerstein_fir:ut2:dc_ac
 
 表示使用 `Ut2` 特征，采用 Hammerstein-FIR 模型，同时校正 DC 基线和 AC 包络。
 
+更完整的数学构造、当前超参数来源和可优化空间见：
+
+```text
+research/spo2_recovery/v2/model_math.md
+```
+
+需要特别说明的是，当前三类候选中严格包含 FIR 滞后结构的是 `ridge_fir`
+和 `hammerstein_fir`；`hysteresis_spline` 目前是按 loading/release 分支拟合的
+静态样条模型，尚未加入 FIR 时间滞后项。
+
 ## 4. 研究流程
 
 本轮实现的完整流程位于：
@@ -399,4 +409,3 @@ best=hammerstein_fir:ut2:dc_ac
 4. 增加更多静息按压数据，检查最佳模型是否稳定。
 5. 引入力量训练或手腕运动数据，验证双侧差模特征在偏压/倾斜状态下是否更有优势。
 6. 将恢复波形接入 SpO2 的 ratio-of-ratios 计算，观察恢复前后 SpO2 序列稳定性。
-
