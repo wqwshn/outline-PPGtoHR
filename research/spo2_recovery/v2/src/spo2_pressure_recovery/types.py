@@ -36,6 +36,7 @@ class PseudoTruthConfig:
     minimum_beats_per_side: int = 2
     minimum_template_correlation: float = 0.65
     rest_guard_s: float = 0.35
+    transition_s: float = 0.50
     endpoint_anchor_weight: float = 0.0
     dc_trend: str = "rest_median_linear"
     envelope_trend: str = "rest_median_linear"

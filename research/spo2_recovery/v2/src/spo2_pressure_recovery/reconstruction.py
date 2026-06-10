@@ -51,6 +51,7 @@ def recover_channel(
     predicted_dc_artifact: np.ndarray,
     predicted_log_gain: np.ndarray,
     event_mask: np.ndarray,
+    correction_mask: np.ndarray | None = None,
     gain_bounds: tuple[float, float] = (0.25, 4.0),
     blend_samples: int = 25,
 ) -> RecoveredChannel:
@@ -59,6 +60,11 @@ def recover_channel(
     dc_artifact = np.resize(interpolate_nonfinite(predicted_dc_artifact), n)
     log_gain = np.resize(interpolate_nonfinite(predicted_log_gain), n)
     mask = np.resize(np.asarray(event_mask, dtype=bool), n)
+    active_mask = (
+        np.resize(np.asarray(correction_mask, dtype=bool), n)
+        if correction_mask is not None
+        else mask
+    )
 
     lower, upper = gain_bounds
     lower = max(float(lower), np.finfo(float).eps)
@@ -71,9 +77,9 @@ def recover_channel(
     candidate = natural_dc + clean_ac
     candidate[~np.isfinite(candidate)] = raw[~np.isfinite(candidate)]
 
-    weight = _event_weight(mask, int(blend_samples))
+    weight = _event_weight(active_mask, int(blend_samples))
     recovered = raw * (1.0 - weight) + candidate * weight
-    recovered[~mask] = raw[~mask]
+    recovered[~active_mask] = raw[~active_mask]
     return RecoveredChannel(
         observed=raw,
         recovered=recovered,

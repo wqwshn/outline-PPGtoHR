@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from spo2_pressure_recovery.decomposition import decompose_ppg, detect_beats
 from spo2_pressure_recovery.pseudo_truth import (
@@ -108,9 +109,12 @@ def test_build_event_pseudo_truth_is_finite_and_avoids_observed_press_endpoints(
         PseudoTruthConfig(fs_hz=fs),
     )
 
-    assert truth.time_s.size == 401
+    assert truth.time_s[0] == pytest.approx(7.5)
+    assert truth.time_s[-1] == pytest.approx(12.5)
     assert np.all(np.isfinite(truth.red))
     assert np.all(np.isfinite(truth.ir))
     assert truth.quality["usable"] == 1.0
-    assert abs(truth.red[0] - red_clean[800]) < abs(red_observed[800] - red_clean[800])
-    assert abs(truth.red[-1] - red_clean[1200]) < abs(red_observed[1200] - red_clean[1200])
+    core_start = int(round((event.loading_start_s - truth.time_s[0]) * fs))
+    core_end = int(round((event.post_rest_start_s - truth.time_s[0]) * fs))
+    assert abs(truth.red[core_start] - red_clean[800]) < abs(red_observed[800] - red_clean[800])
+    assert abs(truth.red[core_end] - red_clean[1200]) < abs(red_observed[1200] - red_clean[1200])

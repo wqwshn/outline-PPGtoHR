@@ -487,7 +487,9 @@ hammerstein_fir:common_difference:dc_ac
 
 需要强调：Phase 1 的主要验收对象不是这个候选排序，而是伪真值质量。候选排序只说明“在新伪真值基准下，当前旧模型会如何重新排序”。
 
-### 10.3 伪真值质量表
+### 10.3 第一版伪真值质量表（已判定不足）
+
+用户复核后确认，本小节第一版质量表存在指标定义问题：其中的 `red_boundary_jump_fraction` / `ir_boundary_jump_fraction` 只衡量 pseudo 波形内部首尾相邻采样点的跳变，并没有衡量 pseudo/recovered 与事件窗口外 observed 波形之间的接续突变。因此它会漏检可视化图中明显存在的边界不连续和恢复后“双肩峰”问题。第 10.8 节给出修订后的有效指标和结果。
 
 逐事件质量结果如下：
 
@@ -535,7 +537,7 @@ abs(pseudo_dc, Ut_common corr) <= 0.50
 
 与上一轮相比，pseudo 不再贴住 observed 的按压高平台。尤其在 E2-E7 中，灰色 observed 明显处于较高平台，而虚线 pseudo 保持在更低、更平滑的静息趋势附近，说明取消 endpoint anchoring 后，伪真值继承按压整体抬升的问题显著减弱。
 
-边界处也没有出现明显的端点贴合突跳。质量表中的最大边界跳变比例只有 `0.036904`，远低于当前 `0.35` 门槛，这与视觉结果一致。
+第一版报告曾根据 `0.036904` 得出“边界处没有明显端点贴合突跳”的判断。这个判断已撤回：该数值只说明 pseudo 内部相邻点较平滑，不能说明 pseudo/recovered 与事件外 observed 连续。
 
 但这张图也暴露了一个重要限制：当前 pseudo 更像“保守的低频干净模板/基线参考”，而不是强约束的逐搏峰形真值。虚线 pseudo 的脉搏峰谷幅度偏小，部分事件内的收缩峰形并不充分。因此它可能适合约束“不要保留按压整体抬升”，但未必足够支撑以逐搏峰形为核心的精细 NRMSE 优化。
 
@@ -547,7 +549,7 @@ abs(pseudo_dc, Ut_common corr) <= 0.50
 
 1. Red/IR pseudo DC：使用双 y 轴显示，避免 Red 与 IR 的不同 ADC 量级互相压扁。
 2. Ut common/difference：同样使用双 y 轴显示，避免共模绝对电压和差模变化幅度交错。
-3. 边界跳变比例与 usable 门控：7 个事件的 Red/IR 边界跳变均远低于门槛，usable 均为 1。
+3. 第一版边界跳变比例与 usable 门控：这组指标后来被判定为不足，只保留为历史记录；有效边界指标见第 10.8 节。
 4. pseudo DC 与 Ut common 的相关性：所有事件均低于 0.50，事件 1 最高，约为 0.344。
 
 这张图支持一个阶段性判断：Phase 1 后的伪真值已经基本解决“边界强贴 observed”和“整体跟随压力平台”的主要问题。它仍然不是完美真值，但比上一轮更适合作为下一步算法调参时的参考对象。
@@ -601,7 +603,7 @@ Phase 1 的硬指标已经通过：
 
 ```text
 conda run -n ppg-hr python -m pytest -q research/spo2_recovery/v2/tests -p no:cacheprovider --basetemp .pytest_tmp\spo2_next_round_final
-23 passed
+26 passed
 
 conda run -n ppg-hr ruff check research/spo2_recovery/v2/src/spo2_pressure_recovery research/spo2_recovery/v2/tests
 All checks passed!
@@ -613,3 +615,120 @@ best=hammerstein_fir:common_difference:dc_ac
 figure_check.py:
 checked 5 figures
 ```
+
+### 10.8 用户反馈后的 Phase 1 边界修订
+
+用户指出第一版 Phase 1 仍存在三个关键问题：
+
+1. 生成的 pseudo 在边界处不连续。
+2. recovered 在按压段边界仍有明显“双肩峰”。
+3. 第一版质量表没有识别出边界跳变，说明指标定义不可靠。
+
+本次修订后的根因判断是：
+
+```text
+第一版 boundary_jump_fraction = max(|pseudo[1]-pseudo[0]|, |pseudo[-1]-pseudo[-2]|) / range(pseudo)
+```
+
+它只看 pseudo 自身内部是否平滑，不看 pseudo/recovered 与事件外 observed 的接续关系。因此它会低估真实边界问题。这个问题不是简单调小阈值能解决，而是需要重定义边界质量指标。
+
+#### 10.8.1 修订内容
+
+本次 Phase 1 修订做了三项改动：
+
+1. 伪真值窗口扩展：
+
+   ```text
+   transition_s = 0.50
+   pseudo_window = [loading_start_s - 0.50 s, post_rest_start_s + 0.50 s]
+   ```
+
+   扩展段内使用 smoothstep 权重从 observed 平滑过渡到核心 pseudo 模板。这样 outer boundary 与事件外 observed 连续，核心按压段仍保持去压力参考。
+
+2. 恢复校正窗口扩展：
+
+   ```text
+   core_event_mask = [loading_start_s, post_rest_start_s]
+   correction_mask = [loading_start_s - 0.50 s, post_rest_start_s + 0.50 s]
+   ```
+
+   `recover_channel` 现在允许在 `correction_mask` 内应用校正，而不是只在核心事件 mask 内生效。这避免了 `recovered[~mask] = raw` 在核心边界处硬截断模型输出。
+
+3. 新增外部边界接续指标：
+
+   ```text
+   external_boundary_jump_ac_fraction
+     = max(|pseudo[start] - observed[start-1]|,
+           |pseudo[end] - observed[end+1]|)
+       / local_ac_range
+   ```
+
+   其中 `local_ac_range` 来自事件前后稳定静息段 PPG 的 5-95% 幅值范围。该指标不除以 ADC 大基线，也不除以 pseudo 自身范围，因此更接近视觉上“一个局部脉搏幅值里跳了多少”的直觉。
+
+#### 10.8.2 修订后伪真值质量表
+
+修订后逐事件质量结果如下：
+
+| 事件 | Red外部边界/AC | IR外部边界/AC | Red核心压力相关 | IR核心压力相关 | usable |
+|---:|---:|---:|---:|---:|:---:|
+| 1 | 0.003233 | 0.000690 | 0.351387 | 0.351387 | True |
+| 2 | 0.008847 | 0.010045 | 0.063216 | 0.063216 | True |
+| 3 | 0.012331 | 0.009700 | 0.206319 | 0.206319 | True |
+| 4 | 0.031540 | 0.011055 | 0.132977 | 0.132977 | True |
+| 5 | 0.016445 | 0.016965 | 0.167093 | 0.167093 | True |
+| 6 | 0.005004 | 0.004727 | 0.079617 | 0.079617 | True |
+| 7 | 0.017957 | 0.016793 | 0.058580 | 0.058580 | True |
+
+汇总：
+
+| 指标 | 结果 |
+|---|---:|
+| usable pseudo events | 7 / 7 |
+| median red external boundary / AC | 0.012331 |
+| median ir external boundary / AC | 0.010045 |
+| max red external boundary / AC | 0.031540 |
+| max ir external boundary / AC | 0.016965 |
+| median red core pressure corr | 0.132977 |
+| median ir core pressure corr | 0.132977 |
+| max abs red core pressure corr | 0.351387 |
+| max abs ir core pressure corr | 0.351387 |
+
+这说明：按新的外部接续定义，pseudo 与事件外 observed 的连接已经比较平滑，最大外部跳变只有 `0.031540` 个局部 AC range，低于新的 `0.30` 初始门槛。
+
+#### 10.8.3 恢复边界效果
+
+为了评估 recovered 是否仍有边界肩峰，额外计算了两个诊断量：
+
+```text
+outer_recovered_jump_ac_fraction:
+  correction window 外边界处 recovered 与 observed 的接续差。
+
+core_recovered_jump_ac_fraction:
+  核心按压窗口边界处 recovered 自身相邻点差。
+```
+
+修订后结果范围为：
+
+| 指标 | 结果范围 |
+|---|---:|
+| outer recovered boundary / AC | 0.001 - 0.069 |
+| core recovered boundary / AC | 0.020 - 0.279 |
+
+解释：
+
+- 扩展校正窗口显著降低了外侧硬跳变，说明“按压前后适当增加过渡段”是有效的。
+- 核心边界仍有残留，尤其 E4/E5 的 IR 边界和部分 Red 边界仍能看到局部肩部或振荡。因此本次修订不能表述为已经完全解决“双肩峰”，更准确的结论是：硬边界突变已被压低，但核心段内的局部形态仍需要下一轮算法目标进一步约束。
+
+#### 10.8.4 当前 Phase 1 判断
+
+修订后，伪真值更适合作为 Phase 2A 的低频基线和边界连续性参考：
+
+- 它不再只在核心事件段内突兀出现，而是有 0.5 s 的前后过渡段。
+- 外部边界接续指标不再被 ADC 基线或 pseudo 自身范围误导。
+- 质量表能够区分“外部边界连续性”和“核心 pseudo DC 压力残留相关性”。
+
+但仍需保留限制：
+
+- pseudo 的逐搏峰形仍偏保守，不宜作为唯一 NRMSE 真值。
+- recovered 在核心事件边界仍有部分局部肩峰，后续应加入边界/峰完整性/AC-DC-R 稳定性共同约束。
+- Phase 2 不应只追求 pseudo NRMSE，而应围绕 SpO2 的 `AC_red/DC_red`、`AC_ir/DC_ir` 和 `R` 值稳定性优化。

@@ -147,8 +147,8 @@ def _plot_pseudo_truth_zoom(result: ExperimentResult, out: Path) -> Path:
     fig, axes = plt.subplots(event_count, 2, figsize=(7.2, 1.35 * event_count), sharex=False)
     axes = np.atleast_2d(axes)
     for row_idx, event in enumerate(result.events.itertuples(index=False)):
-        start = float(event.loading_start_s) - 0.25
-        stop = float(event.post_rest_start_s) + 0.25
+        start = float(event.loading_start_s) - 0.70
+        stop = float(event.post_rest_start_s) + 0.70
         mask = (t >= start) & (t <= stop)
         row_axes = axes[row_idx]
         row_axes[0].plot(t[mask], result.waveforms["ir_observed"][mask], color="#7A8088", lw=0.75, label="Observed")
@@ -205,19 +205,19 @@ def _plot_pseudo_truth_components(result: ExperimentResult, out: Path) -> Path:
         width = 0.18
         axes[2].bar(
             event_ids - width,
-            quality["red_boundary_jump_fraction"].to_numpy(dtype=float),
+            quality["red_external_boundary_jump_ac_fraction"].to_numpy(dtype=float),
             width=width,
             color="#D65F4A",
-            label="Red boundary",
+            label="Red external",
         )
         axes[2].bar(
             event_ids,
-            quality["ir_boundary_jump_fraction"].to_numpy(dtype=float),
+            quality["ir_external_boundary_jump_ac_fraction"].to_numpy(dtype=float),
             width=width,
             color="#007C89",
-            label="IR boundary",
+            label="IR external",
         )
-        axes[2].axhline(0.35, color="#2B2B2B", lw=0.65, ls="--", label="Gate")
+        axes[2].axhline(0.30, color="#2B2B2B", lw=0.65, ls="--", label="Gate")
         usable_colors = np.where(quality["usable"].astype(bool), "#4C9A2A", "#B6B6B6")
         axes[2].bar(event_ids + width, quality["usable"].astype(float), width=width, color=usable_colors, label="Usable")
         axes[3].bar(
@@ -237,7 +237,7 @@ def _plot_pseudo_truth_components(result: ExperimentResult, out: Path) -> Path:
         axes[3].axhline(0.50, color="#2B2B2B", lw=0.65, ls="--", label="Gate")
         axes[2].set_xticks(event_ids)
         axes[3].set_xticks(event_ids)
-    axes[2].set_ylabel("Boundary\nfraction")
+    axes[2].set_ylabel("External boundary\n/ local AC")
     axes[3].set_ylabel("|Pseudo DC,\nUt common corr|")
     axes[3].set_xlabel("Event ID")
     for ax in axes[2:]:

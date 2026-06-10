@@ -58,6 +58,18 @@ def _smoothstep(progress: np.ndarray) -> np.ndarray:
     return clipped * clipped * (3.0 - 2.0 * clipped)
 
 
+def _core_weight(start: int, end: int, core_start: int, core_end: int) -> np.ndarray:
+    indices = np.arange(start, end + 1)
+    weight = np.ones(indices.size, dtype=float)
+    if core_start > start:
+        lead = indices < core_start
+        weight[lead] = _smoothstep((indices[lead] - start) / max(core_start - start, 1))
+    if core_end < end:
+        trail = indices > core_end
+        weight[trail] = _smoothstep((end - indices[trail]) / max(end - core_end, 1))
+    return weight
+
+
 def _template_components(
     ac: np.ndarray,
     *,
@@ -93,6 +105,8 @@ def _synthesise_channel(
     *,
     start: int,
     end: int,
+    core_start: int,
+    core_end: int,
     pre_slice: slice,
     post_slice: slice,
     decomposition_config: DecompositionConfig,
@@ -129,6 +143,13 @@ def _synthesise_channel(
     post_values = np.interp(phase, template_phase, post_template, period=1.0)
     shape = (1.0 - blend) * pre_values + blend * post_values
     synthetic = dc + 2.0 * envelope * shape
+    transition_weight = _core_weight(start, end, core_start, core_end)
+    observed_segment = observed[start : end + 1]
+    synthetic = observed_segment * (1.0 - transition_weight) + synthetic * transition_weight
+    dc_segment = decomposition.dc[start : end + 1]
+    envelope_segment = decomposition.envelope[start : end + 1]
+    dc = dc_segment * (1.0 - transition_weight) + dc * transition_weight
+    envelope = envelope_segment * (1.0 - transition_weight) + envelope * transition_weight
     if pseudo_config.endpoint_anchor_weight > 0.0:
         endpoint_error = np.linspace(
             float(observed[start] - synthetic[0]),
@@ -152,17 +173,21 @@ def build_event_pseudo_truth(
     def index(seconds: float) -> int:
         return int(np.clip(round(float(seconds) * fs), 0, n - 1))
 
-    start = index(event.loading_start_s)
-    end = index(event.post_rest_start_s)
+    core_start = index(event.loading_start_s)
+    core_end = index(event.post_rest_start_s)
     guard = max(0, int(round(float(config.rest_guard_s) * fs)))
+    transition = max(0, int(round(float(config.transition_s) * fs)))
+    stable_guard = max(guard, transition)
+    start = max(0, core_start - transition)
+    end = min(n - 1, core_end + transition)
     pre_start = index(event.pre_rest_start_s)
-    pre_stop = max(pre_start, start - guard)
-    post_start = min(n, end + 1 + guard)
+    pre_stop = max(pre_start, core_start - stable_guard)
+    post_start = min(n, core_end + 1 + stable_guard)
     post_stop = min(n, index(event.post_rest_end_s) + 1)
     if pre_stop <= pre_start:
-        pre_stop = start
+        pre_stop = core_start
     if post_stop <= post_start:
-        post_start = end + 1
+        post_start = core_end + 1
     pre_slice = slice(pre_start, pre_stop)
     post_slice = slice(post_start, post_stop)
     decomp_config = DecompositionConfig(fs_hz=fs)
@@ -170,6 +195,8 @@ def build_event_pseudo_truth(
         record.red_adc,
         start=start,
         end=end,
+        core_start=core_start,
+        core_end=core_end,
         pre_slice=pre_slice,
         post_slice=post_slice,
         decomposition_config=decomp_config,
@@ -179,6 +206,8 @@ def build_event_pseudo_truth(
         record.ir_adc,
         start=start,
         end=end,
+        core_start=core_start,
+        core_end=core_end,
         pre_slice=pre_slice,
         post_slice=post_slice,
         decomposition_config=decomp_config,
@@ -200,5 +229,9 @@ def build_event_pseudo_truth(
             "red_post_beats": float(red_post),
             "ir_pre_beats": float(ir_pre),
             "ir_post_beats": float(ir_post),
+            "window_start_s": float(record.time_s[start]),
+            "window_end_s": float(record.time_s[end]),
+            "core_start_s": float(event.loading_start_s),
+            "core_end_s": float(event.post_rest_start_s),
         },
     )

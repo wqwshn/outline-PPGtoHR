@@ -63,12 +63,18 @@ def _git_commit() -> str:
         return "unknown"
 
 
-def _event_mask(record: PressureRecord, events: list[PressureEvent]) -> np.ndarray:
+def _event_mask(
+    record: PressureRecord,
+    events: list[PressureEvent],
+    *,
+    transition_s: float = 0.0,
+) -> np.ndarray:
     mask = np.zeros(record.time_s.size, dtype=bool)
     fs = float(record.fs_hz)
+    transition = max(0, int(round(float(transition_s) * fs)))
     for event in events:
-        start = int(np.clip(round(event.loading_start_s * fs), 0, mask.size))
-        end = int(np.clip(round(event.post_rest_start_s * fs), 0, mask.size))
+        start = int(np.clip(round(event.loading_start_s * fs) - transition, 0, mask.size))
+        end = int(np.clip(round(event.post_rest_start_s * fs) + transition, 0, mask.size))
         mask[start:end] = True
     return mask
 
@@ -78,6 +84,28 @@ def _event_slice(record: PressureRecord, event: PressureEvent) -> slice:
     start = int(np.clip(round(event.loading_start_s * fs), 0, record.time_s.size - 1))
     end = int(np.clip(round(event.post_rest_start_s * fs), start + 1, record.time_s.size))
     return slice(start, end + 1)
+
+
+def _truth_slice(record: PressureRecord, truth: EventPseudoTruth) -> slice:
+    fs = float(record.fs_hz)
+    if truth.time_s.size == 0:
+        return slice(0, 0)
+    start = int(np.clip(round(float(truth.time_s[0]) * fs), 0, record.time_s.size - 1))
+    stop = min(record.time_s.size, start + truth.time_s.size)
+    return slice(start, stop)
+
+
+def _truth_core_arrays(
+    record: PressureRecord,
+    event: PressureEvent,
+    truth: EventPseudoTruth,
+) -> tuple[slice, slice]:
+    fs = float(record.fs_hz)
+    truth_start = int(np.clip(round(float(truth.time_s[0]) * fs), 0, record.time_s.size - 1))
+    core = _event_slice(record, event)
+    offset = max(0, core.start - truth_start)
+    n = min(core.stop - core.start, truth.time_s.size - offset)
+    return slice(core.start, core.start + n), slice(offset, offset + n)
 
 
 def _state_from_common(record: PressureRecord) -> np.ndarray:
@@ -101,9 +129,9 @@ def _target_vectors(
     for event, truth in zip(events, pseudo_truth, strict=True):
         if truth.quality.get("usable", 0.0) <= 0.0:
             continue
-        slc = _event_slice(record, event)
-        n = min(slc.stop - slc.start, truth.time_s.size)
-        event_slice = slice(slc.start, slc.start + n)
+        event_slice = _truth_slice(record, truth)
+        n = min(event_slice.stop - event_slice.start, truth.time_s.size)
+        event_slice = slice(event_slice.start, event_slice.start + n)
         if channel == "red":
             pseudo_dc = truth.red_dc[:n]
             pseudo_env = truth.red_envelope[:n]
@@ -128,12 +156,10 @@ def _pseudo_truth_waveforms(
     ir = np.full(record.time_s.size, np.nan, dtype=float)
     red_dc = np.full(record.time_s.size, np.nan, dtype=float)
     ir_dc = np.full(record.time_s.size, np.nan, dtype=float)
-    fs = float(record.fs_hz)
-    for event, truth in zip(events, pseudo_truth, strict=True):
-        start = int(np.clip(round(event.loading_start_s * fs), 0, record.time_s.size - 1))
-        stop = int(np.clip(round(event.post_rest_start_s * fs), start + 1, record.time_s.size))
-        n = min(stop - start + 1, truth.time_s.size)
-        segment = slice(start, start + n)
+    for _, truth in zip(events, pseudo_truth, strict=True):
+        segment = _truth_slice(record, truth)
+        n = min(segment.stop - segment.start, truth.time_s.size)
+        segment = slice(segment.start, segment.start + n)
         red[segment] = truth.red[:n]
         ir[segment] = truth.ir[:n]
         red_dc[segment] = truth.red_dc[:n]
@@ -182,12 +208,18 @@ def _candidate_waveform_metrics(
     red_scores: list[float] = []
     ir_scores: list[float] = []
     for event, truth in zip(events, truths, strict=True):
-        slc = _event_slice(record, event)
-        n = min(slc.stop - slc.start, truth.time_s.size)
+        slc, truth_slc = _truth_core_arrays(record, event, truth)
+        n = min(slc.stop - slc.start, truth_slc.stop - truth_slc.start)
         if n <= 1 or truth.quality.get("usable", 0.0) <= 0.0:
             continue
-        red_metrics = waveform_metrics(truth.red[:n], red_recovered[slc.start : slc.start + n])
-        ir_metrics = waveform_metrics(truth.ir[:n], ir_recovered[slc.start : slc.start + n])
+        red_metrics = waveform_metrics(
+            truth.red[truth_slc.start : truth_slc.start + n],
+            red_recovered[slc.start : slc.start + n],
+        )
+        ir_metrics = waveform_metrics(
+            truth.ir[truth_slc.start : truth_slc.start + n],
+            ir_recovered[slc.start : slc.start + n],
+        )
         red_scores.append(red_metrics["nrmse"])
         ir_scores.append(ir_metrics["nrmse"])
         rows.append(
@@ -233,6 +265,11 @@ def run_experiment(data_path: Path | str, config: ExperimentConfig) -> Experimen
         ]
     )
     event_mask = _event_mask(record, events)
+    correction_mask = _event_mask(
+        record,
+        events,
+        transition_s=config.pseudo_truth.transition_s,
+    )
     state = _state_from_common(record)
     red_decomp = decompose_ppg(record.red_adc, config.decomposition)
     ir_decomp = decompose_ppg(record.ir_adc, config.decomposition)
@@ -293,6 +330,7 @@ def run_experiment(data_path: Path | str, config: ExperimentConfig) -> Experimen
                 predicted_dc_artifact=red_dc,
                 predicted_log_gain=red_gain,
                 event_mask=event_mask,
+                correction_mask=correction_mask,
             )
             ir_rec = recover_channel(
                 record.ir_adc,
@@ -300,6 +338,7 @@ def run_experiment(data_path: Path | str, config: ExperimentConfig) -> Experimen
                 predicted_dc_artifact=ir_dc,
                 predicted_log_gain=ir_gain,
                 event_mask=event_mask,
+                correction_mask=correction_mask,
             )
             metrics, rows = _candidate_waveform_metrics(
                 record,
