@@ -58,12 +58,18 @@ def build_pressure_features(
     ut2 = ut2 - float(np.median(ut2[:baseline_count]))
     common = 0.5 * (ut1 + ut2)
     difference = 0.5 * (ut1 - ut2)
+    aliases = {"ut1": "ut1_only", "ut2": "ut2_only", "common": "common_only"}
+    group = aliases.get(group, group)
     mapping = {
-        "ut1": (("ut1", "ut1_d1"), (ut1, _derivative(ut1, fs_hz))),
-        "ut2": (("ut2", "ut2_d1"), (ut2, _derivative(ut2, fs_hz))),
-        "common": (
+        "ut1_only": (("ut1", "ut1_d1"), (ut1, _derivative(ut1, fs_hz))),
+        "ut2_only": (("ut2", "ut2_d1"), (ut2, _derivative(ut2, fs_hz))),
+        "common_only": (
             ("common", "common_d1"),
             (common, _derivative(common, fs_hz)),
+        ),
+        "difference_only": (
+            ("difference", "difference_d1"),
+            (difference, _derivative(difference, fs_hz)),
         ),
         "common_difference": (
             ("common", "common_d1", "difference", "difference_d1"),
@@ -73,6 +79,10 @@ def build_pressure_features(
                 difference,
                 _derivative(difference, fs_hz),
             ),
+        ),
+        "raw_pair": (
+            ("ut1", "ut1_d1", "ut2", "ut2_d1"),
+            (ut1, _derivative(ut1, fs_hz), ut2, _derivative(ut2, fs_hz)),
         ),
     }
     if group not in mapping:

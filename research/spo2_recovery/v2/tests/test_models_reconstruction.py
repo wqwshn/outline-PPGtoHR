@@ -35,6 +35,43 @@ def test_build_pressure_features_has_fixed_white_box_groups() -> None:
     }
 
 
+def test_build_pressure_features_supports_phase2_groups() -> None:
+    ut1 = np.array([10.0, 11.0, 13.0, 16.0, 20.0])
+    ut2 = np.array([4.0, 5.0, 7.0, 10.0, 14.0])
+
+    expected = {
+        "ut1_only": ("ut1", "ut1_d1"),
+        "ut2_only": ("ut2", "ut2_d1"),
+        "common_only": ("common", "common_d1"),
+        "difference_only": ("difference", "difference_d1"),
+        "common_difference": ("common", "common_d1", "difference", "difference_d1"),
+        "raw_pair": ("ut1", "ut1_d1", "ut2", "ut2_d1"),
+    }
+    for group, names in expected.items():
+        features = build_pressure_features(ut1, ut2, fs_hz=10.0, group=group)
+        assert features.names == names
+        assert features.values.shape == (5, len(names))
+        assert np.isfinite(features.values).all()
+
+
+def test_build_pressure_features_keeps_legacy_aliases() -> None:
+    ut1 = np.linspace(1.0, 3.0, 8)
+    ut2 = np.linspace(5.0, 6.0, 8)
+
+    assert build_pressure_features(ut1, ut2, fs_hz=10.0, group="ut1").names == (
+        "ut1",
+        "ut1_d1",
+    )
+    assert build_pressure_features(ut1, ut2, fs_hz=10.0, group="ut2").names == (
+        "ut2",
+        "ut2_d1",
+    )
+    assert build_pressure_features(ut1, ut2, fs_hz=10.0, group="common").names == (
+        "common",
+        "common_d1",
+    )
+
+
 def test_ridge_fir_recovers_known_causal_response() -> None:
     rng = np.random.default_rng(42)
     reference = rng.normal(size=1000)
