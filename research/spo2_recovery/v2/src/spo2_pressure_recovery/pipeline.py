@@ -15,20 +15,28 @@ import pandas as pd
 import scipy
 
 from .data import load_record
-from .decomposition import decompose_ppg
+from .decomposition import decompose_ppg, detect_beats
 from .events import detect_pressure_events, events_to_frame
-from .metrics import decide_candidate, waveform_metrics
+from .metrics import (
+    decide_candidate,
+    peak_interval_stability,
+    spo2_event_metrics,
+    waveform_metrics,
+)
 from .models import (
     HammersteinFIRModel,
     HysteresisSplineModel,
+    NLMSAdaptiveModel,
     PressureFeatures,
     RidgeFIRModel,
+    RLSAdaptiveModel,
+    RegularizedBatchAdaptiveModel,
     build_pressure_features,
 )
 from .pseudo_quality import pseudo_truth_quality
 from .pseudo_truth import EventPseudoTruth, build_event_pseudo_truth
 from .reconstruction import recover_channel
-from .types import ExperimentConfig, PressureEvent, PressureRecord
+from .types import DecompositionConfig, ExperimentConfig, PressureEvent, PressureRecord
 
 
 @dataclass
@@ -185,6 +193,12 @@ def _fit_predict(
         model = HysteresisSplineModel(n_knots=4, alpha=1e-3)
     elif model_name == "hammerstein_fir":
         model = HammersteinFIRModel(n_knots=4, taps=11, alpha=1e-3)
+    elif model_name == "nlms_adaptive":
+        model = NLMSAdaptiveModel(taps=5, mu=0.25, leakage=1e-4)
+    elif model_name == "rls_adaptive":
+        model = RLSAdaptiveModel(taps=5, forgetting_factor=0.995, delta=10.0)
+    elif model_name == "regularized_batch_adaptive":
+        model = RegularizedBatchAdaptiveModel(taps=5, alpha=1e-3)
     else:
         raise ValueError(f"Unsupported model: {model_name}")
     train_features = PressureFeatures(
@@ -193,6 +207,123 @@ def _fit_predict(
     )
     model.fit(train_features, target[train_mask], state[train_mask])
     return model.predict(features, state), model.parameters()
+
+
+def _event_core_mask(record: PressureRecord, event: PressureEvent) -> np.ndarray:
+    mask = np.zeros(record.time_s.size, dtype=bool)
+    core = _event_slice(record, event)
+    mask[core] = True
+    return mask
+
+
+def _event_rest_mask(record: PressureRecord, event: PressureEvent) -> np.ndarray:
+    fs = float(record.fs_hz)
+    mask = np.zeros(record.time_s.size, dtype=bool)
+    pre_start = int(np.clip(round(event.pre_rest_start_s * fs), 0, mask.size))
+    load_start = int(np.clip(round(event.loading_start_s * fs), 0, mask.size))
+    post_start = int(np.clip(round(event.post_rest_start_s * fs), 0, mask.size))
+    post_end = int(np.clip(round(event.post_rest_end_s * fs), 0, mask.size))
+    mask[pre_start:load_start] = True
+    mask[post_start:post_end] = True
+    return mask
+
+
+def _finite_or(default: float, value: float) -> float:
+    return float(value) if np.isfinite(value) else float(default)
+
+
+def _candidate_spo2_time_metrics(
+    record: PressureRecord,
+    events: list[PressureEvent],
+    red_recovered: np.ndarray,
+    ir_recovered: np.ndarray,
+) -> dict[str, float]:
+    red = np.asarray(red_recovered, dtype=float)
+    ir = np.asarray(ir_recovered, dtype=float)
+    decomposition_config = DecompositionConfig(fs_hz=record.fs_hz)
+    ir_observed_decomp = decompose_ppg(record.ir_adc, decomposition_config)
+    ir_recovered_decomp = decompose_ppg(ir, decomposition_config)
+    observed_peaks = detect_beats(ir_observed_decomp.ac, fs_hz=record.fs_hz)
+    recovered_peaks = detect_beats(ir_recovered_decomp.ac, fs_hz=record.fs_hz)
+    r_shifts: list[float] = []
+    spo2_shifts: list[float] = []
+    r_cvs: list[float] = []
+    spo2_cvs: list[float] = []
+    valid_counts: list[float] = []
+    interval_cvs: list[float] = []
+    extra_counts: list[float] = []
+    min_intervals: list[float] = []
+    boundary_jumps: list[float] = []
+    for event in events:
+        event_mask = _event_core_mask(record, event)
+        rest_mask = _event_rest_mask(record, event)
+        event_spo2 = spo2_event_metrics(red, ir, event_mask, fs_hz=record.fs_hz)
+        rest_spo2 = spo2_event_metrics(red, ir, rest_mask, fs_hz=record.fs_hz)
+        if np.isfinite(event_spo2["r_median"]) and np.isfinite(rest_spo2["r_median"]):
+            r_shifts.append(abs(float(event_spo2["r_median"] - rest_spo2["r_median"])))
+        if np.isfinite(event_spo2["spo2_median"]) and np.isfinite(rest_spo2["spo2_median"]):
+            spo2_shifts.append(
+                abs(float(event_spo2["spo2_median"] - rest_spo2["spo2_median"]))
+            )
+        r_cvs.append(_finite_or(0.0, event_spo2["r_cv"]))
+        spo2_cvs.append(_finite_or(0.0, event_spo2["spo2_cv"]))
+        valid_counts.append(float(event_spo2["valid_beat_count"]))
+        core = _event_slice(record, event)
+        reference = observed_peaks[
+            (observed_peaks >= core.start) & (observed_peaks < core.stop)
+        ]
+        estimate = recovered_peaks[
+            (recovered_peaks >= core.start) & (recovered_peaks < core.stop)
+        ]
+        peak_metrics = peak_interval_stability(reference, estimate, fs_hz=record.fs_hz)
+        interval_cvs.append(peak_metrics["peak_interval_cv"])
+        extra_counts.append(peak_metrics["extra_peak_count"])
+        min_intervals.append(peak_metrics["min_interval_s"])
+        boundary_jumps.append(_boundary_jump_ac_fraction(record, event, red, ir))
+    return {
+        "r_event_shift": float(np.mean(r_shifts)) if r_shifts else 0.0,
+        "spo2_event_shift": float(np.mean(spo2_shifts)) if spo2_shifts else 0.0,
+        "r_cv": float(np.mean(r_cvs)) if r_cvs else 0.0,
+        "spo2_cv": float(np.mean(spo2_cvs)) if spo2_cvs else 0.0,
+        "valid_beat_count": float(np.mean(valid_counts)) if valid_counts else 0.0,
+        "peak_interval_cv": float(np.mean(interval_cvs)) if interval_cvs else 0.0,
+        "extra_peak_count": float(np.mean(extra_counts)) if extra_counts else 0.0,
+        "min_interval_s": float(np.mean(min_intervals)) if min_intervals else 0.0,
+        "boundary_jump_ac_fraction": (
+            float(np.mean(boundary_jumps)) if boundary_jumps else 0.0
+        ),
+    }
+
+
+def _boundary_jump_ac_fraction(
+    record: PressureRecord,
+    event: PressureEvent,
+    red_recovered: np.ndarray,
+    ir_recovered: np.ndarray,
+) -> float:
+    fs = float(record.fs_hz)
+    half_window = max(1, int(round(0.15 * fs)))
+    ac_window = max(1, int(round(1.0 * fs)))
+    jumps: list[float] = []
+    for signal in (
+        np.asarray(red_recovered, dtype=float),
+        np.asarray(ir_recovered, dtype=float),
+    ):
+        for boundary_s in (event.loading_start_s, event.post_rest_start_s):
+            center = int(np.clip(round(boundary_s * fs), 0, signal.size - 1))
+            left = signal[max(0, center - half_window) : center]
+            right = signal[center : min(signal.size, center + half_window)]
+            if left.size == 0 or right.size == 0:
+                continue
+            local = signal[
+                max(0, center - ac_window) : min(signal.size, center + ac_window)
+            ]
+            local_ac = float(np.nanpercentile(local, 95) - np.nanpercentile(local, 5))
+            if local_ac <= 1e-12:
+                continue
+            jump = abs(float(np.nanmedian(right) - np.nanmedian(left))) / local_ac
+            jumps.append(jump)
+    return float(np.mean(jumps)) if jumps else 0.0
 
 
 def _candidate_waveform_metrics(
@@ -268,7 +399,10 @@ def run_experiment(data_path: Path | str, config: ExperimentConfig) -> Experimen
     correction_mask = _event_mask(
         record,
         events,
-        transition_s=config.pseudo_truth.transition_s,
+        transition_s=max(
+            config.pseudo_truth.transition_s,
+            config.phase2.boundary_transition_s,
+        ),
     )
     state = _state_from_common(record)
     red_decomp = decompose_ppg(record.red_adc, config.decomposition)
@@ -278,13 +412,26 @@ def run_experiment(data_path: Path | str, config: ExperimentConfig) -> Experimen
     event_rows: list[dict[str, Any]] = []
     parameter_map: dict[str, Any] = {}
 
+    raw_decision_metrics = _candidate_spo2_time_metrics(
+        record,
+        events,
+        record.red_adc,
+        record.ir_adc,
+    )
+    raw_decision_metrics.update(
+        {
+            "rest_nrmse": 0.0,
+            "false_peak_increase": raw_decision_metrics["extra_peak_count"],
+            "ratio_relative_error": raw_decision_metrics["r_event_shift"],
+        }
+    )
     raw_metrics, raw_event_rows = _candidate_waveform_metrics(
         record,
         events,
         truths,
         record.red_adc,
         record.ir_adc,
-        {"rest_nrmse": 0.0, "false_peak_increase": 0.0, "ratio_relative_error": 0.0},
+        raw_decision_metrics,
         config,
     )
     candidates.append(
@@ -294,14 +441,14 @@ def run_experiment(data_path: Path | str, config: ExperimentConfig) -> Experimen
 
     best_waveforms = {"red": record.red_adc.copy(), "ir": record.ir_adc.copy()}
     best_score = float(raw_metrics["score"])
-    for feature_group in ("ut1", "ut2", "common", "common_difference"):
+    for feature_group in config.phase2.feature_groups:
         features = build_pressure_features(
             record.ut1_mv,
             record.ut2_mv,
             fs_hz=record.fs_hz,
             group=feature_group,
         )
-        for model_name in ("ridge_fir", "hysteresis_spline", "hammerstein_fir"):
+        for model_name in config.phase2.model_names:
             key = f"{model_name}:{feature_group}:dc_ac"
             red_dc_target, red_gain_target, red_train = _target_vectors(
                 record,
@@ -340,20 +487,29 @@ def run_experiment(data_path: Path | str, config: ExperimentConfig) -> Experimen
                 event_mask=event_mask,
                 correction_mask=correction_mask,
             )
+            decision_metrics = _candidate_spo2_time_metrics(
+                record,
+                events,
+                red_rec.recovered,
+                ir_rec.recovered,
+            )
+            decision_metrics.update(
+                {
+                    "rest_nrmse": 0.0,
+                    "false_peak_increase": decision_metrics["extra_peak_count"],
+                    "ratio_relative_error": decision_metrics["r_event_shift"],
+                    "invalid_gain_fraction": float(
+                        np.mean((red_rec.gain <= 0.0) | (ir_rec.gain <= 0.0))
+                    ),
+                }
+            )
             metrics, rows = _candidate_waveform_metrics(
                 record,
                 events,
                 truths,
                 red_rec.recovered,
                 ir_rec.recovered,
-                {
-                    "rest_nrmse": 0.0,
-                    "false_peak_increase": 0.0,
-                    "ratio_relative_error": 0.0,
-                    "invalid_gain_fraction": float(
-                        np.mean((red_rec.gain <= 0.0) | (ir_rec.gain <= 0.0))
-                    ),
-                },
+                decision_metrics,
                 config,
             )
             candidate_row = {
@@ -415,6 +571,7 @@ def run_experiment(data_path: Path | str, config: ExperimentConfig) -> Experimen
             "decomposition": asdict(config.decomposition),
             "pseudo_truth": asdict(config.pseudo_truth),
             "decision": asdict(config.decision),
+            "phase2": asdict(config.phase2),
         },
     }
     return ExperimentResult(

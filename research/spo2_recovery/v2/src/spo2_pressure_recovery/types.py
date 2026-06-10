@@ -51,6 +51,27 @@ class DecisionThresholds:
 
 
 @dataclass(frozen=True)
+class Phase2Config:
+    feature_groups: tuple[str, ...] = (
+        "ut1_only",
+        "ut2_only",
+        "common_only",
+        "difference_only",
+        "common_difference",
+        "raw_pair",
+    )
+    model_names: tuple[str, ...] = (
+        "hammerstein_fir",
+        "hysteresis_spline",
+        "nlms_adaptive",
+        "rls_adaptive",
+        "regularized_batch_adaptive",
+    )
+    correction_modes: tuple[str, ...] = ("dc_ac",)
+    boundary_transition_s: float = 0.75
+
+
+@dataclass(frozen=True)
 class CandidateDecision:
     accepted: bool
     rejection_reasons: tuple[str, ...]
@@ -78,6 +99,7 @@ class ExperimentConfig:
     decomposition: DecompositionConfig = field(default_factory=DecompositionConfig)
     pseudo_truth: PseudoTruthConfig = field(default_factory=PseudoTruthConfig)
     decision: DecisionThresholds = field(default_factory=DecisionThresholds)
+    phase2: Phase2Config = field(default_factory=Phase2Config)
     random_seed: int = 42
 
 

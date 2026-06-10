@@ -121,6 +121,22 @@ def test_run_experiment_outputs_minimum_end_to_end_result(tmp_path) -> None:
     assert {"event_id", "usable"}.issubset(result.pseudo_quality.columns)
     assert not result.candidate_metrics.empty
     assert result.best_candidate["accepted"] is True
+    groups = set(result.candidate_metrics["feature_group"].astype(str))
+    assert {
+        "ut1_only",
+        "ut2_only",
+        "common_only",
+        "difference_only",
+        "common_difference",
+        "raw_pair",
+    } <= groups
+    assert {
+        "r_event_shift",
+        "spo2_event_shift",
+        "peak_interval_cv",
+        "extra_peak_count",
+        "boundary_jump_ac_fraction",
+    }.issubset(result.candidate_metrics.columns)
     assert set(result.waveforms) >= {
         "time_s",
         "red_observed",
