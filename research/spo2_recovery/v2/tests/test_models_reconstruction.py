@@ -7,6 +7,9 @@ from spo2_pressure_recovery.models import (
     RidgeFIRModel,
     build_pressure_features,
 )
+from spo2_pressure_recovery.reconstruction import recover_channel
+from spo2_pressure_recovery.types import DecompositionConfig
+from spo2_pressure_recovery.decomposition import decompose_ppg
 
 
 def test_build_pressure_features_has_fixed_white_box_groups() -> None:
@@ -73,3 +76,56 @@ def test_hysteresis_spline_beats_single_linear_branch() -> None:
     hysteresis_mse = np.mean((hysteresis.predict(features, state) - target) ** 2)
 
     assert hysteresis_mse < 0.5 * linear_mse
+
+
+def test_recover_channel_restores_known_dc_and_ac_artifact() -> None:
+    fs = 100.0
+    t = np.arange(0.0, 20.0, 1.0 / fs)
+    natural_dc = 1000.0 + 5.0 * np.sin(2.0 * np.pi * 0.05 * t)
+    clean_ac = 8.0 * np.sin(2.0 * np.pi * 1.1 * t)
+    event_mask = (t >= 5.0) & (t <= 15.0)
+    dc_artifact = np.zeros_like(t)
+    log_gain = np.zeros_like(t)
+    dc_artifact[event_mask] = 40.0
+    log_gain[event_mask] = np.log(1.8)
+    observed = natural_dc + dc_artifact + np.exp(log_gain) * clean_ac
+    decomposition = decompose_ppg(observed, DecompositionConfig(fs_hz=fs))
+
+    recovered = recover_channel(
+        observed,
+        decomposition,
+        predicted_dc_artifact=dc_artifact,
+        predicted_log_gain=log_gain,
+        event_mask=event_mask,
+        blend_samples=0,
+    )
+
+    expected = natural_dc + clean_ac
+    nrmse = np.linalg.norm(recovered.recovered - expected) / np.linalg.norm(expected)
+    assert nrmse < 0.03
+    np.testing.assert_allclose(recovered.gain[event_mask], 1.8)
+
+
+def test_recover_channel_keeps_rest_unchanged_and_clips_gain() -> None:
+    fs = 100.0
+    t = np.arange(0.0, 10.0, 1.0 / fs)
+    observed = 1000.0 + 8.0 * np.sin(2.0 * np.pi * 1.0 * t)
+    decomposition = decompose_ppg(observed, DecompositionConfig(fs_hz=fs))
+    event_mask = (t >= 3.0) & (t <= 7.0)
+    predicted_log_gain = np.zeros_like(t)
+    predicted_log_gain[event_mask] = np.log(100.0)
+
+    recovered = recover_channel(
+        observed,
+        decomposition,
+        predicted_dc_artifact=np.zeros_like(t),
+        predicted_log_gain=predicted_log_gain,
+        event_mask=event_mask,
+        gain_bounds=(0.25, 4.0),
+        blend_samples=25,
+    )
+
+    assert np.all(np.isfinite(recovered.recovered))
+    assert np.max(recovered.gain) <= 4.0
+    np.testing.assert_allclose(recovered.recovered[~event_mask], observed[~event_mask])
+    assert abs(recovered.recovered[np.flatnonzero(event_mask)[0] - 1] - observed[np.flatnonzero(event_mask)[0] - 1]) < 1e-12
