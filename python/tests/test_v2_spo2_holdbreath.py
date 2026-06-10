@@ -11,7 +11,9 @@ import pytest
 
 from ppg_hr.v2.spo2_holdbreath import (
     HoldBreathSpO2Config,
+    HoldBreathSpO2Result,
     PulseOximeterModel,
+    _estimate_holdbreath_band_seconds,
     apply_or_fit_device_model,
     compute_holdbreath_metrics,
     find_holdbreath_truth_path,
@@ -142,6 +144,13 @@ def test_fixed_device_model_does_not_refit_bias_or_lag() -> None:
     assert np.isfinite(modeled).all()
 
 
+def test_default_device_model_lag_search_matches_design_range() -> None:
+    cfg = HoldBreathSpO2Config(data_path=Path("sample.csv"))
+
+    assert cfg.lag_grid_seconds[0] == -20.0
+    assert cfg.lag_grid_seconds[-1] == 20.0
+
+
 def test_model_search_prefers_trend_shape_without_excessive_smoothing() -> None:
     time_s = np.arange(0, 31, dtype=float)
     raw = np.r_[
@@ -205,3 +214,38 @@ def test_save_holdbreath_report_writes_csv_json_and_figures(tmp_path: Path) -> N
     assert {"time_s", "spo2_calculated", "spo2_truth", "error"}.issubset(
         csv_rows.columns
     )
+
+
+def test_holdbreath_band_estimate_uses_main_calculated_nadir_not_all_98_plateaus() -> None:
+    time_s = np.arange(0, 181, dtype=float)
+    calculated = np.r_[
+        np.full(80, 99.0),
+        np.linspace(99, 94, 20),
+        np.linspace(94, 99, 20),
+        np.full(61, 98.5),
+    ]
+    truth = np.r_[np.full(80, 98.0), np.linspace(98, 94, 20), np.full(81, 98.0)]
+    result = HoldBreathSpO2Result(
+        spo2_table=[],
+        aligned_table=[
+            {
+                "time_s": float(t),
+                "spo2_calculated": float(calc),
+                "spo2_truth": float(ref),
+                "error": float(calc - ref),
+                "spo2_raw": float(calc),
+                "device_model_lag_s": 0.0,
+                "device_model_smooth_s": 1.0,
+            }
+            for t, calc, ref in zip(time_s, calculated, truth, strict=True)
+        ],
+        metrics={},
+        metadata={},
+    )
+
+    band = _estimate_holdbreath_band_seconds(result)
+
+    assert band is not None
+    assert 70.0 <= band[0] <= 95.0
+    assert 100.0 <= band[1] <= 125.0
+    assert band[1] - band[0] < 60.0

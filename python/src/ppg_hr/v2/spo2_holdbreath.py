@@ -38,7 +38,7 @@ class HoldBreathSpO2Config:
     fit_device_model: bool = True
     device_model: PulseOximeterModel | None = None
     smooth_grid_seconds: tuple[float, ...] = (1.0, 3.0, 5.0, 7.0, 9.0)
-    lag_grid_seconds: tuple[float, ...] = tuple(float(v) for v in range(-12, 13))
+    lag_grid_seconds: tuple[float, ...] = tuple(float(v) for v in range(-20, 21))
     fit_bias: bool = True
 
 
@@ -152,7 +152,7 @@ def apply_or_fit_device_model(
     fit: bool,
     fixed_model: PulseOximeterModel | None = None,
     smooth_grid_seconds: tuple[float, ...] = (1.0, 3.0, 5.0, 7.0, 9.0),
-    lag_grid_seconds: tuple[float, ...] = tuple(float(v) for v in range(-12, 13)),
+    lag_grid_seconds: tuple[float, ...] = tuple(float(v) for v in range(-20, 21)),
     fit_bias: bool = True,
     analysis_start_s: float | None = None,
     analysis_end_s: float | None = None,
@@ -576,15 +576,30 @@ def _estimate_holdbreath_band_seconds(
     if not table:
         return None
     t = np.asarray([row["time_s"] for row in table], dtype=float)
-    ref = np.asarray([row["spo2_truth"] for row in table], dtype=float)
-    finite = ref[np.isfinite(ref)]
+    calculated = np.asarray(
+        [row["spo2_calculated"] for row in table],
+        dtype=float,
+    )
+    finite = calculated[np.isfinite(calculated)]
     if finite.size == 0:
         return None
     baseline = float(np.nanpercentile(finite, 80))
-    mask = np.isfinite(ref) & (ref <= baseline - 1.0)
+    nadir = float(np.nanmin(finite))
+    drop = baseline - nadir
+    if drop < 1.0:
+        return None
+    threshold = nadir + max(1.0, 0.65 * drop)
+    mask = np.isfinite(calculated) & (calculated <= threshold)
     if not np.any(mask):
         return None
-    return float(t[mask][0]), float(t[mask][-1])
+    nadir_idx = int(np.nanargmin(calculated))
+    start = nadir_idx
+    while start > 0 and mask[start - 1]:
+        start -= 1
+    end = nadir_idx
+    while end + 1 < mask.size and mask[end + 1]:
+        end += 1
+    return float(t[start]), float(t[end])
 
 
 def _spo2_ylim(*series: np.ndarray) -> tuple[float, float]:
