@@ -205,6 +205,8 @@ conda run -n ppg-hr python research/spo2_recovery/v2/scripts/run_recovery_experi
 
 ## 5. 研究结果
 
+本节保留上一轮基线实验结果，便于追溯最初模型对比。2026-06-10 Phase 1 伪真值优化后的最新结果见第 10 节。
+
 ### 5.1 最佳候选
 
 本轮最佳候选为：
@@ -282,7 +284,7 @@ research/spo2_recovery/v2/outputs/figures/
 
 ### 6.1 全程波形与事件图
 
-![全程波形与事件](outputs/figures/01-full-trace-events.png)
+![全程波形与事件](../outputs/figures/01-full-trace-events.png)
 
 该图包含四个子图：
 
@@ -316,7 +318,7 @@ research/spo2_recovery/v2/outputs/figures/
 
 ### 6.2 候选模型比较图
 
-![候选模型比较](outputs/figures/02-candidate-comparison.png)
+![候选模型比较](../outputs/figures/02-candidate-comparison.png)
 
 该图展示不同候选模型的平均伪真值 NRMSE，横轴越小越好。图中从上到下列出表现最好的若干候选。
 
@@ -331,7 +333,7 @@ research/spo2_recovery/v2/outputs/figures/
 
 ### 6.3 最佳模型诊断图
 
-![最佳模型诊断](outputs/figures/03-best-model-diagnostics.png)
+![最佳模型诊断](../outputs/figures/03-best-model-diagnostics.png)
 
 该图专门检查最佳模型 `hammerstein_fir:ut2:dc_ac` 的恢复行为。
 
@@ -409,3 +411,205 @@ best=hammerstein_fir:ut2:dc_ac
 4. 增加更多静息按压数据，检查最佳模型是否稳定。
 5. 引入力量训练或手腕运动数据，验证双侧差模特征在偏压/倾斜状态下是否更有优势。
 6. 将恢复波形接入 SpO2 的 ratio-of-ratios 计算，观察恢复前后 SpO2 序列稳定性。
+
+## 10. 2026-06-10 Phase 1 伪真值优化结果
+
+本节记录下一轮算法开发的 Phase 1 结果。按照计划，本阶段只处理伪真值构建、质量评价和诊断图，不进入基于伪真值的算法参数优化。
+
+### 10.1 本阶段改动
+
+Phase 1 针对上一轮发现的伪真值问题做了四项改造：
+
+1. 默认取消 observed endpoint anchoring：
+
+   ```text
+   endpoint_anchor_weight = 0.0
+   ```
+
+   伪真值不再强制贴合按压窗口首尾的 observed PPG，避免在事件边界继承压力抬升。
+
+2. 静息模板构建加入边界保护：
+
+   ```text
+   rest_guard_s = 0.35
+   ```
+
+   事件前后静息段会避开 loading/post-rest 边界附近样本，降低压力刚开始或刚释放时的残留影响。
+
+3. 新增伪真值质量表：
+
+   ```text
+   research/spo2_recovery/v2/outputs/pseudo_truth_quality.csv
+   ```
+
+   该表逐事件报告伪真值边界跳变、伪 DC 与 Ut 共模的压力残留相关性，以及 `usable` 门控结果。
+
+4. 新增伪真值质量诊断图：
+
+   ```text
+   research/spo2_recovery/v2/outputs/figures/05-pseudo-truth-dc-envelope-quality.png
+   ```
+
+   该图把 Red/IR pseudo DC、Ut 共模/差模和事件级质量指标放在同一页，方便判断伪真值是否仍跟随压力变化。
+
+### 10.2 Phase 1 最新运行结果
+
+真实数据重新运行后检测到 7 个按压事件。当前最佳候选从上一轮的 `hammerstein_fir:ut2:dc_ac` 变为：
+
+```text
+hammerstein_fir:common_difference:dc_ac
+```
+
+这不是因为恢复算法本身发生了 Phase 2 优化，而是因为伪真值构建方式改变后，模型排序基准随之变化。新的结果更偏向使用双侧热式传感器的共模/差模信息，符合“左右两侧传感器共同表征 PPG 接触状态”的硬件结构假设。
+
+当前候选排序前 8 名为：
+
+| 排名 | 候选 | 模型 | 特征组 | NRMSE | score |
+|---:|---|---|---|---:|---:|
+| 1 | `hammerstein_fir:common_difference:dc_ac` | hammerstein_fir | `common_difference` | 0.001180 | 0.699469 |
+| 2 | `hysteresis_spline:common_difference:dc_ac` | hysteresis_spline | `common_difference` | 0.001206 | 0.699457 |
+| 3 | `hammerstein_fir:ut2:dc_ac` | hammerstein_fir | `ut2` | 0.001298 | 0.699416 |
+| 4 | `hysteresis_spline:ut2:dc_ac` | hysteresis_spline | `ut2` | 0.001300 | 0.699415 |
+| 5 | `hysteresis_spline:common:dc_ac` | hysteresis_spline | `common` | 0.001337 | 0.699398 |
+| 6 | `hammerstein_fir:common:dc_ac` | hammerstein_fir | `common` | 0.001341 | 0.699397 |
+| 7 | `ridge_fir:ut2:dc_ac` | ridge_fir | `ut2` | 0.001345 | 0.699395 |
+| 8 | `ridge_fir:common:dc_ac` | ridge_fir | `common` | 0.001353 | 0.699391 |
+
+与 raw 的摘要对比：
+
+| 指标 | raw | Phase 1 best |
+|---|---:|---:|
+| nrmse | 0.003625 | 0.001180 |
+| rest_nrmse | 0.000000 | 0.000000 |
+| false_peak_increase | 0.000000 | 0.000000 |
+| ratio_relative_error | 0.000000 | 0.000000 |
+| score | 0.698369 | 0.699469 |
+
+需要强调：Phase 1 的主要验收对象不是这个候选排序，而是伪真值质量。候选排序只说明“在新伪真值基准下，当前旧模型会如何重新排序”。
+
+### 10.3 伪真值质量表
+
+逐事件质量结果如下：
+
+| 事件 | Red边界跳变 | IR边界跳变 | Red压力相关 | IR压力相关 | usable |
+|---:|---:|---:|---:|---:|:---:|
+| 1 | 0.006929 | 0.004868 | 0.344237 | 0.344237 | True |
+| 2 | 0.015217 | 0.026451 | 0.035794 | 0.035794 | True |
+| 3 | 0.005075 | 0.009828 | 0.177053 | 0.177053 | True |
+| 4 | 0.011514 | 0.017495 | 0.118824 | 0.118824 | True |
+| 5 | 0.001311 | 0.019963 | 0.165353 | 0.165353 | True |
+| 6 | 0.003191 | 0.007239 | 0.046024 | 0.046024 | True |
+| 7 | 0.030046 | 0.036904 | 0.072601 | 0.072601 | True |
+
+汇总指标：
+
+| 指标 | 结果 |
+|---|---:|
+| 检测事件数 | 7 |
+| usable pseudo events | 7 |
+| median red boundary jump fraction | 0.006929 |
+| median ir boundary jump fraction | 0.017495 |
+| median red pressure corr | 0.118824 |
+| median ir pressure corr | 0.118824 |
+| max red boundary jump fraction | 0.030046 |
+| max ir boundary jump fraction | 0.036904 |
+| max abs red pressure corr | 0.344237 |
+| max abs ir pressure corr | 0.344237 |
+
+按照当前硬阈值，7 个事件全部通过 `usable` 门控：
+
+```text
+boundary_jump_fraction <= 0.35
+abs(pseudo_dc, Ut_common corr) <= 0.50
+```
+
+其中最接近压力残留相关性阈值的是事件 1，Red/IR 均为 `0.344237`。这个值低于当前门槛，但已经接近下一步建议的更严格筛查阈值 `0.35`，因此事件 1 后续应重点目视复核。
+
+### 10.4 可视化解释
+
+#### 10.4.1 事件局部伪真值图
+
+![伪真值事件局部图](../outputs/figures/04-pseudo-truth-event-zoom.png)
+
+该图逐事件对比 observed、recovered 和 pseudo。
+
+与上一轮相比，pseudo 不再贴住 observed 的按压高平台。尤其在 E2-E7 中，灰色 observed 明显处于较高平台，而虚线 pseudo 保持在更低、更平滑的静息趋势附近，说明取消 endpoint anchoring 后，伪真值继承按压整体抬升的问题显著减弱。
+
+边界处也没有出现明显的端点贴合突跳。质量表中的最大边界跳变比例只有 `0.036904`，远低于当前 `0.35` 门槛，这与视觉结果一致。
+
+但这张图也暴露了一个重要限制：当前 pseudo 更像“保守的低频干净模板/基线参考”，而不是强约束的逐搏峰形真值。虚线 pseudo 的脉搏峰谷幅度偏小，部分事件内的收缩峰形并不充分。因此它可能适合约束“不要保留按压整体抬升”，但未必足够支撑以逐搏峰形为核心的精细 NRMSE 优化。
+
+#### 10.4.2 伪 DC 与质量诊断图
+
+![伪真值质量诊断图](../outputs/figures/05-pseudo-truth-dc-envelope-quality.png)
+
+该图包含四层信息：
+
+1. Red/IR pseudo DC：使用双 y 轴显示，避免 Red 与 IR 的不同 ADC 量级互相压扁。
+2. Ut common/difference：同样使用双 y 轴显示，避免共模绝对电压和差模变化幅度交错。
+3. 边界跳变比例与 usable 门控：7 个事件的 Red/IR 边界跳变均远低于门槛，usable 均为 1。
+4. pseudo DC 与 Ut common 的相关性：所有事件均低于 0.50，事件 1 最高，约为 0.344。
+
+这张图支持一个阶段性判断：Phase 1 后的伪真值已经基本解决“边界强贴 observed”和“整体跟随压力平台”的主要问题。它仍然不是完美真值，但比上一轮更适合作为下一步算法调参时的参考对象。
+
+### 10.5 面向 SpO2 的判断
+
+Phase 1 后，伪真值对下游 SpO2 的意义应谨慎理解：
+
+1. 对 DC/AC 去压力耦合有帮助：
+
+   pseudo 的低频趋势不再跟随 observed 高平台，可以用于惩罚模型残留的按压基线抬升。
+
+2. 对逐搏峰形和 AC 幅值约束仍不足：
+
+   SpO2 的核心是：
+
+   ```text
+   R = (AC_red / DC_red) / (AC_ir / DC_ir)
+   ```
+
+   如果 pseudo 的 AC 峰谷幅度偏保守，直接用 pseudo NRMSE 作为唯一目标，可能会鼓励模型把真实脉搏幅值也压低。因此 Phase 2 即使走伪真值路线，也应加入 AC/DC、R 稳定性、峰完整性和压力残留相关性指标。
+
+3. 更推荐的 Phase 2A 目标：
+
+   ```text
+   伪真值约束低频基线和边界连续性；
+   SpO2 特征约束 Red/IR AC/DC 与 R 序列稳定性；
+   峰检测指标约束不丢峰、不造峰、不过度平滑。
+   ```
+
+### 10.6 Phase 1 结论与决策点
+
+Phase 1 的硬指标已经通过：
+
+- `pseudo_truth_quality.csv` 已输出。
+- `recovered_waveforms.csv` 中包含 `red_pseudo`、`ir_pseudo`。
+- `04-pseudo-truth-event-zoom.png` 已输出。
+- `05-pseudo-truth-dc-envelope-quality.png` 已输出。
+- 7/7 个事件通过当前 `usable` 门控。
+
+我的阶段性判断是：当前伪真值“可作为低频基线和压力平台去除的参考”，但“还不适合作为唯一的逐搏波形真值”。因此下一步有两个选择：
+
+1. 如果接受这个定位，进入 Phase 2A：使用伪真值 + SpO2 相关特征做多目标优化。
+2. 如果认为 pseudo 的峰形仍不可接受，进入 Phase 2B：放弃伪真值主指标，改用无真值的压力去耦、AC/DC 连续性和 R 稳定性评价。
+
+本阶段按计划停在这里，等待对伪真值质量的人工评估。
+
+### 10.7 验证记录
+
+本阶段收尾时执行了以下验证：
+
+```text
+conda run -n ppg-hr python -m pytest -q research/spo2_recovery/v2/tests -p no:cacheprovider --basetemp .pytest_tmp\spo2_next_round_final
+23 passed
+
+conda run -n ppg-hr ruff check research/spo2_recovery/v2/src/spo2_pressure_recovery research/spo2_recovery/v2/tests
+All checks passed!
+
+真实数据脚本：
+events=7
+best=hammerstein_fir:common_difference:dc_ac
+
+figure_check.py:
+checked 5 figures
+```
