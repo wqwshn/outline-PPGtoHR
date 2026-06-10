@@ -305,8 +305,6 @@ def _plot_waveform_recovery_spo2_event_zoom(
     for row_idx, event in enumerate(result.events.itertuples(index=False)):
         start = float(event.loading_start_s) - 1.0
         stop = float(event.post_rest_start_s) + 1.0
-        buffer_start = float(event.loading_start_s) - 0.75
-        buffer_stop = float(event.post_rest_start_s) + 0.75
         mask = (t >= start) & (t <= stop)
         for ax, channel, color in (
             (axes[row_idx, 0], "ir", "#007C89"),
@@ -315,14 +313,6 @@ def _plot_waveform_recovery_spo2_event_zoom(
             observed = result.waveforms[f"{channel}_observed"]
             recovered = result.waveforms[f"{channel}_recovered"]
             pseudo = result.waveforms[f"{channel}_pseudo"]
-            ax.axvspan(
-                buffer_start,
-                buffer_stop,
-                color="#F3E4C8",
-                alpha=0.28,
-                linewidth=0,
-                zorder=0,
-            )
             ax.axvspan(
                 float(event.loading_start_s),
                 float(event.post_rest_start_s),

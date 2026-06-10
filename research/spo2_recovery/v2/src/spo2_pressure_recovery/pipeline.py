@@ -396,14 +396,6 @@ def run_experiment(data_path: Path | str, config: ExperimentConfig) -> Experimen
         ]
     )
     event_mask = _event_mask(record, events)
-    correction_mask = _event_mask(
-        record,
-        events,
-        transition_s=max(
-            config.pseudo_truth.transition_s,
-            config.phase2.boundary_transition_s,
-        ),
-    )
     state = _state_from_common(record)
     red_decomp = decompose_ppg(record.red_adc, config.decomposition)
     ir_decomp = decompose_ppg(record.ir_adc, config.decomposition)
@@ -477,7 +469,6 @@ def run_experiment(data_path: Path | str, config: ExperimentConfig) -> Experimen
                 predicted_dc_artifact=red_dc,
                 predicted_log_gain=red_gain,
                 event_mask=event_mask,
-                correction_mask=correction_mask,
             )
             ir_rec = recover_channel(
                 record.ir_adc,
@@ -485,7 +476,6 @@ def run_experiment(data_path: Path | str, config: ExperimentConfig) -> Experimen
                 predicted_dc_artifact=ir_dc,
                 predicted_log_gain=ir_gain,
                 event_mask=event_mask,
-                correction_mask=correction_mask,
             )
             decision_metrics = _candidate_spo2_time_metrics(
                 record,

@@ -209,6 +209,16 @@ def test_run_experiment_uses_top_scoring_waveform_when_all_candidates_rejected(
     assert result.best_candidate["candidate"] != "raw"
     assert np.max(np.abs(result.waveforms["red_recovered"] - result.waveforms["red_observed"])) > 0.0
     assert np.max(np.abs(result.waveforms["ir_recovered"] - result.waveforms["ir_observed"])) > 0.0
+    for event in result.events.itertuples(index=False):
+        pre_idx = int(round((float(event.loading_start_s) - 0.25) * fs))
+        post_idx = int(round((float(event.post_rest_start_s) + 0.25) * fs))
+        for idx in (pre_idx, post_idx):
+            assert result.waveforms["red_recovered"][idx] == pytest.approx(
+                result.waveforms["red_observed"][idx]
+            )
+            assert result.waveforms["ir_recovered"][idx] == pytest.approx(
+                result.waveforms["ir_observed"][idx]
+            )
 
 
 def test_render_experiment_figures_writes_png_files(tmp_path) -> None:
