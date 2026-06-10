@@ -794,7 +794,28 @@ Ut2 = C - D
 2. `rls_adaptive`：递归最小二乘，用遗忘因子和正则初值加快短窗收敛。
 3. `regularized_batch_adaptive`：局部批量正则拟合，牺牲在线性，优先保证离线恢复效果。
 
-根据 07 图的复核结果，恢复校正窗口不再扩展到按压前后缓冲段。压力模型只在核心按压段内生效，边界处依靠核心段内的淡入淡出降低硬切换；这样可以避免在按压前后缓冲区提前或滞后减掉 `w·Ut`，造成恢复波形在边界外侧陡降。
+根据 07 图的复核结果，完全取消过渡段会重新暴露按压边界的“双肩峰”，而直接在过渡段扣除 `w·Ut` 又会在按压前后造成陡降。因此本轮采用 `boundary_anchored` 恢复模式：
+
+1. 仍以核心按压段作为主要恢复对象，但在核心段前后各扩展 `boundary_transition_s = 0.50 s` 作为边界支撑区。
+2. 对模型预测的 DC 伪影 `a(t)` 和 log-gain `g(t)`，不直接使用原始预测值，而是在每个支撑窗口内做左右端点锚定：
+
+```text
+b(t) = linear_interpolate(mean(a_left), mean(a_right))
+a_anchor(t) = a(t) - b(t)
+
+h(t) = linear_interpolate(mean(g_left), mean(g_right))
+g_anchor(t) = g(t) - h(t)
+```
+
+其中 `mean(a_left/right)` 与 `mean(g_left/right)` 来自支撑窗口两端 `boundary_anchor_window_s = 0.10 s` 的平均值。这样做的物理含义是：允许 Ut 模型解释按压内部的压力平台和缓慢变化，但强制“可扣除的压力项”在窗口外边界回到 0，避免恢复波形在非按压区域提前或滞后下落。
+
+3. 最终恢复仍使用 raised-cosine 权重 `w(t)` 平滑进入和退出：
+
+```text
+recovered(t) = (1 - w(t)) observed(t) + w(t) candidate(t)
+```
+
+因此，过渡段现在不是“直接扣压力量”的缓冲区，而是一个带端点约束的边界支撑区：它主要用于把核心按压段的低频抬升平滑地消除掉，同时保持支撑区外与原始波形严格接续。
 
 ### 11.4 Phase 2 评价指标
 
@@ -839,7 +860,7 @@ Phase 2 新增：
 
 图中绿色候选表示通过当前门槛，灰色候选表示至少触发一个拒绝原因。该图不替代事件放大图，而是帮助快速筛选值得进一步视觉检查的候选算法和输入组。
 
-`07-waveform-recovery-spo2-event-zoom.png` 是本轮最重要的波形形态检查图。每个按压事件分别绘制 IR 与 Red 的 observed、recovered、pseudo reference。粉色背景表示核心按压区域；压力模型校正只在该区域内生效，边界采用核心段内淡入淡出，避免在按压前后缓冲区提前或滞后扣除 `w·Ut` 造成陡降。该图用于判断：
+`07-waveform-recovery-spo2-event-zoom.png` 是本轮最重要的波形形态检查图。每个按压事件分别绘制 IR 与 Red 的 observed、recovered、pseudo reference。粉色背景表示核心按压区域；淡黄色背景表示 `boundary_anchored` 的边界支撑区。需要注意，淡黄色区域内的校正不是直接扣除原始 `w·Ut`，而是扣除经过左右端点锚定后的压力项，所以支撑区外 recovered 与 observed 保持接续。该图用于判断：
 
 1. recovered 是否比 observed 更好地暴露 PPG 收缩峰。
 2. 按压进入和松开边界是否仍有双肩峰或台阶跳变。
@@ -868,19 +889,19 @@ SpO2 = 1.5958422 R² - 34.6596622 R + 112.6898759
 使用 `data-按压干扰实验.csv` 运行 Phase 2 后，共检测到 7 个按压事件，输出 31 个候选结果。当前综合分最高候选为：
 
 ```text
-nlms_adaptive:raw_pair:dc_ac
+regularized_batch_adaptive:ut2_only:dc_ac
 ```
 
 关键指标：
 
 | 指标 | 数值 |
 |---|---:|
-| pseudo NRMSE | 0.001757 |
-| R event shift | 0.046979 |
-| SpO2 event shift | 1.451395 |
-| peak interval CV | 0.048794 |
-| extra peak count | 1.000000 |
-| boundary / local AC | 0.311587 |
+| pseudo NRMSE | 0.002809 |
+| R event shift | 0.033765 |
+| SpO2 event shift | 1.116809 |
+| peak interval CV | 0.073539 |
+| extra peak count | 0.714286 |
+| boundary / local AC | 0.266304 |
 | accepted | False |
 | rejection reasons | false_peak_increase; boundary_discontinuity |
 
@@ -904,7 +925,9 @@ nlms_adaptive:raw_pair:dc_ac
 | boundary / local AC | 0.323516 |
 | accepted | False |
 
-与 raw 相比，综合最高候选 `nlms_adaptive:raw_pair` 将 SpO2 偏移从约 `3.49` 降到约 `1.45`，R 偏移从约 `0.113` 降到约 `0.047`，说明热式压力信号仍然能改善下游血氧相关特征。但取消缓冲区压力校正后，综合改善幅度低于上一版扩展校正窗口结果；换来的收益是按压前后缓冲区不再被提前或滞后扣除压力项，避免了边界外侧陡降。
+与 raw 相比，综合最高候选 `regularized_batch_adaptive:ut2_only` 将 SpO2 偏移从约 `3.49` 降到约 `1.12`，R 偏移从约 `0.113` 降到约 `0.034`，边界跳变比例从约 `0.324` 降到约 `0.266`。这说明热式压力信号仍然能改善下游血氧相关特征，而且 `boundary_anchored` 比“核心段-only”更能缓解边界肩峰；同时，支撑区外的最大恢复差异为 0，说明该方法没有重新引入按压前后缓冲区陡降问题。
+
+从 `07-waveform-recovery-spo2-event-zoom.png` 视觉复核看，E1/E2/E3 的按压平台抬升被更自然地压低，支撑区外侧没有上一版缓冲区校正造成的明显陡降；E4/E5 仍可见局部肩部和波形形态残留。因此这一轮更适合表述为“边界问题得到缓解，并避免了边界外副作用”，还不能表述为“双肩峰已彻底解决”。
 
 #### 11.6.2 不同目标下的最佳候选
 
@@ -912,30 +935,31 @@ nlms_adaptive:raw_pair:dc_ac
 
 | 目标 | 最优候选 | 结果 |
 |---|---|---:|
-| 综合 score | `nlms_adaptive:raw_pair:dc_ac` | 0.689814 |
-| 最小 SpO2 event shift | `nlms_adaptive:common_only:dc_ac` | 0.364580 |
-| 最小 R event shift | `nlms_adaptive:common_only:dc_ac` | 0.011238 |
-| 最小 boundary / local AC | `nlms_adaptive:difference_only:dc_ac` | 0.166727 |
+| 综合 score | `regularized_batch_adaptive:ut2_only:dc_ac` | 0.691983 |
+| 最小 SpO2 event shift | `nlms_adaptive:common_only:dc_ac` | 0.168003 |
+| 最小 R event shift | `nlms_adaptive:common_only:dc_ac` | 0.005192 |
+| 最小 boundary / local AC | `hysteresis_spline:ut1_only:dc_ac` | 0.240349 |
 | 最小 extra peak count | `raw` | 0.000000 |
 
 这说明当前目标之间存在冲突：改善 SpO2/R 稳定性的候选，未必具有最好的边界连续性和峰结构稳定性。因此下一轮算法不宜只优化单一指标，而应把 `R/SpO2 shift`、`extra_peak_count` 和 `boundary_jump_ac_fraction` 作为联合目标。
 
 #### 11.6.3 输入组初步判断
 
-本轮结果仍支持“Ut 压力参考对下游血氧有帮助”的判断，但在取消缓冲区压力校正后，综合最高候选变为 `raw_pair`，说明短事件自适应模型可能从两路 Ut 的联合信息中获益。同时，`common_only` 仍在最小 R/SpO2 偏移上表现最好，说明整体接触压力仍是主要解释变量。
+本轮结果仍支持“Ut 压力参考对下游血氧有帮助”的判断。综合最高候选变为 `ut2_only`，说明在这组按压实验中单路热式压力信号已经能够解释主要压力伪影，不一定需要同时输入 Ut1/Ut2。与此同时，`common_only` 仍在最小 R/SpO2 偏移上表现最好，说明整体接触压力仍是主要解释变量。
 
 目前不能简单断言 `Ut2` 一定优于 `Ut1`，因为综合分包含峰/边界惩罚，而不同模型的正则化与收敛行为也会影响结果。更稳妥的阶段性结论是：
 
 1. `common_only` 对 R/SpO2 偏移最有利，符合“整体接触压力主导干扰”的假设。
-2. `raw_pair` 在综合 score 上暂时最好，说明两路 Ut 联合输入仍值得保留。
-3. `difference_only` 对边界指标可能有帮助，但对 SpO2 偏移不是最优，适合后续作为边界约束或辅助项，而不是主恢复输入。
+2. `ut2_only` 在综合 score 上暂时最好，提示单侧热式传感器输入可以作为重点白盒基线，后续应与 `ut1_only` 继续逐事件对照，而不是预设两路必须联合。
+3. `raw_pair` / `common_difference` 仍值得保留为对照输入组，但本轮并不是综合最优。
+4. `difference_only` 对部分边界形态可能有帮助，但对 SpO2 偏移不是最优，适合后续作为边界约束或辅助项，而不是主恢复输入。
 
 #### 11.6.4 下一步算法方向
 
 下一轮应从“单纯拟合压力伪影”转向“受约束的下游特征恢复”：
 
-1. 以 `common_only`、`raw_pair` 和少量 `difference_only` 作为重点输入组，减少全组合搜索。
-2. 对 `nlms_adaptive:common_only` 增加边界平滑和伪峰抑制约束，保留其 SpO2/R 稳定优势。
-3. 对 `nlms_adaptive:raw_pair` 加强峰结构约束，降低 `extra_peak_count` 和边界跳变。
+1. 以 `ut1_only`、`ut2_only`、`common_only` 和少量 `raw_pair/common_difference` 作为重点输入组，减少全组合搜索。
+2. 在 `regularized_batch_adaptive` 和 `nlms_adaptive:common_only` 上加入峰结构约束，保留其 R/SpO2 稳定优势，同时抑制 `extra_peak_count`。
+3. 继续保留 `boundary_anchored` 思路，但把锚定窗口、过渡窗口和 raised-cosine 权重作为可解释参数做小范围扫描。
 4. 重新审视 `false_peak_increase` 的定义：当前以 recovered 相对 observed IR 主峰为参考，能够捕捉伪峰，但也可能把 observed 中被伪影淹没的真实峰暴露误判为 extra peak。下一轮需要结合峰显著性、局部心率连续性和 Red/IR 配对一致性进一步区分。
 5. 继续保留 pseudo NRMSE 作为参考列，但不作为算法选择的决定性指标。

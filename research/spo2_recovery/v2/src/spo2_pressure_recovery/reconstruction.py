@@ -44,6 +44,32 @@ def _event_weight(mask: np.ndarray, blend_samples: int) -> np.ndarray:
     return weight
 
 
+def _boundary_anchor_series(
+    values: np.ndarray,
+    mask: np.ndarray,
+    anchor_samples: int,
+) -> np.ndarray:
+    arr = np.asarray(values, dtype=float)
+    event = np.asarray(mask, dtype=bool)
+    anchored = arr.copy()
+    width = max(1, int(anchor_samples))
+    if not np.any(event):
+        return anchored
+    changes = np.diff(np.r_[False, event, False].astype(np.int8))
+    starts = np.flatnonzero(changes == 1)
+    ends = np.flatnonzero(changes == -1)
+    for start, end in zip(starts, ends, strict=True):
+        segment_len = max(0, end - start)
+        if segment_len <= 0:
+            continue
+        anchor_width = min(width, segment_len)
+        left = float(np.median(arr[start : start + anchor_width]))
+        right = float(np.median(arr[end - anchor_width : end]))
+        baseline = np.linspace(left, right, segment_len)
+        anchored[start:end] = arr[start:end] - baseline
+    return anchored
+
+
 def recover_channel(
     observed: np.ndarray,
     decomposition: PPGDecomposition,
@@ -54,6 +80,8 @@ def recover_channel(
     correction_mask: np.ndarray | None = None,
     gain_bounds: tuple[float, float] = (0.25, 4.0),
     blend_samples: int = 25,
+    boundary_anchor: bool = False,
+    anchor_samples: int = 5,
 ) -> RecoveredChannel:
     raw = interpolate_nonfinite(observed)
     n = raw.size
@@ -65,6 +93,9 @@ def recover_channel(
         if correction_mask is not None
         else mask
     )
+    if boundary_anchor:
+        dc_artifact = _boundary_anchor_series(dc_artifact, active_mask, anchor_samples)
+        log_gain = _boundary_anchor_series(log_gain, active_mask, anchor_samples)
 
     lower, upper = gain_bounds
     lower = max(float(lower), np.finfo(float).eps)

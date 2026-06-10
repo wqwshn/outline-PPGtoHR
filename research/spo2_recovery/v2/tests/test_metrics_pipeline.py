@@ -209,10 +209,27 @@ def test_run_experiment_uses_top_scoring_waveform_when_all_candidates_rejected(
     assert result.best_candidate["candidate"] != "raw"
     assert np.max(np.abs(result.waveforms["red_recovered"] - result.waveforms["red_observed"])) > 0.0
     assert np.max(np.abs(result.waveforms["ir_recovered"] - result.waveforms["ir_observed"])) > 0.0
+    transition_s = config.phase2.boundary_transition_s
     for event in result.events.itertuples(index=False):
         pre_idx = int(round((float(event.loading_start_s) - 0.25) * fs))
         post_idx = int(round((float(event.post_rest_start_s) + 0.25) * fs))
         for idx in (pre_idx, post_idx):
+            red_diff = abs(
+                result.waveforms["red_recovered"][idx]
+                - result.waveforms["red_observed"][idx]
+            )
+            ir_diff = abs(
+                result.waveforms["ir_recovered"][idx]
+                - result.waveforms["ir_observed"][idx]
+            )
+            assert max(red_diff, ir_diff) < 5.0
+        outer_pre_idx = int(
+            round((float(event.loading_start_s) - transition_s - 0.05) * fs)
+        )
+        outer_post_idx = int(
+            round((float(event.post_rest_start_s) + transition_s + 0.05) * fs)
+        )
+        for idx in (outer_pre_idx, outer_post_idx):
             assert result.waveforms["red_recovered"][idx] == pytest.approx(
                 result.waveforms["red_observed"][idx]
             )

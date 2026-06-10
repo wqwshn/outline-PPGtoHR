@@ -396,6 +396,26 @@ def run_experiment(data_path: Path | str, config: ExperimentConfig) -> Experimen
         ]
     )
     event_mask = _event_mask(record, events)
+    recovery_mode = str(config.phase2.recovery_mode)
+    use_boundary_anchor = recovery_mode == "boundary_anchored"
+    correction_mask = (
+        _event_mask(
+            record,
+            events,
+            transition_s=max(0.0, config.phase2.boundary_transition_s),
+        )
+        if use_boundary_anchor
+        else None
+    )
+    blend_samples = (
+        int(round(max(0.0, config.phase2.boundary_transition_s) * record.fs_hz))
+        if use_boundary_anchor
+        else 25
+    )
+    anchor_samples = max(
+        1,
+        int(round(max(0.0, config.phase2.boundary_anchor_window_s) * record.fs_hz)),
+    )
     state = _state_from_common(record)
     red_decomp = decompose_ppg(record.red_adc, config.decomposition)
     ir_decomp = decompose_ppg(record.ir_adc, config.decomposition)
@@ -469,6 +489,10 @@ def run_experiment(data_path: Path | str, config: ExperimentConfig) -> Experimen
                 predicted_dc_artifact=red_dc,
                 predicted_log_gain=red_gain,
                 event_mask=event_mask,
+                correction_mask=correction_mask,
+                boundary_anchor=use_boundary_anchor,
+                anchor_samples=anchor_samples,
+                blend_samples=blend_samples,
             )
             ir_rec = recover_channel(
                 record.ir_adc,
@@ -476,6 +500,10 @@ def run_experiment(data_path: Path | str, config: ExperimentConfig) -> Experimen
                 predicted_dc_artifact=ir_dc,
                 predicted_log_gain=ir_gain,
                 event_mask=event_mask,
+                correction_mask=correction_mask,
+                boundary_anchor=use_boundary_anchor,
+                anchor_samples=anchor_samples,
+                blend_samples=blend_samples,
             )
             decision_metrics = _candidate_spo2_time_metrics(
                 record,

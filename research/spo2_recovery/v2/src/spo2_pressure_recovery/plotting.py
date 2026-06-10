@@ -85,6 +85,13 @@ def _fs_hz(result: ExperimentResult) -> float:
     return 100.0
 
 
+def _boundary_transition_s(result: ExperimentResult) -> float:
+    config = result.diagnostics.get("config", {})
+    phase2 = config.get("phase2", {}) if isinstance(config, dict) else {}
+    value = phase2.get("boundary_transition_s") if isinstance(phase2, dict) else None
+    return max(0.0, float(value)) if value is not None else 0.0
+
+
 def _plot_full_trace(result: ExperimentResult, out: Path) -> Path:
     t = result.waveforms["time_s"]
     fig, axes = plt.subplots(4, 1, figsize=(7.2, 6.0), sharex=True)
@@ -294,6 +301,7 @@ def _plot_waveform_recovery_spo2_event_zoom(
     out: Path,
 ) -> Path:
     t = result.waveforms["time_s"]
+    transition_s = _boundary_transition_s(result)
     event_count = max(1, len(result.events))
     fig, axes = plt.subplots(
         event_count,
@@ -305,6 +313,8 @@ def _plot_waveform_recovery_spo2_event_zoom(
     for row_idx, event in enumerate(result.events.itertuples(index=False)):
         start = float(event.loading_start_s) - 1.0
         stop = float(event.post_rest_start_s) + 1.0
+        support_start = float(event.loading_start_s) - transition_s
+        support_stop = float(event.post_rest_start_s) + transition_s
         mask = (t >= start) & (t <= stop)
         for ax, channel, color in (
             (axes[row_idx, 0], "ir", "#007C89"),
@@ -313,6 +323,15 @@ def _plot_waveform_recovery_spo2_event_zoom(
             observed = result.waveforms[f"{channel}_observed"]
             recovered = result.waveforms[f"{channel}_recovered"]
             pseudo = result.waveforms[f"{channel}_pseudo"]
+            if transition_s > 0.0:
+                ax.axvspan(
+                    support_start,
+                    support_stop,
+                    color="#F3E4C8",
+                    alpha=0.22,
+                    linewidth=0,
+                    zorder=0,
+                )
             ax.axvspan(
                 float(event.loading_start_s),
                 float(event.post_rest_start_s),

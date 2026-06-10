@@ -68,7 +68,9 @@ class Phase2Config:
         "regularized_batch_adaptive",
     )
     correction_modes: tuple[str, ...] = ("dc_ac",)
-    boundary_transition_s: float = 0.75
+    recovery_mode: str = "boundary_anchored"
+    boundary_transition_s: float = 0.50
+    boundary_anchor_window_s: float = 0.10
 
 
 @dataclass(frozen=True)
