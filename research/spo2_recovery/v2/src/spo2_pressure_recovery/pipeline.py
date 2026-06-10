@@ -25,6 +25,7 @@ from .models import (
     RidgeFIRModel,
     build_pressure_features,
 )
+from .pseudo_quality import pseudo_truth_quality
 from .pseudo_truth import EventPseudoTruth, build_event_pseudo_truth
 from .reconstruction import recover_channel
 from .types import ExperimentConfig, PressureEvent, PressureRecord
@@ -33,6 +34,7 @@ from .types import ExperimentConfig, PressureEvent, PressureRecord
 @dataclass
 class ExperimentResult:
     events: pd.DataFrame
+    pseudo_quality: pd.DataFrame
     candidate_metrics: pd.DataFrame
     event_metrics: pd.DataFrame
     loo_metrics: pd.DataFrame
@@ -224,6 +226,12 @@ def run_experiment(data_path: Path | str, config: ExperimentConfig) -> Experimen
         for event in events
     ]
     events_frame = events_to_frame(events)
+    pseudo_quality_frame = pd.DataFrame(
+        [
+            pseudo_truth_quality(record, event, truth)
+            for event, truth in zip(events, truths, strict=True)
+        ]
+    )
     event_mask = _event_mask(record, events)
     state = _state_from_common(record)
     red_decomp = decompose_ppg(record.red_adc, config.decomposition)
@@ -357,6 +365,11 @@ def run_experiment(data_path: Path | str, config: ExperimentConfig) -> Experimen
         "platform": platform.platform(),
         "numpy": np.__version__,
         "scipy": scipy.__version__,
+        "pseudo_truth_usable_events": (
+            int(pseudo_quality_frame["usable"].astype(bool).sum())
+            if "usable" in pseudo_quality_frame
+            else 0
+        ),
         "config": {
             "preprocess": asdict(config.preprocess),
             "events": asdict(config.events),
@@ -367,6 +380,7 @@ def run_experiment(data_path: Path | str, config: ExperimentConfig) -> Experimen
     }
     return ExperimentResult(
         events=events_frame,
+        pseudo_quality=pseudo_quality_frame,
         candidate_metrics=candidate_metrics,
         event_metrics=pd.DataFrame(event_rows),
         loo_metrics=pd.DataFrame(),
@@ -401,6 +415,7 @@ def save_experiment(
     out.mkdir(parents=True, exist_ok=True)
     files = {
         "events": out / "events.csv",
+        "pseudo_quality": out / "pseudo_truth_quality.csv",
         "candidate_metrics": out / "candidate_metrics.csv",
         "event_metrics": out / "event_metrics.csv",
         "loo_metrics": out / "loo_metrics.csv",
@@ -409,6 +424,7 @@ def save_experiment(
         "summary": out / "experiment_summary.json",
     }
     result.events.to_csv(files["events"], index=False)
+    result.pseudo_quality.to_csv(files["pseudo_quality"], index=False)
     result.candidate_metrics.to_csv(files["candidate_metrics"], index=False)
     result.event_metrics.to_csv(files["event_metrics"], index=False)
     result.loo_metrics.to_csv(files["loo_metrics"], index=False)

@@ -80,6 +80,8 @@ def test_run_experiment_outputs_minimum_end_to_end_result(tmp_path) -> None:
     files = save_experiment(result, tmp_path / "out")
 
     assert result.events.shape[0] == 2
+    assert not result.pseudo_quality.empty
+    assert {"event_id", "usable"}.issubset(result.pseudo_quality.columns)
     assert not result.candidate_metrics.empty
     assert result.best_candidate["accepted"] is True
     assert set(result.waveforms) >= {
@@ -94,6 +96,7 @@ def test_run_experiment_outputs_minimum_end_to_end_result(tmp_path) -> None:
     assert np.isfinite(result.waveforms["red_pseudo"]).any()
     assert np.isfinite(result.waveforms["ir_pseudo"]).any()
     assert files["candidate_metrics"].exists()
+    assert files["pseudo_quality"].exists()
     assert files["summary"].exists()
 
 
