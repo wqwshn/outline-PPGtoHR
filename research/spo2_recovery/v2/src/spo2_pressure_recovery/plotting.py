@@ -246,6 +246,34 @@ def _plot_pseudo_truth_components(result: ExperimentResult, out: Path) -> Path:
     return _save(fig, out / "05-pseudo-truth-dc-envelope-quality.png")
 
 
+def _plot_spo2_time_domain_diagnostics(result: ExperimentResult, out: Path) -> Path:
+    table = result.candidate_metrics.head(12).copy()
+    metrics = [
+        ("spo2_event_shift", "SpO2 shift"),
+        ("r_event_shift", "R shift"),
+        ("peak_interval_cv", "Peak interval CV"),
+        ("boundary_jump_ac_fraction", "Boundary / local AC"),
+    ]
+    fig, axes = plt.subplots(2, 2, figsize=(7.2, 5.2))
+    axes = np.asarray(axes).ravel()
+    y = np.arange(len(table))
+    labels = table["candidate"].astype(str)
+    colors = np.where(table["accepted"].astype(bool), "#007C89", "#B6B6B6")
+    for ax, (column, label) in zip(axes, metrics, strict=True):
+        values = (
+            table[column].to_numpy(dtype=float)
+            if column in table
+            else np.zeros(len(table), dtype=float)
+        )
+        ax.barh(y, values, color=colors)
+        ax.set_yticks(y, labels if ax in (axes[0], axes[2]) else [])
+        ax.invert_yaxis()
+        ax.set_xlabel(label)
+        _style_axis(ax)
+    fig.subplots_adjust(hspace=0.36, wspace=0.30)
+    return _save(fig, out / "06-spo2-time-domain-diagnostics.png")
+
+
 def render_experiment_figures(
     result: ExperimentResult,
     output_dir: Path | str,
@@ -258,4 +286,5 @@ def render_experiment_figures(
         _plot_best_diagnostics(result, out),
         _plot_pseudo_truth_zoom(result, out),
         _plot_pseudo_truth_components(result, out),
+        _plot_spo2_time_domain_diagnostics(result, out),
     ]

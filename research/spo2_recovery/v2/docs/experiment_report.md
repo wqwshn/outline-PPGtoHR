@@ -732,3 +732,106 @@ core_recovered_jump_ac_fraction:
 - pseudo 的逐搏峰形仍偏保守，不宜作为唯一 NRMSE 真值。
 - recovered 在核心事件边界仍有部分局部肩峰，后续应加入边界/峰完整性/AC-DC-R 稳定性共同约束。
 - Phase 2 不应只追求 pseudo NRMSE，而应围绕 SpO2 的 `AC_red/DC_red`、`AC_ir/DC_ir` 和 `R` 值稳定性优化。
+
+## 11. Phase 2：面向血氧解算的恢复算法设计
+
+### 11.1 为什么 FIR 批量拟合依赖目标函数
+
+上一轮 FIR 类模型本质是监督式批量拟合。以 `common_difference` 输入为例：
+
+```text
+x(t) = [C(t), dC(t)/dt, D(t), dD(t)/dt]
+```
+
+若加入 `K` 个滞后项，FIR 伪影模型为：
+
+```text
+artifact(t) = Σk [
+  hC,k  C(t-k)
++ hCd,k C'(t-k)
++ hD,k  D(t-k)
++ hDd,k D'(t-k)
+]
+```
+
+其中 `h` 不是手工设定，而是通过最小二乘或岭回归拟合：
+
+```text
+h = argmin ||Xh - y||² + λ||h||²
+```
+
+因此只要 `y = observed - pseudo`，FIR 就确实依赖伪真值。Phase 2 保留 FIR/样条类模型作为白盒基线，但不再把 pseudo NRMSE 作为唯一优化目标；自适应模型和候选排序会同时参考 SpO2、峰间期和边界连续性指标。
+
+### 11.2 输入信号组对比
+
+硬件上 PPG 左右两侧各有一个薄膜界面热式传感器，因此 Phase 2 不预设两路 Ut 必须同时进入同一模型，而是系统比较以下输入组：
+
+| 输入组 | 特征 | 解释 |
+|---|---|---|
+| `ut1_only` | `Ut1, dUt1/dt` | 左侧热式传感器单独作为压力参考 |
+| `ut2_only` | `Ut2, dUt2/dt` | 右侧热式传感器单独作为压力参考 |
+| `common_only` | `C, dC/dt` | 左右共同变化，代表整体接触压力/间隙 |
+| `difference_only` | `D, dD/dt` | 左右差异，代表倾斜、偏压或局部翘起 |
+| `common_difference` | `C, dC/dt, D, dD/dt` | 对称/反对称坐标联合输入 |
+| `raw_pair` | `Ut1, dUt1/dt, Ut2, dUt2/dt` | 原始双路联合输入 |
+
+其中：
+
+```text
+C = (Ut1 + Ut2) / 2
+D = (Ut1 - Ut2) / 2
+Ut1 = C + D
+Ut2 = C - D
+```
+
+`common_difference` 与 `raw_pair` 信息量近似等价，但前者物理解释更清楚：`C` 对应整体压力变化，`D` 对应左右不对称。
+
+### 11.3 自适应滤波的短事件约束
+
+本数据中按压事件时间较短，普通 LMS 如果只在按压核心段内更新，可能出现尚未收敛就已进入松开阶段的问题。Phase 2 增加三类短事件友好的白盒模型：
+
+1. `nlms_adaptive`：归一化 LMS，根据输入能量调整步长，降低 Ut 幅值变化造成的更新不稳定。
+2. `rls_adaptive`：递归最小二乘，用遗忘因子和正则初值加快短窗收敛。
+3. `regularized_batch_adaptive`：局部批量正则拟合，牺牲在线性，优先保证离线恢复效果。
+
+同时，恢复校正窗口扩展到按压前后缓冲段，默认取 `max(pseudo_transition_s, phase2_boundary_transition_s)`，当前 Phase 2 为 `0.75 s`。这样可以减少核心事件边界处的硬切换和双肩峰。
+
+### 11.4 Phase 2 评价指标
+
+候选排序不再只看 `nrmse`。新增核心指标包括：
+
+```text
+R = (AC_red / DC_red) / (AC_ir / DC_ir)
+SpO2 = 1.5958422 R² - 34.6596622 R + 112.6898759
+```
+
+主要输出列：
+
+| 指标 | 含义 |
+|---|---|
+| `r_event_shift` | 按压段 R 值相对邻近静息段的平均偏移 |
+| `spo2_event_shift` | 按压段 SpO2 相对邻近静息段的平均偏移 |
+| `r_cv`, `spo2_cv` | 按压段内 R/SpO2 的变异程度 |
+| `valid_beat_count` | 参与事件级 R/SpO2 计算的有效搏动数 |
+| `peak_interval_cv` | 恢复后按压段峰间期变异系数 |
+| `extra_peak_count` | 恢复后相对 observed IR 主峰的额外峰数量 |
+| `boundary_jump_ac_fraction` | 按压进入/松开边界处跳变占局部 AC 的比例 |
+
+峰定位采用 IR 的 AC 分量作为主检测通道，Red 只在同一搏动段内配对提取 AC/DC，避免 Red 或 recovered 波形中的局部毛刺直接生成参与 SpO2 的伪峰。
+
+### 11.5 新增可视化结果解释
+
+Phase 2 新增：
+
+```text
+06-spo2-time-domain-diagnostics.png
+```
+
+该图展示候选模型的四类下游指标：
+
+1. `SpO2 shift`：越小表示按压段血氧结果越接近邻近静息段。
+2. `R shift`：越小表示 Red/IR AC/DC 比值越稳定。
+3. `Peak interval CV`：越小表示恢复后搏动间隔越稳定，不易出现伪峰或漏峰。
+4. `Boundary / local AC`：越小表示按压进入/松开边界越平滑，双肩峰风险越低。
+
+图中绿色候选表示通过当前门槛，灰色候选表示至少触发一个拒绝原因。该图不替代事件放大图，而是帮助快速筛选值得进一步视觉检查的候选算法和输入组。
