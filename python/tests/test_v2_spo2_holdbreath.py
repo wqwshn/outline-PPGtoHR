@@ -144,6 +144,24 @@ def test_fixed_device_model_does_not_refit_bias_or_lag() -> None:
     assert np.isfinite(modeled).all()
 
 
+def test_device_model_keeps_spo2_within_physical_range_after_bias() -> None:
+    time_s = np.arange(6, dtype=float)
+    raw = np.array([99.0, 99.4, 100.0, 99.8, 99.2, 99.0], dtype=float)
+    truth = np.full(raw.size, 100.0, dtype=float)
+    fixed = PulseOximeterModel(smooth_seconds=1.0, lag_seconds=0.0, bias=2.0)
+
+    modeled, _, _ = apply_or_fit_device_model(
+        time_s,
+        raw,
+        truth,
+        fit=False,
+        fixed_model=fixed,
+    )
+
+    assert np.nanmax(modeled) <= 100.0
+    assert np.nanmin(modeled) >= 0.0
+
+
 def test_default_device_model_lag_search_matches_design_range() -> None:
     cfg = HoldBreathSpO2Config(data_path=Path("sample.csv"))
 

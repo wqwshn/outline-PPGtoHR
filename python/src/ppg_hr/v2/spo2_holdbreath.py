@@ -441,7 +441,7 @@ def _apply_device_model(
         left=float(smoothed[0]) if smoothed.size else float("nan"),
         right=float(smoothed[-1]) if smoothed.size else float("nan"),
     )
-    return shifted + float(model.bias)
+    return np.clip(shifted + float(model.bias), 0.0, 100.0)
 
 
 def _median_bias(
