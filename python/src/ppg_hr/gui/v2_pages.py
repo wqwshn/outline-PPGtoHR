@@ -997,8 +997,15 @@ class V2SpO2Page(_PageBase):
         form.addRow("mu_base", self._mu_base)
         form.addRow("adaptive_filter", self._filter_combo)
         form.addRow("参考信号", self._ref_list)
+        self._holdbreath_check = QCheckBox("屏气实验")
+        self._holdbreath_check.setToolTip(
+            "仅使用 PPG_Red / PPG_IR 计算血氧，并自动匹配 *_ref 真值评估 MAE。"
+        )
+        self._holdbreath_check.toggled.connect(self._update_holdbreath_controls)
+        form.addRow("实验模式", self._holdbreath_check)
         param_card.add(form)
         self.body().addWidget(param_card)
+        self._update_holdbreath_controls(False)
 
         row = QHBoxLayout()
         row.addStretch(1)
@@ -1023,6 +1030,14 @@ class V2SpO2Page(_PageBase):
                 order.append(item.text())
         return tuple(order)
 
+    def _update_holdbreath_controls(self, checked: bool) -> None:
+        enabled = not bool(checked)
+        self._ref_list.setEnabled(enabled)
+        self._filter_combo.setEnabled(enabled)
+        self._delay_samples.setEnabled(enabled)
+        self._max_order.setEnabled(enabled)
+        self._mu_base.setEnabled(enabled)
+
     def _run(self) -> None:
         data_path = self._data_pick.path()
         if data_path is None or not data_path.is_file():
@@ -1037,6 +1052,7 @@ class V2SpO2Page(_PageBase):
             max_order=int(self._max_order.value()),
             lms_mu_base=float(self._mu_base.value()),
             adaptive_filter=str(self._filter_combo.currentData()),
+            extras={"holdbreath_enabled": bool(self._holdbreath_check.isChecked())},
         )
         self._run_btn.setEnabled(False)
         worker = V2SpO2Worker(cfg, output_prefix=Path(data_path).stem)

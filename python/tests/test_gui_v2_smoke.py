@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 pytest.importorskip("PySide6")
@@ -200,6 +202,77 @@ def test_v2_spo2_page_exposes_reference_order_controls() -> None:
         ]
         assert filters == ["lms", "as_lms", "klms", "volterra", "noncausal_lms", "rff_lms"]
         assert page._filter_combo.currentData() == "lms"
+    finally:
+        page.deleteLater()
+        app.processEvents()
+
+
+def test_v2_spo2_page_holdbreath_checkbox_disables_ut_controls() -> None:
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.v2_pages import V2SpO2Page
+
+    app = QApplication.instance() or QApplication([])
+    page = V2SpO2Page()
+    try:
+        assert page._holdbreath_check.text() == "屏气实验"
+        page._holdbreath_check.setChecked(True)
+        app.processEvents()
+        assert page._ref_list.isEnabled() is False
+        assert page._filter_combo.isEnabled() is False
+        assert page._delay_samples.isEnabled() is False
+        assert page._max_order.isEnabled() is False
+        assert page._mu_base.isEnabled() is False
+    finally:
+        page.deleteLater()
+        app.processEvents()
+
+
+def test_v2_spo2_page_builds_holdbreath_config(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui import v2_pages
+    from ppg_hr.gui.v2_pages import V2SpO2Page
+
+    data = tmp_path / "Spo2_HB1.csv"
+    data.write_text("Time(s),PPG_Red,PPG_IR,ValidFlag\n0,1,1,1\n", encoding="utf-8")
+    captured = {}
+
+    class FakeSignal:
+        def connect(self, _slot):
+            return None
+
+    class FakeWorker:
+        def __init__(self, cfg, output_prefix):
+            captured["cfg"] = cfg
+            captured["output_prefix"] = output_prefix
+            self.log = FakeSignal()
+            self.finished = FakeSignal()
+            self.failed = FakeSignal()
+
+    class FakeHolder:
+        def __init__(self, worker) -> None:
+            self.worker = worker
+
+        def start(self) -> None:
+            captured["started"] = True
+
+    monkeypatch.setattr(v2_pages, "V2SpO2Worker", FakeWorker)
+    monkeypatch.setattr(v2_pages, "WorkerThread", FakeHolder)
+
+    app = QApplication.instance() or QApplication([])
+    page = V2SpO2Page()
+    try:
+        page._data_pick.setPath(data)
+        page._holdbreath_check.setChecked(True)
+        page._run()
+
+        assert captured["cfg"].extras["holdbreath_enabled"] is True
+        assert captured["output_prefix"] == "Spo2_HB1"
+        assert captured["started"] is True
     finally:
         page.deleteLater()
         app.processEvents()

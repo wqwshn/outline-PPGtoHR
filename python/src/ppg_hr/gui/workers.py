@@ -33,6 +33,11 @@ from ..v2.generalization import run_v2_generalization
 from ..v2.optimizer import V2BayesConfig
 from ..v2.plotting import render_v2_report_batch
 from ..v2.spo2 import V2SpO2Config, save_spo2_report, solve_spo2_v2
+from ..v2.spo2_holdbreath import (
+    HoldBreathSpO2Config,
+    save_holdbreath_report,
+    solve_spo2_holdbreath,
+)
 from ..v2.spo2_plotting import render_spo2_report
 from ..v2.window_diagnostics import (
     DiagnosticPlotOptions,
@@ -792,11 +797,46 @@ class V2SpO2Worker(QObject):
     def run(self) -> None:
         try:
             self.log.emit(f"开始 v2 血氧计算：{Path(self._cfg.data_path).name}")
-            result = solve_spo2_v2(self._cfg)
             out_dir = (
                 self._cfg.output_dir
                 or Path(self._cfg.data_path).parent / "v2_spo2_outputs"
             )
+            if bool(self._cfg.extras.get("holdbreath_enabled", False)):
+                self.log.emit("屏气模式：仅使用 PPG_Red / PPG_IR，不使用 Ut1/Ut2 恢复。")
+                result = solve_spo2_holdbreath(
+                    HoldBreathSpO2Config(
+                        data_path=Path(self._cfg.data_path),
+                        output_dir=Path(out_dir),
+                        trim_seconds=30.0,
+                        fit_device_model=True,
+                    )
+                )
+                report = save_holdbreath_report(
+                    result,
+                    out_dir=out_dir,
+                    output_prefix=self._output_prefix,
+                )
+                payload = {
+                    "report": report,
+                    "figures": {
+                        "png": report["png"],
+                        "svg": report["svg"],
+                        "pdf": report["pdf"],
+                    },
+                    "result": result,
+                }
+                self.log.emit(f"屏气血氧 JSON：{report['json']}")
+                self.log.emit(f"屏气血氧 CSV：{report['csv']}")
+                self.log.emit(f"屏气血氧图 PNG：{report['png']}")
+                self.log.emit(
+                    "屏气误差："
+                    f"MAE={float(result.metrics.get('mae', float('nan'))):.3f}%, "
+                    f"RMSE={float(result.metrics.get('rmse', float('nan'))):.3f}%"
+                )
+                self.finished.emit(payload)
+                return
+
+            result = solve_spo2_v2(self._cfg)
             report = save_spo2_report(
                 result,
                 out_dir=out_dir,
