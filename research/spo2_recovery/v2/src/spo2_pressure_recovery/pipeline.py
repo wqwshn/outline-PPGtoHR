@@ -117,6 +117,33 @@ def _target_vectors(
     return target_dc, target_log_gain, train_mask
 
 
+def _pseudo_truth_waveforms(
+    record: PressureRecord,
+    events: list[PressureEvent],
+    pseudo_truth: list[EventPseudoTruth],
+) -> dict[str, np.ndarray]:
+    red = np.full(record.time_s.size, np.nan, dtype=float)
+    ir = np.full(record.time_s.size, np.nan, dtype=float)
+    red_dc = np.full(record.time_s.size, np.nan, dtype=float)
+    ir_dc = np.full(record.time_s.size, np.nan, dtype=float)
+    fs = float(record.fs_hz)
+    for event, truth in zip(events, pseudo_truth, strict=True):
+        start = int(np.clip(round(event.loading_start_s * fs), 0, record.time_s.size - 1))
+        stop = int(np.clip(round(event.post_rest_start_s * fs), start + 1, record.time_s.size))
+        n = min(stop - start + 1, truth.time_s.size)
+        segment = slice(start, start + n)
+        red[segment] = truth.red[:n]
+        ir[segment] = truth.ir[:n]
+        red_dc[segment] = truth.red_dc[:n]
+        ir_dc[segment] = truth.ir_dc[:n]
+    return {
+        "red_pseudo": red,
+        "ir_pseudo": ir,
+        "red_pseudo_dc": red_dc,
+        "ir_pseudo_dc": ir_dc,
+    }
+
+
 def _fit_predict(
     model_name: str,
     features: PressureFeatures,
@@ -309,12 +336,14 @@ def run_experiment(data_path: Path | str, config: ExperimentConfig) -> Experimen
     best = candidate_metrics.iloc[0].to_dict() if not candidate_metrics.empty else {}
     if "accepted" in best:
         best["accepted"] = bool(best["accepted"])
+    pseudo_waveforms = _pseudo_truth_waveforms(record, events, truths)
     waveforms = {
         "time_s": record.time_s,
         "red_observed": record.red_adc,
         "ir_observed": record.ir_adc,
         "red_recovered": best_waveforms["red"],
         "ir_recovered": best_waveforms["ir"],
+        **pseudo_waveforms,
         "ut1_mv": record.ut1_mv,
         "ut2_mv": record.ut2_mv,
         "ut_common_mv": record.ut_common_mv,

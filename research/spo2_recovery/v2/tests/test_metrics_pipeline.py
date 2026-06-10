@@ -88,7 +88,11 @@ def test_run_experiment_outputs_minimum_end_to_end_result(tmp_path) -> None:
         "ir_observed",
         "red_recovered",
         "ir_recovered",
+        "red_pseudo",
+        "ir_pseudo",
     }
+    assert np.isfinite(result.waveforms["red_pseudo"]).any()
+    assert np.isfinite(result.waveforms["ir_pseudo"]).any()
     assert files["candidate_metrics"].exists()
     assert files["summary"].exists()
 
@@ -125,6 +129,7 @@ def test_render_experiment_figures_writes_png_files(tmp_path) -> None:
         "01-full-trace-events.png",
         "02-candidate-comparison.png",
         "03-best-model-diagnostics.png",
+        "04-pseudo-truth-event-zoom.png",
     }
     assert expected <= {file.name for file in files}
     assert all(file.suffix == ".png" and file.stat().st_size > 10_000 for file in files)
