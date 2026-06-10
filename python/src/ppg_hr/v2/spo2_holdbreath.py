@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import csv
+import json
 from dataclasses import dataclass
 from datetime import time as Time
 from pathlib import Path
 from typing import Any
 
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
@@ -329,6 +335,51 @@ def solve_spo2_holdbreath(config: HoldBreathSpO2Config) -> HoldBreathSpO2Result:
     )
 
 
+def save_holdbreath_report(
+    result: HoldBreathSpO2Result,
+    *,
+    out_dir: str | Path,
+    output_prefix: str,
+) -> dict[str, Path]:
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    prefix = str(output_prefix).strip() or "spo2_holdbreath"
+    json_path = out / f"{prefix}-holdbreath.json"
+    csv_path = out / f"{prefix}-holdbreath.csv"
+    fig_base = out / f"{prefix}-holdbreath-evaluation"
+    payload = {
+        "schema_version": "v2_spo2_holdbreath",
+        "metadata": _jsonify(result.metadata),
+        "metrics": _jsonify(result.metrics),
+        "spo2_table": _jsonify(result.spo2_table),
+        "aligned_table": _jsonify(result.aligned_table),
+    }
+    json_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=True),
+        encoding="utf-8",
+    )
+    fieldnames = [
+        "time_s",
+        "spo2_calculated",
+        "spo2_truth",
+        "error",
+        "spo2_raw",
+        "device_model_lag_s",
+        "device_model_smooth_s",
+    ]
+    with csv_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in result.aligned_table:
+            writer.writerow({key: row.get(key, "") for key in fieldnames})
+
+    return {
+        "json": json_path,
+        "csv": csv_path,
+        **_plot_holdbreath_evaluation(result, fig_base),
+    }
+
+
 def _select_spo2_column(frame: pd.DataFrame) -> int:
     best_idx = 0
     best_count = -1
@@ -425,6 +476,139 @@ def _model_metric_fields(
         "device_model_lag_s": float(model.lag_seconds),
         "device_model_bias": float(model.bias),
     }
+
+
+def _plot_holdbreath_evaluation(
+    result: HoldBreathSpO2Result,
+    fig_base: Path,
+) -> dict[str, Path]:
+    table = result.aligned_table
+    time_min = np.asarray([row["time_s"] for row in table], dtype=float) / 60.0
+    calculated = np.asarray([row["spo2_calculated"] for row in table], dtype=float)
+    truth = np.asarray([row["spo2_truth"] for row in table], dtype=float)
+    metrics = result.metrics
+    plt.rcParams.update(
+        {
+            "font.family": "sans-serif",
+            "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans"],
+            "font.size": 8,
+            "axes.linewidth": 0.7,
+            "pdf.fonttype": 42,
+            "ps.fonttype": 42,
+            "svg.fonttype": "none",
+        }
+    )
+    fig, ax = plt.subplots(figsize=(5.0, 2.65))
+    band = _estimate_holdbreath_band_seconds(result)
+    if band is not None:
+        ax.axvspan(
+            band[0] / 60.0,
+            band[1] / 60.0,
+            color="#D9DDE3",
+            alpha=0.30,
+            linewidth=0,
+            label="Holding breath",
+            zorder=0,
+        )
+    ax.step(
+        time_min,
+        truth,
+        where="mid",
+        color="#F28E2B",
+        linewidth=2.2,
+        linestyle=(0, (6, 4)),
+        label="Reference",
+        zorder=3,
+    )
+    ax.plot(
+        time_min,
+        calculated,
+        color="#8E2C8A",
+        linewidth=2.4,
+        label="Red/IR SpO2",
+        zorder=4,
+    )
+    ax.set_xlabel("Time (min)")
+    ax.set_ylabel("SpO2 (%)")
+    ax.set_ylim(_spo2_ylim(calculated, truth))
+    summary = (
+        f"MAE={float(metrics.get('mae', np.nan)):.2f}%\n"
+        f"RMSE={float(metrics.get('rmse', np.nan)):.2f}%\n"
+        f"Bias={float(metrics.get('mean_bias', np.nan)):.2f}%\n"
+        f"Lag={float(metrics.get('device_model_lag_s', 0.0)):.1f}s, "
+        f"Smooth={float(metrics.get('device_model_smooth_s', 0.0)):.1f}s"
+    )
+    ax.text(
+        0.985,
+        0.05,
+        summary,
+        transform=ax.transAxes,
+        ha="right",
+        va="bottom",
+        fontsize=6.2,
+        color="#303030",
+        bbox={
+            "boxstyle": "round,pad=0.22",
+            "facecolor": "white",
+            "edgecolor": "#D6D6D6",
+            "linewidth": 0.5,
+            "alpha": 0.88,
+        },
+    )
+    ax.legend(loc="upper right", frameon=False, fontsize=7)
+    fig.tight_layout(pad=0.5)
+    paths = {
+        "png": fig_base.with_suffix(".png"),
+        "svg": fig_base.with_suffix(".svg"),
+        "pdf": fig_base.with_suffix(".pdf"),
+    }
+    fig.savefig(paths["png"], dpi=600, bbox_inches="tight", pad_inches=0.02)
+    fig.savefig(paths["svg"], bbox_inches="tight", pad_inches=0.02)
+    fig.savefig(paths["pdf"], bbox_inches="tight", pad_inches=0.02)
+    plt.close(fig)
+    return paths
+
+
+def _estimate_holdbreath_band_seconds(
+    result: HoldBreathSpO2Result,
+) -> tuple[float, float] | None:
+    table = result.aligned_table
+    if not table:
+        return None
+    t = np.asarray([row["time_s"] for row in table], dtype=float)
+    ref = np.asarray([row["spo2_truth"] for row in table], dtype=float)
+    finite = ref[np.isfinite(ref)]
+    if finite.size == 0:
+        return None
+    baseline = float(np.nanpercentile(finite, 80))
+    mask = np.isfinite(ref) & (ref <= baseline - 1.0)
+    if not np.any(mask):
+        return None
+    return float(t[mask][0]), float(t[mask][-1])
+
+
+def _spo2_ylim(*series: np.ndarray) -> tuple[float, float]:
+    values = np.concatenate([np.asarray(item, dtype=float).ravel() for item in series])
+    values = values[np.isfinite(values)]
+    if values.size == 0:
+        return 85.0, 101.0
+    lo = min(85.0, float(np.floor(values.min() - 1.0)))
+    hi = max(101.0, float(np.ceil(values.max() + 1.0)))
+    return lo, min(105.0, hi)
+
+
+def _jsonify(obj: Any) -> Any:
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, np.integer | np.floating | np.bool_):
+        return obj.item()
+    if isinstance(obj, Path):
+        return str(obj)
+    if isinstance(obj, dict):
+        return {str(k): _jsonify(v) for k, v in obj.items()}
+    if isinstance(obj, list | tuple):
+        return [_jsonify(v) for v in obj]
+    return obj
 
 
 def _centered_finite_moving_average(values: np.ndarray, width: int) -> np.ndarray:

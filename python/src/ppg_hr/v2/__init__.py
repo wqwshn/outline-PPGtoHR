@@ -20,6 +20,7 @@ from .spo2_holdbreath import (
     PulseOximeterModel,
     find_holdbreath_truth_path,
     load_holdbreath_truth,
+    save_holdbreath_report,
     solve_spo2_holdbreath,
 )
 from .types import V2Dataset, V2QcResult, V2RunConfig
@@ -39,6 +40,7 @@ __all__ = [
     "find_holdbreath_truth_path",
     "load_holdbreath_truth",
     "load_spo2_report",
+    "save_holdbreath_report",
     "save_spo2_report",
     "solve_spo2_holdbreath",
     "solve_spo2_v2",

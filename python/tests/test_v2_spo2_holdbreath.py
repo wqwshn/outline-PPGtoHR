@@ -16,6 +16,7 @@ from ppg_hr.v2.spo2_holdbreath import (
     compute_holdbreath_metrics,
     find_holdbreath_truth_path,
     load_holdbreath_truth,
+    save_holdbreath_report,
     solve_spo2_holdbreath,
 )
 
@@ -170,3 +171,37 @@ def test_model_search_prefers_trend_shape_without_excessive_smoothing() -> None:
     assert abs(model.lag_seconds - 2.0) <= 1.0
     assert metrics["mae"] < compute_holdbreath_metrics(time_s, raw, truth)["mae"]
     assert np.nanmin(modeled) <= 93.0
+
+
+def test_save_holdbreath_report_writes_csv_json_and_figures(tmp_path: Path) -> None:
+    data = tmp_path / "Spo2_HB1.csv"
+    write_synthetic_red_ir_sensor_csv(data, seconds=75)
+    truth = tmp_path / "Spo2_HB1_ref.csv"
+    pd.DataFrame({"time_s": np.arange(75), "spo2": np.full(75, 98.0)}).to_csv(
+        truth,
+        index=False,
+    )
+    result = solve_spo2_holdbreath(
+        HoldBreathSpO2Config(
+            data_path=data,
+            truth_path=truth,
+            trim_seconds=5.0,
+            fit_device_model=False,
+        )
+    )
+
+    outputs = save_holdbreath_report(
+        result,
+        out_dir=tmp_path / "out",
+        output_prefix="Spo2_HB1",
+    )
+
+    assert outputs["json"].is_file()
+    assert outputs["csv"].is_file()
+    assert outputs["png"].is_file()
+    assert outputs["svg"].is_file()
+    assert outputs["pdf"].is_file()
+    csv_rows = pd.read_csv(outputs["csv"])
+    assert {"time_s", "spo2_calculated", "spo2_truth", "error"}.issubset(
+        csv_rows.columns
+    )
