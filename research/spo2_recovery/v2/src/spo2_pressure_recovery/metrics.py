@@ -200,6 +200,52 @@ def spo2_event_metrics(
     }
 
 
+def beat_spo2_series(
+    red: np.ndarray,
+    ir: np.ndarray,
+    *,
+    fs_hz: float,
+) -> dict[str, np.ndarray]:
+    red_arr = np.asarray(red, dtype=float)
+    ir_arr = np.asarray(ir, dtype=float)
+    n = min(red_arr.size, ir_arr.size)
+    red_arr = red_arr[:n]
+    ir_arr = ir_arr[:n]
+    if n < 3:
+        empty = np.asarray([], dtype=float)
+        return {"time_s": empty, "r": empty, "spo2": empty}
+    config = DecompositionConfig(fs_hz=fs_hz)
+    red_decomp = decompose_ppg(red_arr, config)
+    ir_decomp = decompose_ppg(ir_arr, config)
+    valleys = detect_beats(ir_decomp.ac, fs_hz=fs_hz)
+    times: list[float] = []
+    ratios: list[float] = []
+    for left, right in zip(valleys[:-1], valleys[1:], strict=False):
+        if right <= left + 2:
+            continue
+        segment = slice(int(left), int(right) + 1)
+        red_ac = float(
+            np.nanmax(red_decomp.ac[segment]) - np.nanmin(red_decomp.ac[segment])
+        )
+        ir_ac = float(
+            np.nanmax(ir_decomp.ac[segment]) - np.nanmin(ir_decomp.ac[segment])
+        )
+        red_dc = float(np.nanmedian(red_decomp.dc[segment]))
+        ir_dc = float(np.nanmedian(ir_decomp.dc[segment]))
+        if min(red_ac, ir_ac, abs(red_dc), abs(ir_dc)) <= 1e-12:
+            continue
+        ratio = (red_ac / abs(red_dc)) / (ir_ac / abs(ir_dc))
+        if np.isfinite(ratio):
+            times.append(float((left + right) / (2.0 * fs_hz)))
+            ratios.append(float(ratio))
+    ratio_values = np.asarray(ratios, dtype=float)
+    return {
+        "time_s": np.asarray(times, dtype=float),
+        "r": ratio_values,
+        "spo2": np.asarray(spo2_from_ratio(ratio_values), dtype=float),
+    }
+
+
 def dc_ac_metrics(
     reference: np.ndarray,
     recovered: np.ndarray,

@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from spo2_pressure_recovery.metrics import (
+    beat_spo2_series,
     beat_metrics,
     decide_candidate,
     peak_interval_stability,
@@ -86,6 +87,20 @@ def test_spo2_event_metrics_are_near_stable_for_constant_ratio() -> None:
     assert metrics["valid_beat_count"] >= 3.0
     assert np.isfinite(metrics["r_median"])
     assert np.isfinite(metrics["spo2_median"])
+
+
+def test_beat_spo2_series_returns_ordered_beat_curve() -> None:
+    fs = 100.0
+    t = np.arange(0.0, 10.0, 1.0 / fs)
+    ir = 1500.0 + 20.0 * np.sin(2.0 * np.pi * 1.0 * t)
+    red = 1000.0 + 10.0 * np.sin(2.0 * np.pi * 1.0 * t)
+
+    series = beat_spo2_series(red, ir, fs_hz=fs)
+
+    assert series["time_s"].size >= 6
+    assert np.all(np.diff(series["time_s"]) > 0.0)
+    assert np.isfinite(series["r"]).all()
+    assert np.isfinite(series["spo2"]).all()
 
 
 def test_run_experiment_outputs_minimum_end_to_end_result(tmp_path) -> None:
@@ -188,6 +203,9 @@ def test_render_experiment_figures_writes_png_files(tmp_path) -> None:
         "04-pseudo-truth-event-zoom.png",
         "05-pseudo-truth-dc-envelope-quality.png",
         "06-spo2-time-domain-diagnostics.png",
+        "07-waveform-recovery-spo2-event-zoom.png",
+        "08-spo2-r-timeseries.png",
+        "09-spo2-event-before-after.png",
     }
     assert expected <= {file.name for file in files}
     assert all(file.suffix == ".png" and file.stat().st_size > 10_000 for file in files)

@@ -5,6 +5,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
+from .metrics import beat_spo2_series, spo2_event_metrics
 from .pipeline import ExperimentResult
 
 
@@ -68,6 +69,20 @@ def _merge_legends(ax, twin) -> None:
         frameon=False,
         ncol=2,
     )
+
+
+def _fs_hz(result: ExperimentResult) -> float:
+    config = result.diagnostics.get("config", {})
+    preprocess = config.get("preprocess", {}) if isinstance(config, dict) else {}
+    fs = preprocess.get("fs_hz") if isinstance(preprocess, dict) else None
+    if fs is not None:
+        return float(fs)
+    t = np.asarray(result.waveforms["time_s"], dtype=float)
+    if t.size >= 2:
+        dt = float(np.nanmedian(np.diff(t)))
+        if dt > 0.0:
+            return 1.0 / dt
+    return 100.0
 
 
 def _plot_full_trace(result: ExperimentResult, out: Path) -> Path:
@@ -274,6 +289,219 @@ def _plot_spo2_time_domain_diagnostics(result: ExperimentResult, out: Path) -> P
     return _save(fig, out / "06-spo2-time-domain-diagnostics.png")
 
 
+def _plot_waveform_recovery_spo2_event_zoom(
+    result: ExperimentResult,
+    out: Path,
+) -> Path:
+    t = result.waveforms["time_s"]
+    event_count = max(1, len(result.events))
+    fig, axes = plt.subplots(
+        event_count,
+        2,
+        figsize=(7.2, 1.45 * event_count),
+        sharex=False,
+    )
+    axes = np.atleast_2d(axes)
+    for row_idx, event in enumerate(result.events.itertuples(index=False)):
+        start = float(event.loading_start_s) - 1.0
+        stop = float(event.post_rest_start_s) + 1.0
+        buffer_start = float(event.loading_start_s) - 0.75
+        buffer_stop = float(event.post_rest_start_s) + 0.75
+        mask = (t >= start) & (t <= stop)
+        for ax, channel, color in (
+            (axes[row_idx, 0], "ir", "#007C89"),
+            (axes[row_idx, 1], "red", "#D65F4A"),
+        ):
+            observed = result.waveforms[f"{channel}_observed"]
+            recovered = result.waveforms[f"{channel}_recovered"]
+            pseudo = result.waveforms[f"{channel}_pseudo"]
+            ax.axvspan(
+                buffer_start,
+                buffer_stop,
+                color="#F3E4C8",
+                alpha=0.28,
+                linewidth=0,
+                zorder=0,
+            )
+            ax.axvspan(
+                float(event.loading_start_s),
+                float(event.post_rest_start_s),
+                color="#E8C7C1",
+                alpha=0.30,
+                linewidth=0,
+                zorder=0,
+            )
+            ax.plot(t[mask], observed[mask], color="#7A8088", lw=0.75, label="Observed")
+            ax.plot(t[mask], recovered[mask], color=color, lw=0.90, label="Recovered")
+            ax.plot(t[mask], pseudo[mask], color=color, lw=0.75, ls="--", alpha=0.55, label="Pseudo")
+            ax.set_ylabel(f"E{int(event.event_id)}\n{channel.upper()}")
+            _style_axis(ax)
+    axes[0, 0].set_title("IR waveform recovery")
+    axes[0, 1].set_title("Red waveform recovery")
+    axes[-1, 0].set_xlabel("Time (s)")
+    axes[-1, 1].set_xlabel("Time (s)")
+    axes[0, 1].legend(loc="upper right", frameon=False, ncol=3)
+    fig.subplots_adjust(hspace=0.34, wspace=0.20)
+    return _save(fig, out / "07-waveform-recovery-spo2-event-zoom.png")
+
+
+def _plot_spo2_r_timeseries(result: ExperimentResult, out: Path) -> Path:
+    fs = _fs_hz(result)
+    raw = beat_spo2_series(
+        result.waveforms["red_observed"],
+        result.waveforms["ir_observed"],
+        fs_hz=fs,
+    )
+    recovered = beat_spo2_series(
+        result.waveforms["red_recovered"],
+        result.waveforms["ir_recovered"],
+        fs_hz=fs,
+    )
+    t = result.waveforms["time_s"]
+    fig, axes = plt.subplots(3, 1, figsize=(7.2, 5.4), sharex=False)
+    axes[0].plot(raw["time_s"], raw["r"], color="#7A8088", marker="o", ms=2.5, lw=0.75, label="Raw")
+    axes[0].plot(
+        recovered["time_s"],
+        recovered["r"],
+        color="#007C89",
+        marker="o",
+        ms=2.5,
+        lw=0.75,
+        label="Recovered",
+    )
+    axes[0].set_ylabel("R")
+    axes[1].plot(raw["time_s"], raw["spo2"], color="#7A8088", marker="o", ms=2.5, lw=0.75, label="Raw")
+    axes[1].plot(
+        recovered["time_s"],
+        recovered["spo2"],
+        color="#007C89",
+        marker="o",
+        ms=2.5,
+        lw=0.75,
+        label="Recovered",
+    )
+    axes[1].set_ylabel("SpO2 (%)")
+    ut_axis = axes[2].twinx()
+    axes[2].plot(t, result.waveforms["ut_common_mv"], color="#2B2B2B", lw=0.7, label="Common")
+    ut_axis.plot(t, result.waveforms["ut_difference_mv"], color="#9467BD", lw=0.7, label="Difference")
+    axes[2].set_ylabel("Common (mV)", color="#2B2B2B")
+    ut_axis.set_ylabel("Difference (mV)", color="#9467BD")
+    axes[2].set_xlabel("Time (s)")
+    for ax in axes:
+        _shade_events(ax, result.events)
+        _style_axis(ax)
+    _style_twin_axis(ut_axis)
+    axes[0].legend(loc="upper right", frameon=False, ncol=2)
+    axes[1].legend(loc="upper right", frameon=False, ncol=2)
+    _merge_legends(axes[2], ut_axis)
+    return _save(fig, out / "08-spo2-r-timeseries.png")
+
+
+def _event_mask_from_bounds(t: np.ndarray, start_s: float, stop_s: float) -> np.ndarray:
+    return (t >= start_s) & (t <= stop_s)
+
+
+def _event_spo2_table(result: ExperimentResult) -> dict[str, np.ndarray]:
+    t = result.waveforms["time_s"]
+    fs = _fs_hz(result)
+    rows: dict[str, list[float]] = {
+        "event_id": [],
+        "raw_r": [],
+        "recovered_r": [],
+        "raw_spo2": [],
+        "recovered_spo2": [],
+        "raw_r_shift": [],
+        "recovered_r_shift": [],
+        "raw_spo2_shift": [],
+        "recovered_spo2_shift": [],
+    }
+    for event in result.events.itertuples(index=False):
+        event_mask = _event_mask_from_bounds(
+            t,
+            float(event.loading_start_s),
+            float(event.post_rest_start_s),
+        )
+        rest_mask = _event_mask_from_bounds(
+            t,
+            float(event.pre_rest_start_s),
+            float(event.loading_start_s),
+        ) | _event_mask_from_bounds(
+            t,
+            float(event.post_rest_start_s),
+            float(event.post_rest_end_s),
+        )
+        raw_event = spo2_event_metrics(
+            result.waveforms["red_observed"],
+            result.waveforms["ir_observed"],
+            event_mask,
+            fs_hz=fs,
+        )
+        raw_rest = spo2_event_metrics(
+            result.waveforms["red_observed"],
+            result.waveforms["ir_observed"],
+            rest_mask,
+            fs_hz=fs,
+        )
+        recovered_event = spo2_event_metrics(
+            result.waveforms["red_recovered"],
+            result.waveforms["ir_recovered"],
+            event_mask,
+            fs_hz=fs,
+        )
+        recovered_rest = spo2_event_metrics(
+            result.waveforms["red_recovered"],
+            result.waveforms["ir_recovered"],
+            rest_mask,
+            fs_hz=fs,
+        )
+        rows["event_id"].append(float(event.event_id))
+        rows["raw_r"].append(float(raw_event["r_median"]))
+        rows["recovered_r"].append(float(recovered_event["r_median"]))
+        rows["raw_spo2"].append(float(raw_event["spo2_median"]))
+        rows["recovered_spo2"].append(float(recovered_event["spo2_median"]))
+        rows["raw_r_shift"].append(abs(float(raw_event["r_median"] - raw_rest["r_median"])))
+        rows["recovered_r_shift"].append(
+            abs(float(recovered_event["r_median"] - recovered_rest["r_median"]))
+        )
+        rows["raw_spo2_shift"].append(
+            abs(float(raw_event["spo2_median"] - raw_rest["spo2_median"]))
+        )
+        rows["recovered_spo2_shift"].append(
+            abs(float(recovered_event["spo2_median"] - recovered_rest["spo2_median"]))
+        )
+    return {key: np.asarray(value, dtype=float) for key, value in rows.items()}
+
+
+def _plot_spo2_event_before_after(result: ExperimentResult, out: Path) -> Path:
+    table = _event_spo2_table(result)
+    event_ids = table["event_id"]
+    width = 0.36
+    fig, axes = plt.subplots(2, 2, figsize=(7.2, 5.2), sharex=True)
+    panels = [
+        ("raw_spo2", "recovered_spo2", "Event SpO2 (%)"),
+        ("raw_r", "recovered_r", "Event R"),
+        ("raw_spo2_shift", "recovered_spo2_shift", "|Event - rest| SpO2"),
+        ("raw_r_shift", "recovered_r_shift", "|Event - rest| R"),
+    ]
+    for ax, (raw_key, recovered_key, label) in zip(axes.ravel(), panels, strict=True):
+        ax.bar(event_ids - width / 2.0, table[raw_key], width=width, color="#7A8088", label="Raw")
+        ax.bar(
+            event_ids + width / 2.0,
+            table[recovered_key],
+            width=width,
+            color="#007C89",
+            label="Recovered",
+        )
+        ax.set_ylabel(label)
+        ax.set_xticks(event_ids)
+        _style_axis(ax)
+    axes[1, 0].set_xlabel("Event ID")
+    axes[1, 1].set_xlabel("Event ID")
+    axes[0, 1].legend(loc="upper right", frameon=False, ncol=2)
+    fig.subplots_adjust(hspace=0.28, wspace=0.30)
+    return _save(fig, out / "09-spo2-event-before-after.png")
+
+
 def render_experiment_figures(
     result: ExperimentResult,
     output_dir: Path | str,
@@ -287,4 +515,7 @@ def render_experiment_figures(
         _plot_pseudo_truth_zoom(result, out),
         _plot_pseudo_truth_components(result, out),
         _plot_spo2_time_domain_diagnostics(result, out),
+        _plot_waveform_recovery_spo2_event_zoom(result, out),
+        _plot_spo2_r_timeseries(result, out),
+        _plot_spo2_event_before_after(result, out),
     ]

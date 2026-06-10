@@ -825,9 +825,12 @@ Phase 2 新增：
 
 ```text
 06-spo2-time-domain-diagnostics.png
+07-waveform-recovery-spo2-event-zoom.png
+08-spo2-r-timeseries.png
+09-spo2-event-before-after.png
 ```
 
-该图展示候选模型的四类下游指标：
+`06-spo2-time-domain-diagnostics.png` 展示候选模型的四类下游指标：
 
 1. `SpO2 shift`：越小表示按压段血氧结果越接近邻近静息段。
 2. `R shift`：越小表示 Red/IR AC/DC 比值越稳定。
@@ -835,6 +838,30 @@ Phase 2 新增：
 4. `Boundary / local AC`：越小表示按压进入/松开边界越平滑，双肩峰风险越低。
 
 图中绿色候选表示通过当前门槛，灰色候选表示至少触发一个拒绝原因。该图不替代事件放大图，而是帮助快速筛选值得进一步视觉检查的候选算法和输入组。
+
+`07-waveform-recovery-spo2-event-zoom.png` 是本轮最重要的波形形态检查图。每个按压事件分别绘制 IR 与 Red 的 observed、recovered、pseudo reference。浅黄色背景表示扩展校正缓冲区，粉色背景表示核心按压区域。该图用于判断：
+
+1. recovered 是否比 observed 更好地暴露 PPG 收缩峰。
+2. 按压进入和松开边界是否仍有双肩峰或台阶跳变。
+3. pseudo reference 与 recovered 是否只在低频基线趋势上接近，而不是强行匹配每一个搏动形态。
+
+`08-spo2-r-timeseries.png` 给出逐搏 R 值和 SpO2 曲线。曲线使用 IR 搏动边界作为主节律，在每个相邻 IR 谷值区间内提取 Red/IR 的 AC/DC 并计算：
+
+```text
+R = (AC_red / DC_red) / (AC_ir / DC_ir)
+SpO2 = 1.5958422 R² - 34.6596622 R + 112.6898759
+```
+
+图中同时绘制 raw 与 recovered 的 R/SpO2 逐搏结果，并在底部叠加 `common` 与 `difference` 压力参考信号。该图用于判断血氧曲线是否在按压段被恢复算法拉回，以及恢复后是否产生新的异常波动。
+
+`09-spo2-event-before-after.png` 将每个事件的 raw 与 recovered 直接并排比较，包含：
+
+1. 按压段 SpO2 median。
+2. 按压段 R median。
+3. 按压段相对邻近静息段的 SpO2 shift。
+4. 按压段相对邻近静息段的 R shift。
+
+该图更适合回答下游任务问题：恢复算法是否让每个按压事件中的血氧计算结果更接近邻近静息水平。
 
 ### 11.6 Phase 2 首轮真实数据结果
 
