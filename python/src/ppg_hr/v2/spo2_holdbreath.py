@@ -138,6 +138,90 @@ def compute_holdbreath_metrics(
     }
 
 
+def apply_or_fit_device_model(
+    time_s: np.ndarray,
+    raw_spo2: np.ndarray,
+    truth_spo2: np.ndarray,
+    *,
+    fit: bool,
+    fixed_model: PulseOximeterModel | None = None,
+    smooth_grid_seconds: tuple[float, ...] = (1.0, 3.0, 5.0, 7.0, 9.0),
+    lag_grid_seconds: tuple[float, ...] = tuple(float(v) for v in range(-12, 13)),
+    fit_bias: bool = True,
+    analysis_start_s: float | None = None,
+    analysis_end_s: float | None = None,
+) -> tuple[np.ndarray, PulseOximeterModel, dict[str, float | int | bool]]:
+    t = np.asarray(time_s, dtype=float)
+    raw = np.asarray(raw_spo2, dtype=float)
+    ref = np.asarray(truth_spo2, dtype=float)
+    if not fit:
+        model = fixed_model or PulseOximeterModel()
+        modeled = _apply_device_model(t, raw, model)
+        metrics = compute_holdbreath_metrics(
+            t,
+            modeled,
+            ref,
+            analysis_start_s=analysis_start_s,
+            analysis_end_s=analysis_end_s,
+        )
+        metrics.update(_model_metric_fields(model, fit=False))
+        return modeled, model, metrics
+
+    best_objective = float("inf")
+    best_model = PulseOximeterModel()
+    best_modeled = _apply_device_model(t, raw, best_model)
+    best_metrics = compute_holdbreath_metrics(
+        t,
+        best_modeled,
+        ref,
+        analysis_start_s=analysis_start_s,
+        analysis_end_s=analysis_end_s,
+    )
+    for smooth_s in smooth_grid_seconds:
+        for lag_s in lag_grid_seconds:
+            base_model = PulseOximeterModel(
+                smooth_seconds=float(smooth_s),
+                lag_seconds=float(lag_s),
+                bias=0.0,
+            )
+            modeled = _apply_device_model(t, raw, base_model)
+            if fit_bias:
+                bias = _median_bias(
+                    t,
+                    modeled,
+                    ref,
+                    analysis_start_s=analysis_start_s,
+                    analysis_end_s=analysis_end_s,
+                )
+                model = PulseOximeterModel(
+                    smooth_seconds=float(smooth_s),
+                    lag_seconds=float(lag_s),
+                    bias=bias,
+                )
+                modeled = _apply_device_model(t, raw, model)
+            else:
+                model = base_model
+            metrics = compute_holdbreath_metrics(
+                t,
+                modeled,
+                ref,
+                analysis_start_s=analysis_start_s,
+                analysis_end_s=analysis_end_s,
+            )
+            mae = float(metrics["mae"])
+            if not np.isfinite(mae):
+                continue
+            objective = mae + 0.08 * max(0.0, float(smooth_s) - 5.0)
+            if objective < best_objective:
+                best_objective = objective
+                best_model = model
+                best_modeled = modeled
+                best_metrics = metrics
+    best_metrics.update(_model_metric_fields(best_model, fit=True))
+    best_metrics["objective"] = float(best_objective)
+    return best_modeled, best_model, best_metrics
+
+
 def solve_spo2_holdbreath(config: HoldBreathSpO2Config) -> HoldBreathSpO2Result:
     cfg = HoldBreathSpO2Config(**{**config.__dict__, "data_path": Path(config.data_path)})
     truth_path = Path(cfg.truth_path) if cfg.truth_path is not None else find_holdbreath_truth_path(cfg.data_path)
@@ -180,8 +264,6 @@ def solve_spo2_holdbreath(config: HoldBreathSpO2Config) -> HoldBreathSpO2Result:
 
     table_time = np.asarray([row["center_s"] for row in spo2_table], dtype=float)
     raw_spo2 = np.asarray([row["spo2_raw"] for row in spo2_table], dtype=float)
-    model = cfg.device_model or PulseOximeterModel()
-    calculated = _apply_device_model(table_time, raw_spo2, model)
     truth_at_time = np.interp(
         table_time,
         truth.time_s,
@@ -191,10 +273,15 @@ def solve_spo2_holdbreath(config: HoldBreathSpO2Config) -> HoldBreathSpO2Result:
     )
     analysis_start_s = float(cfg.trim_seconds)
     analysis_end_s = float(signals.time_s[-1] - cfg.trim_seconds)
-    metrics = compute_holdbreath_metrics(
+    calculated, model, metrics = apply_or_fit_device_model(
         table_time,
-        calculated,
+        raw_spo2,
         truth_at_time,
+        fit=bool(cfg.fit_device_model),
+        fixed_model=cfg.device_model,
+        smooth_grid_seconds=cfg.smooth_grid_seconds,
+        lag_grid_seconds=cfg.lag_grid_seconds,
+        fit_bias=bool(cfg.fit_bias),
         analysis_start_s=analysis_start_s,
         analysis_end_s=analysis_end_s,
     )
@@ -207,7 +294,6 @@ def solve_spo2_holdbreath(config: HoldBreathSpO2Config) -> HoldBreathSpO2Result:
     )
     metrics["raw_mae"] = float(raw_metrics["mae"])
     metrics["modeled_mae"] = float(metrics["mae"])
-    metrics["device_model_fit"] = False
 
     aligned_table = [
         {
@@ -290,18 +376,55 @@ def _apply_device_model(
     spo2: np.ndarray,
     model: PulseOximeterModel,
 ) -> np.ndarray:
+    t = np.asarray(time_s, dtype=float)
+    finite_step = np.diff(t[np.isfinite(t)])
+    dt = float(np.median(finite_step)) if finite_step.size else 1.0
     smoothed = _centered_finite_moving_average(
         np.asarray(spo2, dtype=float),
-        max(1, int(round(float(model.smooth_seconds)))),
+        max(1, int(round(float(model.smooth_seconds) / max(dt, 1e-9)))),
     )
     shifted = np.interp(
-        np.asarray(time_s, dtype=float) - float(model.lag_seconds),
-        np.asarray(time_s, dtype=float),
+        t - float(model.lag_seconds),
+        t,
         smoothed,
         left=float(smoothed[0]) if smoothed.size else float("nan"),
         right=float(smoothed[-1]) if smoothed.size else float("nan"),
     )
     return shifted + float(model.bias)
+
+
+def _median_bias(
+    time_s: np.ndarray,
+    modeled: np.ndarray,
+    truth: np.ndarray,
+    *,
+    analysis_start_s: float | None,
+    analysis_end_s: float | None,
+) -> float:
+    t = np.asarray(time_s, dtype=float)
+    model = np.asarray(modeled, dtype=float)
+    ref = np.asarray(truth, dtype=float)
+    mask = np.isfinite(t) & np.isfinite(model) & np.isfinite(ref)
+    if analysis_start_s is not None:
+        mask &= t >= float(analysis_start_s)
+    if analysis_end_s is not None:
+        mask &= t <= float(analysis_end_s)
+    if not np.any(mask):
+        return 0.0
+    return float(np.median(ref[mask] - model[mask]))
+
+
+def _model_metric_fields(
+    model: PulseOximeterModel,
+    *,
+    fit: bool,
+) -> dict[str, float | bool]:
+    return {
+        "device_model_fit": bool(fit),
+        "device_model_smooth_s": float(model.smooth_seconds),
+        "device_model_lag_s": float(model.lag_seconds),
+        "device_model_bias": float(model.bias),
+    }
 
 
 def _centered_finite_moving_average(values: np.ndarray, width: int) -> np.ndarray:

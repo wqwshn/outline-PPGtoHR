@@ -11,6 +11,8 @@ import pytest
 
 from ppg_hr.v2.spo2_holdbreath import (
     HoldBreathSpO2Config,
+    PulseOximeterModel,
+    apply_or_fit_device_model,
     compute_holdbreath_metrics,
     find_holdbreath_truth_path,
     load_holdbreath_truth,
@@ -118,3 +120,53 @@ def test_solve_holdbreath_red_ir_only_has_no_ut_columns(tmp_path: Path) -> None:
         "spo2_ut1" not in row and "spo2_ut2" not in row
         for row in result.spo2_table
     )
+
+
+def test_fixed_device_model_does_not_refit_bias_or_lag() -> None:
+    time_s = np.arange(20, dtype=float)
+    raw = np.linspace(99, 94, 20)
+    truth = raw + 10.0
+    fixed = PulseOximeterModel(smooth_seconds=1.0, lag_seconds=2.0, bias=0.0)
+
+    modeled, model, metrics = apply_or_fit_device_model(
+        time_s,
+        raw,
+        truth,
+        fit=False,
+        fixed_model=fixed,
+    )
+
+    assert model == fixed
+    assert metrics["device_model_fit"] is False
+    assert np.isfinite(modeled).all()
+
+
+def test_model_search_prefers_trend_shape_without_excessive_smoothing() -> None:
+    time_s = np.arange(0, 31, dtype=float)
+    raw = np.r_[
+        np.full(8, 99.0),
+        np.linspace(99, 92, 8),
+        np.linspace(92, 98, 8),
+        np.full(7, 98.0),
+    ]
+    truth = np.r_[
+        np.full(10, 99.0),
+        np.linspace(99, 92, 8),
+        np.linspace(92, 98, 8),
+        np.full(5, 98.0),
+    ]
+
+    modeled, model, metrics = apply_or_fit_device_model(
+        time_s,
+        raw,
+        truth,
+        fit=True,
+        smooth_grid_seconds=(1.0, 3.0, 9.0, 15.0),
+        lag_grid_seconds=(-1.0, 0.0, 1.0, 2.0, 3.0),
+        fit_bias=False,
+    )
+
+    assert model.smooth_seconds <= 3.0
+    assert abs(model.lag_seconds - 2.0) <= 1.0
+    assert metrics["mae"] < compute_holdbreath_metrics(time_s, raw, truth)["mae"]
+    assert np.nanmin(modeled) <= 93.0
