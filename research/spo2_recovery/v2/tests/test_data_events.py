@@ -1,0 +1,66 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+from spo2_pressure_recovery.data import load_record, zero_phase_lowpass
+from spo2_pressure_recovery.types import PreprocessConfig
+
+
+def test_load_record_builds_common_and_difference(tmp_path: Path) -> None:
+    frame = pd.DataFrame(
+        {
+            "Time(s)": [0.00, 0.01, 0.02, 0.03],
+            "Ut1(mV)": [10.0, 12.0, 14.0, 16.0],
+            "Ut2(mV)": [6.0, 8.0, 10.0, 12.0],
+            "PPG_Red": [100.0, 101.0, 102.0, 103.0],
+            "PPG_IR": [200.0, 201.0, 202.0, 203.0],
+        }
+    )
+    path = tmp_path / "sample.csv"
+    frame.to_csv(path, index=False)
+
+    record = load_record(path, PreprocessConfig(fs_hz=100.0))
+
+    np.testing.assert_allclose(record.ut_common_mv, [8.0, 10.0, 12.0, 14.0])
+    np.testing.assert_allclose(record.ut_difference_mv, [2.0, 2.0, 2.0, 2.0])
+    np.testing.assert_allclose(record.time_s, frame["Time(s)"])
+
+
+def test_load_record_interpolates_nonfinite_and_replaces_spike(tmp_path: Path) -> None:
+    n = 400
+    t = np.arange(n, dtype=float) / 100.0
+    red = 1000.0 + 5.0 * np.sin(2.0 * np.pi * 1.0 * t)
+    red[100] = np.nan
+    red[200] = 5000.0
+    frame = pd.DataFrame(
+        {
+            "Time(s)": t,
+            "Ut1(mV)": 10.0 + 0.1 * np.sin(2.0 * np.pi * 0.2 * t),
+            "Ut2(mV)": 8.0 + 0.1 * np.sin(2.0 * np.pi * 0.2 * t),
+            "PPG_Red": red,
+            "PPG_IR": 2000.0 + 4.0 * np.sin(2.0 * np.pi * 1.0 * t),
+        }
+    )
+    path = tmp_path / "sample.csv"
+    frame.to_csv(path, index=False)
+
+    record = load_record(path, PreprocessConfig(fs_hz=100.0))
+
+    assert np.all(np.isfinite(record.red_adc))
+    assert abs(record.red_adc[200] - 1000.0) < 20.0
+    assert record.metadata["deglitch_counts"]["red"] >= 1
+
+
+def test_zero_phase_lowpass_preserves_pulse_and_suppresses_hf_noise() -> None:
+    fs = 100.0
+    t = np.arange(0.0, 10.0, 1.0 / fs)
+    pulse = np.sin(2.0 * np.pi * 1.0 * t)
+    noise = 0.5 * np.sin(2.0 * np.pi * 20.0 * t)
+
+    filtered = zero_phase_lowpass(pulse + noise, fs_hz=fs, cutoff_hz=8.0, order=3)
+
+    assert np.corrcoef(filtered, pulse)[0, 1] > 0.99
+    assert np.std(filtered - pulse) < 0.2 * np.std(noise)

@@ -1,0 +1,14 @@
+{
+  "preprocess": {
+    "fs_hz": 100.0,
+    "ppg_lowpass_hz": 8.0,
+    "ut_lowpass_hz": 5.0,
+    "dc_lowpass_hz": 0.35,
+    "pulse_low_hz": 0.5,
+    "pulse_high_hz": 5.0,
+    "filter_order": 3,
+    "hampel_window_s": 0.25,
+    "hampel_n_sigmas": 6.0
+  },
+  "random_seed": 42
+}
