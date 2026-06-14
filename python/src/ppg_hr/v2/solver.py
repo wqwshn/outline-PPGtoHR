@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import asdict, dataclass
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -19,7 +19,6 @@ from ppg_hr.core.heart_rate_solver import (
     _interpolate_unreliable_hr_columns,
     _is_motion_window,
     _motion_detector_from_raw_acc,
-    _process_spectrum,
     _window_quality_from_valid_mask,
     load_raw_data,
 )
@@ -40,12 +39,156 @@ from .reference_groups import (
 from .types import V2RunConfig
 
 
+WindowKind = Literal["rest", "motion", "recovery"]
+
+
+@dataclass
+class SpectrumTrackingTrace:
+    path: str
+    window_kind: str
+    penalty_applied: bool
+    penalty_centers_bpm: tuple[float, ...]
+    penalty_half_width_bpm: float
+    candidate_peaks_bpm: tuple[float, ...]
+    candidate_peak_amplitudes: tuple[float, ...]
+    raw_candidate_hr_bpm: float
+    previous_hr_bpm: float | None
+    search_min_bpm: float | None
+    search_max_bpm: float | None
+    selected_peak_rank: int
+    tracked_hr_bpm: float
+    slew_limited_hr_bpm: float
+    smoothed_path_hr_bpm: float = float("nan")
+    final_hr_bpm: float = float("nan")
+    ref_hr_bpm: float = float("nan")
+    source: str = "report"
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
 @dataclass
 class V2SolverResult:
     HR: np.ndarray
     err_stats: dict[str, float]
     metadata: dict[str, Any]
     window_table: list[dict[str, Any]]
+
+
+def _process_spectrum_with_trace(
+    sig_in: np.ndarray,
+    sig_penalty_ref: np.ndarray,
+    fs: int,
+    params: SolverParams,
+    times_idx: int,
+    history_arr: np.ndarray,
+    enable_penalty: bool,
+    range_hz: float,
+    limit_bpm: float,
+    step_bpm: float,
+    *,
+    path: str,
+    window_kind: WindowKind,
+) -> tuple[float, SpectrumTrackingTrace]:
+    freqs, amps = fft_peaks(sig_in, fs, 0.3)
+    amps = np.asarray(amps, dtype=float).copy()
+
+    penalty_centers_hz: tuple[float, ...] = ()
+    penalty_applied = bool(params.spec_penalty_enable and enable_penalty)
+    if penalty_applied:
+        ref_freqs, ref_amps = fft_peaks(sig_penalty_ref, fs, 0.3)
+        if ref_freqs.size:
+            motion_freq = float(ref_freqs[int(np.argmax(ref_amps))])
+            penalty_centers_hz = (motion_freq, 2.0 * motion_freq)
+            mask = np.zeros(freqs.shape, dtype=bool)
+            for center in penalty_centers_hz:
+                mask |= np.abs(freqs - center) < float(params.spec_penalty_width)
+            amps[mask] *= float(params.spec_penalty_weight)
+        else:
+            penalty_applied = False
+
+    order = np.argsort(-amps, kind="stable")
+    ordered_freqs = np.asarray(freqs, dtype=float)[order]
+    ordered_amps = amps[order]
+    top_n = min(5, ordered_freqs.size)
+    candidates_hz = ordered_freqs[:top_n]
+    candidate_amps = ordered_amps[:top_n]
+    raw_hz = float(candidates_hz[0]) if top_n else 0.0
+
+    previous_hz: float | None = None
+    search_min_hz: float | None = None
+    search_max_hz: float | None = None
+    selected_rank = 1 if top_n else 0
+    tracked_hz = raw_hz
+    limited_hz = raw_hz
+    if times_idx > 0:
+        previous_hz = float(history_arr[times_idx - 1])
+        search_min_hz = previous_hz - float(range_hz)
+        search_max_hz = previous_hz + float(range_hz)
+        tracked_hz = previous_hz
+        selected_rank = 0
+        for idx, candidate in enumerate(candidates_hz, start=1):
+            if search_min_hz < float(candidate) < search_max_hz:
+                tracked_hz = float(candidate)
+                selected_rank = idx
+                break
+
+        diff_hz = tracked_hz - previous_hz
+        limit_hz = float(limit_bpm) / 60.0
+        step_hz = float(step_bpm) / 60.0
+        if diff_hz > limit_hz:
+            limited_hz = previous_hz + step_hz
+        elif diff_hz < -limit_hz:
+            limited_hz = previous_hz - step_hz
+        else:
+            limited_hz = tracked_hz
+
+    trace = SpectrumTrackingTrace(
+        path=path,
+        window_kind=window_kind,
+        penalty_applied=penalty_applied,
+        penalty_centers_bpm=tuple(v * 60.0 for v in penalty_centers_hz),
+        penalty_half_width_bpm=float(params.spec_penalty_width) * 60.0,
+        candidate_peaks_bpm=tuple(float(v) * 60.0 for v in candidates_hz),
+        candidate_peak_amplitudes=tuple(float(v) for v in candidate_amps),
+        raw_candidate_hr_bpm=raw_hz * 60.0,
+        previous_hr_bpm=None if previous_hz is None else previous_hz * 60.0,
+        search_min_bpm=None if search_min_hz is None else search_min_hz * 60.0,
+        search_max_bpm=None if search_max_hz is None else search_max_hz * 60.0,
+        selected_peak_rank=selected_rank,
+        tracked_hr_bpm=tracked_hz * 60.0,
+        slew_limited_hr_bpm=limited_hz * 60.0,
+    )
+    return limited_hz, trace
+
+
+def _process_spectrum(
+    sig_in: np.ndarray,
+    sig_penalty_ref: np.ndarray,
+    fs: int,
+    params: SolverParams,
+    times_idx: int,
+    history_arr: np.ndarray,
+    enable_penalty: bool,
+    range_hz: float,
+    limit_bpm: float,
+    step_bpm: float,
+) -> float:
+    value, _trace = _process_spectrum_with_trace(
+        sig_in,
+        sig_penalty_ref,
+        fs,
+        params,
+        times_idx,
+        history_arr,
+        enable_penalty,
+        range_hz,
+        limit_bpm,
+        step_bpm,
+        path="legacy",
+        window_kind="motion" if enable_penalty else "rest",
+    )
+    return value
 
 
 def solve_v2(config: V2RunConfig) -> V2SolverResult:

@@ -4,9 +4,106 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from ppg_hr.v2.solver import _apply_ppg_input_transform, solve_v2
 from ppg_hr.v2.types import V2RunConfig
+
+
+def test_process_spectrum_with_trace_records_tracking_decisions(monkeypatch) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([1.0, 3.0, 2.0, 2.5, 3.5, 4.0]),
+            np.asarray([0.95, 0.90, 0.80, 0.70, 0.60, 0.50]),
+        ),
+    )
+    params = SolverParams(spec_penalty_enable=False)
+    history = np.asarray([1.8, 0.0])
+
+    value, trace = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        1,
+        history,
+        False,
+        0.3,
+        10.0,
+        3.0,
+        path="adaptive",
+        window_kind="recovery",
+    )
+
+    assert value == pytest.approx(1.85)
+    assert trace.path == "adaptive"
+    assert trace.window_kind == "recovery"
+    assert trace.penalty_applied is False
+    assert trace.candidate_peaks_bpm == pytest.approx((60, 180, 120, 150, 210))
+    assert trace.previous_hr_bpm == pytest.approx(108.0)
+    assert trace.search_min_bpm == pytest.approx(90.0)
+    assert trace.search_max_bpm == pytest.approx(126.0)
+    assert trace.selected_peak_rank == 3
+    assert trace.tracked_hr_bpm == pytest.approx(120.0)
+    assert trace.slew_limited_hr_bpm == pytest.approx(111.0)
+
+
+def test_process_spectrum_with_trace_handles_first_window_and_no_near_peak(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([1.0, 2.0]),
+            np.asarray([1.0, 0.5]),
+        ),
+    )
+    params = SolverParams(spec_penalty_enable=False)
+
+    first, first_trace = solver._process_spectrum_with_trace(
+        np.ones(64),
+        np.ones(64),
+        50,
+        params,
+        0,
+        np.asarray([0.0]),
+        False,
+        0.1,
+        10.0,
+        2.0,
+        path="fft",
+        window_kind="rest",
+    )
+    held, held_trace = solver._process_spectrum_with_trace(
+        np.ones(64),
+        np.ones(64),
+        50,
+        params,
+        1,
+        np.asarray([3.0, 0.0]),
+        False,
+        0.1,
+        10.0,
+        2.0,
+        path="fft",
+        window_kind="rest",
+    )
+
+    assert first == pytest.approx(1.0)
+    assert first_trace.previous_hr_bpm is None
+    assert first_trace.selected_peak_rank == 1
+    assert held == pytest.approx(3.0)
+    assert held_trace.selected_peak_rank == 0
+    assert held_trace.tracked_hr_bpm == pytest.approx(180.0)
 
 
 def _write_ref(path: Path, seconds: int = 80) -> None:
