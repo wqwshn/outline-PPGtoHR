@@ -204,13 +204,59 @@ result = render_v2_report_batch(
 )
 ```
 
-## 8. 样式自定义
+## 8. 窗口诊断与谱峰追踪
 
-### 8.1 配色修改
+除批量心率曲线外，GUI 的 `v2 窗口诊断` 页面可从单个 v2 JSON 报告重放任意时间窗口，用于解释某一窗口的心率误差来源。入口流程:
+
+1. 导入 `schema_version=v2` 的 JSON 报告。
+2. 点击加载报告处理，页面会列出可选择窗口时间，并显示该报告中静息段、运动段、运动恢复段的连续范围。
+3. 选择窗口后，页面渲染波形图、频谱重放图和谱峰追踪过程图。
+4. 点击保存后，导出当前窗口的图片与 CSV，其中谱峰追踪字段写入现有 `window_summary.csv`，不会额外生成单独的追踪 CSV。
+
+### 8.1 窗口类别与图层
+
+诊断图按 `window_kind` 只展示该窗口真实使用的算法结果:
+
+| 窗口类别 | 波形图 | 频谱重放图 | 谱峰追踪图 |
+|----------|--------|------------|------------|
+| 静息段 (`rest`) | 仅带通 PPG | Raw PPG 频谱、Final HR、Ref HR、Ref ±5 BPM | FFT 路径候选峰、搜索范围、追踪/限幅/最终 HR |
+| 运动段 (`motion`) | 带通 PPG + 自适应滤波结果 | Raw PPG、Filtered、Penalized、惩罚带、Final HR、Ref HR | Penalized adaptive 频谱、候选峰、搜索范围、上一帧/追踪/限幅/最终 HR |
+| 运动恢复段 (`recovery`) | 带通 PPG + 自适应滤波结果 | Raw PPG、Filtered、Final HR、Ref HR；不画 Penalized 和惩罚带 | Filtered adaptive 频谱、候选峰、搜索范围、追踪/限幅/最终 HR |
+
+运动恢复段的人体状态按静息处理，因此不再使用运动主频频谱惩罚；但为了保持运动结束后的心率连续性，仍可继续使用自适应滤波输出，直到恢复检测切回 FFT。
+
+### 8.2 运动段惩罚带
+
+运动窗口的频谱惩罚同时作用于运动主频和二倍频。诊断图中的浅红背景由实际频谱 mask 的连续区间生成，因此可能出现两个惩罚带；这表示算法确实在抑制主频及其谐波，而不是重复绘图。
+
+### 8.3 `window_summary.csv` 追踪字段
+
+保存窗口诊断时，`window_summary.csv` 会包含窗口类别和谱峰追踪过程，便于后续排查误差大的窗口。常用字段:
+
+| 字段 | 含义 |
+|------|------|
+| `window_kind` | `rest` / `motion` / `recovery` |
+| `tracking_path` | 当前窗口最终采用的路径，`fft` 或 `adaptive` |
+| `tracking_source` | `report` 表示来自报告；`diagnostic_replay` 表示旧报告由诊断模块顺序重放得到 |
+| `penalty_applied` | 当前窗口是否真正应用频谱惩罚 |
+| `penalty_centers_bpm_json` | 频谱惩罚中心，运动段通常含主频和二倍频 |
+| `candidate_peaks_bpm_json` | 当前窗口候选谱峰列表 |
+| `candidate_peak_amplitudes_json` | 候选谱峰幅值 |
+| `previous_hr_bpm` | 上一窗口用于谱峰追踪的 HR |
+| `search_min_bpm` / `search_max_bpm` | 候选峰邻近搜索范围 |
+| `raw_candidate_hr_bpm` | 当前窗口原始最大候选峰 |
+| `selected_peak_rank` | 邻近追踪选择的候选峰排名 |
+| `tracked_hr_bpm` | 邻近追踪后的 HR |
+| `slew_limited_hr_bpm` | slew rate 限幅后的 HR |
+| `smoothed_path_hr_bpm` | 路径内平滑后的 HR |
+
+## 9. 样式自定义
+
+### 9.1 配色修改
 
 编辑 `v2/reference_groups.py` 中的 `_ORDER_COLORS` 字典。每个键是参考信号排列组合（用 `+` 连接），值是对应十六进制色值。
 
-### 8.2 线条样式修改
+### 9.2 线条样式修改
 
 编辑 `v2/plotting.py` 中 `_plot_hr()` 函数的各条 `ax.plot()` 调用：
 
@@ -220,7 +266,7 @@ result = render_v2_report_batch(
 
 可调整 `linewidth`、`linestyle`、`marker`、`markersize` 等参数。
 
-### 8.3 图幅与导出
+### 9.3 图幅与导出
 
 编辑 `v2/plotting.py`：
 
@@ -228,7 +274,7 @@ result = render_v2_report_batch(
 - 导出 DPI：`_export_figure()` 中的 `dpi=600`
 - 全局字体：`_apply_style()` 中的 `mpl.rcParams.update()` 调用
 
-### 8.4 误差表样式
+### 9.4 误差表样式
 
 编辑 `v2/plotting.py` 中 `_draw_error_table()` 函数：
 
@@ -240,21 +286,21 @@ result = render_v2_report_batch(
 | `line_h` | `0.045` | 行高 |
 | `fontsize` | `6` | 字号 |
 
-## 9. 技术细节
+## 10. 技术细节
 
-### 9.1 时间对齐
+### 10.1 时间对齐
 
 所有曲线使用统一的 `time_bias`（从 JSON 的 `best_params` 或 `metadata` 中读取）将窗口中心时间偏移到与参考心率对齐的预测时间点。绘图和误差计算均基于对齐后的时间轴。
 
-### 9.2 参考真值插值
+### 10.2 参考真值插值
 
 绘图时参考心率曲线通过 `scipy.interpolate.interp1d` 线性插值到对齐后的时间轴，确保与各预测曲线逐点可比。
 
-### 9.3 对比曲线求解
+### 10.3 对比曲线求解
 
 对比曲线调用 `solve_v2` 的完整流程，包括数据加载、重采样、带通滤波、运动检测、自适应滤波、频谱处理、恢复段机制和最终融合。因此对比曲线不是简单的参数替换——它走完整个求解器。
 
-### 9.4 数据文件回退
+### 10.4 数据文件回退
 
 当 JSON 中存储的 `data_path` 绝对路径指向的文件不存在时（常见于数据目录被移动），系统自动回退到报告文件所在目录查找同名 CSV，保证报告可迁移。
 

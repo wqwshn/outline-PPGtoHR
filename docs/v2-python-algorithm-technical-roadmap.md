@@ -1,6 +1,6 @@
 # v2 Python 心率解算技术路线
 
-> 版本: v2 | 更新日期: 2026-05-25 | 适用范围: `python/src/ppg_hr/v2/` 及关联核心模块
+> 版本: v2 | 更新日期: 2026-06-14 | 适用范围: `python/src/ppg_hr/v2/` 及关联核心模块
 
 ---
 
@@ -16,7 +16,8 @@ v2 是 PPG 心率求解算法的一次架构升级。相比 v1 的多路径独�
 - **贝叶斯超参数优化**：通过 Optuna + TPE Sampler 对窗长、搜索范围、限幅参数、滤波器参数等进行自动调优。
 - **参数泛化评估**：按运动类型组织多个样本，支持 `all_train` 与 `leave_one_group_out`，用于评估同一组参数在同场景不同实验数据上的稳定性。
 - **运动感知自适应调度**：只在最长运动段及其延伸范围内启用自适应滤波，静息段直接使用 FFT 结果，避免自适应滤波在无运动时引入噪声。
-- **恢复检测机制**：运动结束后若自适应结果与 FFT 差异过大，自动寻找交叉点提前切回 FFT，防止自适应滤波器在静息段发散。
+- **恢复检测机制**：运动结束后若自适应结果与 FFT 差异过大，自动寻找交叉点提前切回 FFT，防止自适应滤波器在静息段发散；恢复段仍可使用 LMS 结果，但不再使用运动主频频谱惩罚。
+- **窗口级诊断追踪**：每个窗口记录 `window_kind` 与结构化 `spectrum_tracking`，GUI 可按静息段、运动段、运动恢复段显示真实算法路径和谱峰追踪过程。
 
 ### 1.2 与 v1 的关键区别
 
@@ -59,6 +60,7 @@ python/src/ppg_hr/
     ├── batch_pipeline.py          # 批量一体化流水线
     ├── report.py                  # JSON 报告读写
     ├── plotting.py                # 出版级心率曲线绘图
+    ├── window_diagnostics.py      # 单窗口波形/频谱/谱峰追踪诊断
     ├── spo2.py                    # SpO2 血氧求解器
     └── spo2_plotting.py           # SpO2 结果绘图
 ```
@@ -124,8 +126,8 @@ batch_pipeline.py ──► qc.py + optimizer.py + plotting.py
 │   │ [路径C] 纯 FFT 心率估计 (所有窗均执行)                      │ │
 │   │   ├── Hamming 窗加权                                       │ │
 │   │   ├── 8192 点 FFT → fft_peaks 检测                         │ │
-│   │   ├── 频谱惩罚 (基于最优参考通道抑制运动频率)               │ │
-│   │   ├── _process_spectrum: 首帧直取最大峰, 后续帧邻近追踪     │ │
+│   │   ├── 无频谱惩罚                                           │ │
+│   │   ├── _process_spectrum_with_trace: 首帧直取最大峰, 后续帧邻近追踪 │ │
 │   │   └── Slew rate 限幅                                       │ │
 │   ├───────────────────────────────────────────────────────────┤ │
 │   │ [路径A] 自适应级联滤波 (仅 adaptive 范围内执行)             │ │
@@ -134,7 +136,9 @@ batch_pipeline.py ──► qc.py + optimizer.py + plotting.py
 │   │   ├── 逐通道 apply_adaptive_cascade:                       │ │
 │   │   │   ├── HF/CF: 前馈抽头 K=0, 阶数 M=floor(|delay|)      │ │
 │   │   │   └── ACC:   前馈抽头 K=1, 阶数 M=floor(|delay|)      │ │
-│   │   ├── 滤波后信号 → _process_spectrum (运动段追踪参数)      │ │
+│   │   ├── 滤波后信号 → _process_spectrum_with_trace            │ │
+│   │   │   ├── 运动段: 对运动主频及二倍频启用频谱惩罚            │ │
+│   │   │   └── 恢复段: 保留 LMS 但关闭频谱惩罚                   │ │
 │   │   └── 选择最优惩罚参考通道 (corr 最高者)                    │ │
 │   └───────────────────────────────────────────────────────────┘ │
 └───────────────────────────┬─────────────────────────────────────┘
@@ -165,7 +169,7 @@ batch_pipeline.py ──► qc.py + optimizer.py + plotting.py
 
 ### 3.2 关键子流程详解
 
-#### 3.2.1 频谱处理 (`_process_spectrum`)
+#### 3.2.1 频谱处理 (`_process_spectrum_with_trace`)
 
 ```
 sig_in → Hamming窗 → 8192点 FFT → 单边幅度谱 → fft_peaks
@@ -174,6 +178,7 @@ sig_in → Hamming窗 → 8192点 FFT → 单边幅度谱 → fft_peaks
                               ▼                       ▼
                          信号频谱               惩罚参考信号频谱
                               │                       │
+                              │   仅当 enable_penalty=True 时:
                               │   检测惩罚参考的主峰及倍频
                               │   在信号频谱中抑制对应频率 ±spec_penalty_width
                               │   衰减系数 = spec_penalty_weight
@@ -189,6 +194,9 @@ sig_in → Hamming窗 → 8192点 FFT → 单边幅度谱 → fft_peaks
                               └── 返回追踪后的 HR (Hz)
 ```
 
+- 频谱惩罚只在运动段自适应路径中启用。静息段使用 FFT 路径，恢复段保留自适应滤波但不启用惩罚。
+- 惩罚带同时覆盖运动主频和二倍频，因此运动窗口可出现两个惩罚区间；窗口诊断图的惩罚背景由实际 mask 连续区间生成。
+- `_process_spectrum()` 仍作为兼容包装存在，新增 `_process_spectrum_with_trace()` 返回候选峰、搜索范围、上一帧 HR、追踪后 HR、slew 限幅后 HR 和惩罚中心等诊断字段。
 - 静息段参数: `hr_range_rest`（默认 30/60 Hz）、`slew_limit_rest`（默认 6 BPM）、`slew_step_rest`（默认 4 BPM）
 - 运动段参数: `hr_range_hz`（默认 25/60 Hz）、`slew_limit_bpm`（默认 10 BPM）、`slew_step_bpm`（默认 7 BPM）
 - 运动段参数更保守（更小的搜索范围、更大的限幅和步长），以适应心率快速变化
@@ -257,6 +265,33 @@ final_hr = np.where(adaptive_mask, adaptive_hr, fft_hr)
   - adaptive_start ≤ idx < adaptive_end    → True  (运动/延伸段, 用 adaptive)
   - idx ≥ adaptive_end                     → False (恢复后, 用 FFT)
 ```
+
+### 3.3 窗口分类与诊断记录
+
+每个窗口会写入 `window_table`，其中 `window_kind` 用于区分实际算法路径:
+
+| `window_kind` | 语义 | 算法路径 | 频谱惩罚 |
+|---------------|------|----------|----------|
+| `rest` | 运动段之前或恢复完成后的静息窗口 | FFT | 关闭 |
+| `motion` | 最长连续运动段及运动前上下文内的自适应窗口 | LMS/NC-LMS/KLMS/RFF-LMS/Volterra + 谱峰追踪 | 开启 |
+| `recovery` | 运动结束后仍使用自适应结果的恢复窗口 | 自适应滤波 + 谱峰追踪 | 关闭 |
+
+`spectrum_tracking` 记录当前窗口最终采用路径的追踪过程。主要字段包括:
+
+| 字段 | 说明 |
+|------|------|
+| `path` | `fft` 或 `adaptive` |
+| `penalty_applied` | 本窗口是否真正启用频谱惩罚 |
+| `penalty_centers_bpm` | 惩罚中心；运动段通常包含运动主频与二倍频 |
+| `candidate_peaks_bpm` / `candidate_peak_amplitudes` | 谱峰候选及幅值 |
+| `previous_hr_bpm` | 上一窗口用于邻近追踪的 HR |
+| `search_min_bpm` / `search_max_bpm` | 本窗口邻近追踪搜索范围 |
+| `raw_candidate_hr_bpm` | 未经过邻近追踪和限幅的最大候选峰 |
+| `tracked_hr_bpm` | 邻近追踪选中的峰 |
+| `slew_limited_hr_bpm` | slew rate 限幅后的 HR |
+| `smoothed_path_hr_bpm` | 路径内平滑后的 HR |
+
+窗口诊断加载旧报告时，如果报告尚未包含 `spectrum_tracking`，会按原始 CSV、参考 CSV 与报告参数顺序重放 `solve_v2()`，并将追踪来源标记为 `diagnostic_replay`，便于旧报告继续调试。
 
 ---
 
