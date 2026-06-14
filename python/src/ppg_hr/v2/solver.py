@@ -282,12 +282,13 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
 
     rows: list[list[float]] = []
     adaptive_stage_rows: list[list[dict[str, Any]]] = []
+    fft_tracking_rows: list[SpectrumTrackingTrace] = []
+    adaptive_tracking_rows: list[SpectrumTrackingTrace | None] = []
     quality_rows: list[dict[str, Any]] = []
     valid_mask, quality_fs_origin = _data_quality_from_params(params)
     time_1 = float(params.time_start)
     time_end = len(ppg_ori) / fs - params.time_buffer
     times_idx = 0
-    last_in_adaptive_range = False
     while True:
         time_2 = time_1 + float(cfg.window_seconds)
         idx_s = int(round(time_1 * fs))
@@ -331,26 +332,24 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
         sig_a = [accx[idx_s:idx_e], accy[idx_s:idx_e], accz[idx_s:idx_e]]
         sig_fft = (sig_p - sig_p.mean()) * hamming(len(sig_p))
 
-        if references:
-            history_fft = np.array([r[4] for r in rows] + [0.0])
-            row[4] = _process_spectrum(
-                sig_fft,
-                sig_a[2],
-                fs,
-                params,
-                times_idx,
-                history_fft,
-                True,
-                params.hr_range_rest,
-                params.slew_limit_rest,
-                params.slew_step_rest,
-            )
-        else:
-            prev_fft = rows[-1][4] if rows else None
-            fft_bpm = _extract_hr(sig_fft, fs, prev_fft if prev_fft is not None else None, cfg)
-            row[4] = fft_bpm / 60.0 if np.isfinite(fft_bpm) else float("nan")
+        history_fft = np.array([r[4] for r in rows] + [0.0])
+        row[4], fft_trace = _process_spectrum_with_trace(
+            sig_fft,
+            sig_a[2],
+            fs,
+            params,
+            times_idx,
+            history_fft,
+            False,
+            params.hr_range_rest,
+            params.slew_limit_rest,
+            params.slew_step_rest,
+            path="fft",
+            window_kind="rest",
+        )
 
         stages: list[dict[str, Any]] = []
+        adaptive_trace: SpectrumTrackingTrace | None = None
         if in_adaptive_range:
             filtered, penalty_ref, stages = _run_v1_style_reference_cascade(
                 ppg=ppg,
@@ -364,17 +363,25 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 cfg=cfg,
             )
             history_ref = np.array([r[2] for r in rows] + [0.0])
-            row[2] = _process_spectrum(
+            provisional_kind: WindowKind = (
+                "motion"
+                if motion_segment is not None
+                and center <= float(motion_segment["end_s"])
+                else "recovery"
+            )
+            row[2], adaptive_trace = _process_spectrum_with_trace(
                 filtered,
                 penalty_ref,
                 fs,
                 params,
                 times_idx,
                 history_ref,
-                True,
+                provisional_kind == "motion",
                 params.hr_range_hz,
                 params.slew_limit_bpm,
                 params.slew_step_bpm,
+                path="adaptive",
+                window_kind=provisional_kind,
             )
         else:
             row[2] = row[4]
@@ -382,8 +389,9 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
         row[3] = row[2]
         rows.append(row)
         adaptive_stage_rows.append(stages)
+        fft_tracking_rows.append(fft_trace)
+        adaptive_tracking_rows.append(adaptive_trace)
         quality_rows.append(quality)
-        last_in_adaptive_range = in_adaptive_range
         time_1 += float(cfg.window_step_seconds)
         times_idx += 1
         if time_1 > time_end:
@@ -456,6 +464,23 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
     window_table: list[dict[str, Any]] = []
     for idx, hr_row in enumerate(HR):
         c = float(hr_row[0])
+        used_adaptive = bool(hr_row[5])
+        window_kind = _classify_window_kind(c, motion_segment, used_adaptive)
+        trace = (
+            adaptive_tracking_rows[idx]
+            if used_adaptive and idx < len(adaptive_tracking_rows)
+            else None
+        )
+        if trace is None and idx < len(fft_tracking_rows):
+            trace = fft_tracking_rows[idx]
+        if trace is not None:
+            trace.window_kind = window_kind
+            trace.smoothed_path_hr_bpm = float(
+                source[idx, 2 if used_adaptive else 4] * 60.0
+            )
+            trace.final_hr_bpm = float(hr_row[3])
+            trace.ref_hr_bpm = float(hr_row[1])
+            trace.source = "report"
         window_table.append(
             {
                 "window_idx": idx,
@@ -466,7 +491,9 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 "final_hr_bpm": float(hr_row[3]),
                 "in_analysis_scope": _window_in_analysis_scope(c, motion_segment, cfg),
                 "is_motion": bool(hr_row[4]),
-                "used_adaptive": bool(hr_row[5]),
+                "used_adaptive": used_adaptive,
+                "window_kind": window_kind,
+                "spectrum_tracking": trace.to_dict() if trace is not None else {},
                 "missing_count": int(
                     quality_rows[idx].get("missing_count", 0)
                     if idx < len(quality_rows)
@@ -838,6 +865,21 @@ def _window_in_motion(
     return float(motion_segment["start_s"]) <= center_s <= float(
         motion_segment["end_s"]
     )
+
+
+def _classify_window_kind(
+    center_s: float,
+    motion_segment: dict[str, float] | None,
+    used_adaptive: bool,
+) -> WindowKind:
+    if motion_segment is not None:
+        start = float(motion_segment["start_s"])
+        end = float(motion_segment["end_s"])
+        if start <= float(center_s) <= end:
+            return "motion"
+        if float(center_s) > end and bool(used_adaptive):
+            return "recovery"
+    return "rest"
 
 
 def _window_in_analysis_scope(

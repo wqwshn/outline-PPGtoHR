@@ -106,6 +106,28 @@ def test_process_spectrum_with_trace_handles_first_window_and_no_near_peak(
     assert held_trace.tracked_hr_bpm == pytest.approx(180.0)
 
 
+@pytest.mark.parametrize(
+    ("center_s", "used_adaptive", "expected"),
+    [
+        (50.0, False, "rest"),
+        (63.0, True, "motion"),
+        (100.0, True, "motion"),
+        (129.0, True, "motion"),
+        (130.0, True, "recovery"),
+        (160.0, False, "rest"),
+    ],
+)
+def test_classify_window_kind_uses_longest_motion_segment(
+    center_s: float,
+    used_adaptive: bool,
+    expected: str,
+) -> None:
+    from ppg_hr.v2.solver import _classify_window_kind
+
+    motion = {"start_s": 63.0, "end_s": 129.0}
+    assert _classify_window_kind(center_s, motion, used_adaptive) == expected
+
+
 def _write_ref(path: Path, seconds: int = 80) -> None:
     lines = ["h1", "h2", "h3"]
     for i in range(seconds):
@@ -361,7 +383,7 @@ def test_solve_v2_keeps_spectrum_tracking_when_entering_adaptive_range(
         reference_groups_order=("ACC",),
     )
     seen_adaptive_times_idx: list[int] = []
-    original_process = solver._process_spectrum
+    original_process = solver._process_spectrum_with_trace
 
     def spy_process_spectrum(
         sig_in,
@@ -374,8 +396,11 @@ def test_solve_v2_keeps_spectrum_tracking_when_entering_adaptive_range(
         range_hz,
         limit_bpm,
         step_bpm,
+        *,
+        path,
+        window_kind,
     ):
-        if abs(float(range_hz) - float(cfg.hr_range_hz)) < 1e-12:
+        if path == "adaptive":
             seen_adaptive_times_idx.append(int(times_idx))
         return original_process(
             sig_in,
@@ -388,15 +413,75 @@ def test_solve_v2_keeps_spectrum_tracking_when_entering_adaptive_range(
             range_hz,
             limit_bpm,
             step_bpm,
+            path=path,
+            window_kind=window_kind,
         )
 
-    monkeypatch.setattr(solver, "_process_spectrum", spy_process_spectrum)
+    monkeypatch.setattr(solver, "_process_spectrum_with_trace", spy_process_spectrum)
 
     result = solver.solve_v2(cfg)
 
     assert result.metadata["used_adaptive_windows"] > 0
     assert seen_adaptive_times_idx
     assert seen_adaptive_times_idx[0] > 0
+
+
+def test_solve_v2_disables_penalty_after_motion_but_keeps_adaptive(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from ppg_hr.v2 import solver
+
+    data = tmp_path / "motion.csv"
+    ref = tmp_path / "motion_ref.csv"
+    _write_sensor(data, motion=True)
+    _write_ref(ref)
+    calls: list[tuple[str, str, bool]] = []
+    original = solver._process_spectrum_with_trace
+
+    def spy(*args, path, window_kind, **kwargs):
+        calls.append((str(path), str(window_kind), bool(args[6])))
+        return original(
+            *args,
+            path=path,
+            window_kind=window_kind,
+            **kwargs,
+        )
+
+    monkeypatch.setattr(solver, "_process_spectrum_with_trace", spy)
+    monkeypatch.setattr(solver, "_recovery_should_trigger", lambda *_args: True)
+    monkeypatch.setattr(
+        solver,
+        "_find_crossover_idx",
+        lambda source, motion_end_idx: min(source.shape[0] - 1, motion_end_idx + 3),
+    )
+
+    result = solver.solve_v2(
+        V2RunConfig(
+            data_path=data,
+            ref_path=ref,
+            analysis_scope="full",
+            reference_groups_order=("HF",),
+        )
+    )
+
+    assert any(
+        path == "adaptive" and kind == "motion" and enabled
+        for path, kind, enabled in calls
+    )
+    assert any(
+        path == "adaptive" and kind == "recovery" and not enabled
+        for path, kind, enabled in calls
+    )
+    assert any(
+        row["window_kind"] == "recovery" and row["used_adaptive"]
+        for row in result.window_table
+    )
+    assert all(
+        not row["spectrum_tracking"]["penalty_applied"]
+        for row in result.window_table
+        if row["window_kind"] == "recovery"
+    )
 
 
 def test_recovery_trigger_gating() -> None:

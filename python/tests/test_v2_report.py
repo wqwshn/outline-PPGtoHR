@@ -24,7 +24,18 @@ def _result() -> V2SolverResult:
             "adaptive_filter": "noncausal_lms",
             "reference_groups_order": ["HF", "CF"],
         },
-        window_table=[],
+        window_table=[
+            {
+                "window_idx": 0,
+                "center_s": 0.0,
+                "window_kind": "rest",
+                "spectrum_tracking": {
+                    "path": "fft",
+                    "source": "report",
+                    "penalty_applied": False,
+                },
+            }
+        ],
     )
 
 
@@ -44,6 +55,8 @@ def test_save_and_load_v2_report(tmp_path: Path) -> None:
     assert payload["ppg_input_transform"] == "raw_bandpass"
     assert payload["best_params"] == {"max_order": 16}
     assert payload["history"] == [{"value": 0.5}]
+    assert payload["window_table"][0]["window_kind"] == "rest"
+    assert payload["window_table"][0]["spectrum_tracking"]["source"] == "report"
 
 
 def test_is_v2_report_rejects_old_json(tmp_path: Path) -> None:
