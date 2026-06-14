@@ -172,30 +172,38 @@ batch_pipeline.py ──► qc.py + optimizer.py + plotting.py
 #### 3.2.1 频谱处理 (`_process_spectrum_with_trace`)
 
 ```
-sig_in → Hamming窗 → 8192点 FFT → 单边幅度谱 → fft_peaks
-                                                      │
-                              ┌───────────────────────┤
-                              ▼                       ▼
-                         信号频谱               惩罚参考信号频谱
-                              │                       │
-                              │   仅当 enable_penalty=True 时:
-                              │   检测惩罚参考的主峰及倍频
-                              │   在信号频谱中抑制对应频率 ±spec_penalty_width
-                              │   衰减系数 = spec_penalty_weight
-                              │                       │
-                              └───────────┬───────────┘
-                                          ▼
-                              find_maxpeak → 最大谱峰 Hz
+sig_in → Hamming窗 → 8192点 FFT → 单边幅度谱
                                           │
-                              首帧: 直接返回
-                              后续帧:
-                              ├── find_near_biggest: 在上一帧 HR ± range_hz 内搜索
-                              ├── Slew rate 限制: ΔHz > limit → 仅移动 step
-                              └── 返回追踪后的 HR (Hz)
+                  ┌───────────────────────┤
+                  ▼                       ▼
+             信号完整频谱           惩罚参考信号频谱
+                  │                       │
+                  │   仅当 enable_penalty=True 时:
+                  │   检测惩罚参考的主峰及二倍频
+                  │   先在完整信号频谱中抑制对应频率 ±spec_penalty_width
+                  │   衰减系数 = spec_penalty_weight
+                  │                       │
+                  └───────────┬───────────┘
+                              ▼
+                  在惩罚后的频谱上 find_peaks
+                              │
+                  幅值阈值 = 惩罚后最大局部峰 × 0.3
+                              │
+                  运动段优先排除惩罚带及边界保护区峰
+                              │
+                              ▼
+                  首帧: 取最高可信候选峰
+                  后续帧:
+                  ├── 优先在上一帧 HR ± range_hz 内找最高可信峰
+                  ├── 若范围内没有非惩罚带候选, 回退到惩罚后候选
+                  ├── Slew rate 限制: ΔHz > limit → 仅移动 step
+                  └── 返回追踪后的 HR (Hz)
 ```
 
 - 频谱惩罚只在运动段自适应路径中启用。静息段使用 FFT 路径，恢复段保留自适应滤波但不启用惩罚。
 - 惩罚带同时覆盖运动主频和二倍频，因此运动窗口可出现两个惩罚区间；窗口诊断图的惩罚背景由实际 mask 连续区间生成。
+- 运动段候选峰从惩罚后的完整频谱中提取，而不是先用未惩罚频谱做候选筛选。这样可避免运动主频幅值过大时，真实心率峰因低于最大峰 30% 而在惩罚生效前被提前丢弃。
+- 惩罚带内峰并非永久禁用；当存在非惩罚带候选时优先使用非惩罚带候选，若整窗没有可信非惩罚带候选，则回退到惩罚后的候选峰，避免真实心率恰好落在运动谐波附近时无结果。
 - `_process_spectrum()` 仍作为兼容包装存在，新增 `_process_spectrum_with_trace()` 返回候选峰、搜索范围、上一帧 HR、追踪后 HR、slew 限幅后 HR 和惩罚中心等诊断字段。
 - 静息段参数: `hr_range_rest`（默认 30/60 Hz）、`slew_limit_rest`（默认 6 BPM）、`slew_step_rest`（默认 4 BPM）
 - 运动段参数: `hr_range_hz`（默认 25/60 Hz）、`slew_limit_bpm`（默认 10 BPM）、`slew_step_bpm`（默认 7 BPM）
@@ -441,6 +449,57 @@ V2RunConfig ──(_solver_params_from_v2)──► SolverParams ──► 底�
 | `time_bias` | [4, 4.5, 5, 5.5, 6] |
 
 各滤波算法另有专有参数（如 `klms_step_size`, `klms_sigma`, `rff_D`, `rff_sigma`, `volterra_max_order_vol` 等）。
+
+### 6.2.1 kaihe2 谱峰追踪机制验证（2026-06-14）
+
+本轮针对 `bug/心率算法优化尝试/multi_kaihe2.csv` 验证运动段谱峰后处理机制。对比方式为:
+
+1. 旧机制 + 旧报告当前贝叶斯最优参数。
+2. 新机制 + 相同 `default_v2_search_space("lms")` 重新运行 `V2BayesConfig()`（75 trial × 3 repeat）。
+
+未新增搜索维度；候选阈值仍为惩罚后最大局部峰的 30%，惩罚带边界保护为内部固定机制。
+
+| 指标 | 旧机制 + 旧 best_params | 新机制 + 重新优化 |
+|------|--------------------------|-------------------|
+| `final_aae_bpm` | 4.686 | 1.244 |
+| 窗口级 MAE | 6.213 | 3.712 |
+| 运动窗口 MAE | 12.170 | 5.245 |
+| 80-140 s MAE | 10.810 | 3.625 |
+| 80-140 s 最大绝对误差 | 22.350 | 9.783 |
+
+新机制重新优化后的 best_params:
+
+```json
+{
+  "fs_target": 50,
+  "max_order": 8,
+  "lms_mu_base": 0.008,
+  "smooth_win_len": 9,
+  "spec_penalty_width": 0.2,
+  "hr_range_hz": 0.3333333333333333,
+  "slew_limit_bpm": 10,
+  "slew_step_bpm": 5,
+  "hr_range_rest": 1.3333333333333333,
+  "slew_limit_rest": 3.0,
+  "slew_step_rest": 2.0,
+  "time_bias": 4.5
+}
+```
+
+典型窗口变化:
+
+- 117.5 s: 旧机制预测 119.751 BPM、参考 142.000 BPM、误差 -22.249 BPM；新机制预测 141.357 BPM、误差 -0.643 BPM。
+- 118.5 s: 旧机制预测 119.385 BPM、参考 141.735 BPM、误差 -22.350 BPM；新机制预测 141.357 BPM、误差 -0.378 BPM。
+- 123.5 s: 旧机制预测 120.483 BPM、参考 141.000 BPM、误差 -20.517 BPM；新机制预测 143.921 BPM、误差 2.921 BPM。
+
+复现实验脚本:
+
+```powershell
+$env:PYTHONPATH='python/src'
+conda run -n ppg-hr python scripts/analyze_kaihe2_peak_tracking_optimization.py
+```
+
+输出位于 `figures/kaihe2_peak_tracking_optimization_20260614/`，其中包含新优化报告、对比 JSON 和渲染后的心率图。
 
 ### 6.3 优化流程
 

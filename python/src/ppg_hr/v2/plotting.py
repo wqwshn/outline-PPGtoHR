@@ -76,6 +76,27 @@ def _normalise_plot_curves(
     return tuple(selected)
 
 
+def _motion_segment_span_aligned(
+    payload: dict,
+    time_bias: float,
+) -> tuple[float, float] | None:
+    motion_segment = _payload_value(payload, "motion_segment")
+    if not isinstance(motion_segment, dict):
+        return None
+    try:
+        start = float(motion_segment["start_s"]) + float(time_bias)
+        end = float(motion_segment["end_s"]) + float(time_bias)
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not np.isfinite(start) or not np.isfinite(end):
+        return None
+    if end < start:
+        start, end = end, start
+    if np.isclose(start, end):
+        return None
+    return start, end
+
+
 def _compute_comparison_curves(
     payload: dict,
     comparison_groups: tuple[tuple[str, ...], ...],
@@ -317,16 +338,18 @@ def _plot_hr(
     ref_plot = ref_aligned[aligned]
     fft_plot = hr[aligned, 2]
     final_plot = _base_final_bpm_on_mask(hr)[aligned]
-    motion_plot = hr[aligned, 4] if hr.shape[1] > 4 else np.zeros_like(t_plot)
-
     color = color_for_reference_order(order)
 
-    if motion_plot.any():
-        ax.fill_between(
-            t_plot, 0, 1,
-            where=motion_plot > 0.5,
-            transform=ax.get_xaxis_transform(),
-            color="#D9DDE3", alpha=0.24, edgecolor="none",
+    motion_span = _motion_segment_span_aligned(payload, time_bias)
+    if motion_span is not None:
+        ax.axvspan(
+            motion_span[0],
+            motion_span[1],
+            color="#D9DDE3",
+            alpha=0.24,
+            linewidth=0,
+            label="Motion",
+            zorder=0.2,
         )
 
     y_series: list[np.ndarray] = []

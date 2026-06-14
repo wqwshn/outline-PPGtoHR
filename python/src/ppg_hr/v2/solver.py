@@ -8,7 +8,7 @@ from typing import Any, Literal
 import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
-from scipy.signal import butter, filtfilt, resample_poly
+from scipy.signal import butter, filtfilt, find_peaks, resample_poly
 from scipy.signal.windows import hamming
 
 from ppg_hr.core.adaptive_filter import apply_adaptive_cascade
@@ -40,6 +40,9 @@ from .types import V2RunConfig
 
 
 WindowKind = Literal["rest", "motion", "recovery"]
+
+_CANDIDATE_PEAK_THRESHOLD_RATIO = 0.3
+_MOTION_PENALTY_EDGE_GUARD_HZ = 1.0 / 60.0
 
 
 @dataclass
@@ -90,25 +93,38 @@ def _process_spectrum_with_trace(
     path: str,
     window_kind: WindowKind,
 ) -> tuple[float, SpectrumTrackingTrace]:
-    freqs, amps = fft_peaks(sig_in, fs, 0.3)
+    freqs, amps = _candidate_peak_spectrum(sig_in, fs)
+    freqs = np.asarray(freqs, dtype=float)
     amps = np.asarray(amps, dtype=float).copy()
 
     penalty_centers_hz: tuple[float, ...] = ()
     penalty_applied = bool(params.spec_penalty_enable and enable_penalty)
+    penalty_mask = np.zeros(freqs.shape, dtype=bool)
     if penalty_applied:
         ref_freqs, ref_amps = fft_peaks(sig_penalty_ref, fs, 0.3)
-        if ref_freqs.size:
+        if ref_freqs.size and freqs.size:
             motion_freq = float(ref_freqs[int(np.argmax(ref_amps))])
             penalty_centers_hz = (motion_freq, 2.0 * motion_freq)
-            mask = np.zeros(freqs.shape, dtype=bool)
             for center in penalty_centers_hz:
-                mask |= np.abs(freqs - center) < float(params.spec_penalty_width)
-            amps[mask] *= float(params.spec_penalty_weight)
+                penalty_mask |= (
+                    np.abs(freqs - center) < float(params.spec_penalty_width)
+                )
+            amps[penalty_mask] *= float(params.spec_penalty_weight)
         else:
             penalty_applied = False
 
-    order = np.argsort(-amps, kind="stable")
-    ordered_freqs = np.asarray(freqs, dtype=float)[order]
+    peak_indices = _candidate_peak_indices(freqs, amps)
+    selectable_indices = _preferred_candidate_indices(
+        freqs,
+        peak_indices,
+        penalty_centers_hz=penalty_centers_hz,
+        penalty_width_hz=float(params.spec_penalty_width),
+        prefer_outside_penalty=bool(penalty_applied and window_kind == "motion"),
+    )
+
+    order = selectable_indices[np.argsort(-amps[selectable_indices], kind="stable")]
+    all_order = peak_indices[np.argsort(-amps[peak_indices], kind="stable")]
+    ordered_freqs = freqs[order]
     ordered_amps = amps[order]
     top_n = min(5, ordered_freqs.size)
     candidates_hz = ordered_freqs[:top_n]
@@ -127,11 +143,27 @@ def _process_spectrum_with_trace(
         search_max_hz = previous_hz + float(range_hz)
         tracked_hz = previous_hz
         selected_rank = 0
-        for idx, candidate in enumerate(candidates_hz, start=1):
-            if search_min_hz < float(candidate) < search_max_hz:
-                tracked_hz = float(candidate)
-                selected_rank = idx
-                break
+        selected_peak_idx = _first_peak_in_tracking_range(
+            freqs,
+            order,
+            search_min_hz,
+            search_max_hz,
+        )
+        if selected_peak_idx is None and order.size != all_order.size:
+            selected_peak_idx = _first_peak_in_tracking_range(
+                freqs,
+                all_order,
+                search_min_hz,
+                search_max_hz,
+            )
+        if selected_peak_idx is not None:
+            tracked_hz = float(freqs[selected_peak_idx])
+            rank_matches = np.flatnonzero(order == selected_peak_idx)
+            if rank_matches.size:
+                selected_rank = int(rank_matches[0]) + 1
+            else:
+                fallback_rank = np.flatnonzero(all_order == selected_peak_idx)
+                selected_rank = int(fallback_rank[0]) + 1 if fallback_rank.size else 0
 
         diff_hz = tracked_hz - previous_hz
         limit_hz = float(limit_bpm) / 60.0
@@ -160,6 +192,70 @@ def _process_spectrum_with_trace(
         slew_limited_hr_bpm=limited_hz * 60.0,
     )
     return limited_hz, trace
+
+
+def _candidate_peak_spectrum(signal: np.ndarray, fs: float) -> tuple[np.ndarray, np.ndarray]:
+    sig = np.asarray(signal, dtype=float).ravel()
+    sig = sig[np.isfinite(sig)]
+    if sig.size == 0:
+        return np.asarray([], dtype=float), np.asarray([], dtype=float)
+
+    work = (sig - float(np.nanmean(sig))) * hamming(sig.size)
+    fft_len = 1 << 13
+    spectrum = np.fft.fft(work, fft_len)
+    amp = np.abs(spectrum[: fft_len // 2]) / max(1, work.size)
+    amp[1:] *= 2.0
+    freq = float(fs) * np.arange(fft_len // 2, dtype=float) / float(fft_len)
+    band = (freq > 0.7) & (freq < 4.0)
+    return freq[band], amp[band]
+
+
+def _candidate_peak_indices(freqs: np.ndarray, amps: np.ndarray) -> np.ndarray:
+    if freqs.size == 0 or amps.size == 0:
+        return np.asarray([], dtype=int)
+    peaks, _ = find_peaks(amps)
+    if peaks.size == 0:
+        return np.asarray([], dtype=int)
+    peak_amps = amps[peaks]
+    finite = np.isfinite(peak_amps)
+    if not finite.any():
+        return np.asarray([], dtype=int)
+    peaks = peaks[finite]
+    peak_amps = peak_amps[finite]
+    threshold = float(np.nanmax(peak_amps)) * _CANDIDATE_PEAK_THRESHOLD_RATIO
+    return peaks[peak_amps > threshold]
+
+
+def _preferred_candidate_indices(
+    freqs: np.ndarray,
+    peak_indices: np.ndarray,
+    *,
+    penalty_centers_hz: tuple[float, ...],
+    penalty_width_hz: float,
+    prefer_outside_penalty: bool,
+) -> np.ndarray:
+    if peak_indices.size == 0 or not prefer_outside_penalty:
+        return peak_indices
+
+    blocked = np.zeros(freqs.shape, dtype=bool)
+    half_width = float(penalty_width_hz) + _MOTION_PENALTY_EDGE_GUARD_HZ
+    for center in penalty_centers_hz:
+        blocked |= np.abs(freqs - float(center)) < half_width
+    preferred = peak_indices[~blocked[peak_indices]]
+    return preferred if preferred.size else peak_indices
+
+
+def _first_peak_in_tracking_range(
+    freqs: np.ndarray,
+    ordered_indices: np.ndarray,
+    search_min_hz: float,
+    search_max_hz: float,
+) -> int | None:
+    for peak_idx in ordered_indices:
+        candidate = float(freqs[int(peak_idx)])
+        if search_min_hz < candidate < search_max_hz:
+            return int(peak_idx)
+    return None
 
 
 def _process_spectrum(

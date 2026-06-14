@@ -222,6 +222,48 @@ def test_figure_error_rows_handles_aligned_subset_for_comparison_curve() -> None
     assert [row[0] for row in rows] == ["FFT", "K-LMS+H", "K-LMS+A"]
 
 
+def test_hr_plot_shades_only_motion_segment(tmp_path: Path, monkeypatch) -> None:
+    from matplotlib.axes import Axes
+
+    from ppg_hr.v2.plotting import _plot_hr
+
+    spans: list[tuple[float, float, str | None]] = []
+    original_axvspan = Axes.axvspan
+
+    def record_axvspan(self, xmin, xmax, *args, **kwargs):
+        spans.append((float(xmin), float(xmax), kwargs.get("label")))
+        return original_axvspan(self, xmin, xmax, *args, **kwargs)
+
+    monkeypatch.setattr(Axes, "axvspan", record_axvspan)
+    hr = np.asarray(
+        [
+            [0.0, 70.0, 70.0, 70.0, 0.0, 0.0],
+            [10.0, 90.0, 90.0, 90.0, 1.0, 1.0],
+            [20.0, 110.0, 110.0, 110.0, 1.0, 1.0],
+            [30.0, 95.0, 95.0, 95.0, 1.0, 1.0],
+            [40.0, 75.0, 75.0, 75.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    payload = {
+        "time_bias": 4.5,
+        "analysis_scope": "full",
+        "motion_segment": {"start_s": 10.0, "end_s": 20.0},
+        "ref_path": "",
+    }
+
+    _plot_hr(
+        tmp_path / "motion-shading",
+        hr,
+        "HF",
+        ("HF",),
+        payload,
+        "LMS+H",
+    )
+
+    assert spans == [(14.5, 24.5, "Motion")]
+
+
 def test_render_v2_report_comparison_curve_uses_shared_fft_outside_adaptive(
     tmp_path: Path,
     monkeypatch,

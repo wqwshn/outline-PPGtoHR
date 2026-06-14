@@ -1,0 +1,216 @@
+{
+  "baseline": {
+    "err_stats": {
+      "fft_aae_bpm": 39.14363700163509,
+      "final_aae_bpm": 4.686445673818297
+    },
+    "best_params": {
+      "fs_target": 50,
+      "max_order": 20,
+      "lms_mu_base": 0.01,
+      "smooth_win_len": 9,
+      "spec_penalty_width": 0.2,
+      "hr_range_hz": 0.4166666666666667,
+      "slew_limit_bpm": 10,
+      "slew_step_bpm": 9,
+      "hr_range_rest": 0.5,
+      "slew_limit_rest": 25.0,
+      "slew_step_rest": 8.0,
+      "time_bias": 4.5
+    },
+    "window_mae_bpm": 6.212804124739694,
+    "motion_window_mae_bpm": 12.16961570814391,
+    "focus_80_140s_mae_bpm": 10.80983293202745,
+    "focus_80_140s_max_abs_error_bpm": 22.349995108417573,
+    "top_focus_error_windows": [
+      {
+        "window_idx": 109,
+        "aligned_time_s": 118.5,
+        "ref_hr_bpm": 141.735,
+        "final_hr_bpm": 119.385,
+        "error_bpm": -22.35,
+        "abs_error_bpm": 22.35
+      },
+      {
+        "window_idx": 108,
+        "aligned_time_s": 117.5,
+        "ref_hr_bpm": 142.0,
+        "final_hr_bpm": 119.751,
+        "error_bpm": -22.249,
+        "abs_error_bpm": 22.249
+      },
+      {
+        "window_idx": 106,
+        "aligned_time_s": 115.5,
+        "ref_hr_bpm": 143.0,
+        "final_hr_bpm": 121.216,
+        "error_bpm": -21.784,
+        "abs_error_bpm": 21.784
+      },
+      {
+        "window_idx": 110,
+        "aligned_time_s": 119.5,
+        "ref_hr_bpm": 141.0,
+        "final_hr_bpm": 119.385,
+        "error_bpm": -21.615,
+        "abs_error_bpm": 21.615
+      },
+      {
+        "window_idx": 111,
+        "aligned_time_s": 120.5,
+        "ref_hr_bpm": 141.0,
+        "final_hr_bpm": 119.385,
+        "error_bpm": -21.615,
+        "abs_error_bpm": 21.615
+      },
+      {
+        "window_idx": 112,
+        "aligned_time_s": 121.5,
+        "ref_hr_bpm": 141.0,
+        "final_hr_bpm": 119.385,
+        "error_bpm": -21.615,
+        "abs_error_bpm": 21.615
+      },
+      {
+        "window_idx": 107,
+        "aligned_time_s": 116.5,
+        "ref_hr_bpm": 142.818,
+        "final_hr_bpm": 121.216,
+        "error_bpm": -21.602,
+        "abs_error_bpm": 21.602
+      },
+      {
+        "window_idx": 113,
+        "aligned_time_s": 122.5,
+        "ref_hr_bpm": 141.0,
+        "final_hr_bpm": 119.751,
+        "error_bpm": -21.249,
+        "abs_error_bpm": 21.249
+      },
+      {
+        "window_idx": 114,
+        "aligned_time_s": 123.5,
+        "ref_hr_bpm": 141.0,
+        "final_hr_bpm": 120.483,
+        "error_bpm": -20.517,
+        "abs_error_bpm": 20.517
+      },
+      {
+        "window_idx": 115,
+        "aligned_time_s": 124.5,
+        "ref_hr_bpm": 141.0,
+        "final_hr_bpm": 120.483,
+        "error_bpm": -20.517,
+        "abs_error_bpm": 20.517
+      }
+    ]
+  },
+  "new_optimized": {
+    "err_stats": {
+      "fft_aae_bpm": 24.567602234319747,
+      "final_aae_bpm": 1.2444335216255014
+    },
+    "best_params": {
+      "fs_target": 50,
+      "max_order": 8,
+      "lms_mu_base": 0.008,
+      "smooth_win_len": 9,
+      "spec_penalty_width": 0.2,
+      "hr_range_hz": 0.3333333333333333,
+      "slew_limit_bpm": 10,
+      "slew_step_bpm": 5,
+      "hr_range_rest": 1.3333333333333333,
+      "slew_limit_rest": 3.0,
+      "slew_step_rest": 2.0,
+      "time_bias": 4.5
+    },
+    "window_mae_bpm": 3.712355313160563,
+    "motion_window_mae_bpm": 5.244970322827368,
+    "focus_80_140s_mae_bpm": 3.624984777798978,
+    "focus_80_140s_max_abs_error_bpm": 9.782706980432096,
+    "top_focus_error_windows": [
+      {
+        "window_idx": 88,
+        "aligned_time_s": 97.5,
+        "ref_hr_bpm": 116.926,
+        "final_hr_bpm": 126.709,
+        "error_bpm": 9.783,
+        "abs_error_bpm": 9.783
+      },
+      {
+        "window_idx": 73,
+        "aligned_time_s": 82.5,
+        "ref_hr_bpm": 100.53,
+        "final_hr_bpm": 109.131,
+        "error_bpm": 8.601,
+        "abs_error_bpm": 8.601
+      },
+      {
+        "window_idx": 126,
+        "aligned_time_s": 135.5,
+        "ref_hr_bpm": 145.013,
+        "final_hr_bpm": 136.963,
+        "error_bpm": -8.05,
+        "abs_error_bpm": 8.05
+      },
+      {
+        "window_idx": 94,
+        "aligned_time_s": 103.5,
+        "ref_hr_bpm": 128.419,
+        "final_hr_bpm": 135.864,
+        "error_bpm": 7.445,
+        "abs_error_bpm": 7.445
+      },
+      {
+        "window_idx": 96,
+        "aligned_time_s": 105.5,
+        "ref_hr_bpm": 133.224,
+        "final_hr_bpm": 140.259,
+        "error_bpm": 7.035,
+        "abs_error_bpm": 7.035
+      },
+      {
+        "window_idx": 89,
+        "aligned_time_s": 98.5,
+        "ref_hr_bpm": 119.793,
+        "final_hr_bpm": 126.709,
+        "error_bpm": 6.916,
+        "abs_error_bpm": 6.916
+      },
+      {
+        "window_idx": 74,
+        "aligned_time_s": 83.5,
+        "ref_hr_bpm": 102.306,
+        "final_hr_bpm": 109.131,
+        "error_bpm": 6.825,
+        "abs_error_bpm": 6.825
+      },
+      {
+        "window_idx": 71,
+        "aligned_time_s": 80.5,
+        "ref_hr_bpm": 95.543,
+        "final_hr_bpm": 102.173,
+        "error_bpm": 6.63,
+        "abs_error_bpm": 6.63
+      },
+      {
+        "window_idx": 127,
+        "aligned_time_s": 136.5,
+        "ref_hr_bpm": 141.95,
+        "final_hr_bpm": 135.498,
+        "error_bpm": -6.452,
+        "abs_error_bpm": 6.452
+      },
+      {
+        "window_idx": 80,
+        "aligned_time_s": 89.5,
+        "ref_hr_bpm": 109.704,
+        "final_hr_bpm": 116.089,
+        "error_bpm": 6.385,
+        "abs_error_bpm": 6.385
+      }
+    ]
+  },
+  "new_report_path": "D:\\data\\PPG_HeartRate\\Algorithm\\Algorithm\\outline-PPGtoHR\\figures\\kaihe2_peak_tracking_optimization_20260614\\multi_kaihe2-green-raw_bandpass-lms-full-HF-v2-optimized.json",
+  "trial_count": 225
+}

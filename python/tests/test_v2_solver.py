@@ -10,17 +10,28 @@ from ppg_hr.v2.solver import _apply_ppg_input_transform, solve_v2
 from ppg_hr.v2.types import V2RunConfig
 
 
-def test_process_spectrum_with_trace_records_tracking_decisions(monkeypatch) -> None:
-    from ppg_hr.params import SolverParams
+def _patch_candidate_spectrum(monkeypatch, freqs, amps) -> None:
     from ppg_hr.v2 import solver
 
     monkeypatch.setattr(
         solver,
-        "fft_peaks",
-        lambda _sig, _fs, _percent: (
-            np.asarray([1.0, 3.0, 2.0, 2.5, 3.5, 4.0]),
-            np.asarray([0.95, 0.90, 0.80, 0.70, 0.60, 0.50]),
+        "_candidate_peak_spectrum",
+        lambda _sig, _fs: (
+            np.asarray(freqs, dtype=float),
+            np.asarray(amps, dtype=float),
         ),
+    )
+
+
+def test_process_spectrum_with_trace_records_tracking_decisions(monkeypatch) -> None:
+    from ppg_hr.params import SolverParams
+
+    from ppg_hr.v2 import solver
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [0.8, 1.0, 1.2, 1.8, 2.0, 2.2, 2.4, 2.5, 2.6, 2.9, 3.0, 3.1, 3.4, 3.5, 3.6],
+        [0.0, 0.95, 0.0, 0.0, 0.80, 0.0, 0.0, 0.70, 0.0, 0.0, 0.90, 0.0, 0.0, 0.60, 0.0],
     )
     params = SolverParams(spec_penalty_enable=False)
     history = np.asarray([1.8, 0.0])
@@ -57,15 +68,13 @@ def test_process_spectrum_with_trace_handles_first_window_and_no_near_peak(
     monkeypatch,
 ) -> None:
     from ppg_hr.params import SolverParams
+
     from ppg_hr.v2 import solver
 
-    monkeypatch.setattr(
-        solver,
-        "fft_peaks",
-        lambda _sig, _fs, _percent: (
-            np.asarray([1.0, 2.0]),
-            np.asarray([1.0, 0.5]),
-        ),
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [0.8, 1.0, 1.2, 1.8, 2.0, 2.2],
+        [0.0, 1.0, 0.0, 0.0, 0.5, 0.0],
     )
     params = SolverParams(spec_penalty_enable=False)
 
@@ -104,6 +113,97 @@ def test_process_spectrum_with_trace_handles_first_window_and_no_near_peak(
     assert held == pytest.approx(3.0)
     assert held_trace.selected_peak_rank == 0
     assert held_trace.tracked_hr_bpm == pytest.approx(180.0)
+
+
+def test_process_spectrum_extracts_candidates_after_motion_penalty(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [0.8, 0.9, 1.0, 1.9, 2.0, 2.1],
+        [0.0, 1.0, 0.0, 0.0, 0.25, 0.0],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([0.9]),
+            np.asarray([1.0]),
+        ),
+    )
+    params = SolverParams(
+        spec_penalty_enable=True,
+        spec_penalty_weight=0.1,
+        spec_penalty_width=0.05,
+    )
+
+    value, trace = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        1,
+        np.asarray([2.0, 0.0]),
+        True,
+        25.0 / 60.0,
+        10.0,
+        9.0,
+        path="adaptive",
+        window_kind="motion",
+    )
+
+    assert value == pytest.approx(2.0)
+    assert trace.raw_candidate_hr_bpm == pytest.approx(120.0)
+    assert trace.candidate_peaks_bpm[0] == pytest.approx(120.0)
+    assert trace.selected_peak_rank == 1
+
+
+def test_process_spectrum_prefers_non_penalty_peak_inside_tracking_range(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [0.8, 1.0, 1.2, 1.9, 2.0, 2.1, 2.3, 2.4, 2.5],
+        [0.0, 1.0, 0.0, 0.0, 0.80, 0.0, 0.0, 0.30, 0.0],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([1.0]),
+            np.asarray([1.0]),
+        ),
+    )
+    params = SolverParams(
+        spec_penalty_enable=True,
+        spec_penalty_weight=0.4,
+        spec_penalty_width=0.05,
+    )
+
+    value, trace = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        1,
+        np.asarray([2.3, 0.0]),
+        True,
+        20.0 / 60.0,
+        20.0,
+        9.0,
+        path="adaptive",
+        window_kind="motion",
+    )
+
+    assert value == pytest.approx(2.4)
+    assert trace.tracked_hr_bpm == pytest.approx(144.0)
+    assert all(abs(candidate - 120.0) > 1e-6 for candidate in trace.candidate_peaks_bpm)
 
 
 @pytest.mark.parametrize(
