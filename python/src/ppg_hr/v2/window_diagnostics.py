@@ -33,11 +33,13 @@ from .reference_groups import (
 from .report import load_v2_report
 from .solver import (
     _apply_ppg_input_transform,
+    _classify_window_kind,
     _longest_true_run,
     _motion_flags,
     _ordered_reference_signals,
     _select_ppg_raw,
     _solver_params_from_v2,
+    solve_v2,
 )
 from .types import V2RunConfig
 
@@ -66,6 +68,7 @@ class DiagnosticWindow:
     is_motion: bool
     used_adaptive: bool
     reliable: bool
+    window_kind: str = "rest"
 
 
 @dataclass(frozen=True)
@@ -97,12 +100,31 @@ class WindowDiagnosticsSession:
     config: V2RunConfig
     windows: list[DiagnosticWindow]
     time_bias: float
+    replay_tracking_by_window: dict[int, dict[str, Any]] | None = None
 
     def select_nearest_window(self, aligned_time_s: float) -> DiagnosticWindow:
         if not self.windows:
             raise ValueError("No aligned diagnostic windows are available")
         target = float(aligned_time_s)
         return min(self.windows, key=lambda item: abs(item.aligned_time_s - target))
+
+    def window_kind_ranges(self) -> list[tuple[str, float, float]]:
+        ranges: list[list[Any]] = []
+        for window in self.windows:
+            if not ranges or ranges[-1][0] != window.window_kind:
+                ranges.append(
+                    [
+                        window.window_kind,
+                        window.aligned_time_s,
+                        window.aligned_time_s,
+                    ]
+                )
+            else:
+                ranges[-1][2] = window.aligned_time_s
+        return [
+            (str(kind), float(start), float(end))
+            for kind, start, end in ranges
+        ]
 
 
 @dataclass
@@ -209,35 +231,58 @@ def render_window_diagnostics(
         "ppg_bandpassed": sig_p,
     }
 
-    filtered, penalty_ref, stages, stage_outputs, reference_outputs = _replay_cascade(
-        prepared,
-        sig_p=sig_p,
-        idx_s=idx_s,
-        idx_e=idx_e,
-        start_s=selected.start_s,
-    )
-    waveform["filtered_final"] = _fit_to_length(filtered, sig_p.size)
-    for idx, values in enumerate(stage_outputs, start=1):
-        waveform[f"stage_{idx}"] = _fit_to_length(values, sig_p.size)
-    for idx, values in enumerate(reference_outputs, start=1):
-        waveform[f"reference_{idx}"] = _fit_to_length(values, sig_p.size)
+    if selected.window_kind == "rest":
+        filtered = sig_p
+        penalty_ref = sig_p
+        stages: list[dict[str, Any]] = []
+        stage_outputs: list[np.ndarray] = []
+        reference_outputs: list[np.ndarray] = []
+    else:
+        (
+            filtered,
+            penalty_ref,
+            stages,
+            stage_outputs,
+            reference_outputs,
+        ) = _replay_cascade(
+            prepared,
+            sig_p=sig_p,
+            idx_s=idx_s,
+            idx_e=idx_e,
+            start_s=selected.start_s,
+        )
+        waveform["filtered_final"] = _fit_to_length(filtered, sig_p.size)
+        for idx, values in enumerate(stage_outputs, start=1):
+            waveform[f"stage_{idx}"] = _fit_to_length(values, sig_p.size)
+        for idx, values in enumerate(reference_outputs, start=1):
+            waveform[f"reference_{idx}"] = _fit_to_length(values, sig_p.size)
 
     spectrum = _compute_spectrum(
         sig_p,
-        waveform["filtered_final"],
+        _fit_to_length(filtered, sig_p.size),
         penalty_ref,
         fs,
         prepared.params,
+        enable_penalty=selected.window_kind == "motion",
     )
-    summary = _summary_from_window(session, selected, spectrum, stages)
+    tracking = _tracking_for_window(session, selected)
+    summary = _summary_from_window(
+        session,
+        selected,
+        spectrum,
+        stages,
+        tracking=tracking,
+    )
     comparisons: list[WindowDiagnosticsComparison] = []
-    for comp_idx, comp_order in enumerate(
-        _normalise_comparison_reference_groups(
+    comparison_orders = (
+        ()
+        if selected.window_kind == "rest"
+        else _normalise_comparison_reference_groups(
             opts.comparison_reference_groups,
             session.config.reference_groups_order,
-        ),
-        start=1,
-    ):
+        )
+    )
+    for comp_idx, comp_order in enumerate(comparison_orders, start=1):
         comp_cfg = dataclasses.replace(
             session.config,
             reference_groups_order=comp_order,
@@ -272,6 +317,7 @@ def render_window_diagnostics(
             comp_penalty_ref,
             fs,
             comp_prepared.params,
+            enable_penalty=selected.window_kind == "motion",
         )
         comp_summary = _summary_from_window(
             session,
@@ -280,6 +326,7 @@ def render_window_diagnostics(
             comp_stages,
             reference_groups_order=comp_order,
             final_hr_bpm=_candidate_from_spectrum(comp_spectrum),
+            tracking=tracking,
         )
         comp_key = reference_order_key(comp_order)
         comp_label = method_label(session.config.adaptive_filter, comp_order)
@@ -432,18 +479,22 @@ def plot_spectrum(
     opts = options or DiagnosticPlotOptions()
     spec = result.spectrum
     bpm = spec["bpm"]
-    penalty_band = _penalty_band_bpm(result)
+    window_kind = result.selected_window.window_kind
+    penalty_bands = (
+        _penalty_bands_bpm(result) if window_kind == "motion" else ()
+    )
     ax.clear()
-    if opts.show_penalty_band and penalty_band is not None:
-        ax.axvspan(
-            penalty_band[0],
-            penalty_band[1],
-            color="#F2B8B5",
-            alpha=0.22,
-            linewidth=0,
-            label="Penalty band",
-            zorder=0.2,
-        )
+    if opts.show_penalty_band:
+        for idx, penalty_band in enumerate(penalty_bands):
+            ax.axvspan(
+                penalty_band[0],
+                penalty_band[1],
+                color="#F2B8B5",
+                alpha=0.22,
+                linewidth=0,
+                label="Penalty bands" if idx == 0 else "_nolegend_",
+                zorder=0.2,
+            )
     if opts.show_hr_markers and opts.show_ref_tolerance_band:
         ref_hr = _finite_float(result.summary.get("ref_hr_bpm"))
         if ref_hr is not None:
@@ -499,7 +550,7 @@ def plot_spectrum(
             label="Raw PPG",
             zorder=2,
         )
-    if opts.show_filtered_spectrum:
+    if opts.show_filtered_spectrum and window_kind != "rest":
         ax.plot(
             bpm,
             spec["filtered_amp_norm"],
@@ -509,9 +560,9 @@ def plot_spectrum(
             label="Filtered",
             zorder=3,
         )
-    if opts.show_penalized_spectrum:
+    if opts.show_penalized_spectrum and window_kind == "motion":
         penalized_amp = spec["penalized_amp_norm"]
-        if penalty_band is not None:
+        for penalty_band in penalty_bands:
             penalized_amp = _break_y_at_x_band(bpm, penalized_amp, penalty_band)
         ax.plot(
             bpm,
@@ -726,6 +777,9 @@ def _windows_from_payload(
         return []
     ref_aligned = _aligned_reference_bpm(hr, time_bias)
     table_by_center = _window_table_by_center(payload.get("window_table", []))
+    motion_segment = _payload_value(payload, "motion_segment", default=None)
+    if not isinstance(motion_segment, dict):
+        motion_segment = None
     windows: list[DiagnosticWindow] = []
     for idx, row in enumerate(hr):
         center = float(row[0])
@@ -743,6 +797,12 @@ def _windows_from_payload(
         used_adaptive = (
             bool(row[5]) if hr.shape[1] > 5 else bool(meta.get("used_adaptive", False))
         )
+        window_kind = str(
+            meta.get(
+                "window_kind",
+                _classify_window_kind(center, motion_segment, used_adaptive),
+            )
+        )
         windows.append(
             DiagnosticWindow(
                 window_idx=window_idx,
@@ -757,6 +817,7 @@ def _windows_from_payload(
                 is_motion=is_motion,
                 used_adaptive=used_adaptive,
                 reliable=reliable,
+                window_kind=window_kind,
             )
         )
     return windows
@@ -790,6 +851,32 @@ def _window_table_by_center(raw_table: Any) -> dict[float, dict[str, Any]]:
         except (TypeError, ValueError):
             continue
     return out
+
+
+def _tracking_for_window(
+    session: WindowDiagnosticsSession,
+    window: DiagnosticWindow,
+) -> dict[str, Any]:
+    meta = _window_table_by_center(session.payload.get("window_table", [])).get(
+        round(window.center_s, 6),
+        {},
+    )
+    saved = meta.get("spectrum_tracking")
+    if isinstance(saved, dict):
+        return dict(saved)
+
+    if session.replay_tracking_by_window is None:
+        replay = solve_v2(session.config)
+        session.replay_tracking_by_window = {}
+        for row in replay.window_table:
+            tracking = row.get("spectrum_tracking")
+            if not isinstance(tracking, dict):
+                continue
+            session.replay_tracking_by_window[int(row["window_idx"])] = {
+                **tracking,
+                "source": "diagnostic_replay",
+            }
+    return dict(session.replay_tracking_by_window.get(window.window_idx, {}))
 
 
 def _prepare_signals(cfg: V2RunConfig) -> _PreparedSignals:
@@ -977,6 +1064,8 @@ def _compute_spectrum(
     penalty_ref: np.ndarray,
     fs: int,
     params: SolverParams,
+    *,
+    enable_penalty: bool,
 ) -> dict[str, np.ndarray]:
     freq, raw_amp = _full_spectrum(raw_signal, fs)
     freq_f, filtered_amp = _full_spectrum(filtered_signal, fs)
@@ -985,7 +1074,7 @@ def _compute_spectrum(
 
     penalty_weight = np.ones_like(filtered_amp, dtype=float)
     motion_freq = np.nan
-    if bool(params.spec_penalty_enable):
+    if bool(params.spec_penalty_enable) and bool(enable_penalty):
         ref_freq, ref_amp = fft_peaks(penalty_ref, fs, 0.3)
         if ref_freq.size:
             motion_freq = float(ref_freq[int(np.argmax(ref_amp))])
@@ -1040,6 +1129,7 @@ def _summary_from_window(
     *,
     reference_groups_order: tuple[str, ...] | None = None,
     final_hr_bpm: float | None = None,
+    tracking: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     motion_peak = float(spectrum["motion_peak_hz"][0])
     candidate = float(spectrum["candidate_hr_bpm"][0])
@@ -1050,6 +1140,7 @@ def _summary_from_window(
         if reference_groups_order is None
         else reference_groups_order
     )
+    tracking_data = tracking or {}
     return {
         "report_path": str(session.report_path),
         "data_path": str(session.data_path),
@@ -1070,6 +1161,7 @@ def _summary_from_window(
         "spec_penalty_width_hz": float(session.config.spec_penalty_width),
         "is_motion": window.is_motion,
         "used_adaptive": window.used_adaptive,
+        "window_kind": window.window_kind,
         "reliable": window.reliable,
         "ppg_mode": session.config.ppg_mode,
         "analysis_scope": session.config.analysis_scope,
@@ -1081,6 +1173,46 @@ def _summary_from_window(
             sort_keys=True,
         ),
         "stage_count": len(stages),
+        "tracking_path": str(tracking_data.get("path", "")),
+        "tracking_source": str(tracking_data.get("source", "")),
+        "penalty_applied": bool(
+            tracking_data.get("penalty_applied", False)
+        ),
+        "penalty_centers_bpm": tuple(
+            float(value)
+            for value in tracking_data.get("penalty_centers_bpm", ())
+        ),
+        "penalty_half_width_bpm": float(
+            tracking_data.get(
+                "penalty_half_width_bpm",
+                float(session.config.spec_penalty_width) * 60.0,
+            )
+        ),
+        "candidate_peaks_bpm": tuple(
+            float(value)
+            for value in tracking_data.get("candidate_peaks_bpm", ())
+        ),
+        "candidate_peak_amplitudes": tuple(
+            float(value)
+            for value in tracking_data.get("candidate_peak_amplitudes", ())
+        ),
+        "raw_candidate_hr_bpm": tracking_data.get(
+            "raw_candidate_hr_bpm",
+            candidate,
+        ),
+        "previous_hr_bpm": tracking_data.get("previous_hr_bpm"),
+        "search_min_bpm": tracking_data.get("search_min_bpm"),
+        "search_max_bpm": tracking_data.get("search_max_bpm"),
+        "selected_peak_rank": int(
+            tracking_data.get("selected_peak_rank", 0)
+        ),
+        "tracked_hr_bpm": tracking_data.get("tracked_hr_bpm"),
+        "slew_limited_hr_bpm": tracking_data.get(
+            "slew_limited_hr_bpm"
+        ),
+        "smoothed_path_hr_bpm": tracking_data.get(
+            "smoothed_path_hr_bpm"
+        ),
     }
 
 
@@ -1109,16 +1241,22 @@ def _vline(
     )
 
 
-def _penalty_band_bpm(result: WindowDiagnosticsResult) -> tuple[float, float] | None:
-    if not bool(result.summary.get("has_motion_peak", False)):
-        return None
-    peak_hz = _finite_float(result.summary.get("motion_peak_hz"))
-    width_hz = _finite_float(result.summary.get("spec_penalty_width_hz"))
-    if peak_hz is None or width_hz is None:
-        return None
-    peak_bpm = peak_hz * 60.0
-    width_bpm = abs(width_hz) * 60.0
-    return peak_bpm - width_bpm, peak_bpm + width_bpm
+def _penalty_bands_bpm(
+    result: WindowDiagnosticsResult,
+) -> tuple[tuple[float, float], ...]:
+    bpm = np.asarray(result.spectrum.get("bpm", []), dtype=float)
+    mask = np.asarray(
+        result.spectrum.get("is_penalty_band", []),
+        dtype=bool,
+    )
+    if bpm.size == 0 or bpm.size != mask.size or not mask.any():
+        return ()
+    starts = np.flatnonzero(mask & ~np.r_[False, mask[:-1]])
+    ends = np.flatnonzero(mask & ~np.r_[mask[1:], False])
+    return tuple(
+        (float(bpm[start]), float(bpm[end]))
+        for start, end in zip(starts, ends, strict=False)
+    )
 
 
 def _break_y_at_x_band(

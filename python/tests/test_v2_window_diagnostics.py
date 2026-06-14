@@ -21,6 +21,112 @@ from ppg_hr.v2.window_diagnostics import (
 ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = ROOT / "data" / "testforwindiag"
 REPORT = DATA_DIR / "multi_tiaosheng6-green-lms-full-HF-v2.json"
+KAIHE_REPORT = (
+    ROOT
+    / "bug"
+    / "窗口诊断部分修改"
+    / "multi_kaihe2-green-raw_bandpass-lms-full-HF-v2.json"
+)
+
+
+@pytest.fixture(scope="module")
+def kaihe_session():
+    return load_window_diagnostics_session(KAIHE_REPORT)
+
+
+def _line_labels(ax) -> set[str]:
+    return {line.get_label() for line in ax.lines}
+
+
+def test_session_exposes_contiguous_window_kind_ranges(kaihe_session) -> None:
+    assert kaihe_session.window_kind_ranges() == [
+        ("rest", 10.5, 67.5),
+        ("motion", 68.5, 134.5),
+        ("recovery", 135.5, 161.5),
+        ("rest", 162.5, 218.5),
+    ]
+
+
+def test_old_report_replays_tracking_and_marks_source(kaihe_session) -> None:
+    result = render_window_diagnostics(kaihe_session, 99.5)
+
+    assert result.summary["tracking_source"] == "diagnostic_replay"
+    assert len(result.summary["candidate_peaks_bpm"]) <= 5
+    assert np.isfinite(result.summary["slew_limited_hr_bpm"])
+
+
+def test_rest_window_hides_adaptive_waveform_and_penalty_layers(
+    kaihe_session,
+) -> None:
+    from matplotlib.figure import Figure
+
+    rest = next(
+        window
+        for window in kaihe_session.windows
+        if window.window_kind == "rest"
+    )
+    result = render_window_diagnostics(kaihe_session, rest.aligned_time_s)
+    fig = Figure()
+    wave_ax, spec_ax = fig.subplots(2, 1)
+
+    plot_waveform(wave_ax, result)
+    plot_spectrum(spec_ax, result)
+
+    assert _line_labels(wave_ax) == {"Band-pass PPG"}
+    assert "Filtered" not in _line_labels(spec_ax)
+    assert "Penalized" not in _line_labels(spec_ax)
+    assert not any(p.get_label() == "Penalty bands" for p in spec_ax.patches)
+
+
+def test_recovery_window_draws_adaptive_without_penalty(kaihe_session) -> None:
+    from matplotlib.figure import Figure
+
+    from ppg_hr.v2.reference_groups import method_label
+
+    recovery = next(
+        window
+        for window in kaihe_session.windows
+        if window.window_kind == "recovery"
+    )
+    result = render_window_diagnostics(kaihe_session, recovery.aligned_time_s)
+    fig = Figure()
+    wave_ax, spec_ax = fig.subplots(2, 1)
+
+    plot_waveform(wave_ax, result)
+    plot_spectrum(spec_ax, result)
+
+    adaptive_label = method_label(
+        result.session.config.adaptive_filter,
+        result.session.config.reference_groups_order,
+    )
+    assert adaptive_label in _line_labels(wave_ax)
+    assert "Filtered" in _line_labels(spec_ax)
+    assert "Penalized" not in _line_labels(spec_ax)
+    assert not any(p.get_label() == "Penalty bands" for p in spec_ax.patches)
+
+
+def test_motion_window_marks_fundamental_and_harmonic_penalty_bands(
+    kaihe_session,
+) -> None:
+    from matplotlib.figure import Figure
+
+    result = render_window_diagnostics(kaihe_session, 99.5)
+    fig = Figure()
+    ax = fig.add_subplot(1, 1, 1)
+
+    plot_spectrum(ax, result)
+
+    bands = [
+        patch
+        for patch in ax.patches
+        if patch.get_label() in {"Penalty bands", "_nolegend_"}
+    ]
+    spans = sorted(
+        (float(patch.get_x()), float(patch.get_x() + patch.get_width()))
+        for patch in bands
+    )
+    assert spans[0] == pytest.approx((41.015625, 64.453125))
+    assert spans[1] == pytest.approx((93.75, 117.1875))
 
 
 @pytest.mark.skipif(not REPORT.exists(), reason="window diagnostics fixture missing")
