@@ -307,6 +307,10 @@ def test_v2_window_diagnostics_page_exposes_controls() -> None:
         assert page._wave_final_check.isChecked()
         assert page._wave_stage_check.isChecked() is False
         assert page._spectrum_penalized_check.isChecked()
+        assert page._spectrum_canvas is not None
+        assert page._tracking_canvas is not None
+        assert page._spectrum_canvas.axes is not page._tracking_canvas.axes
+        assert page._window_ranges_label is not None
         assert page.selected_comparison_groups() == ()
         for i in range(page._comparison_ref_list.count()):
             item = page._comparison_ref_list.item(i)
@@ -347,11 +351,49 @@ def test_v2_window_diagnostics_page_keeps_load_and_render_workers_separate(
                     is_motion=False,
                     used_adaptive=False,
                     reliable=True,
+                    window_kind="rest",
+                ),
+                DiagnosticWindow(
+                    window_idx=1,
+                    start_s=1.0,
+                    center_s=5.0,
+                    end_s=9.0,
+                    aligned_time_s=10.0,
+                    ref_hr_bpm=90.0,
+                    fft_hr_bpm=88.0,
+                    final_hr_bpm=89.0,
+                    error_bpm=-1.0,
+                    is_motion=True,
+                    used_adaptive=True,
+                    reliable=True,
+                    window_kind="motion",
+                ),
+                DiagnosticWindow(
+                    window_idx=2,
+                    start_s=2.0,
+                    center_s=6.0,
+                    end_s=10.0,
+                    aligned_time_s=11.0,
+                    ref_hr_bpm=85.0,
+                    fft_hr_bpm=80.0,
+                    final_hr_bpm=84.0,
+                    error_bpm=-1.0,
+                    is_motion=False,
+                    used_adaptive=True,
+                    reliable=True,
+                    window_kind="recovery",
                 )
             ]
 
         def select_nearest_window(self, _value: float):
             return self.windows[0]
+
+        def window_kind_ranges(self):
+            return [
+                ("rest", 9.0, 9.0),
+                ("motion", 10.0, 10.0),
+                ("recovery", 11.0, 11.0),
+            ]
 
     class FakeHolder:
         instances: list[FakeHolder] = []
@@ -374,6 +416,64 @@ def test_v2_window_diagnostics_page_keeps_load_and_render_workers_separate(
         assert hasattr(page, "_render_worker_holder")
         assert page._render_worker_holder is FakeHolder.instances[-1]
         assert page._load_worker_holder is not page._render_worker_holder
+        ranges = page._window_ranges_label.text()
+        assert "静息段：9.0–9.0 s" in ranges
+        assert "运动段：10.0–10.0 s" in ranges
+        assert "运动恢复段：11.0–11.0 s" in ranges
+    finally:
+        page.deleteLater()
+        app.processEvents()
+
+
+def test_v2_window_diagnostics_summary_exposes_tracking_fields() -> None:
+    from types import SimpleNamespace
+
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.v2_pages import V2WindowDiagnosticsPage
+
+    app = QApplication.instance() or QApplication([])
+    page = V2WindowDiagnosticsPage()
+    result = SimpleNamespace(
+        summary={
+            "aligned_time_s": 99.5,
+            "center_s": 94.0,
+            "start_s": 90.0,
+            "end_s": 98.0,
+            "window_kind": "motion",
+            "tracking_path": "adaptive",
+            "penalty_applied": True,
+            "tracking_source": "diagnostic_replay",
+            "candidate_peaks_bpm_json": "[54.0, 108.0]",
+            "raw_candidate_hr_bpm": 54.0,
+            "previous_hr_bpm": 108.0,
+            "search_min_bpm": 83.0,
+            "search_max_bpm": 133.0,
+            "selected_peak_rank": 2,
+            "tracked_hr_bpm": 108.0,
+            "slew_limited_hr_bpm": 108.0,
+            "smoothed_path_hr_bpm": 108.4,
+            "ref_hr_bpm": 129.9,
+            "fft_hr_bpm": 54.2,
+            "final_hr_bpm": 108.4,
+            "error_bpm": -21.5,
+            "is_motion": True,
+            "used_adaptive": True,
+            "reliable": True,
+        }
+    )
+    try:
+        labels = {label for label, _value in page._summary_rows(result)}
+        assert {
+            "窗口类别",
+            "算法路径",
+            "追踪来源",
+            "前5候选峰",
+            "上一窗口HR",
+            "搜索范围",
+            "选中峰排名",
+            "限幅后HR",
+        } <= labels
     finally:
         page.deleteLater()
         app.processEvents()

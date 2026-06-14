@@ -27,6 +27,7 @@ from ppg_hr.v2.optimizer import V2BayesConfig
 from ppg_hr.v2.spo2 import V2SpO2Config
 from ppg_hr.v2.window_diagnostics import (
     DiagnosticPlotOptions,
+    plot_peak_tracking,
     plot_spectra,
     plot_waveform,
 )
@@ -43,6 +44,24 @@ from .workers import (
     V2WindowDiagnosticsSaveWorker,
     WorkerThread,
 )
+
+_WINDOW_KIND_LABELS = {
+    "rest": "静息段",
+    "motion": "运动段",
+    "recovery": "运动恢复段",
+}
+
+_TRACKING_SOURCE_LABELS = {
+    "report": "报告记录值",
+    "diagnostic_replay": "诊断重放值",
+}
+
+
+def _format_window_kind_ranges(session) -> str:
+    return "\n".join(
+        f"{_WINDOW_KIND_LABELS.get(kind, kind)}：{start:.1f}–{end:.1f} s"
+        for kind, start, end in session.window_kind_ranges()
+    )
 
 
 class V2BatchPipelinePage(_PageBase):
@@ -625,6 +644,12 @@ class V2WindowDiagnosticsPage(_PageBase):
         time_row.addWidget(self._time_spin, 0)
         time_row.addWidget(self._time_label, 0)
         time_card.add(time_row)
+        self._window_ranges_label = QLabel("未加载窗口分类")
+        self._window_ranges_label.setWordWrap(True)
+        self._window_ranges_label.setStyleSheet(
+            "font-size: 9pt; color: #666; margin-top: 4px;"
+        )
+        time_card.add(self._window_ranges_label)
         action_row = QHBoxLayout()
         action_row.addStretch(1)
         self._render_btn = QPushButton("渲染当前窗口")
@@ -700,8 +725,10 @@ class V2WindowDiagnosticsPage(_PageBase):
         plot_card = SectionCard("诊断图", "波形域与频域单窗口重放")
         self._wave_canvas = MplCanvas(nrows=1, height=260)
         self._spectrum_canvas = MplCanvas(nrows=2, height=260)
+        self._tracking_canvas = MplCanvas(nrows=1, height=240)
         plot_card.add(self._wave_canvas)
         plot_card.add(self._spectrum_canvas)
+        plot_card.add(self._tracking_canvas)
         self.body_right().addWidget(plot_card)
 
         result_card = SectionCard("窗口摘要与保存", "当前窗口指标、stage 参数和导出")
@@ -787,7 +814,8 @@ class V2WindowDiagnosticsPage(_PageBase):
         self._time_spin.setRange(lo, hi)
         self._time_spin.setValue(lo)
         self._time_spin.blockSignals(False)
-        self._time_label.setText(f"{lo:.1f}–{hi:.1f} s · {count} 窗口")
+        self._window_ranges_label.setText(_format_window_kind_ranges(session))
+        self._update_current_window_label(session.windows[0])
         self._render_btn.setEnabled(True)
         self._save_btn.setEnabled(False)
         self._set_summary_rows(
@@ -810,6 +838,7 @@ class V2WindowDiagnosticsPage(_PageBase):
         self._time_spin.blockSignals(True)
         self._time_spin.setValue(aligned)
         self._time_spin.blockSignals(False)
+        self._update_current_window_label(self._session.windows[idx])
 
     def _on_time_spin_changed(self, value: float) -> None:
         if self._session is None or not self._session.windows:
@@ -819,6 +848,13 @@ class V2WindowDiagnosticsPage(_PageBase):
         self._time_slider.blockSignals(True)
         self._time_slider.setValue(idx)
         self._time_slider.blockSignals(False)
+        self._update_current_window_label(selected)
+
+    def _update_current_window_label(self, window) -> None:
+        label = _WINDOW_KIND_LABELS.get(window.window_kind, window.window_kind)
+        self._time_label.setText(
+            f"当前：{window.aligned_time_s:.1f} s · {label}"
+        )
 
     def _render_current(self) -> None:
         if self._session is None:
@@ -845,6 +881,9 @@ class V2WindowDiagnosticsPage(_PageBase):
         self._wave_canvas.redraw()
         plot_spectra(self._spectrum_canvas.axes, result, opts)
         self._spectrum_canvas.redraw()
+        plot_peak_tracking(self._tracking_canvas.axes, result)
+        self._tracking_canvas.redraw()
+        self._update_current_window_label(result.selected_window)
         self._set_summary_rows(self._summary_rows(result))
         self._stage_table.set_rows(self._stage_rows(result))
         self._save_btn.setEnabled(True)
@@ -861,6 +900,48 @@ class V2WindowDiagnosticsPage(_PageBase):
             self._summary.setItem(0, col, item)
 
     def _summary_rows(self, result) -> list[list[str]]:
+        summary = result.summary
+
+        def format_value(value) -> str:
+            if value is None:
+                return "-"
+            if isinstance(value, float):
+                return f"{value:.3f}"
+            return str(value)
+
+        kind = str(summary.get("window_kind", ""))
+        path = str(summary.get("tracking_path", ""))
+        source = str(summary.get("tracking_source", ""))
+        search_min = summary.get("search_min_bpm")
+        search_max = summary.get("search_max_bpm")
+        if search_min is None or search_max is None:
+            search_range = "-"
+        else:
+            search_range = f"{float(search_min):.3f}–{float(search_max):.3f}"
+
+        rows = [
+            ["窗口类别", _WINDOW_KIND_LABELS.get(kind, kind)],
+            ["算法路径", {"adaptive": "LMS/adaptive", "fft": "FFT"}.get(path, path)],
+            ["频谱惩罚", "是" if bool(summary.get("penalty_applied")) else "否"],
+            ["追踪来源", _TRACKING_SOURCE_LABELS.get(source, source)],
+            [
+                "前5候选峰",
+                str(summary.get("candidate_peaks_bpm_json", "[]")),
+            ],
+            [
+                "Raw Candidate HR",
+                format_value(summary.get("raw_candidate_hr_bpm")),
+            ],
+            ["上一窗口HR", format_value(summary.get("previous_hr_bpm"))],
+            ["搜索范围", search_range],
+            ["选中峰排名", format_value(summary.get("selected_peak_rank"))],
+            ["Tracked HR", format_value(summary.get("tracked_hr_bpm"))],
+            ["限幅后HR", format_value(summary.get("slew_limited_hr_bpm"))],
+            [
+                "路径平滑HR",
+                format_value(summary.get("smoothed_path_hr_bpm")),
+            ],
+        ]
         keys = [
             ("aligned_time_s", "对齐时间"),
             ("center_s", "窗口中心"),
@@ -874,14 +955,8 @@ class V2WindowDiagnosticsPage(_PageBase):
             ("used_adaptive", "使用adaptive"),
             ("reliable", "可靠窗口"),
         ]
-        rows = []
         for key, label in keys:
-            value = result.summary.get(key)
-            if isinstance(value, float):
-                text = f"{value:.3f}"
-            else:
-                text = str(value)
-            rows.append([label, text])
+            rows.append([label, format_value(summary.get(key))])
         return rows
 
     def _stage_rows(self, result) -> list[list[str]]:
