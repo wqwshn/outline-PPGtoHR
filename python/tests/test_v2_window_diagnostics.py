@@ -10,6 +10,7 @@ from ppg_hr.v2.window_diagnostics import (
     DiagnosticPlotOptions,
     diagnostic_panel_figsize,
     load_window_diagnostics_session,
+    plot_peak_tracking,
     plot_spectra,
     plot_spectrum,
     plot_waveform,
@@ -127,6 +128,53 @@ def test_motion_window_marks_fundamental_and_harmonic_penalty_bands(
     )
     assert spans[0] == pytest.approx((41.015625, 64.453125))
     assert spans[1] == pytest.approx((93.75, 117.1875))
+
+
+def test_peak_tracking_plot_shows_candidates_search_and_hr_markers(
+    kaihe_session,
+) -> None:
+    from matplotlib.figure import Figure
+
+    result = render_window_diagnostics(kaihe_session, 99.5)
+    fig = Figure(figsize=diagnostic_panel_figsize("peak_tracking"))
+    ax = fig.add_subplot(1, 1, 1)
+
+    plot_peak_tracking(ax, result)
+
+    labels = {line.get_label() for line in ax.lines}
+    assert {"Previous HR", "Slew-limited HR", "Final HR", "Ref HR"} <= labels
+    assert any(p.get_label() == "Tracking range" for p in ax.patches)
+    expected_ranks = {
+        str(rank)
+        for rank in range(1, len(result.summary["candidate_peaks_bpm"]) + 1)
+    }
+    assert expected_ranks <= {
+        text.get_text() for text in ax.texts
+    }
+
+
+def test_save_window_diagnostics_adds_peak_tracking_without_extra_csv(
+    tmp_path: Path,
+    kaihe_session,
+) -> None:
+    result = render_window_diagnostics(kaihe_session, 99.5)
+
+    saved = save_window_diagnostics(
+        result,
+        output_root=tmp_path,
+        options=DiagnosticPlotOptions(include_vectors=True),
+    )
+
+    assert saved.peak_tracking_png.is_file()
+    assert saved.peak_tracking_svg is not None
+    assert saved.peak_tracking_svg.is_file()
+    assert saved.peak_tracking_pdf is not None
+    assert saved.peak_tracking_pdf.is_file()
+    assert not (saved.output_dir / "window_peak_tracking.csv").exists()
+
+    summary_text = saved.summary_csv.read_text(encoding="utf-8-sig")
+    assert "candidate_peaks_bpm_json" in summary_text
+    assert "tracking_source" in summary_text
 
 
 @pytest.mark.skipif(not REPORT.exists(), reason="window diagnostics fixture missing")

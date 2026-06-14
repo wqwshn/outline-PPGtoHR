@@ -154,6 +154,7 @@ class WindowDiagnosticsSaveResult:
     output_dir: Path
     waveform_png: Path
     spectrum_png: Path
+    peak_tracking_png: Path
     waveform_csv: Path
     spectrum_csv: Path
     summary_csv: Path
@@ -161,6 +162,8 @@ class WindowDiagnosticsSaveResult:
     waveform_pdf: Path | None = None
     spectrum_svg: Path | None = None
     spectrum_pdf: Path | None = None
+    peak_tracking_svg: Path | None = None
+    peak_tracking_pdf: Path | None = None
 
 
 def diagnostic_panel_figsize(kind: str, *, panel_count: int = 1) -> tuple[float, float]:
@@ -168,7 +171,7 @@ def diagnostic_panel_figsize(kind: str, *, panel_count: int = 1) -> tuple[float,
     count = max(1, int(panel_count))
     if kind == "waveform":
         return _WAVEFORM_WIDTH_IN, _WAVEFORM_HEIGHT_IN
-    if kind == "spectrum":
+    if kind in {"spectrum", "peak_tracking"}:
         return _SPECTRUM_WIDTH_IN, _SPECTRUM_PANEL_HEIGHT_IN * count
     raise ValueError(f"Unknown diagnostic panel kind: {kind}")
 
@@ -591,6 +594,180 @@ def plot_spectrum(
     )
 
 
+def plot_peak_tracking(
+    ax: Axes,
+    result: WindowDiagnosticsResult,
+) -> None:
+    """Draw the current window's spectrum-peak tracking decisions."""
+    spec = result.spectrum
+    summary = result.summary
+    bpm = np.asarray(spec["bpm"], dtype=float)
+    window_kind = result.selected_window.window_kind
+    if window_kind == "rest":
+        amplitude = np.asarray(spec["raw_amp_norm"], dtype=float)
+        spectrum_label = "Raw PPG"
+    elif window_kind == "motion":
+        amplitude = np.asarray(spec["penalized_amp_norm"], dtype=float)
+        spectrum_label = "Penalized adaptive"
+    else:
+        amplitude = np.asarray(spec["filtered_amp_norm"], dtype=float)
+        spectrum_label = "Adaptive"
+
+    ax.clear()
+    ax.plot(
+        bpm,
+        amplitude,
+        color="#5DA9C9",
+        linewidth=1.05,
+        alpha=0.9,
+        label=spectrum_label,
+        zorder=2,
+    )
+
+    search_min = _finite_float(summary.get("search_min_bpm"))
+    search_max = _finite_float(summary.get("search_max_bpm"))
+    if search_min is not None and search_max is not None:
+        ax.axvspan(
+            min(search_min, search_max),
+            max(search_min, search_max),
+            color="#7C6FAD",
+            alpha=0.18,
+            linewidth=0,
+            label="Tracking range",
+            zorder=0.4,
+        )
+
+    ref_hr = _finite_float(summary.get("ref_hr_bpm"))
+    if ref_hr is not None:
+        ax.axvspan(
+            ref_hr - 5.0,
+            ref_hr + 5.0,
+            color="#536D8E",
+            alpha=0.12,
+            linewidth=0,
+            label="Ref ±5 BPM",
+            zorder=0.3,
+        )
+
+    candidates = tuple(summary.get("candidate_peaks_bpm", ()))
+    selected_rank = int(summary.get("selected_peak_rank", 0) or 0)
+    for rank, candidate in enumerate(candidates[:5], start=1):
+        candidate_bpm = _finite_float(candidate)
+        if candidate_bpm is None:
+            continue
+        y = float(np.interp(candidate_bpm, bpm, amplitude))
+        selected = rank == selected_rank
+        ax.plot(
+            [candidate_bpm],
+            [y],
+            marker="o",
+            markersize=4.2 if selected else 3.2,
+            markerfacecolor="#D9855E" if selected else "white",
+            markeredgecolor="#D9855E" if selected else "#536D8E",
+            markeredgewidth=0.8,
+            linestyle="none",
+            label="_nolegend_",
+            zorder=7,
+        )
+        ax.text(
+            candidate_bpm,
+            min(1.02, y + 0.055),
+            str(rank),
+            ha="center",
+            va="bottom",
+            fontsize=_LEGEND_SIZE,
+            color="#D9855E" if selected else "#536D8E",
+            zorder=8,
+        )
+
+    _vline(
+        ax,
+        summary.get("previous_hr_bpm"),
+        "#7C6FAD",
+        "-.",
+        "Previous HR",
+        linewidth=0.95,
+        alpha=0.85,
+        zorder=5,
+    )
+    if selected_rank > 0:
+        _vline(
+            ax,
+            summary.get("tracked_hr_bpm"),
+            "#D9855E",
+            ":",
+            "Tracked HR",
+            linewidth=1.0,
+            alpha=0.9,
+            zorder=5.5,
+        )
+    _vline(
+        ax,
+        summary.get("slew_limited_hr_bpm"),
+        "#B06C49",
+        "--",
+        "Slew-limited HR",
+        linewidth=1.15,
+        alpha=0.92,
+        zorder=6,
+    )
+    _vline(
+        ax,
+        summary.get("final_hr_bpm"),
+        "#078C7B",
+        "--",
+        "Final HR",
+        linewidth=1.75,
+        alpha=0.98,
+        zorder=6.5,
+    )
+    _vline(
+        ax,
+        ref_hr,
+        "#233142",
+        "-",
+        "Ref HR",
+        linewidth=1.75,
+        alpha=0.98,
+        zorder=6.5,
+    )
+
+    if _finite_float(summary.get("previous_hr_bpm")) is None:
+        note = "First window: use highest candidate"
+    elif selected_rank == 0:
+        note = "No candidate in range: hold previous HR"
+    else:
+        note = ""
+    if note:
+        ax.text(
+            0.02,
+            0.96,
+            note,
+            transform=ax.transAxes,
+            ha="left",
+            va="top",
+            fontsize=_LEGEND_SIZE,
+            color="#53606F",
+        )
+
+    ax.set_xlabel("Heart-rate frequency (BPM)", fontsize=_AXIS_LABEL_SIZE)
+    ax.set_ylabel("Normalised amplitude", fontsize=_AXIS_LABEL_SIZE)
+    ax.set_ylim(0, 1.08)
+    _apply_diagnostic_axes_style(ax, y_margin=0.05)
+    _set_x_limits_with_padding(ax, bpm, 0.0)
+    ax.legend(
+        loc="upper right",
+        frameon=True,
+        facecolor="white",
+        edgecolor="none",
+        framealpha=0.84,
+        fontsize=_LEGEND_SIZE,
+        handlelength=1.4,
+        borderpad=0.22,
+        labelspacing=0.22,
+    )
+
+
 def plot_spectra(
     axes: Any,
     result: WindowDiagnosticsResult,
@@ -650,6 +827,7 @@ def save_window_diagnostics(
     out_dir = _allocate_output_dir(result, output_root)
     waveform_png = out_dir / "window_waveform.png"
     spectrum_png = out_dir / "window_spectrum.png"
+    peak_tracking_png = out_dir / "window_peak_tracking.png"
     waveform_csv = out_dir / "window_waveform.csv"
     spectrum_csv = out_dir / "window_spectrum.csv"
     summary_csv = out_dir / "window_summary.csv"
@@ -659,22 +837,39 @@ def save_window_diagnostics(
     _write_summary_csv(summary_csv, result)
     _save_panel(waveform_png, result, opts, kind="waveform")
     _save_panel(spectrum_png, result, opts, kind="spectrum")
+    _save_panel(peak_tracking_png, result, opts, kind="peak_tracking")
 
     waveform_svg = waveform_pdf = spectrum_svg = spectrum_pdf = None
+    peak_tracking_svg = peak_tracking_pdf = None
     if opts.include_vectors:
         waveform_svg = out_dir / "window_waveform.svg"
         waveform_pdf = out_dir / "window_waveform.pdf"
         spectrum_svg = out_dir / "window_spectrum.svg"
         spectrum_pdf = out_dir / "window_spectrum.pdf"
+        peak_tracking_svg = out_dir / "window_peak_tracking.svg"
+        peak_tracking_pdf = out_dir / "window_peak_tracking.pdf"
         _save_panel(waveform_svg, result, opts, kind="waveform")
         _save_panel(waveform_pdf, result, opts, kind="waveform")
         _save_panel(spectrum_svg, result, opts, kind="spectrum")
         _save_panel(spectrum_pdf, result, opts, kind="spectrum")
+        _save_panel(
+            peak_tracking_svg,
+            result,
+            opts,
+            kind="peak_tracking",
+        )
+        _save_panel(
+            peak_tracking_pdf,
+            result,
+            opts,
+            kind="peak_tracking",
+        )
 
     return WindowDiagnosticsSaveResult(
         output_dir=out_dir,
         waveform_png=waveform_png,
         spectrum_png=spectrum_png,
+        peak_tracking_png=peak_tracking_png,
         waveform_csv=waveform_csv,
         spectrum_csv=spectrum_csv,
         summary_csv=summary_csv,
@@ -682,6 +877,8 @@ def save_window_diagnostics(
         waveform_pdf=waveform_pdf,
         spectrum_svg=spectrum_svg,
         spectrum_pdf=spectrum_pdf,
+        peak_tracking_svg=peak_tracking_svg,
+        peak_tracking_pdf=peak_tracking_pdf,
     )
 
 
@@ -1196,6 +1393,18 @@ def _summary_from_window(
             float(value)
             for value in tracking_data.get("candidate_peak_amplitudes", ())
         ),
+        "penalty_centers_bpm_json": json.dumps(
+            tracking_data.get("penalty_centers_bpm", []),
+            ensure_ascii=False,
+        ),
+        "candidate_peaks_bpm_json": json.dumps(
+            tracking_data.get("candidate_peaks_bpm", []),
+            ensure_ascii=False,
+        ),
+        "candidate_peak_amplitudes_json": json.dumps(
+            tracking_data.get("candidate_peak_amplitudes", []),
+            ensure_ascii=False,
+        ),
         "raw_candidate_hr_bpm": tracking_data.get(
             "raw_candidate_hr_bpm",
             candidate,
@@ -1448,6 +1657,14 @@ def _save_panel(
         )
         axes = fig.subplots(panel_count, 1, squeeze=False).ravel()
         plot_spectra(axes, result, options)
+    elif kind == "peak_tracking":
+        fig = Figure(
+            figsize=diagnostic_panel_figsize("peak_tracking"),
+            dpi=120,
+            facecolor="white",
+        )
+        ax = fig.add_subplot(1, 1, 1)
+        plot_peak_tracking(ax, result)
     else:
         raise ValueError(f"Unknown diagnostic panel kind: {kind}")
     fig.tight_layout(pad=0.35)
