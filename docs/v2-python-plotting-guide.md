@@ -227,7 +227,9 @@ result = render_v2_report_batch(
 
 ### 8.2 运动段惩罚带
 
-运动窗口的频谱惩罚同时作用于运动主频和二倍频。诊断图中的浅红背景由实际频谱 mask 的连续区间生成，因此可能出现两个惩罚带；这表示算法确实在抑制主频及其谐波，而不是重复绘图。
+运动窗口的频谱惩罚同时作用于运动主频和二倍频。诊断图中的浅红背景由实际 `penalty_weight < 1` 的连续区间生成，因此可能出现两个惩罚带；这表示算法确实在抑制主频及其谐波，而不是重复绘图。
+
+2026-06-15 起，运动段惩罚为连续性保护软惩罚：惩罚中心附近权重最低，靠近边界逐渐恢复到 1；若上一窗口预测 HR 附近的保护走廊与惩罚带重叠，该走廊不会被惩罚，图上的浅红背景会出现缺口。这种缺口代表算法实际保护了当前心率轨迹附近的候选峰，不是可视化错误。
 
 ### 8.3 `window_summary.csv` 追踪字段
 
@@ -240,6 +242,11 @@ result = render_v2_report_batch(
 | `tracking_source` | `report` 表示来自报告；`diagnostic_replay` 表示旧报告由诊断模块顺序重放得到 |
 | `penalty_applied` | 当前窗口是否真正应用频谱惩罚 |
 | `penalty_centers_bpm_json` | 频谱惩罚中心，运动段通常含主频和二倍频 |
+| `penalty_weight_min` | 当前窗口实际最小惩罚权重 |
+| `protection_center_bpm` | 连续性保护中心，来自上一窗口预测 HR |
+| `protection_half_width_bpm` | 连续性保护半宽 |
+| `protection_applied` | 当前窗口是否启用连续性保护走廊 |
+| `protected_penalty_overlap` | 保护走廊是否与惩罚带重叠 |
 | `candidate_peaks_bpm_json` | 当前窗口候选谱峰列表 |
 | `candidate_peak_amplitudes_json` | 候选谱峰幅值 |
 | `previous_hr_bpm` | 上一窗口用于谱峰追踪的 HR |

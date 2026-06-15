@@ -1,0 +1,377 @@
+{
+  "source_dir": "D:\\data\\PPG_HeartRate\\Algorithm\\Algorithm\\outline-PPGtoHR\\bug\\频谱惩罚逻辑优化",
+  "search_space_changed": false,
+  "width_scan_values": [
+    0.05,
+    0.1,
+    0.15,
+    0.2,
+    0.25,
+    0.3,
+    0.35
+  ],
+  "samples": {
+    "multi_bobi1": {
+      "baseline_report": "D:\\data\\PPG_HeartRate\\Algorithm\\Algorithm\\outline-PPGtoHR\\bug\\频谱惩罚逻辑优化\\multi_bobi1-green-raw_bandpass-lms-full-HF-v2.json",
+      "new_report": "D:\\data\\PPG_HeartRate\\Algorithm\\Algorithm\\outline-PPGtoHR\\figures\\bobi_soft_penalty_optimization_20260615\\multi_bobi1-green-raw_bandpass-lms-full-HF-v2-soft.json",
+      "old_best_params": {
+        "fs_target": 100,
+        "max_order": 16,
+        "lms_mu_base": 0.01,
+        "smooth_win_len": 9,
+        "spec_penalty_width": 0.3,
+        "hr_range_hz": 0.4166666666666667,
+        "slew_limit_bpm": 8,
+        "slew_step_bpm": 9,
+        "hr_range_rest": 0.5,
+        "slew_limit_rest": 3.0,
+        "slew_step_rest": 2.0,
+        "time_bias": 5
+      },
+      "new_best_params": {
+        "fs_target": 50,
+        "max_order": 8,
+        "lms_mu_base": 0.012,
+        "smooth_win_len": 9,
+        "spec_penalty_width": 0.3,
+        "hr_range_hz": 0.5833333333333334,
+        "slew_limit_bpm": 12,
+        "slew_step_bpm": 9,
+        "hr_range_rest": 0.3333333333333333,
+        "slew_limit_rest": 3.0,
+        "slew_step_rest": 0.5,
+        "time_bias": 4.5
+      },
+      "old_err_stats": {
+        "fft_aae_bpm": 25.02451533349699,
+        "final_aae_bpm": 4.6730286035298105
+      },
+      "new_err_stats": {
+        "fft_aae_bpm": 28.051611403732636,
+        "final_aae_bpm": 4.634688670917327
+      },
+      "old_metrics": {
+        "motion_window_count": 73,
+        "motion_mae_bpm": 9.158084282241568,
+        "motion_p80_abs_error_bpm": 18.23046875,
+        "motion_p95_abs_error_bpm": 26.202688262963527,
+        "ref_in_penalty_count": 23,
+        "ref_in_penalty_mae_bpm": 15.65269831881975,
+        "protected_overlap_count": 0,
+        "protected_overlap_mae_bpm": null
+      },
+      "new_metrics": {
+        "motion_window_count": 72,
+        "motion_mae_bpm": 8.736270396624775,
+        "motion_p80_abs_error_bpm": 14.86261715491465,
+        "motion_p95_abs_error_bpm": 25.063644470896662,
+        "ref_in_penalty_count": 22,
+        "ref_in_penalty_mae_bpm": 14.948313815097249,
+        "protected_overlap_count": 46,
+        "protected_overlap_mae_bpm": 9.631388692753386
+      },
+      "width_scan": [
+        {
+          "spec_penalty_width": 0.05,
+          "err_stats": {
+            "fft_aae_bpm": 28.051611403732636,
+            "final_aae_bpm": 26.64377779537201
+          },
+          "metrics": {
+            "motion_window_count": 72,
+            "motion_mae_bpm": 48.97263692061842,
+            "motion_p80_abs_error_bpm": 61.46869096544042,
+            "motion_p95_abs_error_bpm": 75.36450978217701,
+            "ref_in_penalty_count": 5,
+            "ref_in_penalty_mae_bpm": 60.540817941377824,
+            "protected_overlap_count": 30,
+            "protected_overlap_mae_bpm": 49.92300736800725
+          }
+        },
+        {
+          "spec_penalty_width": 0.1,
+          "err_stats": {
+            "fft_aae_bpm": 28.051611403732636,
+            "final_aae_bpm": 25.399641910966672
+          },
+          "metrics": {
+            "motion_window_count": 72,
+            "motion_mae_bpm": 45.413025918014256,
+            "motion_p80_abs_error_bpm": 58.225491633621736,
+            "motion_p95_abs_error_bpm": 68.76941879401976,
+            "ref_in_penalty_count": 9,
+            "ref_in_penalty_mae_bpm": 36.65604399220613,
+            "protected_overlap_count": 34,
+            "protected_overlap_mae_bpm": 46.05456736551434
+          }
+        },
+        {
+          "spec_penalty_width": 0.15,
+          "err_stats": {
+            "fft_aae_bpm": 28.051611403732636,
+            "final_aae_bpm": 27.15015863578463
+          },
+          "metrics": {
+            "motion_window_count": 72,
+            "motion_mae_bpm": 50.421448769576756,
+            "motion_p80_abs_error_bpm": 64.44075037733984,
+            "motion_p95_abs_error_bpm": 70.62200002995124,
+            "ref_in_penalty_count": 13,
+            "ref_in_penalty_mae_bpm": 55.80224889527536,
+            "protected_overlap_count": 47,
+            "protected_overlap_mae_bpm": 49.34382189503112
+          }
+        },
+        {
+          "spec_penalty_width": 0.2,
+          "err_stats": {
+            "fft_aae_bpm": 28.051611403732636,
+            "final_aae_bpm": 26.61937321406133
+          },
+          "metrics": {
+            "motion_window_count": 72,
+            "motion_mae_bpm": 48.90281270186842,
+            "motion_p80_abs_error_bpm": 64.44075037733984,
+            "motion_p95_abs_error_bpm": 70.62200002995124,
+            "ref_in_penalty_count": 16,
+            "ref_in_penalty_mae_bpm": 55.90527401177805,
+            "protected_overlap_count": 60,
+            "protected_overlap_mae_bpm": 49.477904318319844
+          }
+        },
+        {
+          "spec_penalty_width": 0.25,
+          "err_stats": {
+            "fft_aae_bpm": 28.051611403732636,
+            "final_aae_bpm": 26.61937321406133
+          },
+          "metrics": {
+            "motion_window_count": 72,
+            "motion_mae_bpm": 48.90281270186842,
+            "motion_p80_abs_error_bpm": 64.44075037733984,
+            "motion_p95_abs_error_bpm": 70.62200002995124,
+            "ref_in_penalty_count": 17,
+            "ref_in_penalty_mae_bpm": 55.66837907724724,
+            "protected_overlap_count": 65,
+            "protected_overlap_mae_bpm": 49.98242850537217
+          }
+        },
+        {
+          "spec_penalty_width": 0.3,
+          "err_stats": {
+            "fft_aae_bpm": 28.051611403732636,
+            "final_aae_bpm": 4.634688670917327
+          },
+          "metrics": {
+            "motion_window_count": 72,
+            "motion_mae_bpm": 8.736270396624775,
+            "motion_p80_abs_error_bpm": 14.86261715491465,
+            "motion_p95_abs_error_bpm": 25.063644470896662,
+            "ref_in_penalty_count": 22,
+            "ref_in_penalty_mae_bpm": 14.948313815097249,
+            "protected_overlap_count": 46,
+            "protected_overlap_mae_bpm": 9.631388692753386
+          }
+        },
+        {
+          "spec_penalty_width": 0.35,
+          "err_stats": {
+            "fft_aae_bpm": 28.051611403732636,
+            "final_aae_bpm": 4.7994688196153685
+          },
+          "metrics": {
+            "motion_window_count": 72,
+            "motion_mae_bpm": 9.196470224424948,
+            "motion_p80_abs_error_bpm": 14.86261715491465,
+            "motion_p95_abs_error_bpm": 25.063644470896662,
+            "ref_in_penalty_count": 30,
+            "ref_in_penalty_mae_bpm": 13.618255242627376,
+            "protected_overlap_count": 53,
+            "protected_overlap_mae_bpm": 9.844978361933705
+          }
+        }
+      ]
+    },
+    "multi_bobi2": {
+      "baseline_report": "D:\\data\\PPG_HeartRate\\Algorithm\\Algorithm\\outline-PPGtoHR\\bug\\频谱惩罚逻辑优化\\multi_bobi2-green-raw_bandpass-lms-full-HF-v2.json",
+      "new_report": "D:\\data\\PPG_HeartRate\\Algorithm\\Algorithm\\outline-PPGtoHR\\figures\\bobi_soft_penalty_optimization_20260615\\multi_bobi2-green-raw_bandpass-lms-full-HF-v2-soft.json",
+      "old_best_params": {
+        "fs_target": 50,
+        "max_order": 20,
+        "lms_mu_base": 0.008,
+        "smooth_win_len": 9,
+        "spec_penalty_width": 0.1,
+        "hr_range_hz": 0.3333333333333333,
+        "slew_limit_bpm": 8,
+        "slew_step_bpm": 5,
+        "hr_range_rest": 0.8333333333333334,
+        "slew_limit_rest": 3.0,
+        "slew_step_rest": 0.5,
+        "time_bias": 5
+      },
+      "new_best_params": {
+        "fs_target": 50,
+        "max_order": 8,
+        "lms_mu_base": 0.008,
+        "smooth_win_len": 9,
+        "spec_penalty_width": 0.2,
+        "hr_range_hz": 0.4166666666666667,
+        "slew_limit_bpm": 12,
+        "slew_step_bpm": 5,
+        "hr_range_rest": 0.5,
+        "slew_limit_rest": 1.0,
+        "slew_step_rest": 2.0,
+        "time_bias": 5
+      },
+      "old_err_stats": {
+        "fft_aae_bpm": 25.285835944510215,
+        "final_aae_bpm": 1.8607929298064378
+      },
+      "new_err_stats": {
+        "fft_aae_bpm": 25.977362806085836,
+        "final_aae_bpm": 1.6451320934152271
+      },
+      "old_metrics": {
+        "motion_window_count": 69,
+        "motion_mae_bpm": 6.341873645404927,
+        "motion_p80_abs_error_bpm": 9.46324251829532,
+        "motion_p95_abs_error_bpm": 18.393534992631274,
+        "ref_in_penalty_count": 7,
+        "ref_in_penalty_mae_bpm": 11.635908362435515,
+        "protected_overlap_count": 0,
+        "protected_overlap_mae_bpm": null
+      },
+      "new_metrics": {
+        "motion_window_count": 69,
+        "motion_mae_bpm": 4.9592592885208715,
+        "motion_p80_abs_error_bpm": 6.779468874249732,
+        "motion_p95_abs_error_bpm": 17.097636555131256,
+        "ref_in_penalty_count": 25,
+        "ref_in_penalty_mae_bpm": 6.715442268170675,
+        "protected_overlap_count": 33,
+        "protected_overlap_mae_bpm": 6.688345363798765
+      },
+      "width_scan": [
+        {
+          "spec_penalty_width": 0.05,
+          "err_stats": {
+            "fft_aae_bpm": 25.977362806085836,
+            "final_aae_bpm": 24.648952559083664
+          },
+          "metrics": {
+            "motion_window_count": 69,
+            "motion_mae_bpm": 47.12065573660389,
+            "motion_p80_abs_error_bpm": 73.0400390625,
+            "motion_p95_abs_error_bpm": 78.7529296875,
+            "ref_in_penalty_count": 1,
+            "ref_in_penalty_mae_bpm": 39.36923073157831,
+            "protected_overlap_count": 25,
+            "protected_overlap_mae_bpm": 48.55232189402378
+          }
+        },
+        {
+          "spec_penalty_width": 0.1,
+          "err_stats": {
+            "fft_aae_bpm": 25.977362806085836,
+            "final_aae_bpm": 24.499228403277975
+          },
+          "metrics": {
+            "motion_window_count": 69,
+            "motion_mae_bpm": 46.66280360798069,
+            "motion_p80_abs_error_bpm": 73.0400390625,
+            "motion_p95_abs_error_bpm": 78.533203125,
+            "ref_in_penalty_count": 7,
+            "ref_in_penalty_mae_bpm": 39.02396886970734,
+            "protected_overlap_count": 36,
+            "protected_overlap_mae_bpm": 52.073993772918385
+          }
+        },
+        {
+          "spec_penalty_width": 0.15,
+          "err_stats": {
+            "fft_aae_bpm": 25.977362806085836,
+            "final_aae_bpm": 24.487148649131058
+          },
+          "metrics": {
+            "motion_window_count": 69,
+            "motion_mae_bpm": 46.625864069937215,
+            "motion_p80_abs_error_bpm": 73.0400390625,
+            "motion_p95_abs_error_bpm": 78.533203125,
+            "ref_in_penalty_count": 17,
+            "ref_in_penalty_mae_bpm": 32.504753745643654,
+            "protected_overlap_count": 39,
+            "protected_overlap_mae_bpm": 50.21176205179587
+          }
+        },
+        {
+          "spec_penalty_width": 0.2,
+          "err_stats": {
+            "fft_aae_bpm": 25.977362806085836,
+            "final_aae_bpm": 1.6451320934152271
+          },
+          "metrics": {
+            "motion_window_count": 69,
+            "motion_mae_bpm": 4.9592592885208715,
+            "motion_p80_abs_error_bpm": 6.779468874249732,
+            "motion_p95_abs_error_bpm": 17.097636555131256,
+            "ref_in_penalty_count": 25,
+            "ref_in_penalty_mae_bpm": 6.715442268170675,
+            "protected_overlap_count": 33,
+            "protected_overlap_mae_bpm": 6.688345363798765
+          }
+        },
+        {
+          "spec_penalty_width": 0.25,
+          "err_stats": {
+            "fft_aae_bpm": 25.977362806085836,
+            "final_aae_bpm": 1.9216689598270413
+          },
+          "metrics": {
+            "motion_window_count": 69,
+            "motion_mae_bpm": 3.8127284583170518,
+            "motion_p80_abs_error_bpm": 5.88496021808074,
+            "motion_p95_abs_error_bpm": 9.658657291548515,
+            "ref_in_penalty_count": 33,
+            "ref_in_penalty_mae_bpm": 4.978552822448406,
+            "protected_overlap_count": 41,
+            "protected_overlap_mae_bpm": 4.606207596900199
+          }
+        },
+        {
+          "spec_penalty_width": 0.3,
+          "err_stats": {
+            "fft_aae_bpm": 25.977362806085836,
+            "final_aae_bpm": 1.801098397350971
+          },
+          "metrics": {
+            "motion_window_count": 69,
+            "motion_mae_bpm": 4.060892553919421,
+            "motion_p80_abs_error_bpm": 6.197836484873912,
+            "motion_p95_abs_error_bpm": 9.98807124496937,
+            "ref_in_penalty_count": 35,
+            "ref_in_penalty_mae_bpm": 5.458968875747352,
+            "protected_overlap_count": 46,
+            "protected_overlap_mae_bpm": 5.085779759390034
+          }
+        },
+        {
+          "spec_penalty_width": 0.35,
+          "err_stats": {
+            "fft_aae_bpm": 25.977362806085836,
+            "final_aae_bpm": 1.801098397350971
+          },
+          "metrics": {
+            "motion_window_count": 69,
+            "motion_mae_bpm": 4.060892553919421,
+            "motion_p80_abs_error_bpm": 6.197836484873912,
+            "motion_p95_abs_error_bpm": 9.98807124496937,
+            "ref_in_penalty_count": 43,
+            "ref_in_penalty_mae_bpm": 5.1721103619297715,
+            "protected_overlap_count": 49,
+            "protected_overlap_mae_bpm": 4.893864990957991
+          }
+        }
+      ]
+    }
+  }
+}

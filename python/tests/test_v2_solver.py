@@ -206,6 +206,96 @@ def test_process_spectrum_prefers_non_penalty_peak_inside_tracking_range(
     assert all(abs(candidate - 120.0) > 1e-6 for candidate in trace.candidate_peaks_bpm)
 
 
+def test_motion_penalty_protects_continuous_peak_inside_harmonic_band(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.80, 1.90, 2.00, 2.10, 2.25, 2.35],
+        [0.0, 0.0, 1.00, 0.0, 0.50, 0.0],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([1.0]),
+            np.asarray([1.0]),
+        ),
+    )
+    params = SolverParams(
+        spec_penalty_enable=True,
+        spec_penalty_weight=0.2,
+        spec_penalty_width=0.2,
+    )
+
+    value, trace = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        1,
+        np.asarray([1.95, 0.0]),
+        True,
+        20.0 / 60.0,
+        8.0,
+        5.0,
+        path="adaptive",
+        window_kind="motion",
+    )
+
+    assert value == pytest.approx(2.0)
+    assert trace.tracked_hr_bpm == pytest.approx(120.0)
+    assert trace.protection_applied is True
+    assert trace.protected_penalty_overlap is True
+    assert trace.penalty_weight_min < 1.0
+
+
+def test_motion_penalty_does_not_require_reference_hr(monkeypatch) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [0.90, 1.00, 1.10, 1.90, 2.00, 2.10],
+        [0.0, 1.0, 0.0, 0.0, 0.5, 0.0],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([1.0]),
+            np.asarray([1.0]),
+        ),
+    )
+    params = SolverParams(
+        spec_penalty_enable=True,
+        spec_penalty_weight=0.2,
+        spec_penalty_width=0.1,
+    )
+
+    value, trace = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        0,
+        np.asarray([0.0]),
+        True,
+        20.0 / 60.0,
+        8.0,
+        5.0,
+        path="adaptive",
+        window_kind="motion",
+    )
+
+    assert np.isfinite(value)
+    assert trace.ref_hr_bpm != trace.ref_hr_bpm
+    assert trace.protection_applied is False
+
+
 @pytest.mark.parametrize(
     ("center_s", "used_adaptive", "expected"),
     [

@@ -34,11 +34,13 @@ from .report import load_v2_report
 from .solver import (
     _apply_ppg_input_transform,
     _classify_window_kind,
+    _continuity_protection_half_width_hz,
     _longest_true_run,
     _motion_flags,
     _ordered_reference_signals,
     _select_ppg_raw,
     _solver_params_from_v2,
+    _spectrum_penalty_state,
     solve_v2,
 )
 from .types import V2RunConfig
@@ -260,6 +262,7 @@ def render_window_diagnostics(
         for idx, values in enumerate(reference_outputs, start=1):
             waveform[f"reference_{idx}"] = _fit_to_length(values, sig_p.size)
 
+    tracking = _tracking_for_window(session, selected)
     spectrum = _compute_spectrum(
         sig_p,
         _fit_to_length(filtered, sig_p.size),
@@ -267,8 +270,11 @@ def render_window_diagnostics(
         fs,
         prepared.params,
         enable_penalty=selected.window_kind == "motion",
+        previous_hr_bpm=_finite_or_none(tracking.get("previous_hr_bpm")),
+        range_hz=float(prepared.params.hr_range_hz),
+        limit_bpm=float(prepared.params.slew_limit_bpm),
+        step_bpm=float(prepared.params.slew_step_bpm),
     )
-    tracking = _tracking_for_window(session, selected)
     summary = _summary_from_window(
         session,
         selected,
@@ -321,6 +327,10 @@ def render_window_diagnostics(
             fs,
             comp_prepared.params,
             enable_penalty=selected.window_kind == "motion",
+            previous_hr_bpm=_finite_or_none(tracking.get("previous_hr_bpm")),
+            range_hz=float(comp_prepared.params.hr_range_hz),
+            limit_bpm=float(comp_prepared.params.slew_limit_bpm),
+            step_bpm=float(comp_prepared.params.slew_step_bpm),
         )
         comp_summary = _summary_from_window(
             session,
@@ -1255,6 +1265,14 @@ def _candidate_from_spectrum(spectrum: dict[str, np.ndarray]) -> float:
     return float(values[0])
 
 
+def _finite_or_none(value: Any) -> float | None:
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return None
+    return out if np.isfinite(out) else None
+
+
 def _compute_spectrum(
     raw_signal: np.ndarray,
     filtered_signal: np.ndarray,
@@ -1263,6 +1281,10 @@ def _compute_spectrum(
     params: SolverParams,
     *,
     enable_penalty: bool,
+    previous_hr_bpm: float | None = None,
+    range_hz: float | None = None,
+    limit_bpm: float | None = None,
+    step_bpm: float | None = None,
 ) -> dict[str, np.ndarray]:
     freq, raw_amp = _full_spectrum(raw_signal, fs)
     freq_f, filtered_amp = _full_spectrum(filtered_signal, fs)
@@ -1275,10 +1297,29 @@ def _compute_spectrum(
         ref_freq, ref_amp = fft_peaks(penalty_ref, fs, 0.3)
         if ref_freq.size:
             motion_freq = float(ref_freq[int(np.argmax(ref_amp))])
-            mask = (
-                np.abs(freq - motion_freq) < float(params.spec_penalty_width)
-            ) | (np.abs(freq - 2.0 * motion_freq) < float(params.spec_penalty_width))
-            penalty_weight[mask] = float(params.spec_penalty_weight)
+            previous_hz = (
+                float(previous_hr_bpm) / 60.0
+                if previous_hr_bpm is not None and np.isfinite(previous_hr_bpm)
+                else None
+            )
+            protection_half_width_hz = (
+                _continuity_protection_half_width_hz(
+                    float(params.hr_range_hz if range_hz is None else range_hz),
+                    float(params.slew_limit_bpm if limit_bpm is None else limit_bpm),
+                    float(params.slew_step_bpm if step_bpm is None else step_bpm),
+                )
+                if previous_hz is not None
+                else None
+            )
+            penalty_state = _spectrum_penalty_state(
+                freq,
+                (motion_freq, 2.0 * motion_freq),
+                penalty_width_hz=float(params.spec_penalty_width),
+                penalty_weight=float(params.spec_penalty_weight),
+                previous_hz=previous_hz,
+                protection_half_width_hz=protection_half_width_hz,
+            )
+            penalty_weight = penalty_state.weights
     penalized = filtered_amp * penalty_weight
     peaks = find_maxpeak(freq, freq, penalized)
     candidate_hz = float(peaks[0]) if peaks.size else float("nan")
@@ -1384,6 +1425,22 @@ def _summary_from_window(
                 "penalty_half_width_bpm",
                 float(session.config.spec_penalty_width) * 60.0,
             )
+        ),
+        "penalty_weight_min": float(
+            tracking_data.get(
+                "penalty_weight_min",
+                np.nanmin(spectrum.get("penalty_weight", [1.0])),
+            )
+        ),
+        "protection_center_bpm": tracking_data.get("protection_center_bpm"),
+        "protection_half_width_bpm": tracking_data.get(
+            "protection_half_width_bpm"
+        ),
+        "protection_applied": bool(
+            tracking_data.get("protection_applied", False)
+        ),
+        "protected_penalty_overlap": bool(
+            tracking_data.get("protected_penalty_overlap", False)
         ),
         "candidate_peaks_bpm": tuple(
             float(value)

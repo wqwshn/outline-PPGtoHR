@@ -1,6 +1,6 @@
 # v2 Python 心率解算技术路线
 
-> 版本: v2 | 更新日期: 2026-06-14 | 适用范围: `python/src/ppg_hr/v2/` 及关联核心模块
+> 版本: v2 | 更新日期: 2026-06-15 | 适用范围: `python/src/ppg_hr/v2/` 及关联核心模块
 
 ---
 
@@ -18,6 +18,7 @@ v2 是 PPG 心率求解算法的一次架构升级。相比 v1 的多路径独�
 - **运动感知自适应调度**：只在最长运动段及其延伸范围内启用自适应滤波，静息段直接使用 FFT 结果，避免自适应滤波在无运动时引入噪声。
 - **恢复检测机制**：运动结束后若自适应结果与 FFT 差异过大，自动寻找交叉点提前切回 FFT，防止自适应滤波器在静息段发散；恢复段仍可使用 LMS 结果，但不再使用运动主频频谱惩罚。
 - **窗口级诊断追踪**：每个窗口记录 `window_kind` 与结构化 `spectrum_tracking`，GUI 可按静息段、运动段、运动恢复段显示真实算法路径和谱峰追踪过程。
+- **连续性保护软频谱惩罚**：运动窗口对运动主频及二倍频使用渐变惩罚，并在上一窗口预测 HR 附近保留窄保护走廊，避免真实心率峰与运动谐波重叠时被误杀；该机制不依赖参考 HR，可用于在线化研究。
 
 ### 1.2 与 v1 的关键区别
 
@@ -180,8 +181,8 @@ sig_in → Hamming窗 → 8192点 FFT → 单边幅度谱
                   │                       │
                   │   仅当 enable_penalty=True 时:
                   │   检测惩罚参考的主峰及二倍频
-                  │   先在完整信号频谱中抑制对应频率 ±spec_penalty_width
-                  │   衰减系数 = spec_penalty_weight
+                  │   对完整信号频谱施加渐变软惩罚
+                  │   上一窗口预测 HR ± slew_step_bpm 形成保护走廊
                   │                       │
                   └───────────┬───────────┘
                               ▼
@@ -189,7 +190,7 @@ sig_in → Hamming窗 → 8192点 FFT → 单边幅度谱
                               │
                   幅值阈值 = 惩罚后最大局部峰 × 0.3
                               │
-                  运动段优先排除惩罚带及边界保护区峰
+                  运动段优先排除未受连续性保护的惩罚带峰
                               │
                               ▼
                   首帧: 取最高可信候选峰
@@ -201,9 +202,11 @@ sig_in → Hamming窗 → 8192点 FFT → 单边幅度谱
 ```
 
 - 频谱惩罚只在运动段自适应路径中启用。静息段使用 FFT 路径，恢复段保留自适应滤波但不启用惩罚。
-- 惩罚带同时覆盖运动主频和二倍频，因此运动窗口可出现两个惩罚区间；窗口诊断图的惩罚背景由实际 mask 连续区间生成。
+- 惩罚带同时覆盖运动主频和二倍频，但不再是硬矩形下陷。惩罚权重从中心的 `spec_penalty_weight` 随距离渐变回 1.0，减少边界尖峰。
+- 运动窗口若存在上一窗口预测 HR，则以该预测值为中心、`min(hr_range_hz, slew_step_bpm/60)` 为半宽建立连续性保护走廊；保护走廊内频点不被惩罚，也不会因为落入惩罚带而被候选过滤硬排除。该机制只使用历史预测，不读取 `ref_hr_bpm` 或未来窗口，因此满足在线化约束。
+- 窗口诊断图的惩罚背景由实际 `penalty_weight < 1` 的连续区间生成。若保护走廊与惩罚带重叠，背景会自然出现缺口，这代表算法实际让路而不是可视化错误。
 - 运动段候选峰从惩罚后的完整频谱中提取，而不是先用未惩罚频谱做候选筛选。这样可避免运动主频幅值过大时，真实心率峰因低于最大峰 30% 而在惩罚生效前被提前丢弃。
-- 惩罚带内峰并非永久禁用；当存在非惩罚带候选时优先使用非惩罚带候选，若整窗没有可信非惩罚带候选，则回退到惩罚后的候选峰，避免真实心率恰好落在运动谐波附近时无结果。
+- 惩罚带内峰并非永久禁用；受连续性保护的峰可以参与 tracking。未受保护的惩罚带峰在存在非惩罚带候选时仍会被降级，以避免运动主频直接锁峰。
 - `_process_spectrum()` 仍作为兼容包装存在，新增 `_process_spectrum_with_trace()` 返回候选峰、搜索范围、上一帧 HR、追踪后 HR、slew 限幅后 HR 和惩罚中心等诊断字段。
 - 静息段参数: `hr_range_rest`（默认 30/60 Hz）、`slew_limit_rest`（默认 6 BPM）、`slew_step_rest`（默认 4 BPM）
 - 运动段参数: `hr_range_hz`（默认 25/60 Hz）、`slew_limit_bpm`（默认 10 BPM）、`slew_step_bpm`（默认 7 BPM）
@@ -291,6 +294,11 @@ final_hr = np.where(adaptive_mask, adaptive_hr, fft_hr)
 | `path` | `fft` 或 `adaptive` |
 | `penalty_applied` | 本窗口是否真正启用频谱惩罚 |
 | `penalty_centers_bpm` | 惩罚中心；运动段通常包含运动主频与二倍频 |
+| `penalty_weight_min` | 本窗口实际最小惩罚权重；软惩罚中心附近通常接近 `spec_penalty_weight` |
+| `protection_center_bpm` | 连续性保护中心，来自上一窗口预测 HR；首窗口或无历史时为空 |
+| `protection_half_width_bpm` | 连续性保护半宽，当前由 `slew_step_bpm` 与 `hr_range_hz` 推导 |
+| `protection_applied` | 本窗口是否存在上一 HR 保护走廊 |
+| `protected_penalty_overlap` | 保护走廊是否与运动主频/二倍频惩罚带发生重叠 |
 | `candidate_peaks_bpm` / `candidate_peak_amplitudes` | 谱峰候选及幅值 |
 | `previous_hr_bpm` | 上一窗口用于邻近追踪的 HR |
 | `search_min_bpm` / `search_max_bpm` | 本窗口邻近追踪搜索范围 |
@@ -500,6 +508,47 @@ conda run -n ppg-hr python scripts/analyze_kaihe2_peak_tracking_optimization.py
 ```
 
 输出位于 `figures/kaihe2_peak_tracking_optimization_20260614/`，其中包含新优化报告、对比 JSON 和渲染后的心率图。
+
+### 6.2.2 bobi1/bobi2 连续性保护软惩罚验证（2026-06-15）
+
+本轮针对 `bug/频谱惩罚逻辑优化/` 中的 `multi_bobi1.csv` 与 `multi_bobi2.csv`，验证运动主频/二倍频惩罚带覆盖真实 HR 峰时的保护机制。对比方式为:
+
+1. 旧报告机制 + 各数据独立 BO 的旧 best_params。
+2. 连续性保护软惩罚 + 相同 `default_v2_search_space("lms")` 重新独立 BO（75 trial × 3 repeat）。
+
+本轮未新增 BO 维度，`spec_penalty_width` 搜索空间仍为 `[0.1, 0.2, 0.3]`。新增机制只使用当前窗口频谱、惩罚参考频谱和上一窗口预测 HR；不使用参考 HR，因此满足后续在线化研究约束。
+
+| 数据 | 指标 | 旧机制 + 旧 best_params | 软惩罚 + 重新优化 |
+|------|------|--------------------------|-------------------|
+| bobi1 | `final_aae_bpm` | 4.673 | 4.635 |
+| bobi1 | 运动窗口 MAE | 9.158 | 8.736 |
+| bobi1 | 运动窗口 95% 绝对误差 | 26.203 | 25.064 |
+| bobi1 | Ref 落入惩罚带窗口 MAE | 15.653 | 14.948 |
+| bobi2 | `final_aae_bpm` | 1.861 | 1.645 |
+| bobi2 | 运动窗口 MAE | 6.342 | 4.959 |
+| bobi2 | 运动窗口 95% 绝对误差 | 18.394 | 17.098 |
+| bobi2 | Ref 落入惩罚带窗口 MAE | 11.636 | 6.715 |
+
+典型窗口变化:
+
+- bobi1 68s: 旧机制候选从 79.1 BPM 起跳，最终 67.38 BPM；软惩罚保护上一 HR 附近峰后，raw/tracked 均为 64.45 BPM，误差从约 3.38 BPM 降到约 0.45 BPM。
+- bobi1 88s: 旧机制 tracked 70.31 BPM，最终 83.50 BPM，Ref 约 105.85 BPM；软惩罚后 tracked 97.78 BPM，最终 97.41 BPM，大误差明显收敛。
+- bobi2 95s: 旧机制二倍频惩罚覆盖 Ref 附近峰，tracking 跳到 130 BPM；软惩罚保护上一 HR 附近的 114.99 BPM 峰，最终约 113.53 BPM。
+
+`spec_penalty_width` 敏感性:
+
+- bobi1 新 best_params 仍选择 `0.3 Hz`；固定其他 best params 时，`0.3 Hz` 的 `final_aae_bpm=4.635`，`0.35 Hz` 为 4.799，而 0.05-0.25 Hz 会明显恶化。这说明 bobi1 中较宽的运动谐波影响范围仍是必要的；软惩罚使较宽宽度不再直接误杀连续 HR 峰。
+- bobi2 新 best_params 选择 `0.2 Hz`；固定其他 best params 时，0.2-0.35 Hz 都保持可用，其中 0.2 Hz 的总体 AAE 最低，0.25 Hz 的运动段 MAE 更低但全段略差。
+- 当前证据不支持立即修改搜索维度或范围。建议暂保留 `[0.1, 0.2, 0.3]`，继续让 BO 在数据级选择宽度；若后续更多波比跳/高强度运动样本持续显示 0.1 Hz 过窄且 0.35 Hz 稳定有效，再考虑把候选范围调整为 `[0.2, 0.3, 0.35]`。
+
+复现实验脚本:
+
+```powershell
+$env:PYTHONPATH='python/src'
+conda run -n ppg-hr python scripts/analyze_bobi_soft_penalty_optimization.py
+```
+
+输出位于 `figures/bobi_soft_penalty_optimization_20260615/`，包含新优化报告、渲染后的心率图和 `bobi_soft_penalty_comparison.json`。
 
 ### 6.3 优化流程
 

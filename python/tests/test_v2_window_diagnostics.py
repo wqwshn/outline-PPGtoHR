@@ -126,8 +126,11 @@ def test_motion_window_marks_fundamental_and_harmonic_penalty_bands(
         (float(patch.get_x()), float(patch.get_x() + patch.get_width()))
         for patch in bands
     )
-    assert spans[0] == pytest.approx((41.015625, 64.453125))
-    assert spans[1] == pytest.approx((93.75, 117.1875))
+    assert spans[0][0] == pytest.approx(41.015625)
+    assert spans[1][1] == pytest.approx(64.453125)
+    assert spans[2] == pytest.approx((93.75, 117.1875))
+    protection_center = float(result.summary["protection_center_bpm"])
+    assert not any(lo <= protection_center <= hi for lo, hi in spans)
 
 
 def test_peak_tracking_plot_shows_candidates_search_and_hr_markers(
@@ -357,6 +360,47 @@ def test_penalized_spectrum_breaks_at_penalty_band_without_changing_width() -> N
     penalized = next(line for line in ax.lines if line.get_label() == "Penalized")
     assert penalized.get_linewidth() == pytest.approx(1.35)
     assert np.isnan(np.asarray(penalized.get_ydata(), dtype=float)).any()
+
+
+def test_compute_spectrum_uses_continuity_protected_penalty(monkeypatch) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import window_diagnostics as wd
+
+    freqs = np.asarray([0.90, 1.00, 1.10, 1.90, 2.00, 2.10, 2.25], dtype=float)
+    amps = np.ones(freqs.size, dtype=float)
+    monkeypatch.setattr(wd, "_full_spectrum", lambda _sig, _fs: (freqs, amps))
+    monkeypatch.setattr(
+        wd,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([1.0]),
+            np.asarray([1.0]),
+        ),
+    )
+    params = SolverParams(
+        spec_penalty_enable=True,
+        spec_penalty_weight=0.2,
+        spec_penalty_width=0.2,
+    )
+
+    spectrum = wd._compute_spectrum(
+        np.ones(128),
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        enable_penalty=True,
+        previous_hr_bpm=120.0,
+        range_hz=20.0 / 60.0,
+        limit_bpm=8.0,
+        step_bpm=5.0,
+    )
+
+    protected_idx = int(np.argmin(np.abs(spectrum["bpm"] - 120.0)))
+    center_idx = int(np.argmin(np.abs(spectrum["bpm"] - 60.0)))
+    assert spectrum["penalty_weight"][protected_idx] == pytest.approx(1.0)
+    assert spectrum["penalty_weight"][center_idx] == pytest.approx(0.2)
+    assert spectrum["is_penalty_band"][protected_idx] == pytest.approx(0.0)
 
 
 @pytest.mark.skipif(not REPORT.exists(), reason="window diagnostics fixture missing")
