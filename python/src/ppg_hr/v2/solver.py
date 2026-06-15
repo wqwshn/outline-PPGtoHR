@@ -17,8 +17,6 @@ from ppg_hr.core.fft_peaks import fft_peaks
 from ppg_hr.core.heart_rate_solver import (
     _data_quality_from_params,
     _interpolate_unreliable_hr_columns,
-    _is_motion_window,
-    _motion_detector_from_raw_acc,
     _window_quality_from_valid_mask,
     load_raw_data,
 )
@@ -43,6 +41,9 @@ WindowKind = Literal["rest", "motion", "recovery"]
 
 _CANDIDATE_PEAK_THRESHOLD_RATIO = 0.3
 _MOTION_PENALTY_EDGE_GUARD_HZ = 1.0 / 60.0
+_MOTION_IMU_RELATIVE_FLOOR = 0.05
+_MOTION_IMU_GAP_BRIDGE_WINDOWS = 3
+_MOTION_IMU_MIN_RUN_WINDOWS = 5
 
 
 @dataclass
@@ -82,6 +83,19 @@ class SpectrumPenaltyState:
     protection_center_hz: float | None
     protection_half_width_hz: float | None
     protected_penalty_overlap: bool
+
+
+@dataclass(frozen=True)
+class MotionDetectionResult:
+    motion_segment: dict[str, float] | None
+    flags: np.ndarray
+    centers_s: np.ndarray
+    scores: np.ndarray
+    threshold: float
+    acc_threshold: float
+    gyro_threshold: float
+    acc_score_max: float
+    gyro_score_max: float
 
 
 @dataclass
@@ -444,6 +458,9 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
     accx_raw = raw_data[:, 8]
     accy_raw = raw_data[:, 9]
     accz_raw = raw_data[:, 10]
+    gyrox_raw = raw_data[:, 11]
+    gyroy_raw = raw_data[:, 12]
+    gyroz_raw = raw_data[:, 13]
 
     ppg_source = _apply_ppg_input_transform(
         ppg_raw,
@@ -475,12 +492,17 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
     accy = filtfilt(b, a, accy_ori)
     accz = filtfilt(b, a, accz_ori)
 
-    acc_mag_motion, motion_threshold = _motion_detector_from_raw_acc(
-        accx_raw, accy_raw, accz_raw, params, fs_origin
+    motion_detection = _detect_motion_from_raw_imu(
+        accx_raw,
+        accy_raw,
+        accz_raw,
+        gyrox_raw,
+        gyroy_raw,
+        gyroz_raw,
+        cfg,
+        fs_origin=fs_origin,
     )
-    acc_mag = np.sqrt(accx**2 + accy**2 + accz**2)
-    motion_flags = _motion_flags(acc_mag, cfg)
-    motion_segment = _longest_true_run(motion_flags, cfg)
+    motion_segment = motion_detection.motion_segment
     reference_order = normalise_reference_order(cfg.reference_groups_order)
     references = _ordered_reference_signals(
         reference_order,
@@ -523,10 +545,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
             in_adaptive_range = False
         idx_s_motion = int(round(time_1 * fs_origin))
         idx_e_motion = int(round(time_2 * fs_origin))
-        is_motion_flag = _is_motion_window(
-            acc_mag_motion[idx_s_motion:idx_e_motion],
-            motion_threshold,
-        )
+        is_motion_flag = _motion_flag_at_center(center, motion_detection)
         quality = _window_quality_from_valid_mask(
             valid_mask,
             idx_s_motion,
@@ -763,6 +782,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
         "reference_groups_order": list(reference_order),
         "reference_order_key": reference_order_key(reference_order),
         "motion_segment": motion_segment,
+        "motion_detection": _motion_detection_metadata(motion_detection),
         "used_adaptive_windows": int(
             sum(1 for row in window_table if row["used_adaptive"])
         ),
@@ -1018,6 +1038,255 @@ def _acc_mag(frame: pd.DataFrame) -> np.ndarray:
         + frame["accy"].to_numpy(dtype=float) ** 2
         + frame["accz"].to_numpy(dtype=float) ** 2
     )
+
+
+def _detect_motion_from_raw_imu(
+    accx_raw: np.ndarray,
+    accy_raw: np.ndarray,
+    accz_raw: np.ndarray,
+    gyrox_raw: np.ndarray,
+    gyroy_raw: np.ndarray,
+    gyroz_raw: np.ndarray,
+    cfg: V2RunConfig,
+    *,
+    fs_origin: int,
+) -> MotionDetectionResult:
+    acc_mag = _source_imu_magnitude(
+        (accx_raw, accy_raw, accz_raw),
+        fs_origin=fs_origin,
+        high_hz=5.0,
+    )
+    gyro_mag = _source_imu_magnitude(
+        (gyrox_raw, gyroy_raw, gyroz_raw),
+        fs_origin=fs_origin,
+        high_hz=10.0,
+    )
+    acc_scores, centers_s = _source_window_std(acc_mag, cfg, fs_origin=fs_origin)
+    gyro_scores, gyro_centers_s = _source_window_std(
+        gyro_mag,
+        cfg,
+        fs_origin=fs_origin,
+    )
+    n = min(acc_scores.size, gyro_scores.size, centers_s.size, gyro_centers_s.size)
+    if n == 0:
+        empty = np.zeros(0, dtype=float)
+        return MotionDetectionResult(
+            motion_segment=None,
+            flags=np.zeros(0, dtype=bool),
+            centers_s=empty,
+            scores=empty,
+            threshold=1.0,
+            acc_threshold=0.0,
+            gyro_threshold=0.0,
+            acc_score_max=0.0,
+            gyro_score_max=0.0,
+        )
+    acc_scores = acc_scores[:n]
+    gyro_scores = gyro_scores[:n]
+    centers_s = centers_s[:n]
+
+    acc_threshold = _imu_motion_threshold(acc_mag, acc_scores, cfg, fs_origin)
+    gyro_threshold = _imu_motion_threshold(gyro_mag, gyro_scores, cfg, fs_origin)
+    acc_flags = acc_scores > acc_threshold
+    gyro_flags = gyro_scores > gyro_threshold
+    flags = _keep_longest_true_run_flags(
+        _postprocess_motion_flags(acc_flags | gyro_flags)
+    )
+    scores = np.maximum(
+        _normalised_scores(acc_scores, acc_threshold),
+        _normalised_scores(gyro_scores, gyro_threshold),
+    )
+    motion_segment = _longest_true_run(flags, cfg)
+    return MotionDetectionResult(
+        motion_segment=motion_segment,
+        flags=flags,
+        centers_s=centers_s,
+        scores=scores,
+        threshold=1.0,
+        acc_threshold=float(acc_threshold),
+        gyro_threshold=float(gyro_threshold),
+        acc_score_max=float(np.nanmax(acc_scores)) if acc_scores.size else 0.0,
+        gyro_score_max=float(np.nanmax(gyro_scores)) if gyro_scores.size else 0.0,
+    )
+
+
+def _source_imu_magnitude(
+    axes: tuple[np.ndarray, np.ndarray, np.ndarray],
+    *,
+    fs_origin: int,
+    high_hz: float,
+) -> np.ndarray:
+    filtered = [
+        _safe_source_bandpass(axis, fs_origin=fs_origin, high_hz=high_hz)
+        for axis in axes
+    ]
+    return np.sqrt(sum(axis**2 for axis in filtered))
+
+
+def _safe_source_bandpass(
+    values: np.ndarray,
+    *,
+    fs_origin: int,
+    high_hz: float,
+) -> np.ndarray:
+    arr = _finite_signal(np.asarray(values, dtype=float))
+    baseline = arr - float(np.nanmean(arr)) if arr.size else arr
+    if arr.size < 16:
+        return baseline
+    nyq = float(fs_origin) / 2.0
+    low = 0.5
+    high = min(float(high_hz), 0.45 * float(fs_origin))
+    if not (0.0 < low < high < nyq):
+        return baseline
+    try:
+        b, a = butter(4, [low / nyq, high / nyq], btype="bandpass")
+        return filtfilt(b, a, arr)
+    except ValueError:
+        return baseline
+
+
+def _source_window_std(
+    values: np.ndarray,
+    cfg: V2RunConfig,
+    *,
+    fs_origin: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    win = int(round(float(cfg.window_seconds) * int(fs_origin)))
+    step = int(round(float(cfg.window_step_seconds) * int(fs_origin)))
+    if win <= 1 or step <= 0:
+        return np.zeros(0, dtype=float), np.zeros(0, dtype=float)
+    starts = range(0, max(0, values.size - win + 1), step)
+    scores: list[float] = []
+    centers: list[float] = []
+    for start in starts:
+        segment = values[start : start + win]
+        scores.append(float(np.std(segment, ddof=1)) if segment.size > 1 else 0.0)
+        centers.append((float(start) + 0.5 * float(win)) / float(fs_origin))
+    return np.asarray(scores, dtype=float), np.asarray(centers, dtype=float)
+
+
+def _imu_motion_threshold(
+    source_mag: np.ndarray,
+    window_scores: np.ndarray,
+    cfg: V2RunConfig,
+    fs_origin: int,
+) -> float:
+    calib_len = min(
+        max(2, int(round(float(cfg.calib_time) * int(fs_origin)))),
+        int(source_mag.size),
+    )
+    baseline = source_mag[:calib_len]
+    baseline_std = float(np.std(baseline, ddof=1)) if baseline.size > 1 else 0.0
+    max_score = (
+        float(np.nanmax(window_scores))
+        if window_scores.size and np.isfinite(window_scores).any()
+        else 0.0
+    )
+    return max(
+        float(cfg.motion_th_scale) * baseline_std,
+        _MOTION_IMU_RELATIVE_FLOOR * max_score,
+        1e-12,
+    )
+
+
+def _normalised_scores(scores: np.ndarray, threshold: float) -> np.ndarray:
+    denom = max(float(threshold), 1e-12)
+    return np.asarray(scores, dtype=float) / denom
+
+
+def _postprocess_motion_flags(flags: np.ndarray) -> np.ndarray:
+    out = np.asarray(flags, dtype=bool).copy()
+    out = _bridge_short_false_runs(out, _MOTION_IMU_GAP_BRIDGE_WINDOWS)
+    out = _remove_short_true_runs(out, _MOTION_IMU_MIN_RUN_WINDOWS)
+    return out
+
+
+def _bridge_short_false_runs(flags: np.ndarray, max_gap: int) -> np.ndarray:
+    out = np.asarray(flags, dtype=bool).copy()
+    idx = 0
+    while idx < out.size:
+        if out[idx]:
+            idx += 1
+            continue
+        start = idx
+        while idx + 1 < out.size and not out[idx + 1]:
+            idx += 1
+        end = idx
+        if (
+            start > 0
+            and end + 1 < out.size
+            and out[start - 1]
+            and out[end + 1]
+            and end - start + 1 <= int(max_gap)
+        ):
+            out[start : end + 1] = True
+        idx += 1
+    return out
+
+
+def _remove_short_true_runs(flags: np.ndarray, min_len: int) -> np.ndarray:
+    out = np.asarray(flags, dtype=bool).copy()
+    idx = 0
+    while idx < out.size:
+        if not out[idx]:
+            idx += 1
+            continue
+        start = idx
+        while idx + 1 < out.size and out[idx + 1]:
+            idx += 1
+        end = idx
+        if end - start + 1 < int(min_len):
+            out[start : end + 1] = False
+        idx += 1
+    return out
+
+
+def _keep_longest_true_run_flags(flags: np.ndarray) -> np.ndarray:
+    out = np.zeros_like(np.asarray(flags, dtype=bool))
+    best_start = best_end = -1
+    best_len = 0
+    idx = 0
+    while idx < flags.size:
+        if not flags[idx]:
+            idx += 1
+            continue
+        start = idx
+        while idx + 1 < flags.size and flags[idx + 1]:
+            idx += 1
+        end = idx
+        run_len = end - start + 1
+        if run_len > best_len:
+            best_start, best_end, best_len = start, end, run_len
+        idx += 1
+    if best_len > 0:
+        out[best_start : best_end + 1] = True
+    return out
+
+
+def _motion_flag_at_center(
+    center_s: float,
+    detection: MotionDetectionResult,
+) -> bool:
+    if detection.flags.size == 0 or detection.centers_s.size == 0:
+        return False
+    idx = int(np.argmin(np.abs(detection.centers_s - float(center_s))))
+    return bool(detection.flags[idx])
+
+
+def _motion_detection_metadata(detection: MotionDetectionResult) -> dict[str, Any]:
+    return {
+        "source": "raw_imu_acc_gyro",
+        "threshold": float(detection.threshold),
+        "acc_threshold": float(detection.acc_threshold),
+        "gyro_threshold": float(detection.gyro_threshold),
+        "acc_score_max": float(detection.acc_score_max),
+        "gyro_score_max": float(detection.gyro_score_max),
+        "relative_floor": float(_MOTION_IMU_RELATIVE_FLOOR),
+        "gap_bridge_windows": int(_MOTION_IMU_GAP_BRIDGE_WINDOWS),
+        "min_run_windows": int(_MOTION_IMU_MIN_RUN_WINDOWS),
+        "window_count": int(detection.flags.size),
+        "motion_window_count": int(np.count_nonzero(detection.flags)),
+    }
 
 
 def _motion_flags(acc_mag: np.ndarray, cfg: V2RunConfig) -> np.ndarray:

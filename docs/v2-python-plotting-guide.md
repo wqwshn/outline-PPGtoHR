@@ -107,7 +107,9 @@ v2 绘图系统负责将优化报告（`schema_version=v2` 的 JSON）渲染为�
 
 ### 4.3 运动段背景
 
-运动段用浅灰色背景区域标记，便于直观判断实验运动区间。心率图背景由报告中的 `motion_segment.start_s/end_s` 加 `time_bias` 对齐后绘制，只表示最长连续运动段；恢复段和逐窗口运动检测的伪运动段不会再被涂成背景。`hr[:, 4]` 的 `is_motion` 标志仍保留在 HR CSV 和误差统计中，但不再驱动图底部阴影。
+运动段用浅灰色背景区域标记，便于直观判断实验运动区间。心率图背景由报告中的 `motion_segment.start_s/end_s` 加 `time_bias` 对齐后绘制，只表示最长连续运动段；恢复段不会再被涂成背景。
+
+2026-06-15 起，`motion_segment` 由源速率 100 Hz ACC+Gyro 联合分割得到，不依赖 `fs_target`、LMS/KLMS 自适应滤波类型或 BO 搜索出的心率参数。`hr[:, 4]` 的 `is_motion` 标志与 `motion_segment` 保持同源，用于 HR CSV 和误差统计；报告中的 `motion_detection` 元数据记录阈值和窗口数，方便排查运动阴影异常。
 
 ## 5. 坐标轴与尺寸
 

@@ -15,6 +15,7 @@ v2 是 PPG 心率求解算法的一次架构升级。相比 v1 的多路径独�
 - **自适应滤波策略多样化**：支持标准 LMS、非因果 LMS（NC-LMS）、核 LMS（KLMS）、随机傅里叶特征 LMS（RFF-LMS）、二阶 Volterra LMS 共五种自适应滤波策略。
 - **贝叶斯超参数优化**：通过 Optuna + TPE Sampler 对窗长、搜索范围、限幅参数、滤波器参数等进行自动调优。
 - **参数泛化评估**：按运动类型组织多个样本，支持 `all_train` 与 `leave_one_group_out`，用于评估同一组参数在同场景不同实验数据上的稳定性。
+- **源速率 IMU 运动分割**：运动段由原始 100 Hz ACC + Gyro 联合判别，不依赖 `fs_target`、LMS/KLMS 类型或贝叶斯优化出的心率参数；最长连续运动段用于自适应调度、窗口分类和绘图阴影。
 - **运动感知自适应调度**：只在最长运动段及其延伸范围内启用自适应滤波，静息段直接使用 FFT 结果，避免自适应滤波在无运动时引入噪声。
 - **恢复检测机制**：运动结束后若自适应结果与 FFT 差异过大，自动寻找交叉点提前切回 FFT，防止自适应滤波器在静息段发散；恢复段仍可使用 LMS 结果，但不再使用运动主频频谱惩罚。
 - **窗口级诊断追踪**：每个窗口记录 `window_kind` 与结构化 `spectrum_tracking`，GUI 可按静息段、运动段、运动恢复段显示真实算法路径和谱峰追踪过程。
@@ -28,7 +29,7 @@ v2 是 PPG 心率求解算法的一次架构升级。相比 v1 的多路径独�
 | 参考信号 | HF、ACC（顺序固定） | HF、CF、ACC（顺序可配置） |
 | CF 信号 | 不支持 | 支持（电容/电阻比值） |
 | 自适应策略 | LMS + NLMS | LMS / NC-LMS / KLMS / RFF-LMS / Volterra |
-| 运动段处理 | 全窗独立判定 | 最长连续运动段 + 延伸缓冲 |
+| 运动段处理 | 全窗独立判定 | 源速率 ACC+Gyro 最长连续运动段 + 延伸缓冲 |
 | 恢复机制 | 无 | 基于 FFT 偏差触发，交叉点检测 |
 | 参数调优 | 手动 | 贝叶斯自动优化 |
 
@@ -99,7 +100,7 @@ batch_pipeline.py ──► qc.py + optimizer.py + plotting.py
                             ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │ 1. 数据加载与预处理                                              │
-│    ├── load_raw_data → raw_data (N×12) + ref_data (M×2)         │
+│    ├── load_raw_data → raw_data (N×14) + ref_data (M×2)         │
 │    ├── 通道提取: ppg / hf1,hf2 / uc1,uc2,ut1,ut2 → cf1,cf2     │
 │    ├── 重采样: scipy.signal.resample_poly (100Hz → fs_target)   │
 │    ├── 带通滤波: 4阶 Butterworth [0.5, 5.0] Hz, filtfilt        │
@@ -108,9 +109,11 @@ batch_pipeline.py ──► qc.py + optimizer.py + plotting.py
                             ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │ 2. 运动检测                                                      │
-│    ├── 原始 ACC 上计算基线标准差 (前 calib_time 秒)               │
-│    ├── 滤波后 acc_mag = sqrt(accx² + accy² + accz²)             │
-│    ├── 滑窗判定: std(acc_mag) > motion_th_scale × baseline_std  │
+│    ├── 使用原始 100 Hz ACC + Gyro，不使用 fs_target 重采样结果    │
+│    ├── ACC 带通 0.5-5 Hz，Gyro 带通 0.5-10 Hz                    │
+│    ├── 滑窗计算 ACC/Gyro magnitude 标准差                         │
+│    ├── 阈值 = max(motion_th_scale × 静息基线, 5% × 全段峰值)      │
+│    ├── ACC 或 Gyro 超阈值即判为运动，桥接短缺口并移除短孤立段      │
 │    └── 提取最长连续运动段 [motion_start, motion_end]             │
 └───────────────────────────┬─────────────────────────────────────┘
                             ▼
@@ -549,6 +552,25 @@ conda run -n ppg-hr python scripts/analyze_bobi_soft_penalty_optimization.py
 ```
 
 输出位于 `figures/bobi_soft_penalty_optimization_20260615/`，包含新优化报告、渲染后的心率图和 `bobi_soft_penalty_comparison.json`。
+
+### 6.2.3 俯卧撑源速率 IMU 运动分割验证（2026-06-15）
+
+本轮针对 `bug/运动段划分优化` 中的俯卧撑、开合跳、波比跳数据验证运动/静息划分机制。旧 v2 报告中存在两类问题：
+
+- `multi_fuwo1_TS` 的 LMS/KLMS 报告都只记录约 `67-85s` 的运动段，明显短于 20 个俯卧撑的实际活动区间。
+- `multi_fuwo2_TS` 的同一原始数据在 LMS 报告中为 `60-72s`，在 KLMS 报告中为 `60-144s`。根因是旧 `motion_segment` 来自重采样 + 带通后的 ACC magnitude，会被 BO 选出的 `fs_target` 间接影响。
+
+新机制将运动分割固定在原始 100 Hz IMU 上执行，并联合 ACC/Gyro：
+
+| 样本 | 新 `motion_segment` | 持续时间 | 备注 |
+|------|---------------------|----------|------|
+| `multi_fuwo1_TS` | `66-153s` | 87s | 俯卧撑低腕动场景不再短检 |
+| `multi_fuwo2_TS` + LMS best params | `59-144s` | 85s | 与 KLMS 使用同一分割 |
+| `multi_fuwo2_TS` + KLMS best params | `59-144s` | 85s | 不再随 adaptive filter 改变 |
+| `multi_kaihe2` | `63-130s` | 67s | 5% 峰值下限避免把恢复尾部长期涂成运动段 |
+| `multi_bobi1` | `61-135s` | 74s | 保持波比跳主运动段 |
+
+`motion_detection` 元数据记录检测来源、ACC/Gyro 阈值、相对峰值下限、短缺口桥接窗口数、最短运动段窗口数和运动窗口数，便于后续排查分割异常。
 
 ### 6.3 优化流程
 

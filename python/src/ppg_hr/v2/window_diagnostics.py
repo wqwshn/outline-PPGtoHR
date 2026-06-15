@@ -35,8 +35,7 @@ from .solver import (
     _apply_ppg_input_transform,
     _classify_window_kind,
     _continuity_protection_half_width_hz,
-    _longest_true_run,
-    _motion_flags,
+    _detect_motion_from_raw_imu,
     _ordered_reference_signals,
     _select_ppg_raw,
     _solver_params_from_v2,
@@ -1103,6 +1102,9 @@ def _prepare_signals(cfg: V2RunConfig) -> _PreparedSignals:
     accx_raw = raw_data[:, 8]
     accy_raw = raw_data[:, 9]
     accz_raw = raw_data[:, 10]
+    gyrox_raw = raw_data[:, 11]
+    gyroy_raw = raw_data[:, 12]
+    gyroz_raw = raw_data[:, 13]
 
     ppg_source = _apply_ppg_input_transform(
         ppg_raw,
@@ -1134,8 +1136,16 @@ def _prepare_signals(cfg: V2RunConfig) -> _PreparedSignals:
     accy = filtfilt(b, a, accy_ori)
     accz = filtfilt(b, a, accz_ori)
 
-    acc_mag = np.sqrt(accx**2 + accy**2 + accz**2)
-    motion_segment = _longest_true_run(_motion_flags(acc_mag, cfg), cfg)
+    motion_segment = _detect_motion_from_raw_imu(
+        accx_raw,
+        accy_raw,
+        accz_raw,
+        gyrox_raw,
+        gyroy_raw,
+        gyroz_raw,
+        cfg,
+        fs_origin=fs_origin,
+    ).motion_segment
     references = _ordered_reference_signals(
         normalise_reference_order(cfg.reference_groups_order),
         hf1=hf1,

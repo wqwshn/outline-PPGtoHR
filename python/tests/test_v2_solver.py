@@ -354,6 +354,135 @@ def _write_sensor(path: Path, *, motion: bool) -> None:
     df.to_csv(path, index=False)
 
 
+def _write_low_acc_gyro_motion_sensor(path: Path) -> None:
+    fs = 100
+    accx, accy, accz, gyrox, gyroy, gyroz = _make_low_acc_gyro_motion_raw(
+        seconds=120,
+        fs=fs,
+        motion_start=35.0,
+        motion_end=95.0,
+    )
+    t = np.arange(accx.size, dtype=float) / fs
+    ppg = 1000 + 20 * np.sin(2 * np.pi * 1.2 * t)
+    df = pd.DataFrame(
+        {
+            "Uc1(mV)": 1.0 + 0.01 * np.sin(t),
+            "Uc2(mV)": 1.1 + 0.01 * np.cos(t),
+            "Ut1(mV)": 5.0 + 0.02 * gyrox,
+            "Ut2(mV)": 5.5 + 0.01 * gyroy,
+            "PPG_Green": ppg,
+            "PPG_Red": ppg,
+            "PPG_IR": ppg,
+            "AccX(g)": accx,
+            "AccY(g)": accy,
+            "AccZ(g)": accz,
+            "GyroX(dps)": gyrox,
+            "GyroY(dps)": gyroy,
+            "GyroZ(dps)": gyroz,
+        }
+    )
+    df.to_csv(path, index=False)
+
+
+def _make_low_acc_gyro_motion_raw(
+    *,
+    seconds: int = 120,
+    fs: int = 100,
+    motion_start: float = 35.0,
+    motion_end: float = 95.0,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    t = np.arange(seconds * fs, dtype=float) / fs
+    motion_mask = (t >= motion_start) & (t <= motion_end)
+    accx = 0.0002 * np.sin(2 * np.pi * 0.8 * t)
+    accy = 0.0001 * np.cos(2 * np.pi * 0.9 * t)
+    accz = np.ones_like(t) + 0.0002 * np.sin(2 * np.pi * 0.7 * t)
+    gyrox = 0.05 * np.sin(2 * np.pi * 0.4 * t)
+    gyroy = 0.04 * np.cos(2 * np.pi * 0.5 * t)
+    gyroz = 0.03 * np.sin(2 * np.pi * 0.6 * t)
+    gyrox[motion_mask] += 24.0 * np.sin(2 * np.pi * 1.1 * t[motion_mask])
+    gyroy[motion_mask] += 16.0 * np.cos(2 * np.pi * 1.1 * t[motion_mask])
+    gyroz[motion_mask] += 8.0 * np.sin(2 * np.pi * 2.2 * t[motion_mask])
+    return accx, accy, accz, gyrox, gyroy, gyroz
+
+
+def test_raw_imu_motion_detector_uses_gyro_for_low_acc_motion() -> None:
+    from ppg_hr.v2.solver import _detect_motion_from_raw_imu
+
+    accx, accy, accz, gyrox, gyroy, gyroz = _make_low_acc_gyro_motion_raw()
+    result = _detect_motion_from_raw_imu(
+        accx,
+        accy,
+        accz,
+        gyrox,
+        gyroy,
+        gyroz,
+        V2RunConfig(data_path=Path("dummy.csv"), ref_path=Path("dummy_ref.csv")),
+        fs_origin=100,
+    )
+
+    assert result.motion_segment is not None
+    assert result.motion_segment["start_s"] <= 40.0
+    assert result.motion_segment["end_s"] >= 90.0
+    assert result.flags.sum() >= 50
+
+
+def test_raw_imu_motion_detector_is_fs_target_independent() -> None:
+    from ppg_hr.v2.solver import _detect_motion_from_raw_imu
+
+    accx, accy, accz, gyrox, gyroy, gyroz = _make_low_acc_gyro_motion_raw()
+    cfg_25 = V2RunConfig(
+        data_path=Path("dummy.csv"),
+        ref_path=Path("dummy_ref.csv"),
+        fs_target=25,
+    )
+    cfg_100 = V2RunConfig(
+        data_path=Path("dummy.csv"),
+        ref_path=Path("dummy_ref.csv"),
+        fs_target=100,
+    )
+
+    result_25 = _detect_motion_from_raw_imu(
+        accx, accy, accz, gyrox, gyroy, gyroz, cfg_25, fs_origin=100
+    )
+    result_100 = _detect_motion_from_raw_imu(
+        accx, accy, accz, gyrox, gyroy, gyroz, cfg_100, fs_origin=100
+    )
+
+    assert result_25.motion_segment == result_100.motion_segment
+    assert result_25.flags.tolist() == result_100.flags.tolist()
+    assert np.allclose(result_25.centers_s, result_100.centers_s)
+
+
+def test_solve_v2_motion_segment_uses_raw_imu_independent_of_fs_target(
+    tmp_path: Path,
+) -> None:
+    data = tmp_path / "low_acc_gyro.csv"
+    ref = tmp_path / "low_acc_gyro_ref.csv"
+    _write_low_acc_gyro_motion_sensor(data)
+    _write_ref(ref, seconds=120)
+
+    cfg_25 = V2RunConfig(
+        data_path=data,
+        ref_path=ref,
+        fs_target=25,
+        reference_groups_order=("HF",),
+    )
+    cfg_100 = V2RunConfig(
+        data_path=data,
+        ref_path=ref,
+        fs_target=100,
+        reference_groups_order=("HF",),
+    )
+
+    result_25 = solve_v2(cfg_25)
+    result_100 = solve_v2(cfg_100)
+
+    assert result_25.metadata["motion_segment"] is not None
+    assert result_25.metadata["motion_segment"] == result_100.metadata["motion_segment"]
+    assert result_25.metadata["used_adaptive_windows"] > 0
+    assert result_100.metadata["used_adaptive_windows"] > 0
+
+
 def test_log_absorbance_input_transform_estimates_relative_absorption() -> None:
     fs = 100
     t = np.arange(60 * fs, dtype=float) / fs
