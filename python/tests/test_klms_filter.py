@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import importlib
+
 import numpy as np
+import pytest
 
 from ppg_hr.core.klms_filter import klms_filter
+
+klms_mod = importlib.import_module("ppg_hr.core.klms_filter")
 
 
 def test_output_shapes() -> None:
@@ -70,3 +75,42 @@ def test_empty_when_M_exceeds_length() -> None:
     assert np.all(e == 0)
     assert A.shape == (0,)
     assert C.shape[1] == 0
+
+
+def test_accelerated_core_matches_python_reference_when_available() -> None:
+    """The optional fast path must be an exact implementation acceleration."""
+    if klms_mod._klms_filter_core_numba is None:
+        pytest.skip("numba is not installed")
+
+    rng = np.random.default_rng(20260616)
+    cases = [
+        (4, 0, 1.0, 0.0),
+        (5, 1, 1.0, 0.1),
+        (8, 2, 0.5, 0.2),
+        (6, 1, 0.0, 0.1),
+    ]
+    for M, K, sigma, epsilon in cases:
+        u_arr = klms_mod._zscore(rng.normal(size=120))
+        d_arr = klms_mod._zscore(rng.normal(size=120))
+
+        expected = klms_mod._klms_filter_core_python(
+            0.1,
+            M,
+            K,
+            u_arr,
+            d_arr,
+            sigma,
+            epsilon,
+        )
+        actual = klms_mod._klms_filter_core_numba(
+            0.1,
+            M,
+            K,
+            u_arr,
+            d_arr,
+            sigma,
+            epsilon,
+        )
+
+        for expected_arr, actual_arr in zip(expected, actual):
+            np.testing.assert_allclose(actual_arr, expected_arr, rtol=1e-12, atol=1e-12)

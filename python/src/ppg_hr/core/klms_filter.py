@@ -21,12 +21,140 @@ import numpy as np
 
 __all__ = ["klms_filter"]
 
+try:  # Optional acceleration; pure Python fallback is kept below.
+    from numba import njit
+except Exception:  # pragma: no cover - depends on local environment
+    njit = None
+
 
 def _zscore(x: np.ndarray) -> np.ndarray:
     sd = x.std(ddof=1)
     if sd == 0.0 or not np.isfinite(sd):
         return x - x.mean()
     return (x - x.mean()) / sd
+
+
+def _klms_filter_core_python(
+    mu: float,
+    M: int,
+    K: int,
+    u_arr: np.ndarray,
+    d_arr: np.ndarray,
+    sigma: float,
+    epsilon: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    n_samples = u_arr.size
+    e = np.zeros(n_samples, dtype=float)
+    C = np.zeros((M + K, 0), dtype=float)
+    A = np.zeros(0, dtype=float)
+
+    if M < 1 or n_samples - K < M:
+        return e, A, C
+
+    two_sigma2 = 2.0 * float(sigma) ** 2
+    eps_threshold = float(epsilon)
+
+    # MATLAB n = M : N-K (1-based inclusive) → Python 0-based [M-1, N-K).
+    for n_py in range(M - 1, n_samples - K):
+        idx = np.arange(n_py + K, n_py - M, -1)
+        uvec = u_arr[idx]
+
+        if C.shape[1] == 0:
+            err = float(d_arr[n_py])
+            e[n_py] = err
+            C = uvec.reshape(-1, 1)
+            A = np.array([mu * err], dtype=float)
+            continue
+
+        diffs = C - uvec[:, None]
+        dists = np.sum(diffs * diffs, axis=0)
+        if two_sigma2 > 0:
+            kappa = np.exp(-dists / two_sigma2)
+        else:
+            kappa = (dists == 0).astype(float)
+        y = float(A @ kappa)
+        err = float(d_arr[n_py]) - y
+        e[n_py] = err
+
+        min_idx = int(np.argmin(dists))
+        min_dist = float(dists[min_idx])
+
+        if min_dist <= eps_threshold:
+            A[min_idx] += mu * err
+        else:
+            C = np.concatenate([C, uvec.reshape(-1, 1)], axis=1)
+            A = np.concatenate([A, np.array([mu * err])])
+
+    return e, A, C
+
+
+if njit is not None:
+
+    @njit(cache=True)
+    def _klms_filter_core_numba(
+        mu: float,
+        M: int,
+        K: int,
+        u_arr: np.ndarray,
+        d_arr: np.ndarray,
+        sigma: float,
+        epsilon: float,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        n_samples = u_arr.size
+        e = np.zeros(n_samples, dtype=np.float64)
+        span = M + K
+        max_cols = max(n_samples, 1)
+        C = np.zeros((span, max_cols), dtype=np.float64)
+        A = np.zeros(max_cols, dtype=np.float64)
+        dict_len = 0
+
+        if M < 1 or n_samples - K < M:
+            return e, A[:0].copy(), C[:, :0].copy()
+
+        two_sigma2 = 2.0 * sigma * sigma
+
+        for n_py in range(M - 1, n_samples - K):
+            if dict_len == 0:
+                err = d_arr[n_py]
+                e[n_py] = err
+                for j in range(span):
+                    C[j, 0] = u_arr[n_py + K - j]
+                A[0] = mu * err
+                dict_len = 1
+                continue
+
+            y = 0.0
+            min_idx = 0
+            min_dist = 1.0e308
+            for col in range(dict_len):
+                dist = 0.0
+                for j in range(span):
+                    diff = C[j, col] - u_arr[n_py + K - j]
+                    dist += diff * diff
+                if two_sigma2 > 0.0:
+                    kappa = np.exp(-dist / two_sigma2)
+                else:
+                    kappa = 1.0 if dist == 0.0 else 0.0
+                y += A[col] * kappa
+                if dist < min_dist:
+                    min_dist = dist
+                    min_idx = col
+
+            err = d_arr[n_py] - y
+            e[n_py] = err
+
+            if min_dist <= epsilon:
+                A[min_idx] += mu * err
+            else:
+                for j in range(span):
+                    C[j, dict_len] = u_arr[n_py + K - j]
+                A[dict_len] = mu * err
+                dict_len += 1
+
+        return e, A[:dict_len].copy(), C[:, :dict_len].copy()
+
+else:
+    _klms_filter_core_numba = None
 
 
 def klms_filter(
@@ -74,45 +202,22 @@ def klms_filter(
             f"d must have at least N-K={n_samples - K} samples, got {d_arr.size}"
         )
 
-    e = np.zeros(n_samples, dtype=float)
-    C = np.zeros((M + K, 0), dtype=float)
-    A = np.zeros(0, dtype=float)
-
-    if M < 1 or n_samples - K < M:
-        return e, A, C
-
-    two_sigma2 = 2.0 * float(sigma) ** 2
-    eps_threshold = float(epsilon)
-
-    # MATLAB n = M : N-K (1-based inclusive) → Python 0-based [M-1, N-K).
-    for n_py in range(M - 1, n_samples - K):
-        idx = np.arange(n_py + K, n_py - M, -1)
-        uvec = u_arr[idx]
-
-        if C.shape[1] == 0:
-            err = float(d_arr[n_py])
-            e[n_py] = err
-            C = uvec.reshape(-1, 1)
-            A = np.array([mu * err], dtype=float)
-            continue
-
-        diffs = C - uvec[:, None]
-        dists = np.sum(diffs * diffs, axis=0)
-        if two_sigma2 > 0:
-            kappa = np.exp(-dists / two_sigma2)
-        else:
-            kappa = (dists == 0).astype(float)
-        y = float(A @ kappa)
-        err = float(d_arr[n_py]) - y
-        e[n_py] = err
-
-        min_idx = int(np.argmin(dists))
-        min_dist = float(dists[min_idx])
-
-        if min_dist <= eps_threshold:
-            A[min_idx] += mu * err
-        else:
-            C = np.concatenate([C, uvec.reshape(-1, 1)], axis=1)
-            A = np.concatenate([A, np.array([mu * err])])
-
-    return e, A, C
+    if _klms_filter_core_numba is not None:
+        return _klms_filter_core_numba(
+            float(mu),
+            int(M),
+            int(K),
+            u_arr,
+            d_arr,
+            float(sigma),
+            float(epsilon),
+        )
+    return _klms_filter_core_python(
+        float(mu),
+        int(M),
+        int(K),
+        u_arr,
+        d_arr,
+        float(sigma),
+        float(epsilon),
+    )
