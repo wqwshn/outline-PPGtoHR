@@ -63,17 +63,22 @@ def main() -> None:
     rows: list[dict[str, Any]] = []
     for report_path, payload in reports:
         row = _base_row(report_path, payload)
+        csv_metrics = _metrics_from_error_csv(report_path, payload)
+        row["error_csv_rel"] = csv_metrics.get("error_csv_rel", "")
         hr = np.asarray(payload.get("hr", []), dtype=float)
-        fft_metrics = _metrics_from_hr(hr, column=2)
-        hf_metrics = _metrics_from_hr(hr, column=3)
+        fft_metrics = csv_metrics.get("fft") or _metrics_from_hr(hr, column=2)
+        hf_metrics = csv_metrics.get("hf") or _metrics_from_hr(hr, column=3)
         row.update(_prefix_metrics("fft", fft_metrics))
         row.update(_prefix_metrics("hf", hf_metrics))
 
-        acc_key = _cache_key("acc", row["report_rel"], row["data_path"], row["ref_path"])
-        if acc_key not in cache or _cache_failed(cache[acc_key]):
-            cache[acc_key] = _solve_with_params(payload, payload.get("best_params", {}), ("ACC",))
-            _save_cache(cache)
-        row.update(_prefix_metrics("acc", cache[acc_key]))
+        acc_metrics = csv_metrics.get("acc")
+        if acc_metrics is None:
+            acc_key = _cache_key("acc", row["report_rel"], row["data_path"], row["ref_path"])
+            if acc_key not in cache or _cache_failed(cache[acc_key]):
+                cache[acc_key] = _solve_with_params(payload, payload.get("best_params", {}), ("ACC",))
+                _save_cache(cache)
+            acc_metrics = cache[acc_key]
+        row.update(_prefix_metrics("acc", acc_metrics))
 
         for key in PARAM_KEYS:
             row[key] = payload.get("best_params", {}).get(key)
@@ -182,6 +187,72 @@ def _subject_from_payload(sample_stem: str, data_date: str) -> str:
     if "_TS" in sample_stem or data_date == "20260615":
         return "TS"
     return "LYX"
+
+
+def _metrics_from_error_csv(report_path: Path, payload: dict[str, Any]) -> dict[str, Any]:
+    csv_path = _find_error_csv(report_path, payload)
+    if csv_path is None:
+        return {}
+
+    method_rows: dict[str, dict[str, str]] = {}
+    with csv_path.open("r", encoding="utf-8-sig", newline="") as fh:
+        for row in csv.DictReader(fh):
+            method = str(row.get("method", "")).strip()
+            if method:
+                method_rows[method] = row
+
+    adaptive_filter = str(payload.get("adaptive_filter", ""))
+    hf_method = "K-LMS+H" if adaptive_filter == "klms" else "LMS+H"
+    acc_method = "K-LMS+A" if adaptive_filter == "klms" else "LMS+A"
+
+    metrics: dict[str, Any] = {"error_csv_rel": csv_path.relative_to(ROOT).as_posix()}
+    if "FFT" in method_rows:
+        metrics["fft"] = _metrics_from_error_row(method_rows["FFT"])
+    if hf_method in method_rows:
+        metrics["hf"] = _metrics_from_error_row(method_rows[hf_method])
+    if acc_method in method_rows:
+        metrics["acc"] = _metrics_from_error_row(method_rows[acc_method])
+    return metrics
+
+
+def _find_error_csv(report_path: Path, payload: dict[str, Any]) -> Path | None:
+    csv_dir = report_path.parent.parent / "csv"
+    if not csv_dir.is_dir():
+        return None
+
+    exact = csv_dir / f"{report_path.stem}-error.csv"
+    if exact.is_file():
+        return exact
+
+    sample_stem = _report_sample_stem(report_path)
+    if not sample_stem:
+        sample_stem = Path(str(payload.get("data_path", ""))).stem
+    adaptive_filter = str(payload.get("adaptive_filter", "")).lower()
+    reference_key = str(payload.get("reference_order_key", "")).lower()
+
+    candidates = sorted(csv_dir.glob(f"{sample_stem}-*error.csv"))
+    filtered = [
+        path
+        for path in candidates
+        if f"-{adaptive_filter}-" in path.name.lower()
+        and (not reference_key or f"-{reference_key}-" in path.name.lower())
+    ]
+    if filtered:
+        return sorted(filtered, key=lambda path: (len(path.name), path.name))[0]
+    if candidates:
+        return sorted(candidates, key=lambda path: (len(path.name), path.name))[0]
+    return None
+
+
+def _metrics_from_error_row(row: dict[str, str]) -> dict[str, float]:
+    return {
+        "total_aae": _num(row.get("total_aae")),
+        "rest_aae": _num(row.get("rest_aae")),
+        "motion_aae": _num(row.get("motion_aae")),
+        "total_hit_rate_5bpm": _num(row.get("total_hit_rate_5bpm")),
+        "rest_hit_rate_5bpm": _num(row.get("rest_hit_rate_5bpm")),
+        "motion_hit_rate_5bpm": _num(row.get("motion_hit_rate_5bpm")),
+    }
 
 
 def _safe_get(d: dict[str, Any], keys: tuple[str, ...]) -> Any:
