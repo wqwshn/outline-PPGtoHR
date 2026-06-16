@@ -17,8 +17,9 @@ from ppg_hr.v2.types import V2RunConfig
 
 ROOT = Path(__file__).resolve().parent
 WORKSPACE = ROOT.parents[1]
+CACHE_SCHEMA_VERSION = "20260616-path-aware"
 OUT = ROOT / "analysis_outputs"
-CACHE = OUT / "replay_cache.json"
+CACHE = OUT / f"replay_cache_{CACHE_SCHEMA_VERSION}.json"
 
 MOTION_LABELS = {
     "tiaosheng": "跳绳",
@@ -26,6 +27,13 @@ MOTION_LABELS = {
     "fuwo": "俯卧撑",
     "kaihe": "开合跳",
     "wanju": "弯举",
+}
+MOTION_ORDER = {
+    "tiaosheng": 0,
+    "bobi": 1,
+    "fuwo": 2,
+    "kaihe": 3,
+    "wanju": 4,
 }
 
 PARAM_KEYS = (
@@ -61,7 +69,7 @@ def main() -> None:
         row.update(_prefix_metrics("fft", fft_metrics))
         row.update(_prefix_metrics("hf", hf_metrics))
 
-        acc_key = f"acc::{row['report_rel']}"
+        acc_key = _cache_key("acc", row["report_rel"], row["data_path"], row["ref_path"])
         if acc_key not in cache or _cache_failed(cache[acc_key]):
             cache[acc_key] = _solve_with_params(payload, payload.get("best_params", {}), ("ACC",))
             _save_cache(cache)
@@ -94,10 +102,16 @@ def _load_cache() -> dict[str, Any]:
 
 
 def _save_cache(cache: dict[str, Any]) -> None:
-    CACHE.write_text(
+    tmp_path = CACHE.with_suffix(".json.tmp")
+    tmp_path.write_text(
         json.dumps(cache, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    tmp_path.replace(CACHE)
+
+
+def _cache_key(kind: str, *parts: Any) -> str:
+    return "::".join([kind, CACHE_SCHEMA_VERSION, *(str(part) for part in parts)])
 
 
 def _collect_reports() -> list[tuple[Path, dict[str, Any]]]:
@@ -123,6 +137,7 @@ def _collect_reports() -> list[tuple[Path, dict[str, Any]]]:
 def _base_row(report_path: Path, payload: dict[str, Any]) -> dict[str, Any]:
     raw_data_path = Path(str(payload.get("data_path", "")))
     data_path = _resolve_report_path(payload, "data_path")
+    ref_path = _resolve_report_path(payload, "ref_path")
     sample = _resolved_sample_name(report_path, data_path)
     sample_stem = Path(sample).stem
     motion_type = _motion_type(sample_stem)
@@ -133,6 +148,7 @@ def _base_row(report_path: Path, payload: dict[str, Any]) -> dict[str, Any]:
         "report_rel": rel,
         "raw_data_path": str(raw_data_path),
         "data_path": str(data_path),
+        "ref_path": str(ref_path),
         "data_date": data_date,
         "research_bucket": report_path.relative_to(ROOT).parts[0],
         "subject": subject,
@@ -163,7 +179,7 @@ def _date_from_path(path: Path) -> str:
 
 
 def _subject_from_payload(sample_stem: str, data_date: str) -> str:
-    if "_TS" in sample_stem or data_date in {"20260613", "20260615"}:
+    if "_TS" in sample_stem or data_date == "20260615":
         return "TS"
     return "LYX"
 
@@ -276,32 +292,51 @@ def _config_from_payload(
 
 def _resolve_report_path(payload: dict[str, Any], key: str) -> Path:
     path = Path(str(payload.get(key, "")))
+    report_path = Path(str(payload.get("_report_path", "")))
+    report_sample = _report_sample_stem(report_path)
+    report_date = _date_from_path(report_path)
+    if report_sample and report_date:
+        if key == "data_path":
+            preferred_names = [f"{report_sample}.csv"]
+        elif key == "ref_path":
+            preferred_names = [f"{report_sample}_HR_ref.csv"]
+        else:
+            preferred_names = []
+        resolved = _find_first_existing_path([WORKSPACE / "data" / report_date], preferred_names)
+        if resolved is not None:
+            return resolved
     if path.is_file():
         return path
     date = _date_from_path(path)
     names = [path.name] if path.name else []
-    report_path = Path(str(payload.get("_report_path", "")))
-    report_sample = _report_sample_stem(report_path)
     if report_sample:
         if key == "data_path":
-            names.append(f"{report_sample}.csv")
+            names.insert(0, f"{report_sample}.csv")
         elif key == "ref_path":
-            names.append(f"{report_sample}_HR_ref.csv")
+            names.insert(0, f"{report_sample}_HR_ref.csv")
     names = [name for i, name in enumerate(names) if name and name not in names[:i]]
     if not names:
         return path
     roots: list[Path] = []
+    if report_date:
+        roots.append(WORKSPACE / "data" / report_date)
     if date:
         roots.append(WORKSPACE / "data" / date)
     roots.append(WORKSPACE / "data")
+    return _find_first_existing_path(roots, names) or path
+
+
+def _find_first_existing_path(roots: list[Path], names: list[str]) -> Path | None:
+    seen_roots: set[Path] = set()
     for root in roots:
-        if not root.is_dir():
+        if root in seen_roots or not root.is_dir():
             continue
+        seen_roots.add(root)
         for name in names:
             matches = sorted(root.rglob(name))
             if matches:
                 return matches[0]
-    return path
+    return None
 
 
 def _resolved_sample_name(report_path: Path, data_path: Path) -> str:
@@ -327,19 +362,30 @@ def _evaluate_scene_shared_candidates(
 ) -> list[dict[str, Any]]:
     grouped: dict[tuple[str, str], list[tuple[Path, dict[str, Any]]]] = defaultdict(list)
     for path, payload in reports:
-        sample = Path(str(payload.get("data_path", path.stem))).stem
-        grouped[(_motion_type(sample), str(payload.get("adaptive_filter", "")))].append((path, payload))
+        base = _base_row(path, payload)
+        grouped[(str(base["motion_type"]), str(payload.get("adaptive_filter", "")))].append((path, payload))
 
     rows: list[dict[str, Any]] = []
     for (motion_type, adaptive_filter), group_reports in sorted(grouped.items()):
         if len(group_reports) < 2:
             continue
         candidate_path, candidate_payload = _medoid_report(group_reports)
-        candidate_sample = Path(str(candidate_payload.get("data_path", ""))).stem
+        candidate_base = _base_row(candidate_path, candidate_payload)
+        candidate_sample = str(candidate_base["sample_stem"])
+        candidate_data_path = str(candidate_base["data_path"])
         candidate_params = candidate_payload.get("best_params", {})
         for report_path, payload in group_reports:
             base = _base_row(report_path, payload)
-            key = f"shared::{motion_type}::{adaptive_filter}::{candidate_sample}::{base['report_rel']}"
+            key = _cache_key(
+                "shared",
+                motion_type,
+                adaptive_filter,
+                candidate_sample,
+                candidate_data_path,
+                base["report_rel"],
+                base["data_path"],
+                base["ref_path"],
+            )
             if key not in cache or _cache_failed(cache[key]):
                 cache[key] = _solve_with_params(payload, candidate_params, ("HF",))
                 _save_cache(cache)
@@ -505,70 +551,297 @@ def _write_result_table(
     scene_rows: list[dict[str, Any]],
     shared_rows: list[dict[str, Any]],
 ) -> None:
+    del scene_rows, shared_rows
+    table_specs = [
+        (
+            "full_mae",
+            "total",
+            "mae",
+            "不同运动场景下心率解算全段 MAE 统计",
+            "tab:hr-full-mae",
+        ),
+        (
+            "full_r5",
+            "total",
+            "r5",
+            "不同运动场景下心率解算全段 \\(R_5\\) 命中率统计",
+            "tab:hr-full-r5",
+        ),
+        (
+            "motion_mae",
+            "motion",
+            "mae",
+            "不同运动场景下心率解算运动段 MAE 统计",
+            "tab:hr-motion-mae",
+        ),
+        (
+            "motion_r5",
+            "motion",
+            "r5",
+            "不同运动场景下心率解算运动段 \\(R_5\\) 命中率统计",
+            "tab:hr-motion-r5",
+        ),
+    ]
+
     lines: list[str] = []
     lines.append("# 目前实验数据心率解算结果汇总表")
     lines.append("")
     lines.append(f"- 统计时间：2026-06-16")
     lines.append(f"- v2 HF 独立优化报告数：{len(rows)}")
     lines.append("- ACC 对比：复用每个 HF 报告的 `best_params`，仅将 `reference_groups_order` 改为 `ACC` 后重放。")
-    lines.append("- 详细逐样本 CSV：`analysis_outputs/all_result_summary.csv`")
+    lines.append("- 行标签格式：`运动编号(日期-受试者)`；缺少 KLMS 独立优化结果的样本以 `--` 表示。")
+    lines.append("- 同口径 CSV：`analysis_outputs/table_full_mae.csv`、`table_full_r5.csv`、`table_motion_mae.csv`、`table_motion_r5.csv`。")
     lines.append("")
-    lines.append("## 按运动场景与滤波器汇总")
-    lines.append("")
-    lines.extend(_markdown_table(
-        scene_rows,
-        [
-            ("motion_label", "运动"),
-            ("adaptive_filter", "滤波器"),
-            ("n", "样本数"),
-            ("subjects", "受试者"),
-            ("dates", "采集日期"),
-            ("hf_total_aae_mean", "HF MAE"),
-            ("hf_r5_mean", "HF R5"),
-            ("acc_total_aae_mean", "ACC MAE"),
-            ("acc_r5_mean", "ACC R5"),
-            ("fft_total_aae_mean", "FFT MAE"),
-            ("fft_r5_mean", "FFT R5"),
-        ],
-    ))
-    lines.append("")
-    lines.append("## 逐样本结果")
-    lines.append("")
-    sample_rows = sorted(rows, key=lambda r: (r["motion_type"], r["sample_stem"], r["adaptive_filter"], r["data_date"]))
-    lines.extend(_markdown_table(
-        sample_rows,
-        [
-            ("data_date", "日期"),
-            ("subject", "受试者"),
-            ("motion_label", "运动"),
-            ("sample_stem", "样本"),
-            ("adaptive_filter", "滤波器"),
-            ("hf_total_aae", "HF MAE"),
-            ("hf_total_hit_rate_5bpm", "HF R5"),
-            ("acc_total_aae", "ACC MAE"),
-            ("acc_total_hit_rate_5bpm", "ACC R5"),
-            ("fft_total_aae", "FFT MAE"),
-            ("fft_total_hit_rate_5bpm", "FFT R5"),
-        ],
-    ))
-    lines.append("")
-    lines.append("## 场景共享参数候选重放")
-    lines.append("")
-    shared_summary = _shared_summary(shared_rows)
-    lines.extend(_markdown_table(
-        shared_summary,
-        [
-            ("motion_label", "运动"),
-            ("adaptive_filter", "滤波器"),
-            ("n", "样本数"),
-            ("candidate_sample", "共享候选参数来源"),
-            ("independent_mean_aae", "独立均值 MAE"),
-            ("shared_mean_aae", "共享候选均值 MAE"),
-            ("delta_aae", "共享-独立"),
-        ],
-    ))
-    lines.append("")
+
+    for file_stem, scope, metric_kind, caption, label in table_specs:
+        table_rows = _paired_stat_rows(rows, scope=scope, metric_kind=metric_kind)
+        _write_stat_csv(OUT / f"table_{file_stem}.csv", table_rows)
+        lines.append(f"## {caption}")
+        lines.append("")
+        lines.append("```latex")
+        lines.extend(_latex_stat_table(
+            table_rows,
+            caption=caption,
+            label=label,
+            metric_kind=metric_kind,
+        ))
+        lines.append("```")
+        lines.append("")
+
     (ROOT / "结果汇总统计表_20260616.md").write_text("\n".join(lines), encoding="utf-8")
+
+
+def _paired_stat_rows(
+    rows: list[dict[str, Any]],
+    *,
+    scope: str,
+    metric_kind: str,
+) -> list[dict[str, Any]]:
+    pairs: dict[tuple[str, str, str, str], dict[str, dict[str, Any]]] = defaultdict(dict)
+    for row in rows:
+        key = (
+            str(row["data_date"]),
+            str(row["subject"]),
+            str(row["motion_type"]),
+            str(row["sample_stem"]),
+        )
+        pairs[key][str(row["adaptive_filter"])] = row
+
+    stat_rows: list[dict[str, Any]] = []
+    for key, by_filter in sorted(pairs.items(), key=lambda item: _paired_sort_key(item[0])):
+        data_date, subject, motion_type, sample_stem = key
+        lms = by_filter.get("lms")
+        klms = by_filter.get("klms")
+        rec: dict[str, Any] = {
+            "scenario": _scenario_label(motion_type, sample_stem, data_date, subject),
+            "motion_type": motion_type,
+            "sample_stem": sample_stem,
+            "data_date": data_date,
+            "subject": subject,
+        }
+        rec.update(_stat_values_for_filter(lms, prefix="lms", scope=scope, metric_kind=metric_kind))
+        rec.update(_stat_values_for_filter(klms, prefix="klms", scope=scope, metric_kind=metric_kind))
+        if metric_kind == "mae":
+            rec["lms_hf_vs_acc_delta"] = _mae_reduction(rec["lms_hf"], rec["lms_acc"])
+            rec["klms_vs_lms_delta"] = _mae_reduction(rec["klms_hf"], rec["lms_hf"])
+        else:
+            rec["lms_hf_vs_acc_delta"] = _rate_delta_pp(rec["lms_hf"], rec["lms_acc"])
+            rec["klms_vs_lms_delta"] = _rate_delta_pp(rec["klms_hf"], rec["lms_hf"])
+        stat_rows.append(rec)
+
+    stat_rows.append(_average_stat_row(stat_rows))
+    return stat_rows
+
+
+def _write_stat_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+    fieldnames = [
+        "scenario",
+        "motion_type",
+        "sample_stem",
+        "data_date",
+        "subject",
+        "lms_hf",
+        "lms_acc",
+        "lms_fft",
+        "lms_hf_vs_acc_delta",
+        "klms_hf",
+        "klms_acc",
+        "klms_fft",
+        "klms_vs_lms_delta",
+    ]
+    with path.open("w", encoding="utf-8-sig", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _paired_sort_key(key: tuple[str, str, str, str]) -> tuple[Any, ...]:
+    data_date, subject, motion_type, sample_stem = key
+    return (
+        MOTION_ORDER.get(motion_type, 99),
+        _sample_number(sample_stem),
+        data_date,
+        subject,
+        sample_stem,
+    )
+
+
+def _sample_number(sample_stem: str) -> int:
+    m = re.match(r"multi_[A-Za-z]+(\d+)", sample_stem)
+    return int(m.group(1)) if m else 999
+
+
+def _scenario_label(motion_type: str, sample_stem: str, data_date: str, subject: str) -> str:
+    label = MOTION_LABELS.get(motion_type, motion_type)
+    suffix = data_date[4:] if len(data_date) == 8 else data_date
+    sample_no = _sample_number(sample_stem)
+    sample_tag = str(sample_no) if sample_no != 999 else sample_stem
+    return f"{label}{sample_tag}({suffix}-{subject})"
+
+
+def _stat_values_for_filter(
+    row: dict[str, Any] | None,
+    *,
+    prefix: str,
+    scope: str,
+    metric_kind: str,
+) -> dict[str, float]:
+    if row is None:
+        return {f"{prefix}_{name}": math.nan for name in ("hf", "acc", "fft")}
+    if metric_kind == "mae":
+        return {
+            f"{prefix}_hf": _num(row.get(f"hf_{scope}_aae")),
+            f"{prefix}_acc": _num(row.get(f"acc_{scope}_aae")),
+            f"{prefix}_fft": _num(row.get(f"fft_{scope}_aae")),
+        }
+    metric_name = f"{scope}_hit_rate_5bpm"
+    return {
+        f"{prefix}_hf": 100.0 * _num(row.get(f"hf_{metric_name}")),
+        f"{prefix}_acc": 100.0 * _num(row.get(f"acc_{metric_name}")),
+        f"{prefix}_fft": 100.0 * _num(row.get(f"fft_{metric_name}")),
+    }
+
+
+def _mae_reduction(new_value: Any, baseline_value: Any) -> float:
+    new = _num(new_value)
+    baseline = _num(baseline_value)
+    if not math.isfinite(new) or not math.isfinite(baseline) or abs(baseline) < 1e-12:
+        return math.nan
+    return 100.0 * (baseline - new) / baseline
+
+
+def _rate_delta_pp(new_value: Any, baseline_value: Any) -> float:
+    new = _num(new_value)
+    baseline = _num(baseline_value)
+    if not math.isfinite(new) or not math.isfinite(baseline):
+        return math.nan
+    return new - baseline
+
+
+def _average_stat_row(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    rec: dict[str, Any] = {
+        "scenario": "平均",
+        "motion_type": "",
+        "sample_stem": "",
+        "data_date": "",
+        "subject": "",
+    }
+    for key in (
+        "lms_hf",
+        "lms_acc",
+        "lms_fft",
+        "lms_hf_vs_acc_delta",
+        "klms_hf",
+        "klms_acc",
+        "klms_fft",
+        "klms_vs_lms_delta",
+    ):
+        rec[key] = _mean(rows, key)
+    return rec
+
+
+def _latex_stat_table(
+    rows: list[dict[str, Any]],
+    *,
+    caption: str,
+    label: str,
+    metric_kind: str,
+) -> list[str]:
+    if metric_kind == "mae":
+        unit = "bpm"
+        lms_delta = "\\makecell{HF 较 ACC\\\\降低(\\%)}"
+        klms_delta = "\\makecell{KLMS 较 LMS\\\\降低(\\%)}"
+    else:
+        unit = "\\%"
+        lms_delta = "\\makecell{HF 较 ACC\\\\提高(pp)}"
+        klms_delta = "\\makecell{KLMS 较 LMS\\\\提高(pp)}"
+
+    out = [
+        "\\begin{table*}[!t]",
+        f"  \\caption{{{caption}}}",
+        f"  \\label{{{label}}}",
+        "  \\centering",
+        "  \\xiaowuhao",
+        "  \\setlength{\\tabcolsep}{3.0pt}",
+        "  \\renewcommand{\\arraystretch}{1.15}",
+        "  \\begin{tabular}{lrrrrrrrr}",
+        "    \\toprule",
+        "    \\makecell{实验\\\\场景} &",
+        "    \\multicolumn{4}{c}{LMS 参考信号对比} &",
+        "    \\multicolumn{4}{c}{KLMS 结果与提升} \\\\",
+        "    \\cmidrule(lr){2-5}\\cmidrule(lr){6-9}",
+        f"    & \\makecell{{HF-LMS\\\\({unit})}}",
+        f"    & \\makecell{{ACC-LMS\\\\({unit})}}",
+        f"    & \\makecell{{FFT\\\\({unit})}}",
+        f"    & {lms_delta}",
+        f"    & \\makecell{{HF-KLMS\\\\({unit})}}",
+        f"    & \\makecell{{ACC-KLMS\\\\({unit})}}",
+        f"    & \\makecell{{FFT\\\\({unit})}}",
+        f"    & {klms_delta} \\\\",
+        "    \\midrule",
+    ]
+    for row in rows:
+        out.append(
+            "    "
+            + _latex_scenario_cell(str(row["scenario"]))
+            + " & "
+            + " & ".join(
+                _latex_num(row.get(key))
+                for key in (
+                    "lms_hf",
+                    "lms_acc",
+                    "lms_fft",
+                    "lms_hf_vs_acc_delta",
+                    "klms_hf",
+                    "klms_acc",
+                    "klms_fft",
+                    "klms_vs_lms_delta",
+                )
+            )
+            + " \\\\"
+        )
+    out.extend([
+        "    \\bottomrule",
+        "  \\end{tabular}",
+        "\\end{table*}",
+    ])
+    return out
+
+
+def _latex_scenario_cell(value: str) -> str:
+    if value == "平均":
+        return "平均"
+    m = re.match(r"(.+?)\\((.+)\\)", value)
+    if not m:
+        return value
+    return f"\\makecell{{{m.group(1)}\\\\{m.group(2)}}}"
+
+
+def _latex_num(value: Any) -> str:
+    num = _num(value)
+    if not math.isfinite(num):
+        return "--"
+    return f"{num:.2f}"
 
 
 def _shared_summary(shared_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -668,7 +941,7 @@ def _write_report(
     ))
     lines.append("")
     lines.append(
-        "当前跨个体证据仍偏早期：TS 样本数量已经超过 LYX，但运动分布不完全相同，弯举仅 TS 有样本。"
+        "当前跨个体证据仍偏早期：除 20260615 数据外，其余数据均按 LYX 处理，LYX 样本数量多于 TS，且弯举仅 TS 有样本。"
         "因此跨个体泛化不能只看总体均值，后续应在每个运动类型内做 LYX->TS、TS->LYX 的 leave-subject-out 重放。"
     )
     lines.append("")
