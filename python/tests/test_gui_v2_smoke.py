@@ -161,6 +161,119 @@ def test_v2_generalization_page_updates_progress_widgets() -> None:
         app.processEvents()
 
 
+def test_v2_generalization_page_refresh_displays_motion_plan(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui import v2_pages
+    from ppg_hr.gui.v2_pages import V2GeneralizationPage
+    from ppg_hr.v2.generalization import (
+        V2GeneralizationFoldPlan,
+        V2GeneralizationGroupPlan,
+        V2GeneralizationPlan,
+        V2SamplePair,
+    )
+
+    data = tmp_path / "multi_bobi1_TS.csv"
+    ref = tmp_path / "multi_bobi1_TS_HR_ref.csv"
+    data.write_text("sensor\n", encoding="utf-8")
+    ref.write_text("ref\n", encoding="utf-8")
+    pair = V2SamplePair(data, ref, "bobi")
+
+    def fake_build_plan(input_dir, *, evaluation_modes, motion_types=None):
+        return V2GeneralizationPlan(
+            input_dir=Path(input_dir),
+            evaluation_modes=tuple(evaluation_modes),
+            groups=(
+                V2GeneralizationGroupPlan(
+                    "bobi",
+                    (pair,),
+                    (
+                        V2GeneralizationFoldPlan(
+                            "all_train",
+                            "all_train",
+                            (pair,),
+                            (pair,),
+                        ),
+                    ),
+                ),
+            ),
+            included_pairs=(pair,),
+            unknown_pairs=(
+                V2SamplePair(
+                    tmp_path / "custom.csv",
+                    tmp_path / "custom_HR_ref.csv",
+                    "unknown",
+                ),
+            ),
+            unpaired_data_files=(tmp_path / "multi_run1_TS.csv",),
+        )
+
+    monkeypatch.setattr(v2_pages, "build_v2_generalization_plan", fake_build_plan)
+
+    app = QApplication.instance() or QApplication([])
+    page = V2GeneralizationPage()
+    try:
+        page._input_dir_pick.setPath(tmp_path)
+        page._refresh()
+
+        assert page._plan_table.rowCount() == 3
+        assert page._plan_table.item(0, 0).text() == "bobi"
+        assert page._plan_table.item(0, 1).text() == "仅 all_train"
+        assert page._plan_table.item(1, 1).text() == "未识别"
+        assert page._plan_table.item(2, 1).text() == "未配对"
+    finally:
+        page.deleteLater()
+        app.processEvents()
+
+
+def test_v2_generalization_page_run_stops_when_plan_has_no_runnable_folds(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui import v2_pages
+    from ppg_hr.gui.v2_pages import V2GeneralizationPage
+    from ppg_hr.v2.generalization import V2GeneralizationPlan
+
+    def fake_build_plan(input_dir, *, evaluation_modes, motion_types=None):
+        return V2GeneralizationPlan(
+            input_dir=Path(input_dir),
+            evaluation_modes=tuple(evaluation_modes),
+            groups=(),
+            included_pairs=(),
+            unknown_pairs=(),
+            unpaired_data_files=(),
+        )
+
+    monkeypatch.setattr(v2_pages, "build_v2_generalization_plan", fake_build_plan)
+    started = {"value": False}
+
+    class FakeHolder:
+        def __init__(self, worker) -> None:
+            self.worker = worker
+
+        def start(self) -> None:
+            started["value"] = True
+
+    monkeypatch.setattr(v2_pages, "WorkerThread", FakeHolder)
+
+    app = QApplication.instance() or QApplication([])
+    page = V2GeneralizationPage()
+    try:
+        page._input_dir_pick.setPath(tmp_path)
+        page._run()
+
+        assert started["value"] is False
+        assert "没有可计算" in page._log.toPlainText()
+    finally:
+        page.deleteLater()
+        app.processEvents()
+
+
 def test_v2_batch_page_can_reorder_enabled_references() -> None:
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication

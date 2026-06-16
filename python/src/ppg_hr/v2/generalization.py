@@ -34,6 +34,73 @@ class V2SamplePair:
         return self.data_path.stem
 
 
+KNOWN_MOTION_TYPES = (
+    "bobi",
+    "fuwo",
+    "kaihe",
+    "tiaosheng",
+    "wanju",
+    "run",
+    "rest",
+    "yangwo",
+    "box",
+    "gaotai",
+)
+
+
+@dataclass(frozen=True)
+class V2GeneralizationFoldPlan:
+    evaluation_mode: str
+    fold_id: str
+    train_pairs: tuple[V2SamplePair, ...]
+    test_pairs: tuple[V2SamplePair, ...]
+
+
+@dataclass(frozen=True)
+class V2GeneralizationGroupPlan:
+    motion_type: str
+    pairs: tuple[V2SamplePair, ...]
+    folds: tuple[V2GeneralizationFoldPlan, ...]
+
+    @property
+    def sample_stems(self) -> tuple[str, ...]:
+        return tuple(pair.stem for pair in self.pairs)
+
+    @property
+    def status(self) -> str:
+        if any(f.evaluation_mode == "leave_one_group_out" for f in self.folds):
+            return "将计算"
+        if self.folds:
+            return "仅 all_train"
+        return "跳过"
+
+    @property
+    def note(self) -> str:
+        if self.status == "仅 all_train":
+            return "样本数不足 2，跳过 LOGO"
+        if self.status == "跳过":
+            return "没有可执行 fold"
+        return ""
+
+
+@dataclass(frozen=True)
+class V2GeneralizationPlan:
+    input_dir: Path
+    evaluation_modes: tuple[str, ...]
+    groups: tuple[V2GeneralizationGroupPlan, ...]
+    included_pairs: tuple[V2SamplePair, ...]
+    unknown_pairs: tuple[V2SamplePair, ...]
+    unpaired_data_files: tuple[Path, ...]
+
+    @property
+    def fold_count(self) -> int:
+        return sum(len(group.folds) for group in self.groups)
+
+    @property
+    def has_runnable_folds(self) -> bool:
+        return self.fold_count > 0
+
+
 @dataclass
 class V2SharedOptimiseResult:
     report_path: Path
@@ -94,32 +161,94 @@ class _ProgressCounter:
 
 
 def infer_motion_type(sample_stem: str) -> str:
+    known = infer_known_motion_type(sample_stem)
+    if known is not None:
+        return known
     value = str(sample_stem).strip()
     if value.startswith("multi_"):
         value = value[len("multi_") :]
-    value = re.sub(r"\d+$", "", value).strip("_-")
+    value = re.sub(r"\d+(?:_TS)?$", "", value, flags=re.IGNORECASE).strip("_-")
     return value or str(sample_stem)
 
 
+def infer_known_motion_type(sample_stem: str) -> str | None:
+    value = str(sample_stem).strip().lower()
+    tokens = [item for item in re.split(r"[_\-\s]+", value) if item]
+    for token in tokens:
+        for motion in KNOWN_MOTION_TYPES:
+            if token == motion or re.fullmatch(rf"{re.escape(motion)}\d*", token):
+                return motion
+    return None
+
+
+def _is_reference_csv(path: Path) -> bool:
+    return path.name.endswith("_ref.csv") or path.name.endswith("_HR_ref.csv")
+
+
+def _matching_ref_path(data_path: Path) -> Path | None:
+    ref_path = data_path.with_name(f"{data_path.stem}_ref.csv")
+    if ref_path.is_file():
+        return ref_path
+    ref_path = data_path.with_name(f"{data_path.stem}_HR_ref.csv")
+    if ref_path.is_file():
+        return ref_path
+    return None
+
+
 def discover_sample_pairs(input_dir: str | Path) -> list[V2SamplePair]:
+    return list(build_v2_generalization_plan(input_dir).included_pairs)
+
+
+def build_v2_generalization_plan(
+    input_dir: str | Path,
+    *,
+    evaluation_modes: tuple[str, ...] = ("all_train", "leave_one_group_out"),
+    motion_types: tuple[str, ...] | None = None,
+) -> V2GeneralizationPlan:
     root = Path(input_dir)
-    pairs: list[V2SamplePair] = []
+    selected_modes = _normalise_evaluation_modes(evaluation_modes)
+    selected_motion_types = {m for m in motion_types} if motion_types else None
+    included: list[V2SamplePair] = []
+    unknown: list[V2SamplePair] = []
+    unpaired: list[Path] = []
+
     for data_path in sorted(root.glob("*.csv")):
-        if data_path.name.endswith("_ref.csv") or data_path.name.endswith("_HR_ref.csv"):
+        if _is_reference_csv(data_path):
             continue
-        ref_path = data_path.with_name(f"{data_path.stem}_ref.csv")
-        if not ref_path.is_file():
-            ref_path = data_path.with_name(f"{data_path.stem}_HR_ref.csv")
-        if not ref_path.is_file():
+        ref_path = _matching_ref_path(data_path)
+        if ref_path is None:
+            unpaired.append(data_path)
             continue
-        pairs.append(
-            V2SamplePair(
-                data_path=data_path,
-                ref_path=ref_path,
-                motion_type=infer_motion_type(data_path.stem),
-            )
+        motion_type = infer_known_motion_type(data_path.stem)
+        if motion_type is None:
+            unknown.append(V2SamplePair(data_path, ref_path, "unknown"))
+            continue
+        if selected_motion_types is not None and motion_type not in selected_motion_types:
+            continue
+        included.append(V2SamplePair(data_path, ref_path, motion_type))
+
+    by_motion: dict[str, list[V2SamplePair]] = {}
+    for pair in included:
+        by_motion.setdefault(pair.motion_type, []).append(pair)
+
+    groups: list[V2GeneralizationGroupPlan] = []
+    for motion_type in sorted(by_motion):
+        samples = tuple(sorted(by_motion[motion_type], key=lambda p: p.stem))
+        folds = tuple(
+            V2GeneralizationFoldPlan(mode, fold_id, tuple(train), tuple(test))
+            for mode in selected_modes
+            for fold_id, train, test in _folds_for_mode(mode, list(samples))
         )
-    return pairs
+        groups.append(V2GeneralizationGroupPlan(motion_type, samples, folds))
+
+    return V2GeneralizationPlan(
+        input_dir=root,
+        evaluation_modes=selected_modes,
+        groups=tuple(groups),
+        included_pairs=tuple(included),
+        unknown_pairs=tuple(unknown),
+        unpaired_data_files=tuple(unpaired),
+    )
 
 
 def run_v2_generalization(
@@ -156,16 +285,27 @@ def run_v2_generalization(
         directory.mkdir(parents=True, exist_ok=True)
 
     selected_modes = _normalise_evaluation_modes(evaluation_modes)
-    selected_motion_types = {m for m in motion_types} if motion_types else None
-    pairs = discover_sample_pairs(root)
-    if selected_motion_types is not None:
-        pairs = [p for p in pairs if p.motion_type in selected_motion_types]
-    if not pairs:
-        raise ValueError(f"No v2 sensor/ref CSV pairs found in {root}")
+    plan = build_v2_generalization_plan(
+        root,
+        evaluation_modes=selected_modes,
+        motion_types=motion_types,
+    )
+    if not plan.has_runnable_folds:
+        raise ValueError(f"No runnable recognised v2 motion samples found in {root}")
 
-    by_motion: dict[str, list[V2SamplePair]] = {}
-    for pair in pairs:
-        by_motion.setdefault(pair.motion_type, []).append(pair)
+    by_motion = {group.motion_type: list(group.pairs) for group in plan.groups}
+    if plan.unknown_pairs:
+        _log(
+            on_log,
+            "未识别运动类型，已跳过: "
+            + ", ".join(pair.stem for pair in plan.unknown_pairs),
+        )
+    if plan.unpaired_data_files:
+        _log(
+            on_log,
+            "缺少参考HR，已跳过: "
+            + ", ".join(path.stem for path in plan.unpaired_data_files),
+        )
 
     progress = _ProgressCounter(
         total=_generalization_work_total(
@@ -186,35 +326,42 @@ def run_v2_generalization(
         stage_total=1,
         detail=(
             f"motion_types={len(by_motion)} | modes={'+'.join(selected_modes)} | "
-            f"samples={len(pairs)}"
+            f"samples={len(plan.included_pairs)} | folds={plan.fold_count} | "
+            f"unknown={len(plan.unknown_pairs)} | "
+            f"unpaired={len(plan.unpaired_data_files)}"
         ),
+        plan=plan_summary(plan),
+        unknown_samples=len(plan.unknown_pairs),
+        unpaired_samples=len(plan.unpaired_data_files),
     )
 
     records: list[V2GeneralizationRecord] = []
-    for motion_type in sorted(by_motion):
-        samples = sorted(by_motion[motion_type], key=lambda p: p.stem)
-        _log(on_log, f"泛化评估 motion_type={motion_type} samples={len(samples)}")
+    for group in plan.groups:
+        motion_type = group.motion_type
+        samples = list(group.pairs)
+        _log(
+            on_log,
+            f"泛化评估 motion_type={motion_type} "
+            f"samples={len(samples)} folds={len(group.folds)}",
+        )
         for mode in selected_modes:
-            folds = _folds_for_mode(mode, samples)
-            for fold_index, (fold_id, train_pairs, test_pairs) in enumerate(
-                folds,
-                start=1,
-            ):
+            folds = [f for f in group.folds if f.evaluation_mode == mode]
+            for fold_index, fold in enumerate(folds, start=1):
                 _progress(
                     on_progress,
                     stage="train",
                     motion_type=motion_type,
                     evaluation_mode=mode,
-                    fold_id=fold_id,
+                    fold_id=fold.fold_id,
                     fold_index=fold_index,
                     fold_total=len(folds),
                 )
                 fold_records = _run_generalization_fold(
                     motion_type=motion_type,
                     evaluation_mode=mode,
-                    fold_id=fold_id,
-                    train_pairs=train_pairs,
-                    test_pairs=test_pairs,
+                    fold_id=fold.fold_id,
+                    train_pairs=list(fold.train_pairs),
+                    test_pairs=list(fold.test_pairs),
                     all_pairs=samples,
                     ppg_mode=ppg_mode,
                     ppg_input_transform=ppg_input_transform,
@@ -245,6 +392,44 @@ def run_v2_generalization(
         detail=str(summary_csv),
     )
     return V2GeneralizationResult(out, summary_csv, records)
+
+
+def plan_summary(plan: V2GeneralizationPlan) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for group in plan.groups:
+        rows.append(
+            {
+                "motion_type": group.motion_type,
+                "status": group.status,
+                "sample_count": len(group.pairs),
+                "fold_count": len(group.folds),
+                "samples": list(group.sample_stems),
+                "note": group.note,
+            }
+        )
+    for pair in plan.unknown_pairs:
+        rows.append(
+            {
+                "motion_type": "unknown",
+                "status": "未识别",
+                "sample_count": 1,
+                "fold_count": 0,
+                "samples": [pair.stem],
+                "note": "不在运动类型库中，已跳过",
+            }
+        )
+    for path in plan.unpaired_data_files:
+        rows.append(
+            {
+                "motion_type": "unpaired",
+                "status": "未配对",
+                "sample_count": 1,
+                "fold_count": 0,
+                "samples": [path.stem],
+                "note": "缺少 _ref.csv 或 _HR_ref.csv",
+            }
+        )
+    return rows
 
 
 def optimise_v2_shared_params(

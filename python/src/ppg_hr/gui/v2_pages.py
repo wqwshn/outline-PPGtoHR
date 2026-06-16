@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
 )
 
+from ppg_hr.v2.generalization import build_v2_generalization_plan, plan_summary
 from ppg_hr.v2.optimizer import V2BayesConfig
 from ppg_hr.v2.spo2 import V2SpO2Config
 from ppg_hr.v2.window_diagnostics import (
@@ -227,7 +228,7 @@ class V2GeneralizationPage(_PageBase):
     def __init__(self):
         super().__init__(
             "v2 泛化评估",
-            "同一运动类型多次实验共享参数，评估 all-train 与留一泛化",
+            "按文件名自动分类运动类型，在每类运动内共享 BO 参数并评估泛化",
             two_column=True,
         )
         self._worker_holder: WorkerThread | None = None
@@ -238,7 +239,7 @@ class V2GeneralizationPage(_PageBase):
         self.body_right().addStretch(1)
 
     def _build_io(self) -> None:
-        card = SectionCard("输入与输出", "输入目录包含同一运动类型的多组 v2 CSV 与参考 HR")
+        card = SectionCard("输入与输出", "输入目录可包含多种运动类型的 v2 CSV 与参考 HR")
         form = QFormLayout()
         self._input_dir_pick = FilePicker(
             placeholder="选择泛化评估输入目录",
@@ -346,12 +347,19 @@ class V2GeneralizationPage(_PageBase):
         self._stage_progress.setRange(0, 100)
         self._stage_progress.setValue(0)
         self._stage_progress.setFormat("阶段进度 0%")
+        self._plan_table = QTableWidget(0, 6)
+        self._plan_table.setHorizontalHeaderLabels(
+            ["运动类型", "状态", "样本数", "fold数", "样本", "备注"]
+        )
+        self._plan_table.horizontalHeader().setStretchLastSection(True)
+        self._plan_table.setMinimumHeight(140)
         self._log = LogPanel()
         self._summary = AAETable(["字段", "值"])
         card.add(self._progress_title)
         card.add(self._progress_meta)
         card.add(self._overall_progress)
         card.add(self._stage_progress)
+        card.add(self._plan_table)
         card.add(self._log)
         card.add(self._summary)
         self.body_right().addWidget(card)
@@ -372,9 +380,42 @@ class V2GeneralizationPage(_PageBase):
             modes.append("leave_one_group_out")
         return tuple(modes)
 
-    def _refresh(self) -> None:
+    def _refresh(self):
         self._summary.set_rows([])
         self._log.clear()
+        input_dir = self._input_dir_pick.path()
+        if input_dir is None or not input_dir.is_dir():
+            self._set_plan_rows([])
+            self._log.error("请选择有效输入目录")
+            return None
+        try:
+            plan = build_v2_generalization_plan(
+                input_dir,
+                evaluation_modes=self.selected_evaluation_modes(),
+            )
+        except Exception as exc:
+            self._set_plan_rows([])
+            self._log.error(f"运动分类失败：{exc}")
+            return None
+        rows = plan_summary(plan)
+        self._set_plan_rows(rows)
+        self._log.info(
+            f"运动分类完成：已识别 {len(plan.included_pairs)} 个样本，"
+            f"fold {plan.fold_count} 个，"
+            f"未识别 {len(plan.unknown_pairs)} 个，"
+            f"未配对 {len(plan.unpaired_data_files)} 个"
+        )
+        return plan
+
+    def _set_plan_rows(self, rows: list[dict]) -> None:
+        self._plan_table.setRowCount(len(rows))
+        keys = ["motion_type", "status", "sample_count", "fold_count", "samples", "note"]
+        for row_idx, row in enumerate(rows):
+            for col_idx, key in enumerate(keys):
+                value = row.get(key, "")
+                if isinstance(value, (list, tuple)):
+                    value = ", ".join(str(item) for item in value)
+                self._plan_table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
 
     def _run(self) -> None:
         input_dir = self._input_dir_pick.path()
@@ -384,6 +425,12 @@ class V2GeneralizationPage(_PageBase):
         modes = self.selected_evaluation_modes()
         if not modes:
             self._log.error("请至少选择一种评估模式")
+            return
+        plan = self._refresh()
+        if plan is None:
+            return
+        if not plan.has_runnable_folds:
+            self._log.error("没有可计算的已识别运动样本")
             return
         cfg = V2BayesConfig(
             max_iterations=int(self._max_iter.value()),
