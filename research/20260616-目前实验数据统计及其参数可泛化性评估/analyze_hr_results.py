@@ -35,6 +35,12 @@ MOTION_ORDER = {
     "kaihe": 3,
     "wanju": 4,
 }
+EXCLUDED_RESULT_KEYS = {
+    ("20260519", "multi_bobi4"),
+    ("20260519", "multi_fuwo3"),
+    ("20260519", "multi_kaihe3"),
+    ("20260519", "multi_kaihe4"),
+}
 
 PARAM_KEYS = (
     "fs_target",
@@ -59,6 +65,11 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     cache = _load_cache()
     reports = _collect_reports()
+    reports = [
+        (report_path, payload)
+        for report_path, payload in reports
+        if not _is_excluded_result(report_path, payload)
+    ]
 
     rows: list[dict[str, Any]] = []
     for report_path, payload in reports:
@@ -137,6 +148,18 @@ def _collect_reports() -> list[tuple[Path, dict[str, Any]]]:
         payload["_report_path"] = str(path)
         reports.append((path, payload))
     return reports
+
+
+def _is_excluded_result(report_path: Path, payload: dict[str, Any]) -> bool:
+    row = _base_row(report_path, payload)
+    return (str(row["data_date"]), str(row["sample_stem"])) in EXCLUDED_RESULT_KEYS
+
+
+def _excluded_result_labels() -> str:
+    labels = []
+    for data_date, sample_stem in sorted(EXCLUDED_RESULT_KEYS):
+        labels.append(f"{data_date}/{sample_stem}")
+    return "、".join(labels)
 
 
 def _base_row(report_path: Path, payload: dict[str, Any]) -> dict[str, Any]:
@@ -659,6 +682,7 @@ def _write_result_table(
     lines.append("")
     lines.append(f"- 统计时间：2026-06-16")
     lines.append(f"- v2 HF 独立优化报告数：{len(rows)}")
+    lines.append(f"- 已排除离群样本：{_excluded_result_labels()}。")
     lines.append("- ACC 对比：复用每个 HF 报告的 `best_params`，仅将 `reference_groups_order` 改为 `ACC` 后重放。")
     lines.append("- 行标签格式：`运动编号(日期-受试者)`；缺少 KLMS 独立优化结果的样本以 `--` 表示。")
     lines.append("- 同口径 CSV：`analysis_outputs/table_full_mae.csv`、`table_full_r5.csv`、`table_motion_mae.csv`、`table_motion_r5.csv`。")
@@ -953,6 +977,7 @@ def _write_report(
         f"HF 路径总体 MAE 为 {overall['hf_mae']:.2f} bpm，ACC 参考组在复用同一参数后总体 MAE 为 {overall['acc_mae']:.2f} bpm，"
         f"FFT 基线为 {overall['fft_mae']:.2f} bpm。"
     )
+    lines.append(f"统计前已按当前研究口径排除离群样本：{_excluded_result_labels()}。")
     lines.append("")
     lines.append(
         "结论上，HF 仍是当前数据中最值得优先研究和固化的参考信号组；ACC 作为单独参考组在多数场景下不如 HF，"
@@ -1076,7 +1101,7 @@ def _write_report(
     lines.append("")
     lines.append("## 数据与可复现性")
     lines.append("")
-    lines.append("- 输入：本目录下 59 个 `schema_version=v2`、`reference_order_key=HF` 的独立优化 JSON。")
+    lines.append(f"- 输入：本目录下排除离群样本后的 {len(rows)} 个 `schema_version=v2`、`reference_order_key=HF` 的独立优化 JSON。")
     lines.append("- 生成文件：`analysis_outputs/all_result_summary.csv`、`scene_summary.csv`、`subject_summary.csv`、`parameter_summary.csv`、`scene_shared_parameter_replay.csv`。")
     lines.append("- ACC 对比：用每个报告 `best_params` 重放 `reference_groups_order=(\"ACC\",)`。")
     lines.append("- 共享候选重放：每个运动类型 × 滤波器选择参数 medoid 后重放组内样本。")
