@@ -110,7 +110,7 @@ def test_v2_batch_page_defaults_to_hf_and_exposes_all_filters() -> None:
         app.processEvents()
 
 
-def test_v2_generalization_page_exposes_input_transform_and_logo_defaults() -> None:
+def test_v2_generalization_page_exposes_full_all_train_defaults() -> None:
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication
 
@@ -120,8 +120,11 @@ def test_v2_generalization_page_exposes_input_transform_and_logo_defaults() -> N
     page = V2GeneralizationPage()
     try:
         assert page._ppg_input_transform_combo.currentData() == "raw_bandpass"
+        assert page._scope_combo.currentData() == "full"
         assert page._all_train_check.isChecked()
-        assert page._logo_check.isChecked()
+        assert page._logo_check.isChecked() is False
+        assert page.selected_evaluation_modes() == ("all_train",)
+        assert page._max_iter.value() == 150
         assert page.selected_reference_order() == ("HF",)
         for i in range(page._ref_list.count()):
             item = page._ref_list.item(i)
@@ -431,6 +434,27 @@ def test_v2_window_diagnostics_page_exposes_controls() -> None:
                 item.setCheckState(Qt.CheckState.Checked)
         assert page.selected_comparison_groups() == (("ACC",),)
         assert page._save_vectors_check.isChecked() is False
+    finally:
+        page.deleteLater()
+        app.processEvents()
+
+
+def test_v2_window_diagnostics_page_uses_balanced_plot_and_summary_heights() -> None:
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.v2_pages import V2WindowDiagnosticsPage
+
+    app = QApplication.instance() or QApplication([])
+    page = V2WindowDiagnosticsPage()
+    try:
+        plot_heights = {
+            page._wave_canvas.minimumHeight(),
+            page._spectrum_canvas.minimumHeight(),
+            page._tracking_canvas.minimumHeight(),
+        }
+        assert plot_heights == {260}
+        assert page._summary.minimumHeight() >= 96
+        assert page._summary.verticalHeader().defaultSectionSize() >= 44
     finally:
         page.deleteLater()
         app.processEvents()

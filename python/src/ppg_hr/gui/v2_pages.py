@@ -275,8 +275,8 @@ class V2GeneralizationPage(_PageBase):
         for value in ("lms", "as_lms", "klms", "volterra", "noncausal_lms", "rff_lms"):
             self._filter_combo.addItem(value, userData=value)
         self._scope_combo = QComboBox()
-        self._scope_combo.addItem("最长运动段 + 前30s", userData="motion")
         self._scope_combo.addItem("整段 full", userData="full")
+        self._scope_combo.addItem("最长运动段 + 前30s", userData="motion")
         self._ref_list = QListWidget()
         self._ref_list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
         self._ref_list.setDefaultDropAction(Qt.DropAction.MoveAction)
@@ -291,14 +291,14 @@ class V2GeneralizationPage(_PageBase):
         self._all_train_check = QCheckBox("all_train")
         self._all_train_check.setChecked(True)
         self._logo_check = QCheckBox("leave_one_group_out")
-        self._logo_check.setChecked(True)
+        self._logo_check.setChecked(False)
         mode_row = QHBoxLayout()
         mode_row.addWidget(self._all_train_check)
         mode_row.addWidget(self._logo_check)
         mode_row.addStretch(1)
         self._max_iter = QSpinBox()
         self._max_iter.setRange(1, 1000)
-        self._max_iter.setValue(75)
+        self._max_iter.setValue(150)
         self._seed_pts = QSpinBox()
         self._seed_pts.setRange(1, 200)
         self._seed_pts.setValue(10)
@@ -772,7 +772,7 @@ class V2WindowDiagnosticsPage(_PageBase):
         plot_card = SectionCard("诊断图", "波形域与频域单窗口重放")
         self._wave_canvas = MplCanvas(nrows=1, height=260)
         self._spectrum_canvas = MplCanvas(nrows=2, height=260)
-        self._tracking_canvas = MplCanvas(nrows=1, height=240)
+        self._tracking_canvas = MplCanvas(nrows=1, height=260)
         plot_card.add(self._wave_canvas)
         plot_card.add(self._spectrum_canvas)
         plot_card.add(self._tracking_canvas)
@@ -783,6 +783,8 @@ class V2WindowDiagnosticsPage(_PageBase):
         self._summary.setEditTriggers(QTableWidget.NoEditTriggers)
         self._summary.setShowGrid(False)
         self._summary.verticalHeader().setVisible(False)
+        self._summary.setMinimumHeight(110)
+        self._summary.verticalHeader().setDefaultSectionSize(48)
         hh = self._summary.horizontalHeader()
         hh.setSectionResizeMode(QHeaderView.ResizeToContents)
         self._stage_table = AAETable(
@@ -945,6 +947,7 @@ class V2WindowDiagnosticsPage(_PageBase):
             item = QTableWidgetItem(row_data[1])
             item.setTextAlignment(Qt.AlignCenter)
             self._summary.setItem(0, col, item)
+        self._summary.setRowHeight(0, 48)
 
     def _summary_rows(self, result) -> list[list[str]]:
         summary = result.summary

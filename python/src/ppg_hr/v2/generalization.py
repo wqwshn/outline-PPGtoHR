@@ -13,7 +13,7 @@ from typing import Any
 import numpy as np
 import optuna
 
-from .batch_pipeline import safe_name, safe_run_prefix
+from .batch_pipeline import safe_name
 from .optimizer import V2BayesConfig
 from .plotting import render_v2_report
 from .reference_groups import reference_order_key
@@ -278,11 +278,7 @@ def run_v2_generalization(
             reference_groups_order,
         )
     )
-    json_dir = out / "json"
-    png_dir = out / "png"
-    csv_dir = out / "csv"
-    for directory in (json_dir, png_dir, csv_dir):
-        directory.mkdir(parents=True, exist_ok=True)
+    out.mkdir(parents=True, exist_ok=True)
 
     selected_modes = _normalise_evaluation_modes(evaluation_modes)
     plan = build_v2_generalization_plan(
@@ -347,6 +343,11 @@ def run_v2_generalization(
         for mode in selected_modes:
             folds = [f for f in group.folds if f.evaluation_mode == mode]
             for fold_index, fold in enumerate(folds, start=1):
+                json_dir, png_dir, csv_dir = _fold_output_dirs(
+                    out,
+                    fold.evaluation_mode,
+                    fold.fold_id,
+                )
                 _progress(
                     on_progress,
                     stage="train",
@@ -378,7 +379,7 @@ def run_v2_generalization(
                 )
                 records.extend(fold_records)
 
-    summary_csv = _write_summary(csv_dir, records)
+    summary_csv = _write_summary(out, records)
     progress.advance()
     _progress(
         on_progress,
@@ -583,8 +584,6 @@ def _run_generalization_fold(
         "-".join(
             [
                 motion_type,
-                mode_tag,
-                fold_tag,
                 ppg_mode,
                 ppg_input_transform,
                 adaptive_filter,
@@ -732,14 +731,7 @@ def _run_generalization_fold(
         )
         cfg = cfg.__class__(**{**cfg.__dict__, **shared.best_params})
         result = solve_v2(cfg)
-        replay_prefix = safe_run_prefix(
-            f"{pair.stem}-{mode_tag}-{fold_tag}-{split}",
-            ppg_mode,
-            ppg_input_transform,
-            adaptive_filter,
-            analysis_scope,
-            reference_groups_order,
-        )
+        replay_prefix = safe_name(f"{pair.stem}-{split}")
         report_path = json_dir / f"{replay_prefix}-v2.json"
         save_v2_report(
             report_path,
@@ -863,6 +855,14 @@ def _evaluation_mode_tag(evaluation_mode: str) -> str:
     return mapping.get(str(evaluation_mode), safe_name(str(evaluation_mode)))
 
 
+def _evaluation_mode_dir_tag(evaluation_mode: str) -> str:
+    mapping = {
+        "all_train": "all_train",
+        "leave_one_group_out": "logo",
+    }
+    return mapping.get(str(evaluation_mode), safe_name(str(evaluation_mode)))
+
+
 def _fold_output_tag(fold_id: str) -> str:
     value = str(fold_id)
     if value == "all_train":
@@ -870,6 +870,21 @@ def _fold_output_tag(fold_id: str) -> str:
     if value.startswith("test_"):
         return value[len("test_") :]
     return safe_name(value)
+
+
+def _fold_output_dirs(
+    output_root: Path,
+    evaluation_mode: str,
+    fold_id: str,
+) -> tuple[Path, Path, Path]:
+    mode_dir = output_root / _evaluation_mode_dir_tag(evaluation_mode)
+    fold_dir = mode_dir / _fold_output_tag(fold_id)
+    json_dir = fold_dir / "json"
+    png_dir = fold_dir / "png"
+    csv_dir = fold_dir / "csv"
+    for directory in (json_dir, png_dir, csv_dir):
+        directory.mkdir(parents=True, exist_ok=True)
+    return json_dir, png_dir, csv_dir
 
 
 def _generalization_work_total(
@@ -957,6 +972,7 @@ def _write_params_report(
 
 def _write_summary(output_dir: Path, records: list[V2GeneralizationRecord]) -> Path:
     path = output_dir / "v2_generalization_summary.csv"
+    path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8-sig", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(
