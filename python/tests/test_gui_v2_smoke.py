@@ -440,6 +440,7 @@ def test_v2_window_diagnostics_page_exposes_controls() -> None:
 
 
 def test_v2_window_diagnostics_page_places_waveform_left_and_details_right() -> None:
+    from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication
 
     from ppg_hr.gui.v2_pages import V2WindowDiagnosticsPage
@@ -461,10 +462,29 @@ def test_v2_window_diagnostics_page_places_waveform_left_and_details_right() -> 
         assert page._wave_canvas.maximumHeight() == 260
         assert page._spectrum_canvas.minimumHeight() == 220
         assert page._spectrum_canvas.maximumHeight() == 220
+        assert len(page._spectrum_canvas.figure.axes) == 1
         assert page._tracking_canvas.minimumHeight() == 240
         assert page._tracking_canvas.maximumHeight() == 240
         assert page._summary.minimumHeight() >= 96
         assert page._summary.verticalHeader().defaultSectionSize() >= 44
+
+        for i in range(page._comparison_ref_list.count()):
+            item = page._comparison_ref_list.item(i)
+            if item is not None and item.text() == "ACC":
+                item.setCheckState(Qt.CheckState.Checked)
+        page._sync_spectrum_canvas_layout()
+        assert len(page._spectrum_canvas.figure.axes) == 2
+        assert page._spectrum_canvas.minimumHeight() == 440
+        assert page._spectrum_canvas.maximumHeight() == 440
+
+        for i in range(page._comparison_ref_list.count()):
+            item = page._comparison_ref_list.item(i)
+            if item is not None and item.text() == "ACC":
+                item.setCheckState(Qt.CheckState.Unchecked)
+        page._sync_spectrum_canvas_layout()
+        assert len(page._spectrum_canvas.figure.axes) == 1
+        assert page._spectrum_canvas.minimumHeight() == 220
+        assert page._spectrum_canvas.maximumHeight() == 220
     finally:
         page.deleteLater()
         app.processEvents()

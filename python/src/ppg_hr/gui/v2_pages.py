@@ -776,7 +776,7 @@ class V2WindowDiagnosticsPage(_PageBase):
         self.body().addWidget(self._wave_card)
 
         self._spectrum_card = SectionCard("频谱重放", "当前窗口频域与惩罚带")
-        self._spectrum_canvas = MplCanvas(nrows=2, height=220)
+        self._spectrum_canvas = MplCanvas(nrows=1, height=220)
         self._set_fixed_canvas_height(self._spectrum_canvas, 220)
         self._spectrum_card.add(self._spectrum_canvas)
         self.body_right().addWidget(self._spectrum_card)
@@ -820,6 +820,11 @@ class V2WindowDiagnosticsPage(_PageBase):
         canvas.setMinimumHeight(height)
         canvas.setMaximumHeight(height)
         canvas.setFixedHeight(height)
+
+    def _sync_spectrum_canvas_layout(self) -> None:
+        panel_count = 1 + len(self.selected_comparison_groups())
+        self._spectrum_canvas.set_subplot_rows(panel_count)
+        self._set_fixed_canvas_height(self._spectrum_canvas, 220 * panel_count)
 
     def _plot_options(self) -> DiagnosticPlotOptions:
         return DiagnosticPlotOptions(
@@ -942,6 +947,7 @@ class V2WindowDiagnosticsPage(_PageBase):
         opts = self._plot_options()
         plot_waveform(self._wave_canvas.axes, result, opts)
         self._wave_canvas.redraw()
+        self._sync_spectrum_canvas_layout()
         plot_spectra(self._spectrum_canvas.axes, result, opts)
         self._spectrum_canvas.redraw()
         plot_peak_tracking(self._tracking_canvas.axes, result)

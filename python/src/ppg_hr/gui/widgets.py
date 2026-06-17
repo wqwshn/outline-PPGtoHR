@@ -191,6 +191,13 @@ class MplCanvas(FigureCanvas):
     def axes(self):
         return self._axes[0] if len(self._axes) == 1 else self._axes
 
+    def set_subplot_rows(self, nrows: int) -> None:
+        nrows = max(1, int(nrows))
+        if len(self._axes) == nrows:
+            return
+        self.figure.clear()
+        self._axes = [self.figure.add_subplot(nrows, 1, i + 1) for i in range(nrows)]
+
     def clear_axes(self) -> None:
         for ax in self._axes:
             ax.clear()
