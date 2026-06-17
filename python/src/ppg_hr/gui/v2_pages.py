@@ -707,7 +707,7 @@ class V2WindowDiagnosticsPage(_PageBase):
         time_card.add(action_row)
         self.body().addWidget(time_card)
 
-        curve_card = SectionCard("曲线选择", "默认突出关键曲线，辅助曲线按需打开")
+        self._curve_card = SectionCard("曲线选择", "默认突出关键曲线，辅助曲线按需打开")
         wave_row = QHBoxLayout()
         self._wave_ppg_check = QCheckBox("带通PPG")
         self._wave_ppg_check.setChecked(True)
@@ -725,7 +725,7 @@ class V2WindowDiagnosticsPage(_PageBase):
         ):
             wave_row.addWidget(widget)
         wave_row.addStretch(1)
-        curve_card.add(wave_row)
+        self._curve_card.add(wave_row)
 
         spectrum_row = QHBoxLayout()
         self._spectrum_raw_check = QCheckBox("原始频谱")
@@ -750,13 +750,13 @@ class V2WindowDiagnosticsPage(_PageBase):
         ):
             spectrum_row.addWidget(widget)
         spectrum_row.addStretch(1)
-        curve_card.add(spectrum_row)
+        self._curve_card.add(spectrum_row)
 
         comparison_label = QLabel(
             "对比参考信号（勾选后用当前 best_params 按该参考组重放当前窗口）"
         )
         comparison_label.setStyleSheet("font-size: 9pt; color: #666; margin-top: 6px;")
-        curve_card.add(comparison_label)
+        self._curve_card.add(comparison_label)
         self._comparison_ref_list = QListWidget()
         self._comparison_ref_list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
         self._comparison_ref_list.setDefaultDropAction(Qt.DropAction.MoveAction)
@@ -766,19 +766,28 @@ class V2WindowDiagnosticsPage(_PageBase):
             item.setCheckState(Qt.CheckState.Unchecked)
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             self._comparison_ref_list.addItem(item)
-        curve_card.add(self._comparison_ref_list)
-        self.body().addWidget(curve_card)
+        self._curve_card.add(self._comparison_ref_list)
+        self.body().addWidget(self._curve_card)
 
-        plot_card = SectionCard("诊断图", "波形域与频域单窗口重放")
+        self._wave_card = SectionCard("波形重放", "当前窗口的带通 PPG 与滤波输出")
         self._wave_canvas = MplCanvas(nrows=1, height=260)
-        self._spectrum_canvas = MplCanvas(nrows=2, height=260)
-        self._tracking_canvas = MplCanvas(nrows=1, height=260)
-        plot_card.add(self._wave_canvas)
-        plot_card.add(self._spectrum_canvas)
-        plot_card.add(self._tracking_canvas)
-        self.body_right().addWidget(plot_card)
+        self._set_fixed_canvas_height(self._wave_canvas, 260)
+        self._wave_card.add(self._wave_canvas)
+        self.body().addWidget(self._wave_card)
 
-        result_card = SectionCard("窗口摘要与保存", "当前窗口指标、stage 参数和导出")
+        self._spectrum_card = SectionCard("频谱重放", "当前窗口频域与惩罚带")
+        self._spectrum_canvas = MplCanvas(nrows=2, height=220)
+        self._set_fixed_canvas_height(self._spectrum_canvas, 220)
+        self._spectrum_card.add(self._spectrum_canvas)
+        self.body_right().addWidget(self._spectrum_card)
+
+        self._tracking_card = SectionCard("谱峰追踪重放", "当前窗口候选峰与追踪决策")
+        self._tracking_canvas = MplCanvas(nrows=1, height=240)
+        self._set_fixed_canvas_height(self._tracking_canvas, 240)
+        self._tracking_card.add(self._tracking_canvas)
+        self.body_right().addWidget(self._tracking_card)
+
+        self._result_card = SectionCard("窗口摘要与保存", "当前窗口指标、stage 参数和导出")
         self._summary = QTableWidget(1, 0)
         self._summary.setEditTriggers(QTableWidget.NoEditTriggers)
         self._summary.setShowGrid(False)
@@ -792,8 +801,8 @@ class V2WindowDiagnosticsPage(_PageBase):
         )
         self._stage_table.setMinimumHeight(100)
         self._log = LogPanel()
-        result_card.add(self._summary)
-        result_card.add(self._stage_table)
+        self._result_card.add(self._summary)
+        self._result_card.add(self._stage_table)
         save_row = QHBoxLayout()
         self._save_vectors_check = QCheckBox("同时保存 SVG/PDF")
         self._save_vectors_check.setChecked(False)
@@ -803,9 +812,14 @@ class V2WindowDiagnosticsPage(_PageBase):
         save_row.addWidget(self._save_vectors_check)
         save_row.addStretch(1)
         save_row.addWidget(self._save_btn)
-        result_card.add(save_row)
-        result_card.add(self._log)
-        self.body_right().addWidget(result_card)
+        self._result_card.add(save_row)
+        self._result_card.add(self._log)
+        self.body_right().addWidget(self._result_card)
+
+    def _set_fixed_canvas_height(self, canvas: MplCanvas, height: int) -> None:
+        canvas.setMinimumHeight(height)
+        canvas.setMaximumHeight(height)
+        canvas.setFixedHeight(height)
 
     def _plot_options(self) -> DiagnosticPlotOptions:
         return DiagnosticPlotOptions(

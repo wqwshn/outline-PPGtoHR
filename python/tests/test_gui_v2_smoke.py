@@ -439,7 +439,7 @@ def test_v2_window_diagnostics_page_exposes_controls() -> None:
         app.processEvents()
 
 
-def test_v2_window_diagnostics_page_uses_balanced_plot_and_summary_heights() -> None:
+def test_v2_window_diagnostics_page_places_waveform_left_and_details_right() -> None:
     from PySide6.QtWidgets import QApplication
 
     from ppg_hr.gui.v2_pages import V2WindowDiagnosticsPage
@@ -447,12 +447,22 @@ def test_v2_window_diagnostics_page_uses_balanced_plot_and_summary_heights() -> 
     app = QApplication.instance() or QApplication([])
     page = V2WindowDiagnosticsPage()
     try:
-        plot_heights = {
-            page._wave_canvas.minimumHeight(),
-            page._spectrum_canvas.minimumHeight(),
-            page._tracking_canvas.minimumHeight(),
-        }
-        assert plot_heights == {260}
+        assert page.body().indexOf(page._wave_card) >= 0
+        assert page.body_right().indexOf(page._wave_card) == -1
+        assert page.body_right().indexOf(page._spectrum_card) >= 0
+        assert page.body_right().indexOf(page._tracking_card) >= 0
+        assert page.body_right().indexOf(page._result_card) >= 0
+        assert (
+            page.body_right().indexOf(page._spectrum_card)
+            < page.body_right().indexOf(page._tracking_card)
+            < page.body_right().indexOf(page._result_card)
+        )
+        assert page._wave_canvas.minimumHeight() == 260
+        assert page._wave_canvas.maximumHeight() == 260
+        assert page._spectrum_canvas.minimumHeight() == 220
+        assert page._spectrum_canvas.maximumHeight() == 220
+        assert page._tracking_canvas.minimumHeight() == 240
+        assert page._tracking_canvas.maximumHeight() == 240
         assert page._summary.minimumHeight() >= 96
         assert page._summary.verticalHeader().defaultSectionSize() >= 44
     finally:

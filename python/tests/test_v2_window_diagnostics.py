@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 import json
 
 import numpy as np
@@ -534,6 +535,42 @@ def test_plot_spectra_draws_primary_and_comparison_panels() -> None:
         frame = legend.get_frame()
         assert frame.get_visible()
         assert frame.get_facecolor()[3] >= 0.78
+
+
+def test_plot_spectra_removes_unused_axes_from_layout() -> None:
+    from matplotlib.figure import Figure
+
+    bpm = np.linspace(40.0, 220.0, 32)
+    result = SimpleNamespace(
+        session=SimpleNamespace(
+            config=SimpleNamespace(
+                adaptive_filter="lms",
+                reference_groups_order=("HF",),
+            )
+        ),
+        selected_window=SimpleNamespace(window_kind="motion"),
+        spectrum={
+            "bpm": bpm,
+            "raw_amp_norm": np.linspace(0.1, 0.8, bpm.size),
+            "filtered_amp_norm": np.linspace(0.2, 0.9, bpm.size),
+            "penalized_amp_norm": np.linspace(0.3, 1.0, bpm.size),
+        },
+        summary={
+            "ref_hr_bpm": 108.0,
+            "final_hr_bpm": 110.0,
+            "candidate_hr_bpm": 111.0,
+        },
+        comparisons=[],
+    )
+    fig = Figure(figsize=(4.8, 2.6))
+    axes = fig.subplots(2, 1)
+
+    plot_spectra(axes, result, DiagnosticPlotOptions())
+
+    assert axes[0].get_visible()
+    assert axes[0].get_in_layout()
+    assert axes[1].get_visible() is False
+    assert axes[1].get_in_layout() is False
 
 
 def test_diagnostic_panel_figsize_uses_requested_column_fractions() -> None:

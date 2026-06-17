@@ -818,11 +818,13 @@ def plot_spectra(
 
     for ax, (title, panel_result) in zip(axis_list, panels, strict=False):
         ax.set_visible(True)
+        ax.set_in_layout(True)
         plot_spectrum(ax, panel_result, opts)
         ax.set_title(title, fontsize=_TITLE_SIZE, fontweight="normal", pad=2.0)
     for ax in axis_list[len(panels) :]:
         ax.clear()
         ax.set_visible(False)
+        ax.set_in_layout(False)
 
 
 def save_window_diagnostics(
