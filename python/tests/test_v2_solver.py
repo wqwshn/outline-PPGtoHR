@@ -25,7 +25,6 @@ def _patch_candidate_spectrum(monkeypatch, freqs, amps) -> None:
 
 def test_process_spectrum_with_trace_records_tracking_decisions(monkeypatch) -> None:
     from ppg_hr.params import SolverParams
-
     from ppg_hr.v2 import solver
 
     _patch_candidate_spectrum(
@@ -68,7 +67,6 @@ def test_process_spectrum_with_trace_handles_first_window_and_no_near_peak(
     monkeypatch,
 ) -> None:
     from ppg_hr.params import SolverParams
-
     from ppg_hr.v2 import solver
 
     _patch_candidate_spectrum(
@@ -294,6 +292,394 @@ def test_motion_penalty_does_not_require_reference_hr(monkeypatch) -> None:
     assert np.isfinite(value)
     assert trace.ref_hr_bpm != trace.ref_hr_bpm
     assert trace.protection_applied is False
+
+
+def test_motion_reacquire_unlocks_from_stable_far_challenger(monkeypatch) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [
+            1.00,
+            1.10,
+            1.20,
+            2.10,
+            2.20,
+            2.30,
+        ],
+        [
+            0.0,
+            1.00,
+            0.0,
+            0.0,
+            0.55,
+            0.0,
+        ],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([1.10]),
+            np.asarray([1.0]),
+        ),
+    )
+    params = SolverParams(
+        spec_penalty_enable=True,
+        spec_penalty_weight=0.2,
+        spec_penalty_width=0.12,
+    )
+    state = solver.SpectrumReacquireState(low_lock_count=8)
+    history = [1.10]
+    outputs: list[float] = []
+    traces = []
+
+    for _ in range(5):
+        value, trace = solver._process_spectrum_with_trace(
+            np.ones(128),
+            np.ones(128),
+            50,
+            params,
+            len(history),
+            np.asarray(history + [0.0]),
+            True,
+            25.0 / 60.0,
+            10.0,
+            7.0,
+            path="adaptive",
+            window_kind="motion",
+            reacquire_state=state,
+            reacquire_enable=True,
+            penalty_confidence_enable=True,
+        )
+        outputs.append(value)
+        traces.append(trace)
+        history.append(value)
+
+    assert outputs[:2] == pytest.approx([1.10, 1.10])
+    assert outputs[2] == pytest.approx(1.60)
+    assert outputs[-1] == pytest.approx(2.20)
+    assert traces[2].reacquire_triggered is True
+    assert traces[-1].reacquire_mode == "locked"
+    assert any(
+        candidate == pytest.approx(132.0)
+        for candidate in traces[-1].unpenalized_candidate_peaks_bpm
+    )
+
+
+def test_motion_reacquire_requires_sustained_low_lock(monkeypatch) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.00, 1.10, 1.20, 2.10, 2.20, 2.30],
+        [0.0, 1.00, 0.0, 0.0, 0.55, 0.0],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([1.10]),
+            np.asarray([1.0]),
+        ),
+    )
+    params = SolverParams(
+        spec_penalty_enable=True,
+        spec_penalty_weight=0.2,
+        spec_penalty_width=0.12,
+    )
+    state = solver.SpectrumReacquireState()
+    history = [1.10]
+
+    for _ in range(3):
+        value, trace = solver._process_spectrum_with_trace(
+            np.ones(128),
+            np.ones(128),
+            50,
+            params,
+            len(history),
+            np.asarray(history + [0.0]),
+            True,
+            25.0 / 60.0,
+            10.0,
+            7.0,
+            path="adaptive",
+            window_kind="motion",
+            reacquire_state=state,
+            reacquire_enable=True,
+            penalty_confidence_enable=True,
+        )
+        history.append(value)
+
+    assert history[-1] == pytest.approx(1.10)
+    assert trace.reacquire_triggered is False
+    assert trace.reacquire_mode == "locked"
+    assert trace.reacquire_low_lock_count == 3
+
+
+def test_motion_reacquire_ignores_one_or_two_window_challenger(monkeypatch) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    spectra = [
+        (
+            [1.00, 1.10, 1.20, 2.10, 2.20, 2.30],
+            [0.0, 1.00, 0.0, 0.0, 0.55, 0.0],
+        ),
+        (
+            [1.00, 1.10, 1.20, 2.10, 2.20, 2.30],
+            [0.0, 1.00, 0.0, 0.0, 0.55, 0.0],
+        ),
+        (
+            [1.00, 1.10, 1.20, 2.10, 2.20, 2.30],
+            [0.0, 1.00, 0.0, 0.0, 0.10, 0.0],
+        ),
+    ]
+
+    def fake_candidate_spectrum(_sig, _fs):
+        freqs, amps = spectra.pop(0)
+        return np.asarray(freqs, dtype=float), np.asarray(amps, dtype=float)
+
+    monkeypatch.setattr(solver, "_candidate_peak_spectrum", fake_candidate_spectrum)
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([1.10]),
+            np.asarray([1.0]),
+        ),
+    )
+    params = SolverParams(
+        spec_penalty_enable=True,
+        spec_penalty_weight=0.2,
+        spec_penalty_width=0.12,
+    )
+    state = solver.SpectrumReacquireState()
+    history = [1.10]
+
+    for _ in range(3):
+        value, trace = solver._process_spectrum_with_trace(
+            np.ones(128),
+            np.ones(128),
+            50,
+            params,
+            len(history),
+            np.asarray(history + [0.0]),
+            True,
+            25.0 / 60.0,
+            10.0,
+            7.0,
+            path="adaptive",
+            window_kind="motion",
+            reacquire_state=state,
+            reacquire_enable=True,
+            penalty_confidence_enable=True,
+        )
+        history.append(value)
+
+    assert history[-1] == pytest.approx(1.10)
+    assert trace.reacquire_triggered is False
+    assert trace.reacquire_mode == "locked"
+    assert trace.reacquire_count == 0
+
+
+def test_motion_reacquire_does_not_treat_83_bpm_as_low_lock(monkeypatch) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.30, 1.38, 1.46, 2.35, 2.45, 2.55],
+        [0.0, 1.00, 0.0, 0.0, 0.60, 0.0],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([1.38]),
+            np.asarray([1.0]),
+        ),
+    )
+    params = SolverParams(
+        spec_penalty_enable=True,
+        spec_penalty_weight=0.2,
+        spec_penalty_width=0.12,
+    )
+    state = solver.SpectrumReacquireState(low_lock_count=8)
+
+    _value, trace = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        1,
+        np.asarray([83.0 / 60.0, 0.0]),
+        True,
+        25.0 / 60.0,
+        10.0,
+        7.0,
+        path="adaptive",
+        window_kind="motion",
+        reacquire_state=state,
+        reacquire_enable=True,
+        penalty_confidence_enable=True,
+    )
+
+    assert trace.reacquire_mode == "locked"
+    assert trace.reacquire_low_lock_count == 0
+    assert trace.reacquire_triggered is False
+
+
+def test_motion_penalty_harmonic_requires_local_ppg_peak(monkeypatch) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [0.90, 1.00, 1.10, 2.40, 2.50, 2.60],
+        [0.0, 1.0, 0.0, 0.0, 0.40, 0.0],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([1.00]),
+            np.asarray([1.0]),
+        ),
+    )
+    params = SolverParams(
+        spec_penalty_enable=True,
+        spec_penalty_weight=0.2,
+        spec_penalty_width=0.12,
+    )
+
+    _value, trace = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        0,
+        np.asarray([0.0]),
+        True,
+        25.0 / 60.0,
+        10.0,
+        7.0,
+        path="adaptive",
+        window_kind="motion",
+        penalty_confidence_enable=True,
+    )
+
+    assert trace.penalty_centers_bpm == pytest.approx((60.0,))
+    assert trace.harmonic_penalty_applied is False
+
+
+def test_motion_penalty_confidence_downweights_ambiguous_reference(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [0.90, 1.00, 1.10, 1.90, 2.00, 2.10],
+        [0.0, 1.0, 0.0, 0.0, 0.80, 0.0],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([1.00, 1.40]),
+            np.asarray([1.00, 0.95]),
+        ),
+    )
+    params = SolverParams(
+        spec_penalty_enable=True,
+        spec_penalty_weight=0.2,
+        spec_penalty_width=0.12,
+    )
+
+    _value, trace = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        0,
+        np.asarray([0.0]),
+        True,
+        25.0 / 60.0,
+        10.0,
+        7.0,
+        path="adaptive",
+        window_kind="motion",
+        penalty_confidence_enable=True,
+    )
+
+    assert 0.0 <= trace.penalty_confidence < 0.2
+    assert 0.2 < trace.penalty_weight_min < 0.35
+
+
+def test_motion_reacquire_and_confidence_flags_can_reproduce_legacy(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.00, 1.10, 1.20, 2.10, 2.20, 2.30],
+        [0.0, 1.00, 0.0, 0.0, 0.55, 0.0],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([1.10]),
+            np.asarray([1.0]),
+        ),
+    )
+    params = SolverParams(
+        spec_penalty_enable=True,
+        spec_penalty_weight=0.2,
+        spec_penalty_width=0.12,
+    )
+
+    baseline, baseline_trace = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        1,
+        np.asarray([1.10, 0.0]),
+        True,
+        25.0 / 60.0,
+        10.0,
+        7.0,
+        path="adaptive",
+        window_kind="motion",
+    )
+    flagged, flagged_trace = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        1,
+        np.asarray([1.10, 0.0]),
+        True,
+        25.0 / 60.0,
+        10.0,
+        7.0,
+        path="adaptive",
+        window_kind="motion",
+        reacquire_state=solver.SpectrumReacquireState(),
+        reacquire_enable=False,
+        penalty_confidence_enable=False,
+    )
+
+    assert flagged == pytest.approx(baseline)
+    assert flagged_trace.penalty_centers_bpm == baseline_trace.penalty_centers_bpm
+    assert flagged_trace.penalty_weight_min == pytest.approx(baseline_trace.penalty_weight_min)
 
 
 @pytest.mark.parametrize(
@@ -618,11 +1004,7 @@ def test_solve_v2_window_table_marks_short_timeline_gap_reliable(
 
     result = solve_v2(cfg)
 
-    gap_rows = [
-        row
-        for row in result.window_table
-        if row["missing_count"] > 0
-    ]
+    gap_rows = [row for row in result.window_table if row["missing_count"] > 0]
     assert gap_rows
     assert all(row["reliable"] for row in gap_rows)
     assert all(row["missing_ratio"] < 0.20 for row in gap_rows)
@@ -718,6 +1100,7 @@ def test_solve_v2_keeps_spectrum_tracking_when_entering_adaptive_range(
         *,
         path,
         window_kind,
+        **kwargs,
     ):
         if path == "adaptive":
             seen_adaptive_times_idx.append(int(times_idx))
@@ -734,6 +1117,7 @@ def test_solve_v2_keeps_spectrum_tracking_when_entering_adaptive_range(
             step_bpm,
             path=path,
             window_kind=window_kind,
+            **kwargs,
         )
 
     monkeypatch.setattr(solver, "_process_spectrum_with_trace", spy_process_spectrum)
@@ -743,6 +1127,40 @@ def test_solve_v2_keeps_spectrum_tracking_when_entering_adaptive_range(
     assert result.metadata["used_adaptive_windows"] > 0
     assert seen_adaptive_times_idx
     assert seen_adaptive_times_idx[0] > 0
+
+
+def test_solve_v2_does_not_enable_reacquire_for_klms(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from ppg_hr.v2 import solver
+
+    data = tmp_path / "motion.csv"
+    ref = tmp_path / "motion_ref.csv"
+    _write_sensor(data, motion=True)
+    _write_ref(ref)
+    flags: list[bool] = []
+    original = solver._process_spectrum_with_trace
+
+    def spy(*args, path, window_kind, **kwargs):
+        if path == "adaptive" and window_kind == "motion":
+            flags.append(bool(kwargs.get("reacquire_enable", False)))
+        return original(*args, path=path, window_kind=window_kind, **kwargs)
+
+    monkeypatch.setattr(solver, "_process_spectrum_with_trace", spy)
+
+    solver.solve_v2(
+        V2RunConfig(
+            data_path=data,
+            ref_path=ref,
+            analysis_scope="full",
+            adaptive_filter="klms",
+            reference_groups_order=("HF",),
+        )
+    )
+
+    assert flags
+    assert not any(flags)
 
 
 def test_solve_v2_disables_penalty_after_motion_but_keeps_adaptive(
@@ -784,17 +1202,12 @@ def test_solve_v2_disables_penalty_after_motion_but_keeps_adaptive(
         )
     )
 
+    assert any(path == "adaptive" and kind == "motion" and enabled for path, kind, enabled in calls)
     assert any(
-        path == "adaptive" and kind == "motion" and enabled
-        for path, kind, enabled in calls
+        path == "adaptive" and kind == "recovery" and not enabled for path, kind, enabled in calls
     )
     assert any(
-        path == "adaptive" and kind == "recovery" and not enabled
-        for path, kind, enabled in calls
-    )
-    assert any(
-        row["window_kind"] == "recovery" and row["used_adaptive"]
-        for row in result.window_table
+        row["window_kind"] == "recovery" and row["used_adaptive"] for row in result.window_table
     )
     assert all(
         not row["spectrum_tracking"]["penalty_applied"]
@@ -948,6 +1361,5 @@ def test_adaptive_range_respects_motion_scope(tmp_path: Path) -> None:
             post_motion_adaptive_count += 1
 
     assert post_motion_adaptive_count <= 2, (
-        f"motion scope 下运动结束后使用 adaptive 的窗口数 "
-        f"({post_motion_adaptive_count}) 过多"
+        f"motion scope 下运动结束后使用 adaptive 的窗口数 ({post_motion_adaptive_count}) 过多"
     )

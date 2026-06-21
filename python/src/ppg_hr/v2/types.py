@@ -54,6 +54,8 @@ class V2RunConfig:
     spec_penalty_enable: bool = True
     spec_penalty_weight: float = 0.4
     spec_penalty_width: float = 0.2
+    reacquire_enable: bool = True
+    penalty_confidence_enable: bool = True
     hr_range_hz: float = 25.0 / 60.0
     slew_limit_bpm: float = 10.0
     slew_step_bpm: float = 7.0

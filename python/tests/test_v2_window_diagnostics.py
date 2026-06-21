@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
-import json
 
 import numpy as np
 import pytest
@@ -18,7 +18,6 @@ from ppg_hr.v2.window_diagnostics import (
     render_window_diagnostics,
     save_window_diagnostics,
 )
-
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = ROOT / "data" / "testforwindiag"
@@ -127,9 +126,9 @@ def test_motion_window_marks_fundamental_and_harmonic_penalty_bands(
         (float(patch.get_x()), float(patch.get_x() + patch.get_width()))
         for patch in bands
     )
-    assert spans[0][0] == pytest.approx(41.015625)
-    assert spans[1][1] == pytest.approx(64.453125)
-    assert spans[2] == pytest.approx((93.75, 117.1875))
+    assert spans[0] == pytest.approx((41.015625, 64.453125))
+    assert spans[1] == pytest.approx((93.75, 96.3134765625))
+    assert spans[2] == pytest.approx((114.6240234375, 117.1875))
     protection_center = float(result.summary["protection_center_bpm"])
     assert not any(lo <= protection_center <= hi for lo, hi in spans)
 
@@ -502,7 +501,7 @@ def test_waveform_labels_are_placed_in_each_lane_instead_of_one_legend() -> None
         for label in labels
     ]
     assert label_y[0] > label_y[1] > label_y[2]
-    assert all(text_y > mean_y for text_y, mean_y in zip(label_y, line_means))
+    assert all(text_y > mean_y for text_y, mean_y in zip(label_y, line_means, strict=False))
 
 
 @pytest.mark.skipif(not REPORT.exists(), reason="window diagnostics fixture missing")

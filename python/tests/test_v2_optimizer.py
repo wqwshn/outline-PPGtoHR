@@ -27,6 +27,8 @@ def test_default_search_space_has_rest_tracking_and_time_bias() -> None:
     assert space.options("slew_step_rest") == [0.5, 2.0, 4.0, 5.0, 8.0, 12.0]
     assert space.options("time_bias") == [4, 4.5, 5, 5.5, 6]
     assert "spec_penalty_weight" not in space.names()
+    assert "reacquire_enable" not in space.names()
+    assert "penalty_confidence_enable" not in space.names()
 
 
 def test_default_search_space_has_strategy_specific_fields() -> None:
@@ -67,6 +69,8 @@ def test_v2_config_defaults_and_strategy_params_pass_to_solver_params(tmp_path: 
     params = _solver_params_from_v2(cfg)
 
     assert cfg.spec_penalty_weight == 0.4
+    assert cfg.reacquire_enable is True
+    assert cfg.penalty_confidence_enable is True
     assert params.spec_penalty_weight == 0.4
     assert params.klms_step_size == 0.2
     assert params.klms_sigma == 2.0
