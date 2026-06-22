@@ -247,8 +247,151 @@ def test_motion_penalty_protects_continuous_peak_inside_harmonic_band(
     assert value == pytest.approx(2.0)
     assert trace.tracked_hr_bpm == pytest.approx(120.0)
     assert trace.protection_applied is True
+    assert trace.protection_suppressed is False
     assert trace.protected_penalty_overlap is True
     assert trace.penalty_weight_min < 1.0
+
+
+def test_motion_penalty_does_not_create_edge_candidate_from_weight_shape(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.80, 1.90, 2.00, 2.10, 2.20, 2.30, 2.40],
+        [0.00, 0.50, 1.00, 0.80, 0.60, 0.40, 0.00],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([2.0]),
+            np.asarray([1.0]),
+        ),
+    )
+    params = SolverParams(
+        spec_penalty_enable=True,
+        spec_penalty_weight=0.2,
+        spec_penalty_width=0.2,
+    )
+
+    value, trace = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        0,
+        np.asarray([0.0]),
+        True,
+        25.0 / 60.0,
+        14.0,
+        5.0,
+        path="adaptive",
+        window_kind="motion",
+        penalty_confidence_enable=True,
+    )
+
+    assert value == pytest.approx(2.0)
+    assert trace.candidate_peaks_bpm == pytest.approx((120.0,))
+    assert trace.candidate_source == "raw_local_peaks"
+
+
+def test_motion_protection_is_suppressed_by_strong_non_penalty_challenger(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.95, 2.05, 2.15, 2.20, 2.30, 2.40],
+        [0.00, 0.55, 0.00, 0.00, 1.00, 0.00],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([2.30]),
+            np.asarray([1.0]),
+        ),
+    )
+    params = SolverParams(
+        spec_penalty_enable=True,
+        spec_penalty_weight=0.2,
+        spec_penalty_width=0.2,
+    )
+
+    value, trace = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        1,
+        np.asarray([2.28, 0.0]),
+        True,
+        25.0 / 60.0,
+        20.0,
+        5.0,
+        path="adaptive",
+        window_kind="motion",
+        penalty_confidence_enable=True,
+    )
+
+    assert value == pytest.approx(2.05)
+    assert trace.tracked_hr_bpm == pytest.approx(123.0)
+    assert trace.protection_suppressed is True
+    assert trace.protection_suppression_reason == "motion_core_challenger"
+    assert trace.protection_challenger_bpm == pytest.approx(123.0)
+    assert trace.candidate_source == "protection_suppressed"
+
+
+def test_motion_tracking_holds_previous_when_only_penalty_band_peak_exists(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.90, 2.00, 2.10],
+        [0.00, 1.00, 0.00],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([2.0]),
+            np.asarray([1.0]),
+        ),
+    )
+    params = SolverParams(
+        spec_penalty_enable=True,
+        spec_penalty_weight=0.2,
+        spec_penalty_width=0.2,
+    )
+
+    value, trace = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        1,
+        np.asarray([1.80, 0.0]),
+        True,
+        25.0 / 60.0,
+        20.0,
+        5.0,
+        path="adaptive",
+        window_kind="motion",
+        penalty_confidence_enable=True,
+    )
+
+    assert value == pytest.approx(1.80)
+    assert trace.selected_peak_rank == 0
+    assert trace.tracked_hr_bpm == pytest.approx(108.0)
+    assert trace.candidate_source == "held_previous"
 
 
 def test_motion_penalty_does_not_require_reference_hr(monkeypatch) -> None:

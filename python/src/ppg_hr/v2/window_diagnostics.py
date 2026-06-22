@@ -33,9 +33,13 @@ from .reference_groups import (
 from .report import load_v2_report
 from .solver import (
     _apply_ppg_input_transform,
+    _candidate_peak_indices,
     _classify_window_kind,
     _continuity_protection_half_width_hz,
     _detect_motion_from_raw_imu,
+    _effective_penalty_weight,
+    _motion_penalty_centers,
+    _motion_penalty_confidence,
     _ordered_reference_signals,
     _select_ppg_raw,
     _solver_params_from_v2,
@@ -492,20 +496,46 @@ def plot_spectrum(
     spec = result.spectrum
     bpm = spec["bpm"]
     window_kind = result.selected_window.window_kind
-    penalty_bands = (
-        _penalty_bands_bpm(result) if window_kind == "motion" else ()
+    nominal_penalty_bands = (
+        _penalty_bands_bpm(result, "nominal_penalty_band") if window_kind == "motion" else ()
+    )
+    active_penalty_bands = (
+        _penalty_bands_bpm(result, "actual_penalty_band") if window_kind == "motion" else ()
+    )
+    protection_bands = (
+        _penalty_bands_bpm(result, "protection_band") if window_kind == "motion" else ()
     )
     ax.clear()
     if opts.show_penalty_band:
-        for idx, penalty_band in enumerate(penalty_bands):
+        for idx, penalty_band in enumerate(nominal_penalty_bands):
             ax.axvspan(
                 penalty_band[0],
                 penalty_band[1],
                 color="#F2B8B5",
-                alpha=0.22,
+                alpha=0.18,
                 linewidth=0,
-                label="Penalty bands" if idx == 0 else "_nolegend_",
-                zorder=0.2,
+                label="Penalty bands" if idx == 0 else "_penalty_bands_",
+                zorder=0.18,
+            )
+        for idx, penalty_band in enumerate(protection_bands):
+            ax.axvspan(
+                penalty_band[0],
+                penalty_band[1],
+                color="#44A6A0",
+                alpha=0.16,
+                linewidth=0,
+                label="Protection corridor" if idx == 0 else "_protection_corridor_",
+                zorder=0.24,
+            )
+        for idx, penalty_band in enumerate(active_penalty_bands):
+            ax.axvspan(
+                penalty_band[0],
+                penalty_band[1],
+                color="#D9855E",
+                alpha=0.14,
+                linewidth=0,
+                label="Active penalty" if idx == 0 else "_active_penalty_",
+                zorder=0.28,
             )
     if opts.show_hr_markers and opts.show_ref_tolerance_band:
         ref_hr = _finite_float(result.summary.get("ref_hr_bpm"))
@@ -573,12 +603,9 @@ def plot_spectrum(
             zorder=3,
         )
     if opts.show_penalized_spectrum and window_kind == "motion":
-        penalized_amp = spec["penalized_amp_norm"]
-        for penalty_band in penalty_bands:
-            penalized_amp = _break_y_at_x_band(bpm, penalized_amp, penalty_band)
         ax.plot(
             bpm,
-            penalized_amp,
+            spec["penalized_amp_norm"],
             color="#D9855E",
             linewidth=1.35,
             alpha=0.96,
@@ -1297,6 +1324,8 @@ def _compute_spectrum(
     range_hz: float | None = None,
     limit_bpm: float | None = None,
     step_bpm: float | None = None,
+    penalty_confidence_enable: bool = True,
+    protection_suppressed: bool = False,
 ) -> dict[str, np.ndarray]:
     freq, raw_amp = _full_spectrum(raw_signal, fs)
     freq_f, filtered_amp = _full_spectrum(filtered_signal, fs)
@@ -1304,11 +1333,34 @@ def _compute_spectrum(
         filtered_amp = np.interp(freq, freq_f, filtered_amp, left=0.0, right=0.0)
 
     penalty_weight = np.ones_like(filtered_amp, dtype=float)
+    nominal_penalty_band = np.zeros_like(filtered_amp, dtype=float)
+    actual_penalty_band = np.zeros_like(filtered_amp, dtype=float)
+    protection_band = np.zeros_like(filtered_amp, dtype=float)
     motion_freq = np.nan
+    penalty_centers_hz: tuple[float, ...] = ()
     if bool(params.spec_penalty_enable) and bool(enable_penalty):
         ref_freq, ref_amp = fft_peaks(penalty_ref, fs, 0.3)
         if ref_freq.size:
+            ref_amp = np.asarray(ref_amp, dtype=float)
             motion_freq = float(ref_freq[int(np.argmax(ref_amp))])
+            peak_indices = _candidate_peak_indices(
+                freq,
+                filtered_amp,
+                threshold_ratio=0.15,
+            )
+            penalty_centers_hz = _motion_penalty_centers(
+                motion_freq,
+                freq,
+                peak_indices,
+                penalty_width_hz=float(params.spec_penalty_width),
+            )
+            penalty_confidence = (
+                _motion_penalty_confidence(ref_amp) if penalty_confidence_enable else 1.0
+            )
+            effective_weight = _effective_penalty_weight(
+                float(params.spec_penalty_weight),
+                penalty_confidence,
+            )
             previous_hz = (
                 float(previous_hr_bpm) / 60.0
                 if previous_hr_bpm is not None and np.isfinite(previous_hr_bpm)
@@ -1323,15 +1375,30 @@ def _compute_spectrum(
                 if previous_hz is not None
                 else None
             )
-            penalty_state = _spectrum_penalty_state(
+            requested_state = _spectrum_penalty_state(
                 freq,
-                (motion_freq, 2.0 * motion_freq),
+                penalty_centers_hz,
                 penalty_width_hz=float(params.spec_penalty_width),
-                penalty_weight=float(params.spec_penalty_weight),
+                penalty_weight=effective_weight,
                 previous_hz=previous_hz,
                 protection_half_width_hz=protection_half_width_hz,
             )
+            active_previous_hz = None if protection_suppressed else previous_hz
+            active_protection_half_width_hz = (
+                None if protection_suppressed else protection_half_width_hz
+            )
+            penalty_state = _spectrum_penalty_state(
+                freq,
+                penalty_centers_hz,
+                penalty_width_hz=float(params.spec_penalty_width),
+                penalty_weight=effective_weight,
+                previous_hz=active_previous_hz,
+                protection_half_width_hz=active_protection_half_width_hz,
+            )
             penalty_weight = penalty_state.weights
+            nominal_penalty_band = requested_state.nominal_mask.astype(float)
+            actual_penalty_band = penalty_state.active_mask.astype(float)
+            protection_band = requested_state.protected_mask.astype(float)
     penalized = filtered_amp * penalty_weight
     peaks = find_maxpeak(freq, freq, penalized)
     candidate_hz = float(peaks[0]) if peaks.size else float("nan")
@@ -1342,11 +1409,14 @@ def _compute_spectrum(
         "filtered_amp_norm": _normalise(filtered_amp),
         "penalized_amp_norm": _normalise(penalized),
         "penalty_weight": penalty_weight,
-        "is_penalty_band": (penalty_weight < 1.0).astype(float),
+        "is_penalty_band": actual_penalty_band,
+        "nominal_penalty_band": nominal_penalty_band,
+        "actual_penalty_band": actual_penalty_band,
+        "protection_band": protection_band,
         "motion_peak_hz": np.asarray([motion_freq], dtype=float),
+        "penalty_centers_bpm": np.asarray([v * 60.0 for v in penalty_centers_hz], dtype=float),
         "candidate_hr_bpm": np.asarray([candidate_hz * 60.0], dtype=float),
     }
-
 
 def _full_spectrum(signal: np.ndarray, fs: int) -> tuple[np.ndarray, np.ndarray]:
     sig = np.asarray(signal, dtype=float).ravel()
@@ -1454,6 +1524,18 @@ def _summary_from_window(
         "protected_penalty_overlap": bool(
             tracking_data.get("protected_penalty_overlap", False)
         ),
+        "protection_suppressed": bool(
+            tracking_data.get("protection_suppressed", False)
+        ),
+        "protection_suppression_reason": str(
+            tracking_data.get("protection_suppression_reason", "")
+        ),
+        "protection_challenger_bpm": tracking_data.get(
+            "protection_challenger_bpm"
+        ),
+        "candidate_source": str(
+            tracking_data.get("candidate_source", "")
+        ),
         "candidate_peaks_bpm": tuple(
             float(value)
             for value in tracking_data.get("candidate_peaks_bpm", ())
@@ -1521,10 +1603,11 @@ def _vline(
 
 def _penalty_bands_bpm(
     result: WindowDiagnosticsResult,
+    key: str = "is_penalty_band",
 ) -> tuple[tuple[float, float], ...]:
     bpm = np.asarray(result.spectrum.get("bpm", []), dtype=float)
     mask = np.asarray(
-        result.spectrum.get("is_penalty_band", []),
+        result.spectrum.get(key, result.spectrum.get("is_penalty_band", [])),
         dtype=bool,
     )
     if bpm.size == 0 or bpm.size != mask.size or not mask.any():
@@ -1756,6 +1839,9 @@ def _spectrum_csv_payload(result: WindowDiagnosticsResult) -> dict[str, np.ndarr
             "penalized_amp_norm",
             "penalty_weight",
             "is_penalty_band",
+            "nominal_penalty_band",
+            "actual_penalty_band",
+            "protection_band",
         ):
             if key in comparison.spectrum:
                 payload[f"comparison_{idx}_{key}"] = comparison.spectrum[key]
@@ -1771,6 +1857,9 @@ def _write_spectrum_csv(path: Path, spectrum: dict[str, np.ndarray]) -> None:
         "penalized_amp_norm",
         "penalty_weight",
         "is_penalty_band",
+        "nominal_penalty_band",
+        "actual_penalty_band",
+        "protection_band",
     ]
     keys.extend(sorted(k for k in spectrum if k.startswith("comparison_")))
     _write_array_csv(path, keys, spectrum)

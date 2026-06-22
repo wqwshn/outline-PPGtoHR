@@ -120,17 +120,23 @@ def test_motion_window_marks_fundamental_and_harmonic_penalty_bands(
     bands = [
         patch
         for patch in ax.patches
-        if patch.get_label() in {"Penalty bands", "_nolegend_"}
+        if patch.get_label() in {"Penalty bands", "_penalty_bands_"}
     ]
     spans = sorted(
         (float(patch.get_x()), float(patch.get_x() + patch.get_width()))
         for patch in bands
     )
     assert spans[0] == pytest.approx((41.015625, 64.453125))
-    assert spans[1] == pytest.approx((93.75, 96.3134765625))
-    assert spans[2] == pytest.approx((114.6240234375, 117.1875))
+    assert spans[1] == pytest.approx((93.75, 117.1875))
+    protection_patches = [
+        patch for patch in ax.patches if patch.get_label() == "Protection corridor"
+    ]
+    assert protection_patches
     protection_center = float(result.summary["protection_center_bpm"])
-    assert not any(lo <= protection_center <= hi for lo, hi in spans)
+    assert any(
+        float(patch.get_x()) <= protection_center <= float(patch.get_x() + patch.get_width())
+        for patch in protection_patches
+    )
 
 
 def test_peak_tracking_plot_shows_candidates_search_and_hr_markers(
@@ -401,6 +407,81 @@ def test_compute_spectrum_uses_continuity_protected_penalty(monkeypatch) -> None
     assert spectrum["penalty_weight"][protected_idx] == pytest.approx(1.0)
     assert spectrum["penalty_weight"][center_idx] == pytest.approx(0.2)
     assert spectrum["is_penalty_band"][protected_idx] == pytest.approx(0.0)
+
+
+def test_compute_spectrum_uses_solver_harmonic_gate(monkeypatch) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import window_diagnostics as wd
+
+    freqs = np.asarray([0.90, 1.00, 1.10, 1.90, 2.00, 2.10], dtype=float)
+    amps = np.asarray([0.50, 1.00, 0.50, 0.40, 0.30, 0.20], dtype=float)
+    monkeypatch.setattr(wd, "_full_spectrum", lambda _sig, _fs: (freqs, amps))
+    monkeypatch.setattr(
+        wd,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([1.0]),
+            np.asarray([1.0]),
+        ),
+    )
+    params = SolverParams(
+        spec_penalty_enable=True,
+        spec_penalty_weight=0.2,
+        spec_penalty_width=0.2,
+    )
+
+    spectrum = wd._compute_spectrum(
+        np.ones(128),
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        enable_penalty=True,
+    )
+
+    fundamental_idx = int(np.argmin(np.abs(spectrum["bpm"] - 60.0)))
+    harmonic_idx = int(np.argmin(np.abs(spectrum["bpm"] - 120.0)))
+    assert spectrum["penalty_weight"][fundamental_idx] == pytest.approx(0.2)
+    assert spectrum["penalty_weight"][harmonic_idx] == pytest.approx(1.0)
+
+
+def test_spectrum_plot_draws_nominal_penalty_and_protection_without_breaking_line() -> None:
+    from matplotlib.figure import Figure
+
+    bpm = np.asarray([120.0, 125.0, 130.0, 135.0, 140.0, 145.0, 150.0])
+    actual_penalty = np.asarray([0, 1, 0, 0, 1, 1, 0], dtype=float)
+    result = SimpleNamespace(
+        selected_window=SimpleNamespace(window_kind="motion"),
+        spectrum={
+            "bpm": bpm,
+            "raw_amp_norm": np.linspace(0.2, 0.8, bpm.size),
+            "filtered_amp_norm": np.linspace(0.3, 0.9, bpm.size),
+            "penalized_amp_norm": np.linspace(0.4, 1.0, bpm.size),
+            "nominal_penalty_band": np.asarray([0, 1, 1, 1, 1, 1, 0], dtype=float),
+            "actual_penalty_band": actual_penalty,
+            "protection_band": np.asarray([0, 0, 1, 1, 0, 0, 0], dtype=float),
+            "is_penalty_band": actual_penalty,
+        },
+        summary={
+            "ref_hr_bpm": 122.0,
+            "final_hr_bpm": 123.0,
+            "candidate_hr_bpm": 124.0,
+        },
+    )
+    fig = Figure(figsize=(4.8, 2.6))
+    ax = fig.add_subplot(1, 1, 1)
+
+    plot_spectrum(ax, result)
+
+    penalized = next(line for line in ax.lines if line.get_label() == "Penalized")
+    assert not np.isnan(np.asarray(penalized.get_ydata(), dtype=float)).any()
+    patch_labels = [patch.get_label() for patch in ax.patches]
+    assert "Penalty bands" in patch_labels
+    assert "Protection corridor" in patch_labels
+    assert "Active penalty" in patch_labels
+    nominal = next(patch for patch in ax.patches if patch.get_label() == "Penalty bands")
+    assert float(nominal.get_x()) == pytest.approx(125.0)
+    assert float(nominal.get_x() + nominal.get_width()) == pytest.approx(145.0)
 
 
 @pytest.mark.skipif(not REPORT.exists(), reason="window diagnostics fixture missing")
