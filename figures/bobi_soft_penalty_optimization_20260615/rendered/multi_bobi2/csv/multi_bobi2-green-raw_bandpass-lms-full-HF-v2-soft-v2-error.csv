@@ -1,3 +1,0 @@
-﻿method,total_aae,rest_aae,motion_aae,total_hit_rate_5bpm,rest_hit_rate_5bpm,motion_hit_rate_5bpm
-FFT,25.9774,9.6259,53.2988,0.516588,0.757576,0.113924
-LMS+H,1.6451,1.8045,1.3789,0.985782,0.977273,1.000000

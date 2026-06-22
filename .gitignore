@@ -52,3 +52,7 @@ env/
 .conda/
 bug/批量全流程生成表格中文乱码问题.csv
 bug/运动区域划分不一致-multi_kaihe2-green-lms-figure.png
+
+# 本地临时脚本与图形输出（不纳入后续版本管理）
+scripts/
+figures/
