@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import random
 import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -21,6 +22,7 @@ from .report import save_v2_report
 from .search_space import V2SearchSpace, decode_v2, default_v2_search_space
 from .solver import solve_v2
 from .types import V2RunConfig
+from .generalization_stats import write_generalization_statistics
 
 
 @dataclass(frozen=True)
@@ -61,26 +63,40 @@ class V2GeneralizationGroupPlan:
     motion_type: str
     pairs: tuple[V2SamplePair, ...]
     folds: tuple[V2GeneralizationFoldPlan, ...]
+    external_pairs: tuple[V2SamplePair, ...] = ()
 
     @property
     def sample_stems(self) -> tuple[str, ...]:
         return tuple(pair.stem for pair in self.pairs)
 
     @property
+    def external_sample_stems(self) -> tuple[str, ...]:
+        return tuple(pair.stem for pair in self.external_pairs)
+
+    @property
     def status(self) -> str:
-        if any(f.evaluation_mode == "leave_one_group_out" for f in self.folds):
-            return "将计算"
+        if any(
+            f.evaluation_mode in {"leave_one_group_out", "k_fold_holdout", "cross_person"}
+            for f in self.folds
+        ):
+            return "\u5c06\u8ba1\u7b97"
         if self.folds:
-            return "仅 all_train"
-        return "跳过"
+            return "\u4ec5 all_train"
+        return "\u8df3\u8fc7"
 
     @property
     def note(self) -> str:
-        if self.status == "仅 all_train":
-            return "样本数不足 2，跳过 LOGO"
-        if self.status == "跳过":
-            return "没有可执行 fold"
+        if self.status == "\u4ec5 all_train":
+            return "\u6837\u672c\u6570\u4e0d\u8db3\u4ee5\u8fd0\u884c\u7559\u51fa\u8bc4\u4f30"
+        if self.status == "\u8df3\u8fc7":
+            return "\u6ca1\u6709\u53ef\u6267\u884c fold"
         return ""
+
+    def estimated_train_events(self, *, repeat_total: int, trial_total: int) -> int:
+        return sum(
+            len(fold.train_pairs) * max(1, int(repeat_total)) * max(1, int(trial_total))
+            for fold in self.folds
+        )
 
 
 @dataclass(frozen=True)
@@ -91,6 +107,11 @@ class V2GeneralizationPlan:
     included_pairs: tuple[V2SamplePair, ...]
     unknown_pairs: tuple[V2SamplePair, ...]
     unpaired_data_files: tuple[Path, ...]
+    test_dir: Path | None = None
+    external_pairs: tuple[V2SamplePair, ...] = ()
+    unknown_external_pairs: tuple[V2SamplePair, ...] = ()
+    unpaired_external_data_files: tuple[Path, ...] = ()
+    skipped_external_pairs: tuple[V2SamplePair, ...] = ()
 
     @property
     def fold_count(self) -> int:
@@ -141,6 +162,7 @@ class V2GeneralizationRecord:
     hr_csv: Path | None = None
     status: str = "ok"
     error: str = ""
+    dataset_role: str = ""
 
 
 @dataclass
@@ -148,6 +170,9 @@ class V2GeneralizationResult:
     output_dir: Path
     summary_csv: Path
     records: list[V2GeneralizationRecord] = field(default_factory=list)
+    fold_stats_csv: Path | None = None
+    aggregate_stats_csv: Path | None = None
+    analysis_tables_dir: Path | None = None
 
 
 @dataclass
@@ -204,14 +229,78 @@ def build_v2_generalization_plan(
     *,
     evaluation_modes: tuple[str, ...] = ("all_train", "leave_one_group_out"),
     motion_types: tuple[str, ...] | None = None,
+    k_fold_count: int = 5,
+    k_fold_seed: int | None = None,
+    test_dir: str | Path | None = None,
 ) -> V2GeneralizationPlan:
     root = Path(input_dir)
     selected_modes = _normalise_evaluation_modes(evaluation_modes)
     selected_motion_types = {m for m in motion_types} if motion_types else None
+    included, unknown, unpaired = _scan_sample_pairs(root, selected_motion_types)
+
+    external: list[V2SamplePair] = []
+    unknown_external: list[V2SamplePair] = []
+    unpaired_external: list[Path] = []
+    external_root = Path(test_dir) if test_dir is not None else None
+    if "cross_person" in selected_modes:
+        if external_root is None:
+            raise ValueError("cross_person evaluation requires test_dir")
+        external, unknown_external, unpaired_external = _scan_sample_pairs(
+            external_root,
+            selected_motion_types,
+        )
+
+    by_motion: dict[str, list[V2SamplePair]] = {}
+    for pair in included:
+        by_motion.setdefault(pair.motion_type, []).append(pair)
+    external_by_motion: dict[str, list[V2SamplePair]] = {}
+    for pair in external:
+        external_by_motion.setdefault(pair.motion_type, []).append(pair)
+
+    skipped_external: list[V2SamplePair] = []
+    groups: list[V2GeneralizationGroupPlan] = []
+    for motion_type in sorted(by_motion):
+        samples = tuple(sorted(by_motion[motion_type], key=lambda p: p.stem))
+        external_samples = tuple(sorted(external_by_motion.get(motion_type, []), key=lambda p: p.stem))
+        folds: list[V2GeneralizationFoldPlan] = []
+        for mode in selected_modes:
+            for fold_id, train, test in _folds_for_mode(
+                mode,
+                list(samples),
+                k_fold_count=k_fold_count,
+                k_fold_seed=k_fold_seed,
+                external_samples=list(external_samples),
+                motion_type=motion_type,
+            ):
+                folds.append(V2GeneralizationFoldPlan(mode, fold_id, tuple(train), tuple(test)))
+        if folds:
+            groups.append(V2GeneralizationGroupPlan(motion_type, samples, tuple(folds), external_samples))
+    for motion_type in sorted(external_by_motion):
+        if motion_type not in by_motion:
+            skipped_external.extend(sorted(external_by_motion[motion_type], key=lambda p: p.stem))
+
+    return V2GeneralizationPlan(
+        input_dir=root,
+        evaluation_modes=selected_modes,
+        groups=tuple(groups),
+        included_pairs=tuple(included),
+        unknown_pairs=tuple(unknown),
+        unpaired_data_files=tuple(unpaired),
+        test_dir=external_root,
+        external_pairs=tuple(external),
+        unknown_external_pairs=tuple(unknown_external),
+        unpaired_external_data_files=tuple(unpaired_external),
+        skipped_external_pairs=tuple(skipped_external),
+    )
+
+
+def _scan_sample_pairs(
+    root: Path,
+    selected_motion_types: set[str] | None,
+) -> tuple[list[V2SamplePair], list[V2SamplePair], list[Path]]:
     included: list[V2SamplePair] = []
     unknown: list[V2SamplePair] = []
     unpaired: list[Path] = []
-
     for data_path in sorted(root.glob("*.csv")):
         if _is_reference_csv(data_path):
             continue
@@ -226,29 +315,7 @@ def build_v2_generalization_plan(
         if selected_motion_types is not None and motion_type not in selected_motion_types:
             continue
         included.append(V2SamplePair(data_path, ref_path, motion_type))
-
-    by_motion: dict[str, list[V2SamplePair]] = {}
-    for pair in included:
-        by_motion.setdefault(pair.motion_type, []).append(pair)
-
-    groups: list[V2GeneralizationGroupPlan] = []
-    for motion_type in sorted(by_motion):
-        samples = tuple(sorted(by_motion[motion_type], key=lambda p: p.stem))
-        folds = tuple(
-            V2GeneralizationFoldPlan(mode, fold_id, tuple(train), tuple(test))
-            for mode in selected_modes
-            for fold_id, train, test in _folds_for_mode(mode, list(samples))
-        )
-        groups.append(V2GeneralizationGroupPlan(motion_type, samples, folds))
-
-    return V2GeneralizationPlan(
-        input_dir=root,
-        evaluation_modes=selected_modes,
-        groups=tuple(groups),
-        included_pairs=tuple(included),
-        unknown_pairs=tuple(unknown),
-        unpaired_data_files=tuple(unpaired),
-    )
+    return included, unknown, unpaired
 
 
 def run_v2_generalization(
@@ -263,6 +330,8 @@ def run_v2_generalization(
     bayes_cfg: V2BayesConfig | None = None,
     evaluation_modes: tuple[str, ...] = ("all_train", "leave_one_group_out"),
     motion_types: tuple[str, ...] | None = None,
+    k_fold_count: int = 5,
+    test_dir: str | Path | None = None,
     on_log: Callable[[str], None] | None = None,
     on_progress: Callable[[dict], None] | None = None,
 ) -> V2GeneralizationResult:
@@ -285,11 +354,13 @@ def run_v2_generalization(
         root,
         evaluation_modes=selected_modes,
         motion_types=motion_types,
+        k_fold_count=k_fold_count,
+        k_fold_seed=int(cfg.random_state),
+        test_dir=test_dir,
     )
     if not plan.has_runnable_folds:
         raise ValueError(f"No runnable recognised v2 motion samples found in {root}")
 
-    by_motion = {group.motion_type: list(group.pairs) for group in plan.groups}
     if plan.unknown_pairs:
         _log(
             on_log,
@@ -305,8 +376,7 @@ def run_v2_generalization(
 
     progress = _ProgressCounter(
         total=_generalization_work_total(
-            by_motion,
-            selected_modes,
+            plan,
             repeat_total=max(1, int(cfg.num_repeats)),
             trial_total=max(1, int(cfg.max_iterations)),
         )
@@ -321,7 +391,7 @@ def run_v2_generalization(
         stage_current=0,
         stage_total=1,
         detail=(
-            f"motion_types={len(by_motion)} | modes={'+'.join(selected_modes)} | "
+            f"motion_types={len(plan.groups)} | modes={'+'.join(selected_modes)} | "
             f"samples={len(plan.included_pairs)} | folds={plan.fold_count} | "
             f"unknown={len(plan.unknown_pairs)} | "
             f"unpaired={len(plan.unpaired_data_files)}"
@@ -363,7 +433,9 @@ def run_v2_generalization(
                     fold_id=fold.fold_id,
                     train_pairs=list(fold.train_pairs),
                     test_pairs=list(fold.test_pairs),
-                    all_pairs=samples,
+                    all_pairs=list(fold.test_pairs) if mode == "cross_person" else samples,
+                    fold_index=fold_index,
+                    fold_total=len(folds),
                     ppg_mode=ppg_mode,
                     ppg_input_transform=ppg_input_transform,
                     adaptive_filter=adaptive_filter,
@@ -385,14 +457,42 @@ def run_v2_generalization(
         on_progress,
         event="summary",
         stage="summary",
-        stage_label="写出汇总",
+        stage_label="write_summary",
         overall_current=progress.current,
         overall_total=progress.total,
         stage_current=1,
         stage_total=1,
         detail=str(summary_csv),
     )
-    return V2GeneralizationResult(out, summary_csv, records)
+    stats = write_generalization_statistics(out, records)
+    for idx, (event, label, path) in enumerate(
+        (
+            ("stats_fold", "write_fold_stats", stats.fold_stats_csv),
+            ("stats_aggregate", "write_aggregate_stats", stats.aggregate_stats_csv),
+            ("stats_tables", "write_analysis_tables", stats.analysis_tables_dir),
+        ),
+        start=1,
+    ):
+        progress.advance()
+        _progress(
+            on_progress,
+            event=event,
+            stage="stats",
+            stage_label=label,
+            overall_current=progress.current,
+            overall_total=progress.total,
+            stage_current=idx,
+            stage_total=3,
+            detail=str(path),
+        )
+    return V2GeneralizationResult(
+        out,
+        summary_csv,
+        records,
+        fold_stats_csv=stats.fold_stats_csv,
+        aggregate_stats_csv=stats.aggregate_stats_csv,
+        analysis_tables_dir=stats.analysis_tables_dir,
+    )
 
 
 def plan_summary(plan: V2GeneralizationPlan) -> list[dict[str, Any]]:
@@ -400,11 +500,15 @@ def plan_summary(plan: V2GeneralizationPlan) -> list[dict[str, Any]]:
     for group in plan.groups:
         rows.append(
             {
+                "evaluation_modes": list(plan.evaluation_modes),
                 "motion_type": group.motion_type,
                 "status": group.status,
                 "sample_count": len(group.pairs),
                 "fold_count": len(group.folds),
                 "samples": list(group.sample_stems),
+                "external_sample_count": len(group.external_pairs),
+                "external_samples": list(group.external_sample_stems),
+                "estimated_train_events": group.estimated_train_events(repeat_total=1, trial_total=1),
                 "note": group.note,
             }
         )
@@ -551,6 +655,8 @@ def _run_generalization_fold(
     train_pairs: list[V2SamplePair],
     test_pairs: list[V2SamplePair],
     all_pairs: list[V2SamplePair],
+    fold_index: int,
+    fold_total: int,
     ppg_mode: str,
     ppg_input_transform: str,
     adaptive_filter: str,
@@ -620,7 +726,9 @@ def _run_generalization_fold(
         overall_total=progress.total,
         stage_current=train_stage_current,
         stage_total=train_stage_total,
-        detail=f"train={','.join(train_names)} test={','.join(test_names)}",
+        fold_index=fold_index,
+        fold_total=fold_total,
+        detail=f"fold {fold_index}/{fold_total} | train={','.join(train_names)} test={','.join(test_names)}",
     )
 
     def _on_trial_progress(info: dict) -> None:
@@ -635,6 +743,8 @@ def _run_generalization_fold(
             "fold_id": fold_id,
             "train_samples": train_names,
             "test_samples": test_names,
+            "fold_index": fold_index,
+            "fold_total": fold_total,
             "stage_total": train_stage_total,
             "overall_total": progress.total,
         }
@@ -705,7 +815,9 @@ def _run_generalization_fold(
         overall_total=progress.total,
         stage_current=train_stage_current,
         stage_total=train_stage_total,
-        detail=f"best={float(shared.best_error):.3g} bpm",
+        fold_index=fold_index,
+        fold_total=fold_total,
+        detail=f"fold {fold_index}/{fold_total} | best={float(shared.best_error):.3g} bpm",
     )
     _log(
         on_log,
@@ -716,11 +828,18 @@ def _run_generalization_fold(
     records: list[V2GeneralizationRecord] = []
     replay_stage_total = max(1, len(all_pairs))
     for sample_idx, pair in enumerate(all_pairs, start=1):
-        split = (
-            "train_test"
-            if evaluation_mode == "all_train"
-            else "test" if pair.stem in test_stems else "train"
-        )
+        if evaluation_mode == "all_train":
+            split = "train_test"
+            dataset_role = "own_train_test"
+        elif evaluation_mode == "cross_person":
+            split = "external_test"
+            dataset_role = "external_test"
+        elif pair.stem in test_stems:
+            split = "test"
+            dataset_role = "own_test"
+        else:
+            split = "train"
+            dataset_role = "own_train"
         cfg = _base_config(
             pair,
             ppg_mode=ppg_mode,
@@ -744,6 +863,7 @@ def _run_generalization_fold(
                     "evaluation_mode": evaluation_mode,
                     "fold_id": fold_id,
                     "split": split,
+                    "dataset_role": dataset_role,
                     "train_samples": list(train_names),
                     "test_samples": list(test_names),
                     "params_report_path": str(shared.report_path),
@@ -779,6 +899,7 @@ def _run_generalization_fold(
                 figure_png=arte.figure_png,
                 error_csv=arte.error_csv,
                 hr_csv=arte.hr_csv,
+                dataset_role=dataset_role,
             )
         )
         progress.advance()
@@ -796,6 +917,9 @@ def _run_generalization_fold(
             stage_total=replay_stage_total,
             sample=pair.stem,
             split=split,
+            dataset_role=dataset_role,
+            fold_index=fold_index,
+            fold_total=fold_total,
             final_aae_bpm=float(result.err_stats.get("final_aae_bpm", float("nan"))),
             detail=(
                 f"{pair.stem} ({split}) "
@@ -833,6 +957,11 @@ def _base_config(
 def _folds_for_mode(
     evaluation_mode: str,
     samples: list[V2SamplePair],
+    *,
+    k_fold_count: int = 5,
+    k_fold_seed: int | None = None,
+    external_samples: list[V2SamplePair] | None = None,
+    motion_type: str = "",
 ) -> list[tuple[str, list[V2SamplePair], list[V2SamplePair]]]:
     if evaluation_mode == "all_train":
         return [("all_train", list(samples), list(samples))]
@@ -844,6 +973,27 @@ def _folds_for_mode(
             train = [p for p in samples if p.stem != held_out.stem]
             folds.append((f"test_{held_out.stem}", train, [held_out]))
         return folds
+    if evaluation_mode == "k_fold_holdout":
+        if len(samples) < 2:
+            return []
+        shuffled = list(samples)
+        rng = random.Random(0 if k_fold_seed is None else int(k_fold_seed))
+        rng.shuffle(shuffled)
+        fold_count = max(2, min(int(k_fold_count), len(shuffled)))
+        buckets: list[list[V2SamplePair]] = [[] for _ in range(fold_count)]
+        for idx, pair in enumerate(shuffled):
+            buckets[idx % fold_count].append(pair)
+        folds = []
+        for fold_idx, test in enumerate(buckets, start=1):
+            test_stems = {p.stem for p in test}
+            train = [p for p in samples if p.stem not in test_stems]
+            folds.append((f"fold_{fold_idx:02d}", train, sorted(test, key=lambda p: p.stem)))
+        return folds
+    if evaluation_mode == "cross_person":
+        ext = sorted(external_samples or [], key=lambda p: p.stem)
+        if not samples or not ext:
+            return []
+        return [(f"external_{motion_type or samples[0].motion_type}", list(samples), ext)]
     raise ValueError(f"Unsupported evaluation mode: {evaluation_mode!r}")
 
 
@@ -851,6 +1001,8 @@ def _evaluation_mode_tag(evaluation_mode: str) -> str:
     mapping = {
         "all_train": "all",
         "leave_one_group_out": "logo",
+        "k_fold_holdout": "kfold",
+        "cross_person": "cross_person",
     }
     return mapping.get(str(evaluation_mode), safe_name(str(evaluation_mode)))
 
@@ -859,6 +1011,8 @@ def _evaluation_mode_dir_tag(evaluation_mode: str) -> str:
     mapping = {
         "all_train": "all_train",
         "leave_one_group_out": "logo",
+        "k_fold_holdout": "kfold",
+        "cross_person": "cross_person",
     }
     return mapping.get(str(evaluation_mode), safe_name(str(evaluation_mode)))
 
@@ -888,24 +1042,23 @@ def _fold_output_dirs(
 
 
 def _generalization_work_total(
-    by_motion: dict[str, list[V2SamplePair]],
-    evaluation_modes: tuple[str, ...],
+    plan: V2GeneralizationPlan,
     *,
     repeat_total: int,
     trial_total: int,
 ) -> int:
     total = 1  # summary write
-    for motion_type in sorted(by_motion):
-        samples = sorted(by_motion[motion_type], key=lambda p: p.stem)
-        for mode in evaluation_modes:
-            for _, train_pairs, _ in _folds_for_mode(mode, samples):
-                total += len(train_pairs) * max(1, repeat_total) * max(1, trial_total)
-                total += len(samples)
+    for group in plan.groups:
+        samples = list(group.pairs)
+        for fold in group.folds:
+            total += len(fold.train_pairs) * max(1, repeat_total) * max(1, trial_total)
+            total += len(fold.test_pairs) if fold.evaluation_mode == "cross_person" else len(samples)
+    total += 3  # fold stats, aggregate stats, analysis tables
     return max(1, total)
 
 
 def _normalise_evaluation_modes(values: tuple[str, ...]) -> tuple[str, ...]:
-    allowed = {"all_train", "leave_one_group_out"}
+    allowed = {"all_train", "leave_one_group_out", "k_fold_holdout", "cross_person"}
     out: list[str] = []
     for item in values:
         value = str(item).strip().lower()
@@ -981,6 +1134,7 @@ def _write_summary(output_dir: Path, records: list[V2GeneralizationRecord]) -> P
                 "evaluation_mode",
                 "fold_id",
                 "split",
+                "dataset_role",
                 "sample",
                 "ppg_mode",
                 "ppg_input_transform",
@@ -1008,6 +1162,7 @@ def _write_summary(output_dir: Path, records: list[V2GeneralizationRecord]) -> P
                     r.evaluation_mode,
                     r.fold_id,
                     r.split,
+                    r.dataset_role,
                     r.sample,
                     r.ppg_mode,
                     r.ppg_input_transform,

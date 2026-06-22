@@ -235,6 +235,7 @@ class V2GeneralizationPage(_PageBase):
         self._build_io()
         self._build_run_options()
         self._build_results()
+        self._update_eval_mode_controls()
         self.body().addStretch(1)
         self.body_right().addStretch(1)
 
@@ -251,8 +252,15 @@ class V2GeneralizationPage(_PageBase):
             mode="dir",
             filter_str="",
         )
+        self._external_test_dir_pick = FilePicker(
+            placeholder="cross_person test directory",
+            mode="dir",
+            filter_str="",
+        )
+        self._external_test_label = QLabel("external_test_dir")
         form.addRow("输入目录", self._input_dir_pick)
         form.addRow("输出目录", self._output_dir_pick)
+        form.addRow(self._external_test_label, self._external_test_dir_pick)
         card.add(form)
         self.body().addWidget(card)
 
@@ -288,14 +296,19 @@ class V2GeneralizationPage(_PageBase):
             )
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             self._ref_list.addItem(item)
-        self._all_train_check = QCheckBox("all_train")
-        self._all_train_check.setChecked(True)
-        self._logo_check = QCheckBox("leave_one_group_out")
-        self._logo_check.setChecked(False)
-        mode_row = QHBoxLayout()
-        mode_row.addWidget(self._all_train_check)
-        mode_row.addWidget(self._logo_check)
-        mode_row.addStretch(1)
+        self._eval_mode_combo = QComboBox()
+        for label, value in (
+            ("all_train", "all_train"),
+            ("k_fold_holdout", "k_fold_holdout"),
+            ("leave_one_group_out", "leave_one_group_out"),
+            ("cross_person", "cross_person"),
+        ):
+            self._eval_mode_combo.addItem(label, userData=value)
+        self._eval_mode_combo.currentIndexChanged.connect(self._update_eval_mode_controls)
+        self._k_fold_spin = QSpinBox()
+        self._k_fold_spin.setRange(2, 50)
+        self._k_fold_spin.setValue(5)
+        self._k_fold_label = QLabel("K_fold")
         self._max_iter = QSpinBox()
         self._max_iter.setRange(1, 1000)
         self._max_iter.setValue(150)
@@ -314,7 +327,8 @@ class V2GeneralizationPage(_PageBase):
         form.addRow("自适应滤波", self._filter_combo)
         form.addRow("分析范围", self._scope_combo)
         form.addRow("参考信号", self._ref_list)
-        form.addRow("评估模式", mode_row)
+        form.addRow("evaluation_mode", self._eval_mode_combo)
+        form.addRow(self._k_fold_label, self._k_fold_spin)
         form.addRow("max_iterations", self._max_iter)
         form.addRow("num_seed_points", self._seed_pts)
         form.addRow("num_repeats", self._num_repeats)
@@ -347,9 +361,9 @@ class V2GeneralizationPage(_PageBase):
         self._stage_progress.setRange(0, 100)
         self._stage_progress.setValue(0)
         self._stage_progress.setFormat("阶段进度 0%")
-        self._plan_table = QTableWidget(0, 6)
+        self._plan_table = QTableWidget(0, 7)
         self._plan_table.setHorizontalHeaderLabels(
-            ["运动类型", "状态", "样本数", "fold数", "样本", "备注"]
+            ["mode", "motion", "folds", "train", "test", "train_events", "status"]
         )
         self._plan_table.horizontalHeader().setStretchLastSection(True)
         self._plan_table.setMinimumHeight(140)
@@ -373,12 +387,16 @@ class V2GeneralizationPage(_PageBase):
         return tuple(order)
 
     def selected_evaluation_modes(self) -> tuple[str, ...]:
-        modes: list[str] = []
-        if self._all_train_check.isChecked():
-            modes.append("all_train")
-        if self._logo_check.isChecked():
-            modes.append("leave_one_group_out")
-        return tuple(modes)
+        return (str(self._eval_mode_combo.currentData()),)
+
+    def _update_eval_mode_controls(self) -> None:
+        mode = str(self._eval_mode_combo.currentData())
+        is_kfold = mode == "k_fold_holdout"
+        is_cross = mode == "cross_person"
+        self._k_fold_spin.setVisible(is_kfold)
+        self._k_fold_label.setVisible(is_kfold)
+        self._external_test_dir_pick.setVisible(is_cross)
+        self._external_test_label.setVisible(is_cross)
 
     def _refresh(self):
         self._summary.set_rows([])
@@ -392,6 +410,9 @@ class V2GeneralizationPage(_PageBase):
             plan = build_v2_generalization_plan(
                 input_dir,
                 evaluation_modes=self.selected_evaluation_modes(),
+                k_fold_count=int(self._k_fold_spin.value()),
+                k_fold_seed=int(self._seed.value()),
+                test_dir=self._external_test_dir_pick.path(),
             )
         except Exception as exc:
             self._set_plan_rows([])
@@ -409,13 +430,22 @@ class V2GeneralizationPage(_PageBase):
 
     def _set_plan_rows(self, rows: list[dict]) -> None:
         self._plan_table.setRowCount(len(rows))
-        keys = ["motion_type", "status", "sample_count", "fold_count", "samples", "note"]
+        keys = [
+            "evaluation_modes",
+            "motion_type",
+            "fold_count",
+            "sample_count",
+            "external_sample_count",
+            "estimated_train_events",
+            "status",
+        ]
         for row_idx, row in enumerate(rows):
             for col_idx, key in enumerate(keys):
                 value = row.get(key, "")
                 if isinstance(value, (list, tuple)):
                     value = ", ".join(str(item) for item in value)
                 self._plan_table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
+        self._plan_table.resizeColumnsToContents()
 
     def _run(self) -> None:
         input_dir = self._input_dir_pick.path()
@@ -457,6 +487,8 @@ class V2GeneralizationPage(_PageBase):
             reference_groups_order=self.selected_reference_order(),
             bayes_cfg=cfg,
             evaluation_modes=modes,
+            k_fold_count=int(self._k_fold_spin.value()),
+            test_dir=self._external_test_dir_pick.path(),
         )
         worker.log.connect(self._log.info)
         worker.progress.connect(self._on_progress)
@@ -483,9 +515,12 @@ class V2GeneralizationPage(_PageBase):
     def _on_done(self, result) -> None:
         self._summary.set_rows(
             [
-                ["输出目录", str(result.output_dir)],
-                ["汇总CSV", str(result.summary_csv)],
-                ["记录数", str(len(result.records))],
+                ["output_dir", str(result.output_dir)],
+                ["summary_csv", str(result.summary_csv)],
+                ["fold_stats_csv", str(result.fold_stats_csv)],
+                ["aggregate_stats_csv", str(result.aggregate_stats_csv)],
+                ["analysis_tables_dir", str(result.analysis_tables_dir)],
+                ["records", str(len(result.records))],
             ]
         )
         self._progress_title.setText("泛化评估完成")

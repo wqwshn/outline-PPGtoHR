@@ -89,6 +89,148 @@ def test_build_v2_generalization_plan_groups_known_motions_and_tracks_skips(
     assert fuwo.status == "仅 all_train"
 
 
+
+
+def test_build_v2_generalization_plan_creates_k_fold_holdout(
+    tmp_path: Path,
+) -> None:
+    from ppg_hr.v2.generalization import build_v2_generalization_plan
+
+    for idx in range(1, 6):
+        _touch_pair(tmp_path, f"multi_bobi{idx}_TS")
+
+    plan = build_v2_generalization_plan(
+        tmp_path,
+        evaluation_modes=("k_fold_holdout",),
+        k_fold_count=3,
+        k_fold_seed=7,
+    )
+
+    group = plan.groups[0]
+    assert group.motion_type == "bobi"
+    assert len(group.folds) == 3
+    assert [fold.fold_id for fold in group.folds] == ["fold_01", "fold_02", "fold_03"]
+    tested = []
+    for fold in group.folds:
+        train = {pair.stem for pair in fold.train_pairs}
+        test = {pair.stem for pair in fold.test_pairs}
+        assert train
+        assert test
+        assert train.isdisjoint(test)
+        tested.extend(sorted(test))
+    assert sorted(tested) == [f"multi_bobi{idx}_TS" for idx in range(1, 6)]
+    assert group.estimated_train_events(repeat_total=2, trial_total=3) == 20 * 3
+
+
+def test_build_v2_generalization_plan_matches_cross_person_by_motion(
+    tmp_path: Path,
+) -> None:
+    from ppg_hr.v2.generalization import build_v2_generalization_plan
+
+    train_dir = tmp_path / "own"
+    test_dir = tmp_path / "other"
+    train_dir.mkdir()
+    test_dir.mkdir()
+    for stem in ("multi_bobi1_TS", "multi_bobi2_TS", "multi_fuwo1_TS"):
+        _touch_pair(train_dir, stem)
+    for stem in ("multi_bobi9_TS", "multi_kaihe1_TS"):
+        _touch_pair(test_dir, stem)
+
+    plan = build_v2_generalization_plan(
+        train_dir,
+        evaluation_modes=("cross_person",),
+        test_dir=test_dir,
+    )
+
+    assert [group.motion_type for group in plan.groups] == ["bobi"]
+    group = plan.groups[0]
+    assert group.sample_stems == ("multi_bobi1_TS", "multi_bobi2_TS")
+    assert group.external_sample_stems == ("multi_bobi9_TS",)
+    assert [(fold.evaluation_mode, fold.fold_id) for fold in group.folds] == [
+        ("cross_person", "external_bobi")
+    ]
+    assert [pair.stem for pair in plan.skipped_external_pairs] == ["multi_kaihe1_TS"]
+
+
+def test_generalization_analysis_tables_replay_acc_with_best_params(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from types import SimpleNamespace
+
+    from ppg_hr.v2 import generalization_stats
+    from ppg_hr.v2.generalization_stats import write_generalization_statistics
+    from ppg_hr.v2.solver import V2SolverResult
+
+    data = tmp_path / "multi_bobi1_TS.csv"
+    ref = tmp_path / "multi_bobi1_TS_HR_ref.csv"
+    data.write_text("sensor\n", encoding="utf-8")
+    ref.write_text("ref\n", encoding="utf-8")
+    report = tmp_path / "sample-v2.json"
+    params_report = tmp_path / "params.json"
+    error_csv = tmp_path / "sample-error.csv"
+    report.write_text(
+        json.dumps(
+            {
+                "schema_version": "v2",
+                "data_path": str(data),
+                "ref_path": str(ref),
+                "ppg_mode": "green",
+                "ppg_input_transform": "raw_bandpass",
+                "analysis_scope": "motion",
+                "adaptive_filter": "klms",
+                "reference_groups_order": ["HF"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    params_report.write_text(
+        json.dumps({"best_params": {"max_order": 9}}),
+        encoding="utf-8",
+    )
+    error_csv.write_text(
+        "method,total_aae,motion_aae,total_hit_rate_5bpm,motion_hit_rate_5bpm\n"
+        "K-LMS+H,2,3,0.8,0.7\n"
+        "FFT,5,6,0.4,0.3\n",
+        encoding="utf-8",
+    )
+    seen = {}
+
+    def fake_solve_v2(cfg):
+        seen["reference_groups_order"] = cfg.reference_groups_order
+        seen["max_order"] = cfg.max_order
+        hr = np.array(
+            [
+                [0.0, 70.0, 0.0, 72.0, 1.0],
+                [1.0, 75.0, 0.0, 74.0, 1.0],
+            ],
+            dtype=float,
+        )
+        return V2SolverResult(HR=hr, err_stats={}, metadata={}, window_table=[])
+
+    monkeypatch.setattr(generalization_stats, "solve_v2", fake_solve_v2)
+    record = SimpleNamespace(
+        motion_type="bobi",
+        evaluation_mode="k_fold_holdout",
+        fold_id="fold_01",
+        split="test",
+        status="ok",
+        sample="multi_bobi1_TS.csv",
+        final_aae_bpm=2.0,
+        fft_aae_bpm=5.0,
+        report_path=report,
+        params_report_path=params_report,
+        error_csv=error_csv,
+    )
+
+    stats = write_generalization_statistics(tmp_path / "out", [record])
+
+    assert seen == {"reference_groups_order": ("ACC",), "max_order": 9}
+    table = stats.analysis_tables_dir / "table_motion_mae.csv"
+    with table.open("r", encoding="utf-8-sig", newline="") as fh:
+        rows = list(csv.DictReader(fh))
+    assert rows[0]["klms_acc"] == "1.5"
+
 def test_run_v2_generalization_builds_all_train_and_logo_folds(
     tmp_path: Path,
     monkeypatch,
@@ -207,6 +349,15 @@ def test_run_v2_generalization_builds_all_train_and_logo_folds(
         rows = list(csv.DictReader(f))
     assert rows[0]["ppg_input_transform"] == "log_absorbance"
     assert rows[0]["motion_type"] == "tiaosheng"
+    assert result.fold_stats_csv is not None and result.fold_stats_csv.is_file()
+    assert result.aggregate_stats_csv is not None and result.aggregate_stats_csv.is_file()
+    assert result.analysis_tables_dir is not None and result.analysis_tables_dir.is_dir()
+    with result.aggregate_stats_csv.open("r", encoding="utf-8-sig", newline="") as f:
+        aggregate_rows = list(csv.DictReader(f))
+    assert {row["evaluation_mode"] for row in aggregate_rows} == {
+        "all_train",
+        "leave_one_group_out",
+    }
 
 
 def test_run_v2_generalization_reports_training_sample_progress(
@@ -305,9 +456,10 @@ def test_run_v2_generalization_reports_training_sample_progress(
 
     replay_events = [e for e in events if e.get("event") == "replay_sample"]
     assert len(replay_events) == 2
-    assert replay_events[-1]["overall_current"] == replay_events[-1]["overall_total"] - 1
+    assert replay_events[-1]["overall_current"] == replay_events[-1]["overall_total"] - 4
 
-    assert events[-1]["stage"] == "summary"
+    assert events[-1]["stage"] == "stats"
+    assert events[-1]["event"] == "stats_tables"
     assert events[-1]["overall_current"] == events[-1]["overall_total"]
     currents = [int(e["overall_current"]) for e in events if "overall_current" in e]
     assert currents == sorted(currents)

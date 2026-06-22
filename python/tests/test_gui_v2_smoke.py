@@ -121,9 +121,17 @@ def test_v2_generalization_page_exposes_full_all_train_defaults() -> None:
     try:
         assert page._ppg_input_transform_combo.currentData() == "raw_bandpass"
         assert page._scope_combo.currentData() == "full"
-        assert page._all_train_check.isChecked()
-        assert page._logo_check.isChecked() is False
+        assert page._eval_mode_combo.currentData() == "all_train"
         assert page.selected_evaluation_modes() == ("all_train",)
+        assert page._k_fold_spin.isHidden() is True
+        assert page._external_test_dir_pick.isHidden() is True
+        page._eval_mode_combo.setCurrentIndex(page._eval_mode_combo.findData("k_fold_holdout"))
+        app.processEvents()
+        assert page._k_fold_spin.isHidden() is False
+        assert page._k_fold_spin.value() == 5
+        page._eval_mode_combo.setCurrentIndex(page._eval_mode_combo.findData("cross_person"))
+        app.processEvents()
+        assert page._external_test_dir_pick.isHidden() is False
         assert page._max_iter.value() == 150
         assert page.selected_reference_order() == ("HF",)
         for i in range(page._ref_list.count()):
@@ -185,7 +193,7 @@ def test_v2_generalization_page_refresh_displays_motion_plan(
     ref.write_text("ref\n", encoding="utf-8")
     pair = V2SamplePair(data, ref, "bobi")
 
-    def fake_build_plan(input_dir, *, evaluation_modes, motion_types=None):
+    def fake_build_plan(input_dir, *, evaluation_modes, motion_types=None, **_kwargs):
         return V2GeneralizationPlan(
             input_dir=Path(input_dir),
             evaluation_modes=tuple(evaluation_modes),
@@ -223,10 +231,11 @@ def test_v2_generalization_page_refresh_displays_motion_plan(
         page._refresh()
 
         assert page._plan_table.rowCount() == 3
-        assert page._plan_table.item(0, 0).text() == "bobi"
-        assert page._plan_table.item(0, 1).text() == "仅 all_train"
-        assert page._plan_table.item(1, 1).text() == "未识别"
-        assert page._plan_table.item(2, 1).text() == "未配对"
+        assert page._plan_table.item(0, 0).text() == "all_train"
+        assert page._plan_table.item(0, 1).text() == "bobi"
+        assert page._plan_table.item(0, 2).text() == "1"
+        assert page._plan_table.item(1, 6).text() == "\u672a\u8bc6\u522b"
+        assert page._plan_table.item(2, 6).text() == "\u672a\u914d\u5bf9"
     finally:
         page.deleteLater()
         app.processEvents()
@@ -242,7 +251,7 @@ def test_v2_generalization_page_run_stops_when_plan_has_no_runnable_folds(
     from ppg_hr.gui.v2_pages import V2GeneralizationPage
     from ppg_hr.v2.generalization import V2GeneralizationPlan
 
-    def fake_build_plan(input_dir, *, evaluation_modes, motion_types=None):
+    def fake_build_plan(input_dir, *, evaluation_modes, motion_types=None, **_kwargs):
         return V2GeneralizationPlan(
             input_dir=Path(input_dir),
             evaluation_modes=tuple(evaluation_modes),

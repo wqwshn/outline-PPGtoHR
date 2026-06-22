@@ -644,6 +644,8 @@ class V2GeneralizationWorker(QObject):
         reference_groups_order: tuple[str, ...],
         bayes_cfg: V2BayesConfig,
         evaluation_modes: tuple[str, ...],
+        k_fold_count: int = 5,
+        test_dir: Path | None = None,
     ):
         super().__init__()
         self._input_dir = input_dir
@@ -655,6 +657,8 @@ class V2GeneralizationWorker(QObject):
         self._reference_groups_order = reference_groups_order
         self._bayes_cfg = bayes_cfg
         self._evaluation_modes = evaluation_modes
+        self._k_fold_count = int(k_fold_count)
+        self._test_dir = test_dir
 
     def run(self) -> None:
         try:
@@ -668,6 +672,7 @@ class V2GeneralizationWorker(QObject):
                 f"analysis_scope={self._analysis_scope} | "
                 f"reference_order={'+'.join(self._reference_groups_order) or 'FFT'} | "
                 f"evaluation_modes={'+'.join(self._evaluation_modes)} | "
+                f"k_fold_count={self._k_fold_count} | "
                 f"max_iterations={self._bayes_cfg.max_iterations}, "
                 f"num_seed_points={self._bayes_cfg.num_seed_points}, "
                 f"num_repeats={self._bayes_cfg.num_repeats}, "
@@ -703,6 +708,8 @@ class V2GeneralizationWorker(QObject):
                     title_parts.append(str(evaluation_mode))
                 if fold_id:
                     title_parts.append(str(fold_id))
+                if info.get("fold_index") and info.get("fold_total"):
+                    title_parts.append(f"{info.get('fold_index')}/{info.get('fold_total')}")
                 title = " | ".join(title_parts)
 
                 meta_parts: list[str] = []
@@ -743,6 +750,8 @@ class V2GeneralizationWorker(QObject):
                 reference_groups_order=self._reference_groups_order,
                 bayes_cfg=self._bayes_cfg,
                 evaluation_modes=self._evaluation_modes,
+                k_fold_count=self._k_fold_count,
+                test_dir=self._test_dir,
                 on_log=self.log.emit,
                 on_progress=_on_progress,
             )
