@@ -8,8 +8,9 @@ from typing import Callable
 
 import optuna
 
+from .algorithm_presets import v2_search_space_for_preset
 from .report import save_v2_report
-from .search_space import V2SearchSpace, decode_v2, default_v2_search_space
+from .search_space import V2SearchSpace, decode_v2
 from .solver import solve_v2
 from .types import V2RunConfig
 
@@ -41,7 +42,10 @@ def optimise_v2(
     on_trial_step: Callable[[dict], None] | None = None,
     qc: dict | None = None,
 ) -> V2OptimiseResult:
-    active_space = space or default_v2_search_space(base.adaptive_filter)
+    active_space = space or v2_search_space_for_preset(
+        base.adaptive_filter,
+        base.algorithm_preset,
+    )
     history: list[dict] = []
     trials_per_repeat = max(1, int(config.max_iterations))
     repeat_total = max(1, int(config.num_repeats))

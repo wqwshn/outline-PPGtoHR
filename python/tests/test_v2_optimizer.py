@@ -205,6 +205,40 @@ def test_optimise_v2_writes_single_objective_report(tmp_path: Path) -> None:
     assert result.best_params
 
 
+def test_optimise_v2_uses_default_algorithm_preset_search_space(tmp_path: Path) -> None:
+    data, ref = _write_pair(tmp_path)
+    cfg = V2RunConfig(
+        data_path=data,
+        ref_path=ref,
+        adaptive_filter="noncausal_lms",
+        reference_groups_order=(),
+    )
+
+    result = optimise_v2(
+        cfg,
+        V2BayesConfig(max_iterations=1, num_seed_points=1, random_state=3),
+        out_path=tmp_path / "preset.json",
+    )
+
+    sampled = result.history[0]
+    hr_range_rest_candidates = [20 / 60.0, 30 / 60.0, 60 / 60.0, 80 / 60.0]
+    slew_limit_rest_candidates = [1.0, 3.0, 6.0, 8.0]
+    slew_step_rest_candidates = [0.5, 2.0, 4.0]
+    assert cfg.algorithm_preset == V2_ALGORITHM_PRESET_DYNAMIC_REST_BO
+    assert "hr_range_hz" not in sampled
+    assert "slew_limit_bpm" not in sampled
+    assert "slew_step_bpm" not in sampled
+    assert sampled["hr_range_rest"] in hr_range_rest_candidates
+    assert sampled["slew_limit_rest"] in slew_limit_rest_candidates
+    assert sampled["slew_step_rest"] in slew_step_rest_candidates
+    assert "hr_range_hz" not in result.best_params
+    assert "slew_limit_bpm" not in result.best_params
+    assert "slew_step_bpm" not in result.best_params
+    assert result.best_params["hr_range_rest"] in hr_range_rest_candidates
+    assert result.best_params["slew_limit_rest"] in slew_limit_rest_candidates
+    assert result.best_params["slew_step_rest"] in slew_step_rest_candidates
+
+
 def test_optimise_v2_records_repeat_and_trial_progress(tmp_path: Path) -> None:
     data, ref = _write_pair(tmp_path)
     cfg = V2RunConfig(
