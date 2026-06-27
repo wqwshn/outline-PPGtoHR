@@ -6,7 +6,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from ppg_hr.v2.batch_pipeline import run_v2_batch_pipeline
+from ppg_hr.v2.batch_pipeline import (
+    default_v2_batch_output_dir,
+    run_v2_batch_pipeline,
+)
 from ppg_hr.v2.optimizer import V2BayesConfig
 from ppg_hr.v2.search_space import V2SearchSpace
 
@@ -139,6 +142,31 @@ def test_run_v2_batch_pipeline_writes_algorithm_preset_metadata(
 
     report = json.loads(payload["records"][0].report_path.read_text(encoding="utf-8"))
     assert report["algorithm_preset"] == "lite"
+
+
+def test_default_v2_batch_output_dir_includes_algorithm_preset(
+    tmp_path: Path,
+) -> None:
+    lite = default_v2_batch_output_dir(
+        tmp_path,
+        ppg_input_transform="raw_bandpass",
+        analysis_scope="full",
+        adaptive_filter="lms",
+        reference_groups_order=("HF",),
+        algorithm_preset="Lite",
+    )
+    dynamic = default_v2_batch_output_dir(
+        tmp_path,
+        ppg_input_transform="raw_bandpass",
+        analysis_scope="full",
+        adaptive_filter="lms",
+        reference_groups_order=("HF",),
+        algorithm_preset="dynamic_rest_bo",
+    )
+
+    assert lite != dynamic
+    assert "lite" in lite.name
+    assert "dynamic_rest_bo" in dynamic.name
 
 
 def test_run_v2_batch_pipeline_accepts_custom_search_space(tmp_path: Path) -> None:

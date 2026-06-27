@@ -352,6 +352,7 @@ def run_v2_generalization(
             adaptive_filter,
             analysis_scope,
             reference_groups_order,
+            algorithm_preset=preset,
         )
     )
     out.mkdir(parents=True, exist_ok=True)
@@ -555,9 +556,23 @@ def optimise_v2_shared_params(
 ) -> V2SharedOptimiseResult:
     if not base_configs:
         raise ValueError("At least one training config is required")
+    presets = [
+        normalise_v2_algorithm_preset(cfg.algorithm_preset)
+        for cfg in base_configs
+    ]
+    if len(set(presets)) != 1:
+        raise ValueError(
+            "All training configs must use the same algorithm_preset; "
+            f"got {sorted(set(presets))}"
+        )
+    preset = presets[0]
+    base_configs = tuple(
+        cfg.__class__(**{**cfg.__dict__, "algorithm_preset": preset})
+        for cfg in base_configs
+    )
     active_space = space or v2_search_space_for_preset(
         base_configs[0].adaptive_filter,
-        base_configs[0].algorithm_preset,
+        preset,
     )
     history: list[dict[str, Any]] = []
     trials_per_repeat = max(1, int(config.max_iterations))
@@ -1090,13 +1105,16 @@ def _default_output_tag(
     adaptive_filter: str,
     analysis_scope: str,
     reference_groups_order: tuple[str, ...],
+    algorithm_preset: str = V2_ALGORITHM_PRESET_DEFAULT,
 ) -> str:
     from datetime import datetime
 
+    preset = normalise_v2_algorithm_preset(algorithm_preset)
     return safe_name(
         "_".join(
             [
                 datetime.now().strftime("%Y%m%d_%H%M%S"),
+                preset,
                 str(ppg_input_transform),
                 str(analysis_scope),
                 str(adaptive_filter),
@@ -1130,6 +1148,9 @@ def _write_params_report(
         "ppg_input_transform": base_configs[0].ppg_input_transform,
         "analysis_scope": base_configs[0].analysis_scope,
         "adaptive_filter": base_configs[0].adaptive_filter,
+        "algorithm_preset": normalise_v2_algorithm_preset(
+            base_configs[0].algorithm_preset
+        ),
         "reference_groups_order": list(base_configs[0].reference_groups_order),
         "best_error": float(best_error),
         "best_params": _jsonify(best_params),

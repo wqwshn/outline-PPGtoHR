@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from ppg_hr.v2.optimizer import V2BayesConfig
 from ppg_hr.v2.solver import V2SolverResult
@@ -589,6 +590,60 @@ def test_optimise_v2_shared_params_uses_base_algorithm_preset_space(
     }
     assert fixed_tracking_params.isdisjoint(result.history[0])
     assert fixed_tracking_params.isdisjoint(result.best_params)
+    report = json.loads((tmp_path / "params.json").read_text(encoding="utf-8"))
+    assert report["algorithm_preset"] == "lite"
+
+
+def test_optimise_v2_shared_params_rejects_mixed_algorithm_presets(
+    tmp_path: Path,
+) -> None:
+    from ppg_hr.v2.generalization import optimise_v2_shared_params
+    from ppg_hr.v2.types import V2RunConfig
+
+    lite = V2RunConfig(
+        data_path=tmp_path / "multi_bobi1_TS.csv",
+        ref_path=tmp_path / "multi_bobi1_TS_HR_ref.csv",
+        adaptive_filter="lms",
+        algorithm_preset="lite",
+        reference_groups_order=("HF",),
+    )
+    dynamic = V2RunConfig(
+        data_path=tmp_path / "multi_bobi2_TS.csv",
+        ref_path=tmp_path / "multi_bobi2_TS_HR_ref.csv",
+        adaptive_filter="lms",
+        algorithm_preset="dynamic_rest_bo",
+        reference_groups_order=("HF",),
+    )
+
+    with pytest.raises(ValueError, match="algorithm_preset"):
+        optimise_v2_shared_params(
+            [lite, dynamic],
+            V2BayesConfig(max_iterations=1, num_seed_points=1, num_repeats=1),
+            out_path=tmp_path / "params.json",
+        )
+
+
+def test_default_v2_generalization_output_tag_includes_algorithm_preset() -> None:
+    from ppg_hr.v2.generalization import _default_output_tag
+
+    lite = _default_output_tag(
+        "raw_bandpass",
+        "lms",
+        "motion",
+        ("HF",),
+        algorithm_preset="Lite",
+    )
+    dynamic = _default_output_tag(
+        "raw_bandpass",
+        "lms",
+        "motion",
+        ("HF",),
+        algorithm_preset="dynamic_rest_bo",
+    )
+
+    assert lite != dynamic
+    assert "lite" in lite
+    assert "dynamic_rest_bo" in dynamic
 
 
 def test_run_v2_generalization_skips_unknown_paired_samples(

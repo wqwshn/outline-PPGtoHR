@@ -70,6 +70,7 @@ def run_v2_batch_pipeline(
             analysis_scope=analysis_scope,
             adaptive_filter=adaptive_filter,
             reference_groups_order=reference_groups_order,
+            algorithm_preset=preset,
         )
     )
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -246,12 +247,14 @@ def default_v2_batch_output_dir(
     analysis_scope: str = "full",
     adaptive_filter: str = "lms",
     reference_groups_order: tuple[str, ...] = (),
+    algorithm_preset: str = V2_ALGORITHM_PRESET_DEFAULT,
 ) -> Path:
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    preset = normalise_v2_algorithm_preset(algorithm_preset)
     scope = str(analysis_scope).strip().lower()
     transform = safe_name(ppg_input_transform)
     label = method_label(adaptive_filter, reference_groups_order)
-    tag = f"{stamp}_{transform}_{scope}_{label}"
+    tag = f"{stamp}_{preset}_{transform}_{scope}_{label}"
     return Path(input_dir).resolve() / "v2_batch_outputs" / tag
 
 
