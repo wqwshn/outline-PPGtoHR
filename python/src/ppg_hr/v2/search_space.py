@@ -82,6 +82,7 @@ def default_v2_search_space(adaptive_filter: str) -> V2SearchSpace:
         return V2SearchSpace(rff_D=[50, 100, 200], rff_sigma=[0.5, 1.0, 2.0])
     if adaptive_filter == "klms":
         return V2SearchSpace(
+            lms_mu_base=None,
             klms_step_size=[0.01, 0.05, 0.1, 0.2, 0.5],
             klms_sigma=[0.1, 0.5, 1.0, 2.0, 5.0],
             klms_epsilon=[0.01, 0.05, 0.1, 0.2],

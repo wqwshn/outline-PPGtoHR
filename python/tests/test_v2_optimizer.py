@@ -13,7 +13,7 @@ from ppg_hr.v2.algorithm_presets import (
     normalise_v2_algorithm_preset,
     v2_search_space_for_preset,
 )
-from ppg_hr.v2.search_space import default_v2_search_space, reduced_v2_search_space
+from ppg_hr.v2.search_space import V2SearchSpace, default_v2_search_space, reduced_v2_search_space
 from ppg_hr.v2.solver import _solver_params_from_v2
 from ppg_hr.v2.types import V2RunConfig
 
@@ -113,6 +113,7 @@ def test_default_search_space_has_strategy_specific_fields() -> None:
     assert "klms_step_size" in klms_names
     assert "klms_sigma" in klms_names
     assert "klms_epsilon" in klms_names
+    assert "lms_mu_base" not in klms_names
     assert "volterra_max_order_vol" not in klms_names
     assert "volterra_max_order_vol" in volterra_names
     assert "klms_sigma" not in volterra_names
@@ -237,6 +238,50 @@ def test_optimise_v2_uses_default_algorithm_preset_search_space(tmp_path: Path) 
     assert result.best_params["hr_range_rest"] in hr_range_rest_candidates
     assert result.best_params["slew_limit_rest"] in slew_limit_rest_candidates
     assert result.best_params["slew_step_rest"] in slew_step_rest_candidates
+
+
+def test_optimise_v2_explicit_space_overrides_algorithm_preset(tmp_path: Path) -> None:
+    data, ref = _write_pair(tmp_path)
+    cfg = V2RunConfig(
+        data_path=data,
+        ref_path=ref,
+        adaptive_filter="noncausal_lms",
+        reference_groups_order=(),
+    )
+    custom_space = V2SearchSpace(
+        fs_target=[25],
+        max_order=None,
+        lms_mu_base=None,
+        smooth_win_len=None,
+        spec_penalty_width=None,
+        hr_range_hz=None,
+        slew_limit_bpm=None,
+        slew_step_bpm=None,
+        hr_range_rest=None,
+        slew_limit_rest=None,
+        slew_step_rest=None,
+        time_bias=None,
+    )
+
+    result = optimise_v2(
+        cfg,
+        V2BayesConfig(max_iterations=1, num_seed_points=1, random_state=3),
+        out_path=tmp_path / "custom-space.json",
+        space=custom_space,
+    )
+
+    assert result.history[0]["fs_target"] == 25
+    assert result.best_params == {"fs_target": 25}
+    assert set(result.history[0]).isdisjoint(
+        {
+            "hr_range_rest",
+            "slew_limit_rest",
+            "slew_step_rest",
+            "hr_range_hz",
+            "slew_limit_bpm",
+            "slew_step_bpm",
+        }
+    )
 
 
 def test_optimise_v2_records_repeat_and_trial_progress(tmp_path: Path) -> None:
