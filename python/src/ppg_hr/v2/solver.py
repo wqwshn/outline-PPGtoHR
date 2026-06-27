@@ -28,6 +28,11 @@ from ppg_hr.preprocess.utils import (
     smoothdata_movmedian,
 )
 
+from .algorithm_presets import (
+    DirectionalTrackingParams,
+    normalise_v2_algorithm_preset,
+    v2_tracking_policy_for_preset,
+)
 from .preprocess import safe_cf_ratio
 from .reference_groups import (
     channel_names_for_group,
@@ -158,9 +163,7 @@ def _process_spectrum_with_trace(
     times_idx: int,
     history_arr: np.ndarray,
     enable_penalty: bool,
-    range_hz: float,
-    limit_bpm: float,
-    step_bpm: float,
+    tracking: DirectionalTrackingParams,
     *,
     path: str,
     window_kind: WindowKind,
@@ -234,9 +237,9 @@ def _process_spectrum_with_trace(
             )
             protection_half_width_hz = (
                 _continuity_protection_half_width_hz(
-                    range_hz,
-                    limit_bpm,
-                    step_bpm,
+                    max(tracking.range_up_hz, tracking.range_down_hz),
+                    max(float(tracking.limit_up_bpm), float(tracking.limit_down_bpm)),
+                    max(float(tracking.step_up_bpm), float(tracking.step_down_bpm)),
                 )
                 if previous_hz is not None and window_kind == "motion" and not protection_disabled
                 else None
@@ -280,8 +283,8 @@ def _process_spectrum_with_trace(
     candidate_source = "raw_local_peaks"
 
     if previous_hz is not None:
-        search_min_hz = previous_hz - float(range_hz)
-        search_max_hz = previous_hz + float(range_hz)
+        search_min_hz = previous_hz - float(tracking.range_down_hz)
+        search_max_hz = previous_hz + float(tracking.range_up_hz)
         selected_peak_idx = _first_peak_in_tracking_range(
             freqs,
             order,
@@ -362,8 +365,12 @@ def _process_spectrum_with_trace(
             candidate_source = "held_previous"
 
         diff_hz = tracked_hz - previous_hz
-        limit_hz = float(limit_bpm) / 60.0
-        step_hz = float(step_bpm) / 60.0
+        if diff_hz >= 0.0:
+            limit_hz = float(tracking.limit_up_bpm) / 60.0
+            step_hz = float(tracking.step_up_bpm) / 60.0
+        else:
+            limit_hz = float(tracking.limit_down_bpm) / 60.0
+            step_hz = float(tracking.step_down_bpm) / 60.0
         if diff_hz > limit_hz:
             limited_hz = previous_hz + step_hz
         elif diff_hz < -limit_hz:
@@ -449,6 +456,45 @@ def _continuity_protection_half_width_hz(
     step_bpm: float,
 ) -> float:
     return max(0.0, min(float(range_hz), float(step_bpm) / 60.0))
+
+
+def _symmetric_tracking_params(
+    range_hz: float,
+    limit_bpm: float,
+    step_bpm: float,
+) -> DirectionalTrackingParams:
+    return DirectionalTrackingParams(
+        range_up_bpm=float(range_hz) * 60.0,
+        range_down_bpm=float(range_hz) * 60.0,
+        limit_up_bpm=float(limit_bpm),
+        step_up_bpm=float(step_bpm),
+        limit_down_bpm=float(limit_bpm),
+        step_down_bpm=float(step_bpm),
+    )
+
+
+def _tracking_params_metadata(tracking: DirectionalTrackingParams) -> dict[str, float]:
+    return {
+        "range_up_bpm": float(tracking.range_up_bpm),
+        "range_down_bpm": float(tracking.range_down_bpm),
+        "limit_up_bpm": float(tracking.limit_up_bpm),
+        "step_up_bpm": float(tracking.step_up_bpm),
+        "limit_down_bpm": float(tracking.limit_down_bpm),
+        "step_down_bpm": float(tracking.step_down_bpm),
+    }
+
+
+def _tracking_policy_metadata(
+    *,
+    rest: DirectionalTrackingParams,
+    motion: DirectionalTrackingParams,
+    recovery: DirectionalTrackingParams,
+) -> dict[str, dict[str, float]]:
+    return {
+        "rest": _tracking_params_metadata(rest),
+        "motion": _tracking_params_metadata(motion),
+        "recovery": _tracking_params_metadata(recovery),
+    }
 
 
 def _motion_penalty_confidence(ref_amps: np.ndarray) -> float:
@@ -901,9 +947,7 @@ def _process_spectrum(
         times_idx,
         history_arr,
         enable_penalty,
-        range_hz,
-        limit_bpm,
-        step_bpm,
+        _symmetric_tracking_params(range_hz, limit_bpm, step_bpm),
         path="legacy",
         window_kind="motion" if enable_penalty else "rest",
     )
@@ -928,6 +972,17 @@ def _normalise_config(config: V2RunConfig) -> V2RunConfig:
 
 def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
     params = _solver_params_from_v2(cfg)
+    algorithm_preset = normalise_v2_algorithm_preset(cfg.algorithm_preset)
+    tracking_policy = v2_tracking_policy_for_preset(algorithm_preset)
+    rest_tracking = (
+        tracking_policy.rest
+        if tracking_policy.rest is not None
+        else _symmetric_tracking_params(
+            params.hr_range_rest,
+            params.slew_limit_rest,
+            params.slew_step_rest,
+        )
+    )
     raw_data, ref_data = load_raw_data(params)
     fs_origin = 100
     fs = int(cfg.fs_target)
@@ -1060,9 +1115,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
             times_idx,
             history_fft,
             False,
-            params.hr_range_rest,
-            params.slew_limit_rest,
-            params.slew_step_rest,
+            rest_tracking,
             path="fft",
             window_kind="rest",
         )
@@ -1087,6 +1140,11 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 if motion_segment is not None and center <= float(motion_segment["end_s"])
                 else "recovery"
             )
+            adaptive_tracking = (
+                tracking_policy.motion
+                if provisional_kind == "motion"
+                else tracking_policy.recovery
+            )
             row[2], adaptive_trace = _process_spectrum_with_trace(
                 filtered,
                 penalty_ref,
@@ -1095,9 +1153,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 times_idx,
                 history_ref,
                 provisional_kind == "motion",
-                params.hr_range_hz,
-                params.slew_limit_bpm,
-                params.slew_step_bpm,
+                adaptive_tracking,
                 path="adaptive",
                 window_kind=provisional_kind,
                 reacquire_state=(
@@ -1268,6 +1324,12 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
         "ppg_input_transform_params": {
             "baseline_seconds": float(cfg.ppg_input_baseline_seconds),
         },
+        "algorithm_preset": algorithm_preset,
+        "tracking_policy": _tracking_policy_metadata(
+            rest=rest_tracking,
+            motion=tracking_policy.motion,
+            recovery=tracking_policy.recovery,
+        ),
         "analysis_scope": cfg.analysis_scope,
         "adaptive_filter": cfg.adaptive_filter,
         "reference_groups_order": list(reference_order),

@@ -23,6 +23,19 @@ def _patch_candidate_spectrum(monkeypatch, freqs, amps) -> None:
     )
 
 
+def _tracking(range_hz: float, limit_bpm: float, step_bpm: float):
+    from ppg_hr.v2.algorithm_presets import DirectionalTrackingParams
+
+    return DirectionalTrackingParams(
+        range_up_bpm=range_hz * 60.0,
+        range_down_bpm=range_hz * 60.0,
+        limit_up_bpm=limit_bpm,
+        step_up_bpm=step_bpm,
+        limit_down_bpm=limit_bpm,
+        step_down_bpm=step_bpm,
+    )
+
+
 def test_process_spectrum_with_trace_records_tracking_decisions(monkeypatch) -> None:
     from ppg_hr.params import SolverParams
     from ppg_hr.v2 import solver
@@ -43,9 +56,7 @@ def test_process_spectrum_with_trace_records_tracking_decisions(monkeypatch) -> 
         1,
         history,
         False,
-        0.3,
-        10.0,
-        3.0,
+        _tracking(0.3, 10.0, 3.0),
         path="adaptive",
         window_kind="recovery",
     )
@@ -61,6 +72,83 @@ def test_process_spectrum_with_trace_records_tracking_decisions(monkeypatch) -> 
     assert trace.selected_peak_rank == 3
     assert trace.tracked_hr_bpm == pytest.approx(120.0)
     assert trace.slew_limited_hr_bpm == pytest.approx(111.0)
+
+
+def test_process_spectrum_with_trace_uses_asymmetric_tracking_range(monkeypatch) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+    from ppg_hr.v2.algorithm_presets import DirectionalTrackingParams
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.3, 1.4, 1.5, 1.7, 1.8],
+        [0.0, 1.0, 0.0, 0.8, 0.0],
+    )
+    params = SolverParams(spec_penalty_enable=False)
+    tracking = DirectionalTrackingParams(
+        range_up_bpm=12.0,
+        range_down_bpm=30.0,
+        limit_up_bpm=10.0,
+        step_up_bpm=3.0,
+        limit_down_bpm=10.0,
+        step_down_bpm=3.0,
+    )
+
+    value, trace = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        1,
+        np.asarray([1.5, 0.0]),
+        False,
+        tracking,
+        path="adaptive",
+        window_kind="recovery",
+    )
+
+    assert value == pytest.approx(1.4)
+    assert trace.search_min_bpm == pytest.approx(60.0)
+    assert trace.search_max_bpm == pytest.approx(102.0)
+    assert trace.tracked_hr_bpm == pytest.approx(84.0)
+
+
+def test_process_spectrum_with_trace_uses_directional_slew_limit(monkeypatch) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+    from ppg_hr.v2.algorithm_presets import DirectionalTrackingParams
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.9, 2.0, 2.1],
+        [0.0, 1.0, 0.0],
+    )
+    params = SolverParams(spec_penalty_enable=False)
+    tracking = DirectionalTrackingParams(
+        range_up_bpm=40.0,
+        range_down_bpm=40.0,
+        limit_up_bpm=6.0,
+        step_up_bpm=3.0,
+        limit_down_bpm=30.0,
+        step_down_bpm=20.0,
+    )
+
+    value, trace = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        1,
+        np.asarray([1.5, 0.0]),
+        False,
+        tracking,
+        path="adaptive",
+        window_kind="motion",
+    )
+
+    assert trace.tracked_hr_bpm == pytest.approx(120.0)
+    assert trace.slew_limited_hr_bpm == pytest.approx(93.0)
+    assert value == pytest.approx(93.0 / 60.0)
 
 
 def test_process_spectrum_with_trace_handles_first_window_and_no_near_peak(
@@ -84,9 +172,7 @@ def test_process_spectrum_with_trace_handles_first_window_and_no_near_peak(
         0,
         np.asarray([0.0]),
         False,
-        0.1,
-        10.0,
-        2.0,
+        _tracking(0.1, 10.0, 2.0),
         path="fft",
         window_kind="rest",
     )
@@ -98,9 +184,7 @@ def test_process_spectrum_with_trace_handles_first_window_and_no_near_peak(
         1,
         np.asarray([3.0, 0.0]),
         False,
-        0.1,
-        10.0,
-        2.0,
+        _tracking(0.1, 10.0, 2.0),
         path="fft",
         window_kind="rest",
     )
@@ -146,9 +230,7 @@ def test_process_spectrum_extracts_candidates_after_motion_penalty(
         1,
         np.asarray([2.0, 0.0]),
         True,
-        25.0 / 60.0,
-        10.0,
-        9.0,
+        _tracking(25.0 / 60.0, 10.0, 9.0),
         path="adaptive",
         window_kind="motion",
     )
@@ -192,9 +274,7 @@ def test_process_spectrum_prefers_non_penalty_peak_inside_tracking_range(
         1,
         np.asarray([2.3, 0.0]),
         True,
-        20.0 / 60.0,
-        20.0,
-        9.0,
+        _tracking(20.0 / 60.0, 20.0, 9.0),
         path="adaptive",
         window_kind="motion",
     )
@@ -237,9 +317,7 @@ def test_motion_penalty_protects_continuous_peak_inside_harmonic_band(
         1,
         np.asarray([1.95, 0.0]),
         True,
-        20.0 / 60.0,
-        8.0,
-        5.0,
+        _tracking(20.0 / 60.0, 8.0, 5.0),
         path="adaptive",
         window_kind="motion",
     )
@@ -285,9 +363,7 @@ def test_motion_penalty_does_not_create_edge_candidate_from_weight_shape(
         0,
         np.asarray([0.0]),
         True,
-        25.0 / 60.0,
-        14.0,
-        5.0,
+        _tracking(25.0 / 60.0, 14.0, 5.0),
         path="adaptive",
         window_kind="motion",
         penalty_confidence_enable=True,
@@ -331,9 +407,7 @@ def test_motion_protection_is_suppressed_by_strong_non_penalty_challenger(
         1,
         np.asarray([2.28, 0.0]),
         True,
-        25.0 / 60.0,
-        20.0,
-        5.0,
+        _tracking(25.0 / 60.0, 20.0, 5.0),
         path="adaptive",
         window_kind="motion",
         penalty_confidence_enable=True,
@@ -380,9 +454,7 @@ def test_motion_tracking_holds_previous_when_only_penalty_band_peak_exists(
         1,
         np.asarray([1.80, 0.0]),
         True,
-        25.0 / 60.0,
-        20.0,
-        5.0,
+        _tracking(25.0 / 60.0, 20.0, 5.0),
         path="adaptive",
         window_kind="motion",
         penalty_confidence_enable=True,
@@ -425,9 +497,7 @@ def test_motion_penalty_does_not_require_reference_hr(monkeypatch) -> None:
         0,
         np.asarray([0.0]),
         True,
-        20.0 / 60.0,
-        8.0,
-        5.0,
+        _tracking(20.0 / 60.0, 8.0, 5.0),
         path="adaptive",
         window_kind="motion",
     )
@@ -487,9 +557,7 @@ def test_motion_reacquire_unlocks_from_stable_far_challenger(monkeypatch) -> Non
             len(history),
             np.asarray(history + [0.0]),
             True,
-            25.0 / 60.0,
-            10.0,
-            7.0,
+            _tracking(25.0 / 60.0, 10.0, 7.0),
             path="adaptive",
             window_kind="motion",
             reacquire_state=state,
@@ -545,9 +613,7 @@ def test_motion_reacquire_requires_sustained_low_lock(monkeypatch) -> None:
             len(history),
             np.asarray(history + [0.0]),
             True,
-            25.0 / 60.0,
-            10.0,
-            7.0,
+            _tracking(25.0 / 60.0, 10.0, 7.0),
             path="adaptive",
             window_kind="motion",
             reacquire_state=state,
@@ -611,9 +677,7 @@ def test_motion_reacquire_ignores_one_or_two_window_challenger(monkeypatch) -> N
             len(history),
             np.asarray(history + [0.0]),
             True,
-            25.0 / 60.0,
-            10.0,
-            7.0,
+            _tracking(25.0 / 60.0, 10.0, 7.0),
             path="adaptive",
             window_kind="motion",
             reacquire_state=state,
@@ -660,9 +724,7 @@ def test_motion_reacquire_does_not_treat_83_bpm_as_low_lock(monkeypatch) -> None
         1,
         np.asarray([83.0 / 60.0, 0.0]),
         True,
-        25.0 / 60.0,
-        10.0,
-        7.0,
+        _tracking(25.0 / 60.0, 10.0, 7.0),
         path="adaptive",
         window_kind="motion",
         reacquire_state=state,
@@ -706,9 +768,7 @@ def test_motion_penalty_harmonic_requires_local_ppg_peak(monkeypatch) -> None:
         0,
         np.asarray([0.0]),
         True,
-        25.0 / 60.0,
-        10.0,
-        7.0,
+        _tracking(25.0 / 60.0, 10.0, 7.0),
         path="adaptive",
         window_kind="motion",
         penalty_confidence_enable=True,
@@ -751,9 +811,7 @@ def test_motion_penalty_confidence_downweights_ambiguous_reference(
         0,
         np.asarray([0.0]),
         True,
-        25.0 / 60.0,
-        10.0,
-        7.0,
+        _tracking(25.0 / 60.0, 10.0, 7.0),
         path="adaptive",
         window_kind="motion",
         penalty_confidence_enable=True,
@@ -796,9 +854,7 @@ def test_motion_reacquire_and_confidence_flags_can_reproduce_legacy(
         1,
         np.asarray([1.10, 0.0]),
         True,
-        25.0 / 60.0,
-        10.0,
-        7.0,
+        _tracking(25.0 / 60.0, 10.0, 7.0),
         path="adaptive",
         window_kind="motion",
     )
@@ -810,9 +866,7 @@ def test_motion_reacquire_and_confidence_flags_can_reproduce_legacy(
         1,
         np.asarray([1.10, 0.0]),
         True,
-        25.0 / 60.0,
-        10.0,
-        7.0,
+        _tracking(25.0 / 60.0, 10.0, 7.0),
         path="adaptive",
         window_kind="motion",
         reacquire_state=solver.SpectrumReacquireState(),
@@ -1188,6 +1242,49 @@ def test_solve_v2_empty_reference_order_degrades_to_fft(tmp_path: Path) -> None:
     assert result.metadata["fallback_reason"] == "no_reference_groups"
 
 
+def test_solve_v2_lite_records_fixed_tracking_policy_in_metadata(tmp_path: Path) -> None:
+    data = tmp_path / "lite.csv"
+    ref = tmp_path / "lite_ref.csv"
+    _write_sensor(data, motion=False)
+    _write_ref(ref)
+    cfg = V2RunConfig(
+        data_path=data,
+        ref_path=ref,
+        algorithm_preset="lite",
+        reference_groups_order=(),
+    )
+
+    result = solve_v2(cfg)
+
+    assert result.metadata["algorithm_preset"] == "lite"
+    assert result.metadata["tracking_policy"] == {
+        "rest": {
+            "range_up_bpm": 15.0,
+            "range_down_bpm": 20.0,
+            "limit_up_bpm": 1.5,
+            "step_up_bpm": 1.5,
+            "limit_down_bpm": 3.0,
+            "step_down_bpm": 1.5,
+        },
+        "motion": {
+            "range_up_bpm": 35.0,
+            "range_down_bpm": 15.0,
+            "limit_up_bpm": 5.5,
+            "step_up_bpm": 3.5,
+            "limit_down_bpm": 2.0,
+            "step_down_bpm": 1.5,
+        },
+        "recovery": {
+            "range_up_bpm": 20.0,
+            "range_down_bpm": 25.0,
+            "limit_up_bpm": 1.5,
+            "step_up_bpm": 1.5,
+            "limit_down_bpm": 3.5,
+            "step_down_bpm": 3.0,
+        },
+    }
+
+
 def test_solve_v2_non_hf_reference_uses_v1_fusion_kernel(tmp_path: Path) -> None:
     data = tmp_path / "cf.csv"
     ref = tmp_path / "cf_ref.csv"
@@ -1237,9 +1334,7 @@ def test_solve_v2_keeps_spectrum_tracking_when_entering_adaptive_range(
         times_idx,
         history_arr,
         enable_penalty,
-        range_hz,
-        limit_bpm,
-        step_bpm,
+        tracking,
         *,
         path,
         window_kind,
@@ -1255,9 +1350,7 @@ def test_solve_v2_keeps_spectrum_tracking_when_entering_adaptive_range(
             times_idx,
             history_arr,
             enable_penalty,
-            range_hz,
-            limit_bpm,
-            step_bpm,
+            tracking,
             path=path,
             window_kind=window_kind,
             **kwargs,
