@@ -113,6 +113,13 @@ class V2BatchPipelinePage(_PageBase):
         for value in ("lms", "as_lms", "klms", "volterra", "noncausal_lms", "rff_lms"):
             self._filter_combo.addItem(value, userData=value)
 
+        self._algorithm_preset_combo = QComboBox()
+        self._algorithm_preset_combo.addItem(
+            "动态追踪-静息BO",
+            userData="dynamic_rest_bo",
+        )
+        self._algorithm_preset_combo.addItem("Lite", userData="lite")
+
         self._scope_combo = QComboBox()
         self._scope_combo.addItem("整段 full", userData="full")
         self._scope_combo.addItem("最长运动段 + 前30s", userData="motion")
@@ -146,6 +153,7 @@ class V2BatchPipelinePage(_PageBase):
         form.addRow("自适应滤波", self._filter_combo)
         form.addRow("分析范围", self._scope_combo)
         form.addRow("参考信号", ref_widget)
+        form.addRow("algorithm_preset", self._algorithm_preset_combo)
         form.addRow("max_iterations", self._max_iter)
         form.addRow("num_seed_points", self._seed_pts)
         form.addRow("num_repeats", self._num_repeats)
@@ -180,6 +188,9 @@ class V2BatchPipelinePage(_PageBase):
                 order.append(item.text())
         return tuple(order)
 
+    def selected_algorithm_preset(self) -> str:
+        return str(self._algorithm_preset_combo.currentData())
+
     def _refresh(self) -> None:
         self._summary.set_rows([])
         self._log.clear()
@@ -202,6 +213,7 @@ class V2BatchPipelinePage(_PageBase):
             ppg_modes=[str(self._ppg_combo.currentData())],
             ppg_input_transform=str(self._ppg_input_transform_combo.currentData()),
             adaptive_filter=str(self._filter_combo.currentData()),
+            algorithm_preset=self.selected_algorithm_preset(),
             analysis_scope=str(self._scope_combo.currentData()),
             reference_groups_order=self.selected_reference_order(),
             bayes_cfg=cfg,
@@ -282,6 +294,12 @@ class V2GeneralizationPage(_PageBase):
         self._filter_combo = QComboBox()
         for value in ("lms", "as_lms", "klms", "volterra", "noncausal_lms", "rff_lms"):
             self._filter_combo.addItem(value, userData=value)
+        self._algorithm_preset_combo = QComboBox()
+        self._algorithm_preset_combo.addItem(
+            "动态追踪-静息BO",
+            userData="dynamic_rest_bo",
+        )
+        self._algorithm_preset_combo.addItem("Lite", userData="lite")
         self._scope_combo = QComboBox()
         self._scope_combo.addItem("整段 full", userData="full")
         self._scope_combo.addItem("最长运动段 + 前30s", userData="motion")
@@ -327,6 +345,7 @@ class V2GeneralizationPage(_PageBase):
         form.addRow("自适应滤波", self._filter_combo)
         form.addRow("分析范围", self._scope_combo)
         form.addRow("参考信号", self._ref_list)
+        form.addRow("algorithm_preset", self._algorithm_preset_combo)
         form.addRow("evaluation_mode", self._eval_mode_combo)
         form.addRow(self._k_fold_label, self._k_fold_spin)
         form.addRow("max_iterations", self._max_iter)
@@ -388,6 +407,9 @@ class V2GeneralizationPage(_PageBase):
 
     def selected_evaluation_modes(self) -> tuple[str, ...]:
         return (str(self._eval_mode_combo.currentData()),)
+
+    def selected_algorithm_preset(self) -> str:
+        return str(self._algorithm_preset_combo.currentData())
 
     def _update_eval_mode_controls(self) -> None:
         mode = str(self._eval_mode_combo.currentData())
@@ -483,6 +505,7 @@ class V2GeneralizationPage(_PageBase):
             ppg_mode=str(self._ppg_combo.currentData()),
             ppg_input_transform=str(self._ppg_input_transform_combo.currentData()),
             adaptive_filter=str(self._filter_combo.currentData()),
+            algorithm_preset=self.selected_algorithm_preset(),
             analysis_scope=str(self._scope_combo.currentData()),
             reference_groups_order=self.selected_reference_order(),
             bayes_cfg=cfg,

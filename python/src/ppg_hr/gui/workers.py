@@ -529,6 +529,7 @@ class V2BatchPipelineWorker(QObject):
         ppg_modes: list[str],
         ppg_input_transform: str,
         adaptive_filter: str,
+        algorithm_preset: str,
         analysis_scope: str,
         reference_groups_order: tuple[str, ...],
         bayes_cfg: V2BayesConfig,
@@ -539,6 +540,7 @@ class V2BatchPipelineWorker(QObject):
         self._ppg_modes = ppg_modes
         self._ppg_input_transform = ppg_input_transform
         self._adaptive_filter = adaptive_filter
+        self._algorithm_preset = algorithm_preset
         self._analysis_scope = analysis_scope
         self._reference_groups_order = reference_groups_order
         self._bayes_cfg = bayes_cfg
@@ -552,6 +554,7 @@ class V2BatchPipelineWorker(QObject):
                 f"modes={','.join(self._ppg_modes)} | "
                 f"ppg_input_transform={self._ppg_input_transform} | "
                 f"adaptive_filter={self._adaptive_filter} | "
+                f"algorithm_preset={self._algorithm_preset} | "
                 f"analysis_scope={self._analysis_scope} | "
                 f"reference_order={'+'.join(self._reference_groups_order) or 'FFT'} | "
                 f"max_iterations={self._bayes_cfg.max_iterations}, "
@@ -615,6 +618,7 @@ class V2BatchPipelineWorker(QObject):
                 ppg_modes=self._ppg_modes,
                 ppg_input_transform=self._ppg_input_transform,
                 adaptive_filter=self._adaptive_filter,
+                algorithm_preset=self._algorithm_preset,
                 analysis_scope=self._analysis_scope,
                 reference_groups_order=self._reference_groups_order,
                 bayes_cfg=self._bayes_cfg,
@@ -640,6 +644,7 @@ class V2GeneralizationWorker(QObject):
         ppg_mode: str,
         ppg_input_transform: str,
         adaptive_filter: str,
+        algorithm_preset: str,
         analysis_scope: str,
         reference_groups_order: tuple[str, ...],
         bayes_cfg: V2BayesConfig,
@@ -653,6 +658,7 @@ class V2GeneralizationWorker(QObject):
         self._ppg_mode = ppg_mode
         self._ppg_input_transform = ppg_input_transform
         self._adaptive_filter = adaptive_filter
+        self._algorithm_preset = algorithm_preset
         self._analysis_scope = analysis_scope
         self._reference_groups_order = reference_groups_order
         self._bayes_cfg = bayes_cfg
@@ -669,6 +675,7 @@ class V2GeneralizationWorker(QObject):
                 f"ppg_mode={self._ppg_mode} | "
                 f"ppg_input_transform={self._ppg_input_transform} | "
                 f"adaptive_filter={self._adaptive_filter} | "
+                f"algorithm_preset={self._algorithm_preset} | "
                 f"analysis_scope={self._analysis_scope} | "
                 f"reference_order={'+'.join(self._reference_groups_order) or 'FFT'} | "
                 f"evaluation_modes={'+'.join(self._evaluation_modes)} | "
@@ -746,6 +753,7 @@ class V2GeneralizationWorker(QObject):
                 ppg_mode=self._ppg_mode,
                 ppg_input_transform=self._ppg_input_transform,
                 adaptive_filter=self._adaptive_filter,
+                algorithm_preset=self._algorithm_preset,
                 analysis_scope=self._analysis_scope,
                 reference_groups_order=self._reference_groups_order,
                 bayes_cfg=self._bayes_cfg,

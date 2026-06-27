@@ -110,6 +110,29 @@ def test_v2_batch_page_defaults_to_hf_and_exposes_all_filters() -> None:
         app.processEvents()
 
 
+def test_v2_batch_page_exposes_algorithm_preset_selection() -> None:
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.v2_pages import V2BatchPipelinePage
+
+    app = QApplication.instance() or QApplication([])
+    page = V2BatchPipelinePage()
+    try:
+        presets = [
+            str(page._algorithm_preset_combo.itemData(i))
+            for i in range(page._algorithm_preset_combo.count())
+        ]
+        assert presets == ["dynamic_rest_bo", "lite"]
+        assert page.selected_algorithm_preset() == "dynamic_rest_bo"
+        page._algorithm_preset_combo.setCurrentIndex(
+            page._algorithm_preset_combo.findData("lite")
+        )
+        assert page.selected_algorithm_preset() == "lite"
+    finally:
+        page.deleteLater()
+        app.processEvents()
+
+
 def test_v2_generalization_page_exposes_full_all_train_defaults() -> None:
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication
@@ -139,6 +162,29 @@ def test_v2_generalization_page_exposes_full_all_train_defaults() -> None:
             if item is not None and item.text() == "ACC":
                 item.setCheckState(Qt.CheckState.Checked)
         assert page.selected_reference_order() == ("HF", "ACC")
+    finally:
+        page.deleteLater()
+        app.processEvents()
+
+
+def test_v2_generalization_page_exposes_algorithm_preset_selection() -> None:
+    from PySide6.QtWidgets import QApplication
+
+    from ppg_hr.gui.v2_pages import V2GeneralizationPage
+
+    app = QApplication.instance() or QApplication([])
+    page = V2GeneralizationPage()
+    try:
+        presets = [
+            str(page._algorithm_preset_combo.itemData(i))
+            for i in range(page._algorithm_preset_combo.count())
+        ]
+        assert presets == ["dynamic_rest_bo", "lite"]
+        assert page.selected_algorithm_preset() == "dynamic_rest_bo"
+        page._algorithm_preset_combo.setCurrentIndex(
+            page._algorithm_preset_combo.findData("lite")
+        )
+        assert page.selected_algorithm_preset() == "lite"
     finally:
         page.deleteLater()
         app.processEvents()
