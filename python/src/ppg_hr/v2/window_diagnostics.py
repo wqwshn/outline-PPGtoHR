@@ -23,6 +23,11 @@ from ppg_hr.core.find_maxpeak import find_maxpeak
 from ppg_hr.core.heart_rate_solver import load_raw_data
 from ppg_hr.params import SolverParams
 
+from .algorithm_presets import (
+    DirectionalTrackingParams,
+    normalise_v2_algorithm_preset,
+    v2_tracking_policy_for_preset,
+)
 from .preprocess import safe_cf_ratio
 from .reference_groups import (
     color_for_reference_order,
@@ -274,9 +279,11 @@ def render_window_diagnostics(
         prepared.params,
         enable_penalty=selected.window_kind == "motion",
         previous_hr_bpm=_finite_or_none(tracking.get("previous_hr_bpm")),
-        range_hz=float(prepared.params.hr_range_hz),
-        limit_bpm=float(prepared.params.slew_limit_bpm),
-        step_bpm=float(prepared.params.slew_step_bpm),
+        tracking=_diagnostic_tracking_params(
+            session.config,
+            prepared.params,
+            selected.window_kind,
+        ),
     )
     summary = _summary_from_window(
         session,
@@ -331,9 +338,11 @@ def render_window_diagnostics(
             comp_prepared.params,
             enable_penalty=selected.window_kind == "motion",
             previous_hr_bpm=_finite_or_none(tracking.get("previous_hr_bpm")),
-            range_hz=float(comp_prepared.params.hr_range_hz),
-            limit_bpm=float(comp_prepared.params.slew_limit_bpm),
-            step_bpm=float(comp_prepared.params.slew_step_bpm),
+            tracking=_diagnostic_tracking_params(
+                comp_cfg,
+                comp_prepared.params,
+                selected.window_kind,
+            ),
         )
         comp_summary = _summary_from_window(
             session,
@@ -1312,6 +1321,51 @@ def _finite_or_none(value: Any) -> float | None:
     return out if np.isfinite(out) else None
 
 
+def _diagnostic_tracking_params(
+    cfg: V2RunConfig,
+    params: SolverParams,
+    window_kind: str,
+) -> DirectionalTrackingParams:
+    policy = v2_tracking_policy_for_preset(
+        normalise_v2_algorithm_preset(cfg.algorithm_preset)
+    )
+    if window_kind == "motion":
+        return policy.motion
+    if window_kind == "recovery":
+        return policy.recovery
+    if policy.rest is not None:
+        return policy.rest
+    return DirectionalTrackingParams(
+        range_up_bpm=float(params.hr_range_rest) * 60.0,
+        range_down_bpm=float(params.hr_range_rest) * 60.0,
+        limit_up_bpm=float(params.slew_limit_rest),
+        step_up_bpm=float(params.slew_step_rest),
+        limit_down_bpm=float(params.slew_limit_rest),
+        step_down_bpm=float(params.slew_step_rest),
+    )
+
+
+def _protection_params_from_tracking(
+    params: SolverParams,
+    *,
+    range_hz: float | None,
+    limit_bpm: float | None,
+    step_bpm: float | None,
+    tracking: DirectionalTrackingParams | None,
+) -> tuple[float, float, float]:
+    if tracking is not None:
+        return (
+            max(float(tracking.range_up_hz), float(tracking.range_down_hz)),
+            max(float(tracking.limit_up_bpm), float(tracking.limit_down_bpm)),
+            max(float(tracking.step_up_bpm), float(tracking.step_down_bpm)),
+        )
+    return (
+        float(params.hr_range_hz if range_hz is None else range_hz),
+        float(params.slew_limit_bpm if limit_bpm is None else limit_bpm),
+        float(params.slew_step_bpm if step_bpm is None else step_bpm),
+    )
+
+
 def _compute_spectrum(
     raw_signal: np.ndarray,
     filtered_signal: np.ndarray,
@@ -1324,6 +1378,7 @@ def _compute_spectrum(
     range_hz: float | None = None,
     limit_bpm: float | None = None,
     step_bpm: float | None = None,
+    tracking: DirectionalTrackingParams | None = None,
     penalty_confidence_enable: bool = True,
     protection_suppressed: bool = False,
 ) -> dict[str, np.ndarray]:
@@ -1366,11 +1421,20 @@ def _compute_spectrum(
                 if previous_hr_bpm is not None and np.isfinite(previous_hr_bpm)
                 else None
             )
+            protection_range_hz, protection_limit_bpm, protection_step_bpm = (
+                _protection_params_from_tracking(
+                    params,
+                    range_hz=range_hz,
+                    limit_bpm=limit_bpm,
+                    step_bpm=step_bpm,
+                    tracking=tracking,
+                )
+            )
             protection_half_width_hz = (
                 _continuity_protection_half_width_hz(
-                    float(params.hr_range_hz if range_hz is None else range_hz),
-                    float(params.slew_limit_bpm if limit_bpm is None else limit_bpm),
-                    float(params.slew_step_bpm if step_bpm is None else step_bpm),
+                    protection_range_hz,
+                    protection_limit_bpm,
+                    protection_step_bpm,
                 )
                 if previous_hz is not None
                 else None

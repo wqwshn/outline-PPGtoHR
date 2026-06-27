@@ -409,6 +409,56 @@ def test_compute_spectrum_uses_continuity_protected_penalty(monkeypatch) -> None
     assert spectrum["is_penalty_band"][protected_idx] == pytest.approx(0.0)
 
 
+def test_compute_spectrum_uses_directional_tracking_for_protection(monkeypatch) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import window_diagnostics as wd
+    from ppg_hr.v2.algorithm_presets import DirectionalTrackingParams
+
+    freqs = np.asarray([1.90, 1.96, 2.00, 2.04, 2.10], dtype=float)
+    amps = np.ones(freqs.size, dtype=float)
+    monkeypatch.setattr(wd, "_full_spectrum", lambda _sig, _fs: (freqs, amps))
+    monkeypatch.setattr(
+        wd,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([2.0]),
+            np.asarray([1.0]),
+        ),
+    )
+    params = SolverParams(
+        spec_penalty_enable=True,
+        spec_penalty_weight=0.2,
+        spec_penalty_width=0.04,
+        slew_step_bpm=9.0,
+    )
+    tracking = DirectionalTrackingParams(
+        range_up_bpm=20.0,
+        range_down_bpm=25.0,
+        limit_up_bpm=1.5,
+        step_up_bpm=1.5,
+        limit_down_bpm=3.5,
+        step_down_bpm=3.0,
+    )
+
+    spectrum = wd._compute_spectrum(
+        np.ones(128),
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        enable_penalty=True,
+        previous_hr_bpm=120.0,
+        tracking=tracking,
+    )
+
+    protected_bpm = spectrum["bpm"][spectrum["protection_band"].astype(bool)]
+    assert protected_bpm.min() == pytest.approx(117.6)
+    assert protected_bpm.max() == pytest.approx(122.4)
+    outside_bpm = spectrum["bpm"][~spectrum["protection_band"].astype(bool)]
+    assert any(value == pytest.approx(114.0) for value in outside_bpm)
+    assert any(value == pytest.approx(126.0) for value in outside_bpm)
+
+
 def test_compute_spectrum_uses_solver_harmonic_gate(monkeypatch) -> None:
     from ppg_hr.params import SolverParams
     from ppg_hr.v2 import window_diagnostics as wd
