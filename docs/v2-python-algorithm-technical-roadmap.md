@@ -425,6 +425,36 @@ V2RunConfig ──(_solver_params_from_v2)──► SolverParams ──► 底�
 
 优化器不直接修改 `SolverParams`, 而是修改 `V2RunConfig` 后重新映射。
 
+### 5.3 动态追踪算法预设
+
+v2 心率算法新增 `algorithm_preset` 运行预设，用于把最近两轮泛化评估、静息段 BO 参数统计和 Polar H10 真值心率动态统计固化到频谱追踪阶段。当前提供两个方案：
+
+| 方案 | 内部值 | BO 行为 | 适用场景 |
+|------|--------|---------|----------|
+| 动态追踪-静息BO | `dynamic_rest_bo` | 固定运动/恢复追踪参数，静息段继续 BO 且使用收敛候选 | 默认主算法，兼顾运动段稳定性和静息段个体适应 |
+| Lite | `lite` | 固定静息/运动/恢复全部追踪参数 | 批量实验、效率优先、固定参数基线 |
+
+方向性频谱追踪不再使用单一对称窗口 `previous_hr ± range`，而是使用：
+
+```text
+previous_hr - down_range <= candidate_hr <= previous_hr + up_range
+```
+
+选中候选峰后，再按候选峰相对上一窗口 HR 的上升或下降方向选择对应 `slew_limit` 和 `slew_step`。固定参数如下：
+
+| 状态 | 方向 | range bpm | limit bpm | step bpm |
+|------|------|----------:|----------:|---------:|
+| 静息 | 上升 | 15 | 1.5 | 1.5 |
+| 静息 | 下降 | 20 | 3.0 | 1.5 |
+| 运动 | 上升 | 35 | 5.5 | 3.5 |
+| 运动 | 下降 | 15 | 2.0 | 1.5 |
+| 恢复 | 上升 | 20 | 1.5 | 1.5 |
+| 恢复 | 下降 | 25 | 3.5 | 3.0 |
+
+`dynamic_rest_bo` 中，运动和恢复使用上表固定值；静息段仍由 BO 给出对称 `hr_range_rest`、`slew_limit_rest` 和 `slew_step_rest`，以保留对个体差异和静息噪声的适应能力。`Lite` 中，静息、运动和恢复全部使用上表固定值。
+
+最终 HR 后处理阶段保留状态和方向感知的连续性保护，用于保护频谱追踪和 FFT/adaptive 融合后的最终曲线。该保护与同一组状态/方向参数保持一致，但主要机制已下沉到频谱追踪阶段。
+
 ---
 
 ## 6. 贝叶斯超参数优化
@@ -460,6 +490,15 @@ V2RunConfig ──(_solver_params_from_v2)──► SolverParams ──► 底�
 | `time_bias` | [4, 4.5, 5, 5.5, 6] |
 
 各滤波算法另有专有参数（如 `klms_step_size`, `klms_sigma`, `rff_D`, `rff_sigma`, `volterra_max_order_vol` 等）。
+
+`default_v2_search_space()` 保留完整历史默认空间，用于回溯和对照。实际批量全流程、泛化评估和 `optimise_v2()` 默认会按 `algorithm_preset` 选择搜索空间：
+
+| 方案 | 搜索空间变化 |
+|------|--------------|
+| `dynamic_rest_bo` | 移除 `hr_range_hz`、`slew_limit_bpm`、`slew_step_bpm`；静息段候选收敛为 `hr_range_rest=[20,30,60,80]/60`、`slew_limit_rest=[1,3,6,8]`、`slew_step_rest=[0.5,2,4]` |
+| `lite` | 移除 `hr_range_hz`、`slew_limit_bpm`、`slew_step_bpm`、`hr_range_rest`、`slew_limit_rest`、`slew_step_rest` |
+
+上一轮合并实验中，相对完整默认空间，Lite 类固定追踪参数空间的理论组合规模下降约 99.95%。实际耗时收益仍取决于样本数量、`max_iterations`、`num_repeats`、滤波器类型和单 trial 求解成本。
 
 ### 6.2.1 kaihe2 谱峰追踪机制验证（2026-06-14）
 
