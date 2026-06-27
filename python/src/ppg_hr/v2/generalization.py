@@ -15,11 +15,16 @@ import numpy as np
 import optuna
 
 from .batch_pipeline import safe_name
+from .algorithm_presets import (
+    V2_ALGORITHM_PRESET_DEFAULT,
+    normalise_v2_algorithm_preset,
+    v2_search_space_for_preset,
+)
 from .optimizer import V2BayesConfig
 from .plotting import render_v2_report
 from .reference_groups import reference_order_key
 from .report import save_v2_report
-from .search_space import V2SearchSpace, decode_v2, default_v2_search_space
+from .search_space import V2SearchSpace, decode_v2
 from .solver import solve_v2
 from .types import V2RunConfig
 from .generalization_stats import write_generalization_statistics
@@ -327,6 +332,7 @@ def run_v2_generalization(
     adaptive_filter: str = "noncausal_lms",
     analysis_scope: str = "motion",
     reference_groups_order: tuple[str, ...] = ("HF",),
+    algorithm_preset: str = V2_ALGORITHM_PRESET_DEFAULT,
     bayes_cfg: V2BayesConfig | None = None,
     evaluation_modes: tuple[str, ...] = ("all_train", "leave_one_group_out"),
     motion_types: tuple[str, ...] | None = None,
@@ -336,6 +342,7 @@ def run_v2_generalization(
     on_progress: Callable[[dict], None] | None = None,
 ) -> V2GeneralizationResult:
     root = Path(input_dir).resolve()
+    preset = normalise_v2_algorithm_preset(algorithm_preset)
     cfg = bayes_cfg or V2BayesConfig()
     out = (
         Path(output_dir).resolve()
@@ -441,6 +448,7 @@ def run_v2_generalization(
                     adaptive_filter=adaptive_filter,
                     analysis_scope=analysis_scope,
                     reference_groups_order=reference_groups_order,
+                    algorithm_preset=preset,
                     bayes_cfg=cfg,
                     json_dir=json_dir,
                     png_dir=png_dir,
@@ -547,7 +555,10 @@ def optimise_v2_shared_params(
 ) -> V2SharedOptimiseResult:
     if not base_configs:
         raise ValueError("At least one training config is required")
-    active_space = space or default_v2_search_space(base_configs[0].adaptive_filter)
+    active_space = space or v2_search_space_for_preset(
+        base_configs[0].adaptive_filter,
+        base_configs[0].algorithm_preset,
+    )
     history: list[dict[str, Any]] = []
     trials_per_repeat = max(1, int(config.max_iterations))
     repeat_total = max(1, int(config.num_repeats))
@@ -662,6 +673,7 @@ def _run_generalization_fold(
     adaptive_filter: str,
     analysis_scope: str,
     reference_groups_order: tuple[str, ...],
+    algorithm_preset: str,
     bayes_cfg: V2BayesConfig,
     json_dir: Path,
     png_dir: Path,
@@ -678,6 +690,7 @@ def _run_generalization_fold(
             adaptive_filter=adaptive_filter,
             analysis_scope=analysis_scope,
             reference_groups_order=reference_groups_order,
+            algorithm_preset=algorithm_preset,
         )
         for pair in train_pairs
     ]
@@ -847,6 +860,7 @@ def _run_generalization_fold(
             adaptive_filter=adaptive_filter,
             analysis_scope=analysis_scope,
             reference_groups_order=reference_groups_order,
+            algorithm_preset=algorithm_preset,
         )
         cfg = cfg.__class__(**{**cfg.__dict__, **shared.best_params})
         result = solve_v2(cfg)
@@ -942,6 +956,7 @@ def _base_config(
     adaptive_filter: str,
     analysis_scope: str,
     reference_groups_order: tuple[str, ...],
+    algorithm_preset: str,
 ) -> V2RunConfig:
     return V2RunConfig(
         data_path=pair.data_path,
@@ -950,6 +965,7 @@ def _base_config(
         ppg_input_transform=ppg_input_transform,
         adaptive_filter=adaptive_filter,
         analysis_scope=analysis_scope,
+        algorithm_preset=algorithm_preset,
         reference_groups_order=reference_groups_order,
     )
 

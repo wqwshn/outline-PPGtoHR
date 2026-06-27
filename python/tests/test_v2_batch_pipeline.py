@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -120,6 +121,26 @@ def test_run_v2_batch_pipeline_names_and_records_log_absorbance_transform(
     assert "log_absorbance" in payload["summary_csv"].read_text(encoding="utf-8-sig")
 
 
+def test_run_v2_batch_pipeline_writes_algorithm_preset_metadata(
+    tmp_path: Path,
+) -> None:
+    _write_pair(tmp_path, "sample")
+
+    payload = run_v2_batch_pipeline(
+        input_dir=tmp_path,
+        output_dir=tmp_path / "out",
+        ppg_modes=["green"],
+        adaptive_filter="lms",
+        analysis_scope="full",
+        reference_groups_order=("HF",),
+        bayes_cfg=V2BayesConfig(max_iterations=1, num_seed_points=1, random_state=1),
+        algorithm_preset="lite",
+    )
+
+    report = json.loads(payload["records"][0].report_path.read_text(encoding="utf-8"))
+    assert report["algorithm_preset"] == "lite"
+
+
 def test_run_v2_batch_pipeline_accepts_custom_search_space(tmp_path: Path) -> None:
     _write_pair(tmp_path, "sample")
     compact_space = V2SearchSpace(
@@ -145,6 +166,7 @@ def test_run_v2_batch_pipeline_accepts_custom_search_space(tmp_path: Path) -> No
         analysis_scope="full",
         reference_groups_order=("HF",),
         bayes_cfg=V2BayesConfig(max_iterations=1, num_seed_points=1, random_state=1),
+        algorithm_preset="lite",
         search_space=compact_space,
     )
 

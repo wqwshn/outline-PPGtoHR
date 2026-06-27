@@ -465,6 +465,132 @@ def test_run_v2_generalization_reports_training_sample_progress(
     assert currents == sorted(currents)
 
 
+def test_run_v2_generalization_passes_algorithm_preset_to_fold_configs(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from ppg_hr.v2 import generalization
+    from ppg_hr.v2.generalization import run_v2_generalization
+
+    _touch_pair(tmp_path, "multi_bobi1_TS")
+    seen_train_presets: list[str] = []
+    seen_solve_presets: list[str] = []
+
+    def fake_optimise_shared_params(base_configs, bayes_cfg, *, out_path, **_kwargs):
+        seen_train_presets.extend(cfg.algorithm_preset for cfg in base_configs)
+        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(out_path).write_text(
+            json.dumps({"schema_version": "v2_generalization_params"}),
+            encoding="utf-8",
+        )
+        return generalization.V2SharedOptimiseResult(
+            report_path=Path(out_path),
+            best_error=1.0,
+            best_params={"max_order": 16},
+            history=[],
+        )
+
+    def fake_solve_v2(cfg):
+        seen_solve_presets.append(cfg.algorithm_preset)
+        hr = np.array(
+            [
+                [0.0, 72.0, 72.0, 72.0, 0.0, 0.0],
+                [1.0, 73.0, 73.0, 73.0, 1.0, 1.0],
+            ],
+            dtype=float,
+        )
+        return V2SolverResult(
+            HR=hr,
+            err_stats={"fft_aae_bpm": 1.0, "final_aae_bpm": 1.0},
+            metadata={
+                "schema_version": "v2",
+                "data_path": str(cfg.data_path),
+                "ref_path": str(cfg.ref_path),
+                "ppg_mode": cfg.ppg_mode,
+                "ppg_input_transform": cfg.ppg_input_transform,
+                "analysis_scope": cfg.analysis_scope,
+                "adaptive_filter": cfg.adaptive_filter,
+                "algorithm_preset": cfg.algorithm_preset,
+                "reference_groups_order": list(cfg.reference_groups_order),
+            },
+            window_table=[],
+        )
+
+    def fake_render_v2_report(report_path, out_dir, *, csv_dir=None, output_prefix=None, **_kwargs):
+        png_dir = Path(out_dir)
+        csv_out = Path(csv_dir)
+        png_dir.mkdir(parents=True, exist_ok=True)
+        csv_out.mkdir(parents=True, exist_ok=True)
+        prefix = output_prefix or Path(report_path).stem
+        figure = png_dir / f"{prefix}-v2-hr.png"
+        err = csv_out / f"{prefix}-v2-error.csv"
+        hr = csv_out / f"{prefix}-v2-hr.csv"
+        figure.write_text("png", encoding="utf-8")
+        err.write_text("err", encoding="utf-8")
+        hr.write_text("hr", encoding="utf-8")
+        return generalization.V2GeneralizationArtefacts(figure, err, hr)
+
+    monkeypatch.setattr(generalization, "optimise_v2_shared_params", fake_optimise_shared_params)
+    monkeypatch.setattr(generalization, "solve_v2", fake_solve_v2)
+    monkeypatch.setattr(generalization, "render_v2_report", fake_render_v2_report)
+
+    run_v2_generalization(
+        input_dir=tmp_path,
+        output_dir=tmp_path / "out",
+        bayes_cfg=V2BayesConfig(max_iterations=1, num_seed_points=1, num_repeats=1),
+        evaluation_modes=("all_train",),
+        algorithm_preset="Lite",
+    )
+
+    assert seen_train_presets == ["lite"]
+    assert seen_solve_presets == ["lite"]
+    report = json.loads(next((tmp_path / "out").glob("**/*-v2.json")).read_text(encoding="utf-8"))
+    assert report["algorithm_preset"] == "lite"
+
+
+def test_optimise_v2_shared_params_uses_base_algorithm_preset_space(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from ppg_hr.v2 import generalization
+    from ppg_hr.v2.generalization import optimise_v2_shared_params
+    from ppg_hr.v2.types import V2RunConfig
+
+    def fake_solve_v2(cfg):
+        return V2SolverResult(
+            HR=np.empty((0, 0)),
+            err_stats={"final_aae_bpm": float(cfg.fs_target)},
+            metadata={},
+            window_table=[],
+        )
+
+    monkeypatch.setattr(generalization, "solve_v2", fake_solve_v2)
+    cfg = V2RunConfig(
+        data_path=tmp_path / "multi_bobi1_TS.csv",
+        ref_path=tmp_path / "multi_bobi1_TS_HR_ref.csv",
+        adaptive_filter="lms",
+        algorithm_preset="lite",
+        reference_groups_order=("HF",),
+    )
+
+    result = optimise_v2_shared_params(
+        [cfg],
+        V2BayesConfig(max_iterations=1, num_seed_points=1, num_repeats=1),
+        out_path=tmp_path / "params.json",
+    )
+
+    fixed_tracking_params = {
+        "hr_range_hz",
+        "slew_limit_bpm",
+        "slew_step_bpm",
+        "hr_range_rest",
+        "slew_limit_rest",
+        "slew_step_rest",
+    }
+    assert fixed_tracking_params.isdisjoint(result.history[0])
+    assert fixed_tracking_params.isdisjoint(result.best_params)
+
+
 def test_run_v2_generalization_skips_unknown_paired_samples(
     tmp_path: Path,
     monkeypatch,

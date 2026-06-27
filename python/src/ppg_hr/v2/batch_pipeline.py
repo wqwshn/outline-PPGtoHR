@@ -9,6 +9,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from .algorithm_presets import (
+    V2_ALGORITHM_PRESET_DEFAULT,
+    normalise_v2_algorithm_preset,
+    v2_search_space_for_preset,
+)
 from .optimizer import V2BayesConfig, optimise_v2
 from .plotting import render_v2_report
 from .qc import quality_filter_sample_v2
@@ -45,11 +50,17 @@ def run_v2_batch_pipeline(
     analysis_scope: str,
     reference_groups_order: tuple[str, ...],
     bayes_cfg: V2BayesConfig,
+    algorithm_preset: str = V2_ALGORITHM_PRESET_DEFAULT,
     search_space: V2SearchSpace | None = None,
     on_log: Callable[[str], None] | None = None,
     on_progress: Callable[[dict], None] | None = None,
 ) -> dict[str, object]:
     input_dir = Path(input_dir).resolve()
+    preset = normalise_v2_algorithm_preset(algorithm_preset)
+    active_search_space = search_space or v2_search_space_for_preset(
+        adaptive_filter,
+        preset,
+    )
     output_dir = (
         Path(output_dir).resolve()
         if output_dir is not None
@@ -104,8 +115,10 @@ def run_v2_batch_pipeline(
                 ppg_input_transform=ppg_input_transform,
                 analysis_scope=analysis_scope,
                 adaptive_filter=adaptive_filter,
+                algorithm_preset=preset,
                 reference_groups_order=reference_groups_order,
             )
+            _log(on_log, f"algorithm_preset={preset}")
             _log(
                 on_log,
                 f"[{run_idx}/{total_runs}] 开始v2优化: sample={sample.name} | "
@@ -155,7 +168,7 @@ def run_v2_batch_pipeline(
                 cfg,
                 bayes_cfg,
                 out_path=report_path,
-                space=search_space,
+                space=active_search_space,
                 on_trial_step=_trial_step,
                 qc=qc.to_dict(),
             )
