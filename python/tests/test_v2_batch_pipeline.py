@@ -7,6 +7,7 @@ import pandas as pd
 
 from ppg_hr.v2.batch_pipeline import run_v2_batch_pipeline
 from ppg_hr.v2.optimizer import V2BayesConfig
+from ppg_hr.v2.search_space import V2SearchSpace
 
 
 def _write_pair(root: Path, stem: str) -> None:
@@ -117,3 +118,35 @@ def test_run_v2_batch_pipeline_names_and_records_log_absorbance_transform(
     assert report.is_file()
     assert payload["records"][0].ppg_input_transform == "log_absorbance"
     assert "log_absorbance" in payload["summary_csv"].read_text(encoding="utf-8-sig")
+
+
+def test_run_v2_batch_pipeline_accepts_custom_search_space(tmp_path: Path) -> None:
+    _write_pair(tmp_path, "sample")
+    compact_space = V2SearchSpace(
+        fs_target=[25],
+        max_order=None,
+        lms_mu_base=None,
+        smooth_win_len=None,
+        spec_penalty_width=None,
+        hr_range_hz=None,
+        slew_limit_bpm=None,
+        slew_step_bpm=None,
+        hr_range_rest=None,
+        slew_limit_rest=None,
+        slew_step_rest=None,
+        time_bias=None,
+    )
+
+    payload = run_v2_batch_pipeline(
+        input_dir=tmp_path,
+        output_dir=tmp_path / "out",
+        ppg_modes=["green"],
+        adaptive_filter="lms",
+        analysis_scope="full",
+        reference_groups_order=("HF",),
+        bayes_cfg=V2BayesConfig(max_iterations=1, num_seed_points=1, random_state=1),
+        search_space=compact_space,
+    )
+
+    report_text = payload["records"][0].report_path.read_text(encoding="utf-8")
+    assert '"fs_target": 25' in report_text

@@ -1126,11 +1126,13 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
         if time_1 > time_end:
             break
 
+    postprocess_applied_count = 0
     source = np.asarray(rows, dtype=float) if rows else np.zeros((0, 9), dtype=float)
     if source.size:
         source[:, 2] = smoothdata_movmedian(source[:, 2], int(cfg.smooth_win_len))
         source[:, 4] = smoothdata_movmedian(source[:, 4], int(cfg.smooth_win_len))
 
+        used_adaptive_mask = np.zeros(source.shape[0], dtype=bool)
         if references and motion_segment is not None:
             adaptive_start_time = float(motion_segment["start_s"])
             motion_end_time = float(motion_segment["end_s"])
@@ -1170,6 +1172,14 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
         else:
             source[:, 5] = source[:, 4]
             source[:, 8] = np.zeros(source.shape[0], dtype=float)
+
+        final_bpm, postprocess_applied_count = _postprocess_dynamic_final_hr_bpm(
+            source,
+            used_adaptive_mask,
+            motion_segment,
+            cfg,
+        )
+        source[:, 5] = final_bpm / 60.0
 
         HR = np.column_stack(
             [
@@ -1272,6 +1282,9 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
         "pre_motion_context_seconds": float(cfg.pre_motion_context_seconds),
         "reacquire_enable": bool(cfg.reacquire_enable),
         "penalty_confidence_enable": bool(cfg.penalty_confidence_enable),
+        "postprocess_dynamics_enable": bool(cfg.postprocess_dynamics_enable),
+        "postprocess_dynamics_params": _postprocess_dynamics_params(cfg),
+        "postprocess_dynamics_applied_windows": int(postprocess_applied_count),
     }
     return V2SolverResult(
         HR=HR,
@@ -1910,6 +1923,106 @@ def _blend_final_hr_by_mask(
     if mask.shape[0] != src.shape[0]:
         raise ValueError("used_adaptive_mask length must match source rows")
     return np.where(mask, src[:, 2], src[:, 4])
+
+
+def _postprocess_dynamic_final_hr_bpm(
+    source: np.ndarray,
+    used_adaptive_mask: np.ndarray,
+    motion_segment: dict[str, float] | None,
+    cfg: V2RunConfig,
+) -> tuple[np.ndarray, int]:
+    src = np.asarray(source, dtype=float)
+    if src.ndim != 2 or src.shape[1] <= 5:
+        raise ValueError("source must contain final HR candidate column")
+    mask = np.asarray(used_adaptive_mask, dtype=bool)
+    if mask.shape[0] != src.shape[0]:
+        raise ValueError("used_adaptive_mask length must match source rows")
+
+    candidates = src[:, 5].astype(float) * 60.0
+    if not bool(cfg.postprocess_dynamics_enable) or candidates.size == 0:
+        return candidates.copy(), 0
+
+    out = candidates.copy()
+    applied = 0
+    for idx in range(1, out.size):
+        previous = float(out[idx - 1])
+        current = float(candidates[idx])
+        if not (np.isfinite(previous) and np.isfinite(current)):
+            out[idx] = current
+            continue
+        diff = current - previous
+        if abs(diff) <= 1e-9:
+            out[idx] = current
+            continue
+        kind = _dynamic_window_kind(float(src[idx, 0]), bool(mask[idx]), motion_segment)
+        limit_bpm, step_bpm = _directional_slew_limit_bpm(kind, diff, cfg)
+        if abs(diff) > limit_bpm:
+            out[idx] = previous + np.sign(diff) * min(abs(diff), step_bpm)
+            applied += 1
+        else:
+            out[idx] = current
+    return out, applied
+
+
+def _dynamic_window_kind(
+    center_s: float,
+    used_adaptive: bool,
+    motion_segment: dict[str, float] | None,
+) -> WindowKind:
+    return _classify_window_kind(center_s, motion_segment, used_adaptive)
+
+
+def _directional_slew_limit_bpm(
+    kind: WindowKind,
+    diff_bpm: float,
+    cfg: V2RunConfig,
+) -> tuple[float, float]:
+    if kind == "motion":
+        if diff_bpm >= 0.0:
+            return (
+                max(0.0, float(cfg.postprocess_limit_motion_up_bpm)),
+                max(0.0, float(cfg.postprocess_step_motion_up_bpm)),
+            )
+        return (
+            max(0.0, float(cfg.postprocess_limit_motion_down_bpm)),
+            max(0.0, float(cfg.postprocess_step_motion_down_bpm)),
+        )
+    if kind == "recovery":
+        if diff_bpm >= 0.0:
+            return (
+                max(0.0, float(cfg.postprocess_limit_recovery_up_bpm)),
+                max(0.0, float(cfg.postprocess_step_recovery_up_bpm)),
+            )
+        return (
+            max(0.0, float(cfg.postprocess_limit_recovery_down_bpm)),
+            max(0.0, float(cfg.postprocess_step_recovery_down_bpm)),
+        )
+    if diff_bpm >= 0.0:
+        return (
+            max(0.0, float(cfg.postprocess_limit_rest_up_bpm)),
+            max(0.0, float(cfg.postprocess_step_rest_up_bpm)),
+        )
+    return (
+        max(0.0, float(cfg.postprocess_limit_rest_down_bpm)),
+        max(0.0, float(cfg.postprocess_step_rest_down_bpm)),
+    )
+
+
+def _postprocess_dynamics_params(cfg: V2RunConfig) -> dict[str, float]:
+    return {
+        "rest_up_limit_bpm": float(cfg.postprocess_limit_rest_up_bpm),
+        "rest_up_step_bpm": float(cfg.postprocess_step_rest_up_bpm),
+        "rest_down_limit_bpm": float(cfg.postprocess_limit_rest_down_bpm),
+        "rest_down_step_bpm": float(cfg.postprocess_step_rest_down_bpm),
+        "motion_up_limit_bpm": float(cfg.postprocess_limit_motion_up_bpm),
+        "motion_up_step_bpm": float(cfg.postprocess_step_motion_up_bpm),
+        "motion_down_limit_bpm": float(cfg.postprocess_limit_motion_down_bpm),
+        "motion_down_step_bpm": float(cfg.postprocess_step_motion_down_bpm),
+        "recovery_up_limit_bpm": float(cfg.postprocess_limit_recovery_up_bpm),
+        "recovery_up_step_bpm": float(cfg.postprocess_step_recovery_up_bpm),
+        "recovery_down_limit_bpm": float(cfg.postprocess_limit_recovery_down_bpm),
+        "recovery_down_step_bpm": float(cfg.postprocess_step_recovery_down_bpm),
+    }
 
 
 def _find_crossover_idx(

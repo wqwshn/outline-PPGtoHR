@@ -13,6 +13,7 @@ from .optimizer import V2BayesConfig, optimise_v2
 from .plotting import render_v2_report
 from .qc import quality_filter_sample_v2
 from .reference_groups import method_label, reference_order_key
+from .search_space import V2SearchSpace
 from .types import V2RunConfig
 
 
@@ -44,6 +45,7 @@ def run_v2_batch_pipeline(
     analysis_scope: str,
     reference_groups_order: tuple[str, ...],
     bayes_cfg: V2BayesConfig,
+    search_space: V2SearchSpace | None = None,
     on_log: Callable[[str], None] | None = None,
     on_progress: Callable[[dict], None] | None = None,
 ) -> dict[str, object]:
@@ -153,6 +155,7 @@ def run_v2_batch_pipeline(
                 cfg,
                 bayes_cfg,
                 out_path=report_path,
+                space=search_space,
                 on_trial_step=_trial_step,
                 qc=qc.to_dict(),
             )

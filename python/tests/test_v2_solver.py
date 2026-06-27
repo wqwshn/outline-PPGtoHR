@@ -1390,6 +1390,50 @@ def test_final_hr_blend_keeps_fft_on_nonadaptive_windows() -> None:
     assert np.allclose(blended[used_adaptive_mask], source[used_adaptive_mask, 2])
 
 
+def test_dynamic_postprocess_uses_state_and_direction_specific_limits() -> None:
+    from ppg_hr.v2.solver import _postprocess_dynamic_final_hr_bpm
+
+    source = np.zeros((4, 9), dtype=float)
+    source[:, 0] = [10.0, 20.0, 40.0, 50.0]
+    source[:, 5] = np.asarray([70.0, 80.0, 100.0, 60.0], dtype=float) / 60.0
+    used_adaptive_mask = np.asarray([False, False, True, True])
+    motion_segment = {"start_s": 30.0, "end_s": 45.0}
+    cfg = V2RunConfig(data_path=Path("sample.csv"), ref_path=Path("sample_ref.csv"))
+
+    out_bpm, applied = _postprocess_dynamic_final_hr_bpm(
+        source,
+        used_adaptive_mask,
+        motion_segment,
+        cfg,
+    )
+
+    assert out_bpm == pytest.approx([70.0, 71.5, 75.0, 72.0])
+    assert applied == 3
+
+
+def test_dynamic_postprocess_can_be_disabled() -> None:
+    from ppg_hr.v2.solver import _postprocess_dynamic_final_hr_bpm
+
+    source = np.zeros((2, 9), dtype=float)
+    source[:, 0] = [10.0, 20.0]
+    source[:, 5] = np.asarray([70.0, 90.0], dtype=float) / 60.0
+    cfg = V2RunConfig(
+        data_path=Path("sample.csv"),
+        ref_path=Path("sample_ref.csv"),
+        postprocess_dynamics_enable=False,
+    )
+
+    out_bpm, applied = _postprocess_dynamic_final_hr_bpm(
+        source,
+        np.asarray([False, False]),
+        None,
+        cfg,
+    )
+
+    assert out_bpm == pytest.approx([70.0, 90.0])
+    assert applied == 0
+
+
 def test_find_crossover_detects_fft_rise() -> None:
     from ppg_hr.v2.solver import _find_crossover_idx
 

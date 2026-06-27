@@ -62,6 +62,19 @@ class V2RunConfig:
     hr_range_rest: float = 30.0 / 60.0
     slew_limit_rest: float = 6.0
     slew_step_rest: float = 4.0
+    postprocess_dynamics_enable: bool = True
+    postprocess_limit_rest_up_bpm: float = 1.5
+    postprocess_step_rest_up_bpm: float = 1.5
+    postprocess_limit_rest_down_bpm: float = 3.0
+    postprocess_step_rest_down_bpm: float = 1.5
+    postprocess_limit_motion_up_bpm: float = 5.5
+    postprocess_step_motion_up_bpm: float = 3.5
+    postprocess_limit_motion_down_bpm: float = 2.0
+    postprocess_step_motion_down_bpm: float = 1.5
+    postprocess_limit_recovery_up_bpm: float = 1.5
+    postprocess_step_recovery_up_bpm: float = 1.5
+    postprocess_limit_recovery_down_bpm: float = 3.5
+    postprocess_step_recovery_down_bpm: float = 3.0
     time_bias: float = 5.0
     extras: dict[str, Any] = field(default_factory=dict)
 

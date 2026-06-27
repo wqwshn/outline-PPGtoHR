@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from ppg_hr.v2.optimizer import V2BayesConfig, optimise_v2
-from ppg_hr.v2.search_space import default_v2_search_space
+from ppg_hr.v2.search_space import default_v2_search_space, reduced_v2_search_space
 from ppg_hr.v2.solver import _solver_params_from_v2
 from ppg_hr.v2.types import V2RunConfig
 
@@ -29,6 +29,23 @@ def test_default_search_space_has_rest_tracking_and_time_bias() -> None:
     assert "spec_penalty_weight" not in space.names()
     assert "reacquire_enable" not in space.names()
     assert "penalty_confidence_enable" not in space.names()
+
+
+def test_reduced_search_space_fixes_tracking_parameters() -> None:
+    space = reduced_v2_search_space("lms")
+
+    assert "fs_target" in space.names()
+    assert "max_order" in space.names()
+    assert "lms_mu_base" in space.names()
+    assert "smooth_win_len" in space.names()
+    assert "spec_penalty_width" in space.names()
+    assert "hr_range_hz" in space.names()
+    assert "time_bias" in space.names()
+    assert "slew_limit_bpm" not in space.names()
+    assert "slew_step_bpm" not in space.names()
+    assert "hr_range_rest" not in space.names()
+    assert "slew_limit_rest" not in space.names()
+    assert "slew_step_rest" not in space.names()
 
 
 def test_default_search_space_has_strategy_specific_fields() -> None:
