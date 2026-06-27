@@ -21,6 +21,7 @@ class V2RunConfig:
     ppg_input_baseline_seconds: float = 5.0
     analysis_scope: str = "full"
     adaptive_filter: str = "noncausal_lms"
+    algorithm_preset: str = "dynamic_rest_bo"
     reference_groups_order: tuple[str, ...] = ("HF", "CF", "ACC")
     fs_origin: int = 100
     fs_target: int = 25

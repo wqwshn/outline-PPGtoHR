@@ -4,8 +4,15 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from ppg_hr.v2.optimizer import V2BayesConfig, optimise_v2
+from ppg_hr.v2.algorithm_presets import (
+    V2_ALGORITHM_PRESET_DYNAMIC_REST_BO,
+    V2_ALGORITHM_PRESET_LITE,
+    normalise_v2_algorithm_preset,
+    v2_search_space_for_preset,
+)
 from ppg_hr.v2.search_space import default_v2_search_space, reduced_v2_search_space
 from ppg_hr.v2.solver import _solver_params_from_v2
 from ppg_hr.v2.types import V2RunConfig
@@ -39,13 +46,57 @@ def test_reduced_search_space_fixes_tracking_parameters() -> None:
     assert "lms_mu_base" in space.names()
     assert "smooth_win_len" in space.names()
     assert "spec_penalty_width" in space.names()
-    assert "hr_range_hz" in space.names()
     assert "time_bias" in space.names()
+    assert "hr_range_hz" not in space.names()
     assert "slew_limit_bpm" not in space.names()
     assert "slew_step_bpm" not in space.names()
     assert "hr_range_rest" not in space.names()
     assert "slew_limit_rest" not in space.names()
     assert "slew_step_rest" not in space.names()
+
+
+def test_dynamic_rest_bo_search_space_keeps_narrow_rest_bo_candidates() -> None:
+    space = v2_search_space_for_preset(
+        "noncausal_lms",
+        V2_ALGORITHM_PRESET_DYNAMIC_REST_BO,
+    )
+
+    assert space.options("hr_range_rest") == [20 / 60.0, 30 / 60.0, 60 / 60.0, 80 / 60.0]
+    assert space.options("slew_limit_rest") == [1.0, 3.0, 6.0, 8.0]
+    assert space.options("slew_step_rest") == [0.5, 2.0, 4.0]
+    assert "hr_range_hz" not in space.names()
+    assert "slew_limit_bpm" not in space.names()
+    assert "slew_step_bpm" not in space.names()
+
+
+def test_lite_search_space_removes_all_tracking_bo_parameters() -> None:
+    space = v2_search_space_for_preset("lms", V2_ALGORITHM_PRESET_LITE)
+
+    assert "fs_target" in space.names()
+    assert "max_order" in space.names()
+    assert "lms_mu_base" in space.names()
+    assert "smooth_win_len" in space.names()
+    assert "spec_penalty_width" in space.names()
+    assert "time_bias" in space.names()
+    assert "hr_range_hz" not in space.names()
+    assert "slew_limit_bpm" not in space.names()
+    assert "slew_step_bpm" not in space.names()
+    assert "hr_range_rest" not in space.names()
+    assert "slew_limit_rest" not in space.names()
+    assert "slew_step_rest" not in space.names()
+
+
+def test_normalise_v2_algorithm_preset_accepts_known_values() -> None:
+    assert normalise_v2_algorithm_preset("Lite") == V2_ALGORITHM_PRESET_LITE
+    assert (
+        normalise_v2_algorithm_preset("dynamic_rest_bo")
+        == V2_ALGORITHM_PRESET_DYNAMIC_REST_BO
+    )
+
+
+def test_normalise_v2_algorithm_preset_rejects_unknown_values() -> None:
+    with pytest.raises(ValueError):
+        normalise_v2_algorithm_preset("unknown")
 
 
 def test_default_search_space_has_strategy_specific_fields() -> None:

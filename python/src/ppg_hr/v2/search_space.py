@@ -97,14 +97,9 @@ def default_v2_search_space(adaptive_filter: str) -> V2SearchSpace:
 
 
 def reduced_v2_search_space(adaptive_filter: str) -> V2SearchSpace:
-    space = default_v2_search_space(adaptive_filter)
-    if adaptive_filter in {"lms", "noncausal_lms"}:
-        space.slew_limit_bpm = None
-        space.slew_step_bpm = None
-        space.hr_range_rest = None
-        space.slew_limit_rest = None
-        space.slew_step_rest = None
-    return space
+    from .algorithm_presets import V2_ALGORITHM_PRESET_LITE, v2_search_space_for_preset
+
+    return v2_search_space_for_preset(adaptive_filter, V2_ALGORITHM_PRESET_LITE)
 
 
 def decode_v2(space: V2SearchSpace, idx_map: dict[str, int]) -> dict[str, Any]:
