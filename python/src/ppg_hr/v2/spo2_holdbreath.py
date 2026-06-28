@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from .output_paths import prepare_output_dir, safe_output_path
 from .spo2 import V2SpO2Config, _compute_spo2_window, _load_spo2_raw_signals
 
 
@@ -341,12 +342,11 @@ def save_holdbreath_report(
     out_dir: str | Path,
     output_prefix: str,
 ) -> dict[str, Path]:
-    out = Path(out_dir)
-    out.mkdir(parents=True, exist_ok=True)
+    out = prepare_output_dir(out_dir)
     prefix = str(output_prefix).strip() or "spo2_holdbreath"
-    json_path = out / f"{prefix}-holdbreath.json"
-    csv_path = out / f"{prefix}-holdbreath.csv"
-    fig_base = out / f"{prefix}-holdbreath-evaluation"
+    json_path = safe_output_path(out, f"{prefix}-holdbreath.json")
+    csv_path = safe_output_path(out, f"{prefix}-holdbreath.csv")
+    fig_base = safe_output_path(out, f"{prefix}-holdbreath-evaluation.png").with_suffix("")
     payload = {
         "schema_version": "v2_spo2_holdbreath",
         "metadata": _jsonify(result.metadata),
@@ -558,9 +558,9 @@ def _plot_holdbreath_evaluation(
     ax.legend(loc="upper right", frameon=False, fontsize=7)
     fig.tight_layout(pad=0.5)
     paths = {
-        "png": fig_base.with_suffix(".png"),
-        "svg": fig_base.with_suffix(".svg"),
-        "pdf": fig_base.with_suffix(".pdf"),
+        "png": safe_output_path(fig_base.parent, fig_base.with_suffix(".png").name),
+        "svg": safe_output_path(fig_base.parent, fig_base.with_suffix(".svg").name),
+        "pdf": safe_output_path(fig_base.parent, fig_base.with_suffix(".pdf").name),
     }
     fig.savefig(paths["png"], dpi=600, bbox_inches="tight", pad_inches=0.02)
     fig.savefig(paths["svg"], bbox_inches="tight", pad_inches=0.02)

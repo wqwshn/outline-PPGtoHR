@@ -15,6 +15,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 
+from .output_paths import prepare_output_dir, safe_output_path
 from .spo2 import _ppg_adc_to_ua
 
 
@@ -65,7 +66,7 @@ def _apply_style() -> None:
 
 
 def _export_png(fig, path: Path) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path = safe_output_path(prepare_output_dir(path.parent), path.name)
     fig.savefig(path, dpi=600, bbox_inches="tight", pad_inches=0.02)
     return path
 
@@ -548,7 +549,7 @@ def render_spo2_report(
     if payload.get("schema_version") != "v2_spo2":
         raise ValueError(f"{report} is not a v2 SpO2 report")
     out = Path(out_dir) if out_dir is not None else report.parent / "figures"
-    out.mkdir(parents=True, exist_ok=True)
+    out = prepare_output_dir(out)
     _apply_style()
 
     table = list(payload.get("spo2_table", []))

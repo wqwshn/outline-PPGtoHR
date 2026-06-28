@@ -8,6 +8,7 @@ from typing import Any
 
 import numpy as np
 
+from .output_paths import prepare_output_dir, safe_output_path
 from .types import V2_SCHEMA_VERSION
 
 
@@ -20,8 +21,9 @@ def save_v2_report(
     qc: dict[str, Any] | None = None,
     artefacts: dict[str, Any] | None = None,
 ) -> Path:
-    out = Path(path)
-    out.parent.mkdir(parents=True, exist_ok=True)
+    requested = Path(path)
+    parent = prepare_output_dir(requested.parent)
+    out = safe_output_path(parent, requested.name)
     payload = {
         **result.metadata,
         "schema_version": V2_SCHEMA_VERSION,

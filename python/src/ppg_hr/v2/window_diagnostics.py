@@ -35,6 +35,7 @@ from .reference_groups import (
     normalise_reference_order,
     reference_order_key,
 )
+from .output_paths import prepare_output_dir, safe_output_path
 from .report import load_v2_report
 from .solver import (
     _apply_ppg_input_transform,
@@ -556,7 +557,7 @@ def plot_spectrum(
                 color="#536D8E",
                 alpha=0.12,
                 linewidth=0,
-                label="Ref ±5 BPM",
+                label="Ref +/-5 BPM",
                 zorder=0.3,
             )
     if opts.show_hr_markers:
@@ -690,7 +691,7 @@ def plot_peak_tracking(
             color="#536D8E",
             alpha=0.12,
             linewidth=0,
-            label="Ref ±5 BPM",
+            label="Ref +/-5 BPM",
             zorder=0.3,
         )
 
@@ -872,12 +873,12 @@ def save_window_diagnostics(
     """Save current-window figures and source CSV files."""
     opts = options or DiagnosticPlotOptions()
     out_dir = _allocate_output_dir(result, output_root)
-    waveform_png = out_dir / "window_waveform.png"
-    spectrum_png = out_dir / "window_spectrum.png"
-    peak_tracking_png = out_dir / "window_peak_tracking.png"
-    waveform_csv = out_dir / "window_waveform.csv"
-    spectrum_csv = out_dir / "window_spectrum.csv"
-    summary_csv = out_dir / "window_summary.csv"
+    waveform_png = safe_output_path(out_dir, "window_waveform.png")
+    spectrum_png = safe_output_path(out_dir, "window_spectrum.png")
+    peak_tracking_png = safe_output_path(out_dir, "window_peak_tracking.png")
+    waveform_csv = safe_output_path(out_dir, "window_waveform.csv")
+    spectrum_csv = safe_output_path(out_dir, "window_spectrum.csv")
+    summary_csv = safe_output_path(out_dir, "window_summary.csv")
 
     _write_waveform_csv(waveform_csv, result.waveform)
     _write_spectrum_csv(spectrum_csv, _spectrum_csv_payload(result))
@@ -889,12 +890,12 @@ def save_window_diagnostics(
     waveform_svg = waveform_pdf = spectrum_svg = spectrum_pdf = None
     peak_tracking_svg = peak_tracking_pdf = None
     if opts.include_vectors:
-        waveform_svg = out_dir / "window_waveform.svg"
-        waveform_pdf = out_dir / "window_waveform.pdf"
-        spectrum_svg = out_dir / "window_spectrum.svg"
-        spectrum_pdf = out_dir / "window_spectrum.pdf"
-        peak_tracking_svg = out_dir / "window_peak_tracking.svg"
-        peak_tracking_pdf = out_dir / "window_peak_tracking.pdf"
+        waveform_svg = safe_output_path(out_dir, "window_waveform.svg")
+        waveform_pdf = safe_output_path(out_dir, "window_waveform.pdf")
+        spectrum_svg = safe_output_path(out_dir, "window_spectrum.svg")
+        spectrum_pdf = safe_output_path(out_dir, "window_spectrum.pdf")
+        peak_tracking_svg = safe_output_path(out_dir, "window_peak_tracking.svg")
+        peak_tracking_pdf = safe_output_path(out_dir, "window_peak_tracking.pdf")
         _save_panel(waveform_svg, result, opts, kind="waveform")
         _save_panel(waveform_pdf, result, opts, kind="waveform")
         _save_panel(spectrum_svg, result, opts, kind="spectrum")
@@ -1835,17 +1836,15 @@ def _allocate_output_dir(
         )
     else:
         root = Path(output_root)
-    root.mkdir(parents=True, exist_ok=True)
+    root = prepare_output_dir(root)
     label = f"{result.selected_window.aligned_time_s:.1f}s"
     candidate = root / label
     if not candidate.exists():
-        candidate.mkdir(parents=True)
-        return candidate
+        return prepare_output_dir(candidate)
     for idx in range(2, 10000):
         current = root / f"{label}-{idx}"
         if not current.exists():
-            current.mkdir(parents=True)
-            return current
+            return prepare_output_dir(current)
     raise RuntimeError(f"Cannot allocate output directory under {root}")
 
 
@@ -1887,6 +1886,7 @@ def _save_panel(
     kwargs: dict[str, Any] = {}
     if path.suffix.lower() == ".png":
         kwargs["dpi"] = 600
+    path = safe_output_path(prepare_output_dir(path.parent), path.name)
     fig.savefig(path, **kwargs)
 
 
@@ -1934,7 +1934,7 @@ def _write_array_csv(
     keys: list[str],
     values: dict[str, np.ndarray],
 ) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path = safe_output_path(prepare_output_dir(path.parent), path.name)
     lengths = [np.asarray(values[key]).size for key in keys if key in values]
     n = min(lengths) if lengths else 0
     with path.open("w", newline="", encoding="utf-8-sig") as handle:
@@ -1945,7 +1945,7 @@ def _write_array_csv(
 
 
 def _write_summary_csv(path: Path, result: WindowDiagnosticsResult) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path = safe_output_path(prepare_output_dir(path.parent), path.name)
     with path.open("w", newline="", encoding="utf-8-sig") as handle:
         writer = csv.writer(handle)
         writer.writerow(["section", "key", "value"])

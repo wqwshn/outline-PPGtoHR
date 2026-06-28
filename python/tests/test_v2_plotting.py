@@ -498,3 +498,20 @@ def test_render_v2_report_full_scope_uses_all_data(tmp_path: Path) -> None:
 
     arte = render_v2_report(report, out_dir=tmp_path / "figures")
     assert arte.figure_png.is_file()
+
+
+def test_render_v2_report_compacts_long_output_prefix(tmp_path: Path) -> None:
+    report = tmp_path / "new.json"
+    _write_report(report, ["HF"])
+    prefix = "sample_" + "x" * 220
+
+    arte = render_v2_report(report, out_dir=tmp_path / "out", output_prefix=prefix)
+
+    assert len(str(arte.figure_png)) <= 240
+    assert len(str(arte.hr_csv)) <= 240
+    assert len(str(arte.error_csv)) <= 240
+    assert arte.figure_png.name.endswith("-v2-hr.png")
+    assert arte.figure_png.name != f"{prefix}-v2-hr.png"
+    assert arte.figure_png.is_file()
+    assert arte.hr_csv.is_file()
+    assert arte.error_csv.is_file()

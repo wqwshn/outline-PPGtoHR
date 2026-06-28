@@ -14,7 +14,7 @@ from typing import Any
 import numpy as np
 import optuna
 
-from .batch_pipeline import safe_name
+from .output_paths import prepare_output_dir, safe_name, safe_output_path
 from .algorithm_presets import (
     V2_ALGORITHM_PRESET_DEFAULT,
     normalise_v2_algorithm_preset,
@@ -355,7 +355,7 @@ def run_v2_generalization(
             algorithm_preset=preset,
         )
     )
-    out.mkdir(parents=True, exist_ok=True)
+    out = prepare_output_dir(out)
 
     selected_modes = _normalise_evaluation_modes(evaluation_modes)
     plan = build_v2_generalization_plan(
@@ -415,7 +415,7 @@ def run_v2_generalization(
         samples = list(group.pairs)
         _log(
             on_log,
-            f"泛化评估 motion_type={motion_type} "
+            f"generalization motion_type={motion_type} "
             f"samples={len(samples)} folds={len(group.folds)}",
         )
         for mode in selected_modes:
@@ -529,7 +529,7 @@ def plan_summary(plan: V2GeneralizationPlan) -> list[dict[str, Any]]:
                 "sample_count": 1,
                 "fold_count": 0,
                 "samples": [pair.stem],
-                "note": "不在运动类型库中，已跳过",
+                "note": "unknown motion type; skipped",
             }
         )
     for path in plan.unpaired_data_files:
@@ -540,7 +540,7 @@ def plan_summary(plan: V2GeneralizationPlan) -> list[dict[str, Any]]:
                 "sample_count": 1,
                 "fold_count": 0,
                 "samples": [path.stem],
-                "note": "缺少 _ref.csv 或 _HR_ref.csv",
+                "note": "missing _ref.csv or _HR_ref.csv",
             }
         )
     return rows
@@ -726,7 +726,7 @@ def _run_generalization_fold(
             ]
         )
     )
-    params_report = json_dir / f"{params_prefix}-params.json"
+    params_report = safe_output_path(json_dir, f"{params_prefix}-params.json")
     _log(
         on_log,
         f"训练共享参数: {evaluation_mode}/{fold_id} "
@@ -880,7 +880,7 @@ def _run_generalization_fold(
         cfg = cfg.__class__(**{**cfg.__dict__, **shared.best_params})
         result = solve_v2(cfg)
         replay_prefix = safe_name(f"{pair.stem}-{split}")
-        report_path = json_dir / f"{replay_prefix}-v2.json"
+        report_path = safe_output_path(json_dir, f"{replay_prefix}-v2.json")
         save_v2_report(
             report_path,
             result,
@@ -936,7 +936,7 @@ def _run_generalization_fold(
             on_progress,
             event="replay_sample",
             stage="replay",
-            stage_label="重放共享参数",
+            stage_label="replay shared params",
             motion_type=motion_type,
             evaluation_mode=evaluation_mode,
             fold_id=fold_id,
@@ -957,7 +957,7 @@ def _run_generalization_fold(
         )
         _log(
             on_log,
-            f"重放完成: {evaluation_mode}/{fold_id} {pair.stem} "
+            f"replay done: {evaluation_mode}/{fold_id} {pair.stem} "
             f"split={split} final={float(result.err_stats.get('final_aae_bpm', float('nan'))):.3g} bpm",
         )
     return records
@@ -1068,7 +1068,7 @@ def _fold_output_dirs(
     png_dir = fold_dir / "png"
     csv_dir = fold_dir / "csv"
     for directory in (json_dir, png_dir, csv_dir):
-        directory.mkdir(parents=True, exist_ok=True)
+        prepare_output_dir(directory)
     return json_dir, png_dir, csv_dir
 
 
@@ -1132,8 +1132,8 @@ def _write_params_report(
     best_params: dict[str, Any],
     history: list[dict[str, Any]],
 ) -> Path:
-    path = Path(out_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    requested = Path(out_path)
+    path = safe_output_path(prepare_output_dir(requested.parent), requested.name)
     payload = {
         "schema_version": "v2_generalization_params",
         "train_samples": [
@@ -1161,8 +1161,7 @@ def _write_params_report(
 
 
 def _write_summary(output_dir: Path, records: list[V2GeneralizationRecord]) -> Path:
-    path = output_dir / "v2_generalization_summary.csv"
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path = safe_output_path(prepare_output_dir(output_dir), "v2_generalization_summary.csv")
     with path.open("w", encoding="utf-8-sig", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(

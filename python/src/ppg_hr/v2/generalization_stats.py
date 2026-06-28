@@ -12,6 +12,7 @@ from typing import Any, Iterable
 
 import numpy as np
 
+from .output_paths import prepare_output_dir, safe_output_path
 from .solver import solve_v2
 from .types import V2RunConfig
 
@@ -38,18 +39,17 @@ def write_generalization_statistics(
     *,
     on_progress=None,
 ) -> V2GeneralizationStatsResult:
-    output_dir = Path(output_dir)
+    output_dir = prepare_output_dir(output_dir)
     rows = list(records)
-    fold_stats_csv = output_dir / "v2_generalization_fold_stats.csv"
-    aggregate_stats_csv = output_dir / "v2_generalization_aggregate_stats.csv"
-    analysis_dir = output_dir / "analysis_tables"
-    analysis_dir.mkdir(parents=True, exist_ok=True)
+    fold_stats_csv = safe_output_path(output_dir, "v2_generalization_fold_stats.csv")
+    aggregate_stats_csv = safe_output_path(output_dir, "v2_generalization_aggregate_stats.csv")
+    analysis_dir = prepare_output_dir(output_dir / "analysis_tables")
     _write_fold_stats(fold_stats_csv, rows)
     _progress(on_progress, event="stats_fold", stage="stats", stage_label="统计fold指标", detail=str(fold_stats_csv))
     _write_aggregate_stats(aggregate_stats_csv, rows)
     _progress(on_progress, event="stats_aggregate", stage="stats", stage_label="统计整体指标", detail=str(aggregate_stats_csv))
     _write_analysis_tables(analysis_dir, rows)
-    _write_markdown(analysis_dir / "generalization_stat_tables.md", rows)
+    _write_markdown(safe_output_path(analysis_dir, "generalization_stat_tables.md"), rows)
     _progress(on_progress, event="stats_tables", stage="stats", stage_label="生成统计表", detail=str(analysis_dir))
     return V2GeneralizationStatsResult(fold_stats_csv, aggregate_stats_csv, analysis_dir)
 
@@ -152,7 +152,7 @@ def _write_analysis_tables(output_dir: Path, records: list[Any]) -> None:
                 "klms_hf_vs_acc_delta": delta,
             })
         rows.append(_average_row(rows))
-        _write_dict_csv(output_dir / file_name, rows, [
+        _write_dict_csv(safe_output_path(output_dir, file_name), rows, [
             "data_file", "motion_type", "evaluation_mode", "fold_id",
             "klms_hf", "klms_acc", "klms_fft", "klms_hf_vs_acc_delta",
         ])
@@ -319,7 +319,7 @@ def _write_markdown(path: Path, records: list[Any]) -> None:
 
 
 def _write_dict_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path = safe_output_path(prepare_output_dir(path.parent), path.name)
     with path.open("w", encoding="utf-8-sig", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames)
         writer.writeheader()

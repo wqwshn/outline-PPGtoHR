@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import csv
-import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -15,6 +14,7 @@ from .algorithm_presets import (
     v2_search_space_for_preset,
 )
 from .optimizer import V2BayesConfig, optimise_v2
+from .output_paths import prepare_output_dir, safe_name, safe_output_path
 from .plotting import render_v2_report
 from .qc import quality_filter_sample_v2
 from .reference_groups import method_label, reference_order_key
@@ -73,12 +73,13 @@ def run_v2_batch_pipeline(
             algorithm_preset=preset,
         )
     )
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = prepare_output_dir(output_dir)
     json_dir = output_dir / "json"
     png_dir = output_dir / "png"
     csv_dir = output_dir / "csv"
-    for directory in (json_dir, png_dir, csv_dir):
-        directory.mkdir(parents=True, exist_ok=True)
+    json_dir = prepare_output_dir(json_dir)
+    png_dir = prepare_output_dir(png_dir)
+    csv_dir = prepare_output_dir(csv_dir)
 
     records: list[V2BatchRecord] = []
     samples = [
@@ -108,7 +109,7 @@ def run_v2_batch_pipeline(
                 analysis_scope,
                 reference_groups_order,
             )
-            report_path = json_dir / f"{prefix}-v2.json"
+            report_path = safe_output_path(json_dir, f"{prefix}-v2.json")
             cfg = V2RunConfig(
                 data_path=sample,
                 ref_path=ref,
@@ -279,12 +280,9 @@ def safe_run_prefix(
     return safe_name(raw) or "v2-run"
 
 
-def safe_name(raw: object) -> str:
-    return re.sub(r"[^A-Za-z0-9_.+-]+", "_", str(raw)).strip("._-")
-
 
 def _write_summary(output_dir: Path, records: list[V2BatchRecord]) -> Path:
-    path = output_dir / "v2_batch_summary.csv"
+    path = safe_output_path(output_dir, "v2_batch_summary.csv")
     with path.open("w", encoding="utf-8-sig", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(

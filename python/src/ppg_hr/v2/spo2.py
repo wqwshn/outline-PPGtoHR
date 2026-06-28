@@ -13,6 +13,7 @@ import pandas as pd
 from scipy.signal import butter, filtfilt, find_peaks
 
 from ..core.adaptive_filter import apply_adaptive_cascade
+from .output_paths import prepare_output_dir, safe_output_path
 from .preprocess import RAW_COLUMNS, safe_cf_ratio
 from .reference_groups import channel_names_for_group, normalise_reference_order
 
@@ -387,12 +388,11 @@ def save_spo2_report(
     out_dir: str | Path,
     output_prefix: str,
 ) -> dict[str, Path]:
-    out = Path(out_dir)
-    out.mkdir(parents=True, exist_ok=True)
+    out = prepare_output_dir(out_dir)
     prefix = str(output_prefix).strip() or "spo2"
-    json_path = out / f"{prefix}-spo2.json"
-    csv_path = out / f"{prefix}-spo2.csv"
-    waveform_csv_path = out / f"{prefix}-spo2-waveforms.csv"
+    json_path = safe_output_path(out, f"{prefix}-spo2.json")
+    csv_path = safe_output_path(out, f"{prefix}-spo2.csv")
+    waveform_csv_path = safe_output_path(out, f"{prefix}-spo2-waveforms.csv")
     payload = {
         "schema_version": "v2_spo2",
         "metadata": _jsonify(result.metadata),

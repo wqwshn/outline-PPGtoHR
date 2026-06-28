@@ -15,6 +15,7 @@ from scipy.interpolate import interp1d
 matplotlib.use("Agg", force=True)
 import matplotlib.pyplot as plt  # noqa: E402
 
+from .output_paths import prepare_output_dir, safe_output_path
 from .reference_groups import color_for_reference_order, method_label, reference_order_key
 from .report import is_v2_report, load_v2_report
 
@@ -50,7 +51,7 @@ def discover_v2_plot_jobs(root_dir: str | Path) -> list[V2PlotJob]:
 
 
 def _payload_value(payload: dict, key: str, *, default: object = None) -> object:
-    """从 payload 读取字段，兼容顶层展开和 ``metadata`` 子对象两种格式。"""
+    """Read a payload value from the top level or metadata."""
     if key in payload:
         return payload[key]
     meta = payload.get("metadata")
@@ -104,7 +105,7 @@ def _compute_comparison_curves(
     adaptive_filter: str,
     report_dir: Path,
 ) -> list[dict[str, object]]:
-    """用 report 中的 best_params 以不同参考信号组重新解算，返回对比曲线列表。"""
+    """Recompute comparison curves from report best_params."""
     if not comparison_groups:
         return []
 
@@ -191,16 +192,15 @@ def render_v2_report(
     report = Path(report_path)
     payload = load_v2_report(report)
     out = Path(out_dir) if out_dir is not None else report.parent
-    # 若调用者显式分别传入 out_dir 与 csv_dir，则沿用原路径（如 batch_pipeline 已组织子目录）；
-    # 若仅传入 out_dir（或均未传入），则自动创建 png/csv 子目录。
+    # Keep caller-provided split output dirs; otherwise create png/csv children.
     if csv_dir is not None:
         fig_dir = out
         csv_out = Path(csv_dir)
     else:
         fig_dir = out / "png"
         csv_out = out / "csv"
-    fig_dir.mkdir(parents=True, exist_ok=True)
-    csv_out.mkdir(parents=True, exist_ok=True)
+    fig_dir = prepare_output_dir(fig_dir)
+    csv_out = prepare_output_dir(csv_out)
     order = tuple(payload.get("reference_groups_order", []))
     key = reference_order_key(order)
     prefix = output_prefix or report.stem
@@ -208,10 +208,10 @@ def render_v2_report(
     time_bias = float(_payload_value(payload, "time_bias", default=5.0))
     adaptive_filter = str(_payload_value(payload, "adaptive_filter", default="lms"))
     adaptive_label = method_label(adaptive_filter, order)
-    fig_base = fig_dir / f"{prefix}-v2-hr"
-    fig_path = fig_base.with_suffix(".png")
-    err_path = csv_out / f"{prefix}-v2-error.csv"
-    hr_path = csv_out / f"{prefix}-v2-hr.csv"
+    fig_path = safe_output_path(fig_dir, f"{prefix}-v2-hr.png")
+    fig_base = fig_path.with_suffix("")
+    err_path = safe_output_path(csv_out, f"{prefix}-v2-error.csv")
+    hr_path = safe_output_path(csv_out, f"{prefix}-v2-hr.csv")
 
     comparison_curves = _compute_comparison_curves(
         payload, comparison_groups, key, adaptive_filter, report.parent
@@ -247,7 +247,7 @@ def render_v2_report_batch(
 ) -> V2BatchPlotResult:
     root = Path(root_dir)
     out = Path(out_dir) if out_dir is not None else root
-    out.mkdir(parents=True, exist_ok=True)
+    out = prepare_output_dir(out)
     items: list[V2PlotArtefacts] = []
     for job in discover_v2_plot_jobs(root):
         try:
@@ -901,7 +901,7 @@ def _apply_style() -> None:
 
 def _export_figure(fig, output_base: Path) -> None:
     fig.savefig(
-        output_base.with_suffix(".png"),
+        safe_output_path(output_base.parent, output_base.with_suffix(".png").name),
         bbox_inches="tight",
         pad_inches=0.02,
         dpi=600,
