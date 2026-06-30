@@ -10,11 +10,12 @@ from ppg_hr.v2.optimizer import V2BayesConfig, optimise_v2
 from ppg_hr.v2.algorithm_presets import (
     V2_ALGORITHM_PRESET_DYNAMIC_REST_BO,
     V2_ALGORITHM_PRESET_LITE,
+    V2_ALGORITHM_PRESET_TRACE_RESCUE,
     normalise_v2_algorithm_preset,
     v2_search_space_for_preset,
 )
 from ppg_hr.v2.search_space import V2SearchSpace, default_v2_search_space, reduced_v2_search_space
-from ppg_hr.v2.solver import _solver_params_from_v2
+from ppg_hr.v2.solver import V2SolverResult, _solver_params_from_v2
 from ppg_hr.v2.types import V2RunConfig
 
 
@@ -86,11 +87,41 @@ def test_lite_search_space_removes_all_tracking_bo_parameters() -> None:
     assert "slew_step_rest" not in space.names()
 
 
+def test_trace_rescue_search_space_keeps_only_filter_specific_bo() -> None:
+    assert (
+        v2_search_space_for_preset("lms", V2_ALGORITHM_PRESET_TRACE_RESCUE).names()
+        == []
+    )
+    assert (
+        v2_search_space_for_preset(
+            "noncausal_lms",
+            V2_ALGORITHM_PRESET_TRACE_RESCUE,
+        ).names()
+        == []
+    )
+    assert v2_search_space_for_preset(
+        "klms",
+        V2_ALGORITHM_PRESET_TRACE_RESCUE,
+    ).names() == ["klms_step_size", "klms_sigma", "klms_epsilon"]
+    assert v2_search_space_for_preset(
+        "volterra",
+        V2_ALGORITHM_PRESET_TRACE_RESCUE,
+    ).names() == ["volterra_max_order_vol"]
+    assert v2_search_space_for_preset(
+        "as_lms",
+        V2_ALGORITHM_PRESET_TRACE_RESCUE,
+    ).names() == ["as_lms_rho", "as_lms_mu_max"]
+
+
 def test_normalise_v2_algorithm_preset_accepts_known_values() -> None:
     assert normalise_v2_algorithm_preset("Lite") == V2_ALGORITHM_PRESET_LITE
     assert (
         normalise_v2_algorithm_preset("dynamic_rest_bo")
         == V2_ALGORITHM_PRESET_DYNAMIC_REST_BO
+    )
+    assert (
+        normalise_v2_algorithm_preset("TraceRescue")
+        == V2_ALGORITHM_PRESET_TRACE_RESCUE
     )
 
 
@@ -282,6 +313,102 @@ def test_optimise_v2_explicit_space_overrides_algorithm_preset(tmp_path: Path) -
             "slew_step_bpm",
         }
     )
+
+
+def test_optimise_v2_trace_rescue_lms_runs_single_fixed_evaluation(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    data, ref = _write_pair(tmp_path)
+    cfg = V2RunConfig(
+        data_path=data,
+        ref_path=ref,
+        adaptive_filter="lms",
+        algorithm_preset=V2_ALGORITHM_PRESET_TRACE_RESCUE,
+        reference_groups_order=("CF", "ACC"),
+    )
+    calls: list[V2RunConfig] = []
+
+    def fake_solve_v2(run_cfg: V2RunConfig) -> V2SolverResult:
+        calls.append(run_cfg)
+        return V2SolverResult(
+            HR=np.array([[4.0, 72.0, 73.0, 74.0, 0.0, 0.0]], dtype=float),
+            err_stats={"final_aae_bpm": 1.25},
+            metadata={
+                "schema_version": "v2",
+                "algorithm_preset": run_cfg.algorithm_preset,
+                "adaptive_filter": run_cfg.adaptive_filter,
+                "reference_groups_order": list(run_cfg.reference_groups_order),
+            },
+            window_table=[],
+        )
+
+    import ppg_hr.v2.optimizer as optimizer
+
+    monkeypatch.setattr(optimizer, "solve_v2", fake_solve_v2)
+
+    result = optimise_v2(
+        cfg,
+        V2BayesConfig(max_iterations=10, num_seed_points=3, num_repeats=2),
+        out_path=tmp_path / "trace-rescue.json",
+    )
+
+    assert len(calls) == 1
+    assert calls[0].adaptive_filter == "lms"
+    assert calls[0].reference_groups_order == ("CF", "ACC")
+    assert result.best_error == 1.25
+    assert result.best_params == {}
+    assert len(result.history) == 1
+    assert result.history[0]["value"] == 1.25
+    assert result.report_path.is_file()
+
+
+def test_optimise_v2_trace_rescue_klms_searches_filter_params(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    data, ref = _write_pair(tmp_path)
+    cfg = V2RunConfig(
+        data_path=data,
+        ref_path=ref,
+        adaptive_filter="klms",
+        algorithm_preset=V2_ALGORITHM_PRESET_TRACE_RESCUE,
+        reference_groups_order=("HF",),
+    )
+    calls: list[V2RunConfig] = []
+
+    def fake_solve_v2(run_cfg: V2RunConfig) -> V2SolverResult:
+        calls.append(run_cfg)
+        return V2SolverResult(
+            HR=np.array([[4.0, 72.0, 73.0, 74.0, 0.0, 0.0]], dtype=float),
+            err_stats={"final_aae_bpm": float(run_cfg.klms_sigma)},
+            metadata={
+                "schema_version": "v2",
+                "algorithm_preset": run_cfg.algorithm_preset,
+                "adaptive_filter": run_cfg.adaptive_filter,
+            },
+            window_table=[],
+        )
+
+    import ppg_hr.v2.optimizer as optimizer
+
+    monkeypatch.setattr(optimizer, "solve_v2", fake_solve_v2)
+
+    result = optimise_v2(
+        cfg,
+        V2BayesConfig(max_iterations=2, num_seed_points=1, num_repeats=1),
+        out_path=tmp_path / "trace-rescue-klms.json",
+    )
+
+    assert len(calls) >= 2
+    assert {call.algorithm_preset for call in calls} == {V2_ALGORITHM_PRESET_TRACE_RESCUE}
+    assert {call.adaptive_filter for call in calls} == {"klms"}
+    assert set(result.best_params) <= {
+        "klms_step_size",
+        "klms_sigma",
+        "klms_epsilon",
+    }
+    assert len(result.history) == 2
 
 
 def test_optimise_v2_records_repeat_and_trial_progress(tmp_path: Path) -> None:

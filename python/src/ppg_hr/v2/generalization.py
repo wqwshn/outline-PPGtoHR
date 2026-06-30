@@ -338,6 +338,7 @@ def run_v2_generalization(
     motion_types: tuple[str, ...] | None = None,
     k_fold_count: int = 5,
     test_dir: str | Path | None = None,
+    comparison_groups: tuple[tuple[str, ...], ...] = (),
     on_log: Callable[[str], None] | None = None,
     on_progress: Callable[[dict], None] | None = None,
 ) -> V2GeneralizationResult:
@@ -382,11 +383,14 @@ def run_v2_generalization(
             + ", ".join(path.stem for path in plan.unpaired_data_files),
         )
 
+    active_space = v2_search_space_for_preset(adaptive_filter, preset)
+    effective_repeat_total = max(1, int(cfg.num_repeats)) if active_space.names() else 1
+    effective_trial_total = max(1, int(cfg.max_iterations)) if active_space.names() else 1
     progress = _ProgressCounter(
         total=_generalization_work_total(
             plan,
-            repeat_total=max(1, int(cfg.num_repeats)),
-            trial_total=max(1, int(cfg.max_iterations)),
+            repeat_total=effective_repeat_total,
+            trial_total=effective_trial_total,
         )
     )
     _progress(
@@ -441,7 +445,11 @@ def run_v2_generalization(
                     fold_id=fold.fold_id,
                     train_pairs=list(fold.train_pairs),
                     test_pairs=list(fold.test_pairs),
-                    all_pairs=list(fold.test_pairs) if mode == "cross_person" else samples,
+                    all_pairs=(
+                        [*fold.train_pairs, *fold.test_pairs]
+                        if mode == "cross_person"
+                        else samples
+                    ),
                     fold_index=fold_index,
                     fold_total=len(folds),
                     ppg_mode=ppg_mode,
@@ -454,6 +462,7 @@ def run_v2_generalization(
                     json_dir=json_dir,
                     png_dir=png_dir,
                     csv_dir=csv_dir,
+                    comparison_groups=comparison_groups,
                     on_log=on_log,
                     on_progress=on_progress,
                     progress=progress,
@@ -574,6 +583,60 @@ def optimise_v2_shared_params(
         base_configs[0].adaptive_filter,
         preset,
     )
+    if not active_space.names():
+        sample_errors: dict[str, float] = {}
+        values: list[float] = []
+        for sample_index, base in enumerate(base_configs, start=1):
+            result = solve_v2(base)
+            err = float(result.err_stats["final_aae_bpm"])
+            sample_errors[Path(base.data_path).stem] = err
+            if np.isfinite(err):
+                values.append(err)
+            if on_trial_step is not None:
+                on_trial_step(
+                    {
+                        "event": "train_sample",
+                        "repeat_idx": 1,
+                        "repeat_total": 1,
+                        "trial": 0,
+                        "trial_idx": 1,
+                        "trial_total": 1,
+                        "global_trial": 1,
+                        "global_total": 1,
+                        "sample_index": sample_index,
+                        "sample_total": len(base_configs),
+                        "sample": Path(base.data_path).stem,
+                        "sample_error": err,
+                    }
+                )
+        value = float(np.mean(values)) if values else float("inf")
+        history = [
+            {
+                "event": "train_trial",
+                "repeat_idx": 1,
+                "repeat_total": 1,
+                "trial": 0,
+                "trial_idx": 1,
+                "trial_total": 1,
+                "global_trial": 1,
+                "global_total": 1,
+                "trial_value": value,
+                "value": value,
+                "best_error": value,
+                "sample_errors": sample_errors,
+            }
+        ]
+        if on_trial_step is not None:
+            on_trial_step(history[0])
+        report_path = _write_params_report(
+            out_path,
+            base_configs,
+            best_error=value,
+            best_params={},
+            history=history,
+        )
+        return V2SharedOptimiseResult(report_path, value, {}, history)
+
     history: list[dict[str, Any]] = []
     trials_per_repeat = max(1, int(config.max_iterations))
     repeat_total = max(1, int(config.num_repeats))
@@ -693,6 +756,7 @@ def _run_generalization_fold(
     json_dir: Path,
     png_dir: Path,
     csv_dir: Path,
+    comparison_groups: tuple[tuple[str, ...], ...],
     on_log: Callable[[str], None] | None,
     on_progress: Callable[[dict], None] | None,
     progress: _ProgressCounter,
@@ -859,9 +923,12 @@ def _run_generalization_fold(
         if evaluation_mode == "all_train":
             split = "train_test"
             dataset_role = "own_train_test"
-        elif evaluation_mode == "cross_person":
+        elif evaluation_mode == "cross_person" and pair.stem in test_stems:
             split = "external_test"
             dataset_role = "external_test"
+        elif evaluation_mode == "cross_person":
+            split = "train"
+            dataset_role = "own_train"
         elif pair.stem in test_stems:
             split = "test"
             dataset_role = "own_test"
@@ -904,6 +971,7 @@ def _run_generalization_fold(
             out_dir=png_dir,
             csv_dir=csv_dir,
             output_prefix=replay_prefix,
+            comparison_groups=comparison_groups,
         )
         records.append(
             V2GeneralizationRecord(
@@ -1083,7 +1151,11 @@ def _generalization_work_total(
         samples = list(group.pairs)
         for fold in group.folds:
             total += len(fold.train_pairs) * max(1, repeat_total) * max(1, trial_total)
-            total += len(fold.test_pairs) if fold.evaluation_mode == "cross_person" else len(samples)
+            total += (
+                len(fold.train_pairs) + len(fold.test_pairs)
+                if fold.evaluation_mode == "cross_person"
+                else len(samples)
+            )
     total += 3  # fold stats, aggregate stats, analysis tables
     return max(1, total)
 

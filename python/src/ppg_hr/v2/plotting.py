@@ -110,12 +110,23 @@ def _compute_comparison_curves(
         return []
 
     best_params = payload.get("best_params", {})
+    from .algorithm_presets import (
+        V2_ALGORITHM_PRESET_LITE,
+        V2_ALGORITHM_PRESET_TRACE_RESCUE,
+        normalise_v2_algorithm_preset,
+    )
     from .solver import solve_v2
     from .types import V2RunConfig
 
     field_names = {f.name for f in dataclasses.fields(V2RunConfig)}
     comparison_curves: list[dict[str, object]] = []
     seen_keys = {orig_key}
+    raw_preset = _payload_value(payload, "algorithm_preset", default=None)
+    preset = (
+        normalise_v2_algorithm_preset(str(raw_preset))
+        if raw_preset is not None
+        else ""
+    )
 
     def _resolve_path(key: str) -> Path:
         p = Path(payload.get(key, ""))
@@ -136,6 +147,23 @@ def _compute_comparison_curves(
                 return params["baseline_seconds"]
         return _payload_value(payload, name, default=None)
 
+    def _selected_trace_rescue_params() -> dict[str, object]:
+        if preset != V2_ALGORITHM_PRESET_TRACE_RESCUE:
+            return {}
+        trace = payload.get("trace_rescue")
+        if not isinstance(trace, dict):
+            return {}
+        selected = trace.get("selected_candidate")
+        candidate_params = trace.get("candidate_params")
+        if not isinstance(selected, str) or not isinstance(candidate_params, dict):
+            return {}
+        params = candidate_params.get(selected)
+        if not isinstance(params, dict):
+            return {}
+        return {k: v for k, v in params.items() if k in field_names}
+
+    trace_rescue_params = _selected_trace_rescue_params()
+
     for comp_order in comparison_groups:
         comp_order_norm = tuple(str(g).strip().upper() for g in comp_order)
         comp_key = reference_order_key(comp_order_norm)
@@ -155,6 +183,9 @@ def _compute_comparison_curves(
                 value = _report_config_value(name)
                 if value is not None:
                     cfg_dict[name] = value
+            if trace_rescue_params:
+                cfg_dict["algorithm_preset"] = V2_ALGORITHM_PRESET_LITE
+                cfg_dict.update(trace_rescue_params)
             for k, v in best_params.items():
                 if k in field_names and k not in {
                     "data_path",

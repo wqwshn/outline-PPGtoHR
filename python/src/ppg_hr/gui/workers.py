@@ -532,6 +532,7 @@ class V2BatchPipelineWorker(QObject):
         algorithm_preset: str,
         analysis_scope: str,
         reference_groups_order: tuple[str, ...],
+        comparison_groups: tuple[tuple[str, ...], ...],
         bayes_cfg: V2BayesConfig,
     ):
         super().__init__()
@@ -543,6 +544,7 @@ class V2BatchPipelineWorker(QObject):
         self._algorithm_preset = algorithm_preset
         self._analysis_scope = analysis_scope
         self._reference_groups_order = reference_groups_order
+        self._comparison_groups = comparison_groups
         self._bayes_cfg = bayes_cfg
 
     def run(self) -> None:
@@ -557,6 +559,7 @@ class V2BatchPipelineWorker(QObject):
                 f"algorithm_preset={self._algorithm_preset} | "
                 f"analysis_scope={self._analysis_scope} | "
                 f"reference_order={'+'.join(self._reference_groups_order) or 'FFT'} | "
+                f"comparison={'+'.join('+'.join(g) for g in self._comparison_groups) or 'none'} | "
                 f"max_iterations={self._bayes_cfg.max_iterations}, "
                 f"num_seed_points={self._bayes_cfg.num_seed_points}, "
                 f"num_repeats={self._bayes_cfg.num_repeats}, "
@@ -621,6 +624,7 @@ class V2BatchPipelineWorker(QObject):
                 algorithm_preset=self._algorithm_preset,
                 analysis_scope=self._analysis_scope,
                 reference_groups_order=self._reference_groups_order,
+                comparison_groups=self._comparison_groups,
                 bayes_cfg=self._bayes_cfg,
                 on_log=self.log.emit,
                 on_progress=_on_progress,
@@ -647,6 +651,7 @@ class V2GeneralizationWorker(QObject):
         algorithm_preset: str,
         analysis_scope: str,
         reference_groups_order: tuple[str, ...],
+        comparison_groups: tuple[tuple[str, ...], ...],
         bayes_cfg: V2BayesConfig,
         evaluation_modes: tuple[str, ...],
         k_fold_count: int = 5,
@@ -661,6 +666,7 @@ class V2GeneralizationWorker(QObject):
         self._algorithm_preset = algorithm_preset
         self._analysis_scope = analysis_scope
         self._reference_groups_order = reference_groups_order
+        self._comparison_groups = comparison_groups
         self._bayes_cfg = bayes_cfg
         self._evaluation_modes = evaluation_modes
         self._k_fold_count = int(k_fold_count)
@@ -678,6 +684,7 @@ class V2GeneralizationWorker(QObject):
                 f"algorithm_preset={self._algorithm_preset} | "
                 f"analysis_scope={self._analysis_scope} | "
                 f"reference_order={'+'.join(self._reference_groups_order) or 'FFT'} | "
+                f"comparison={'+'.join('+'.join(g) for g in self._comparison_groups) or 'none'} | "
                 f"evaluation_modes={'+'.join(self._evaluation_modes)} | "
                 f"k_fold_count={self._k_fold_count} | "
                 f"max_iterations={self._bayes_cfg.max_iterations}, "
@@ -756,6 +763,7 @@ class V2GeneralizationWorker(QObject):
                 algorithm_preset=self._algorithm_preset,
                 analysis_scope=self._analysis_scope,
                 reference_groups_order=self._reference_groups_order,
+                comparison_groups=self._comparison_groups,
                 bayes_cfg=self._bayes_cfg,
                 evaluation_modes=self._evaluation_modes,
                 k_fold_count=self._k_fold_count,

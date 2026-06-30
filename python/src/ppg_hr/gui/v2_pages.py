@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 
 from ppg_hr.v2.generalization import build_v2_generalization_plan, plan_summary
 from ppg_hr.v2.optimizer import V2BayesConfig
+from ppg_hr.v2.algorithm_presets import v2_search_space_for_preset
 from ppg_hr.v2.spo2 import V2SpO2Config
 from ppg_hr.v2.window_diagnostics import (
     DiagnosticPlotOptions,
@@ -119,6 +120,9 @@ class V2BatchPipelinePage(_PageBase):
             userData="dynamic_rest_bo",
         )
         self._algorithm_preset_combo.addItem("Lite", userData="lite")
+        self._algorithm_preset_combo.addItem("TraceRescue", userData="trace_rescue")
+        self._algorithm_preset_combo.currentIndexChanged.connect(self._sync_bo_controls)
+        self._filter_combo.currentIndexChanged.connect(self._sync_bo_controls)
 
         self._scope_combo = QComboBox()
         self._scope_combo.addItem("整段 full", userData="full")
@@ -134,6 +138,13 @@ class V2BatchPipelinePage(_PageBase):
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             self._ref_list.addItem(item)
         ref_widget = self._ref_list
+        self._comparison_ref_list = QListWidget()
+        self._comparison_ref_list.setMaximumHeight(86)
+        for group in ("HF", "CF", "ACC"):
+            item = QListWidgetItem(group)
+            item.setCheckState(Qt.CheckState.Checked if group == "ACC" else Qt.CheckState.Unchecked)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            self._comparison_ref_list.addItem(item)
 
         self._max_iter = QSpinBox()
         self._max_iter.setRange(1, 1000)
@@ -153,13 +164,22 @@ class V2BatchPipelinePage(_PageBase):
         form.addRow("自适应滤波", self._filter_combo)
         form.addRow("分析范围", self._scope_combo)
         form.addRow("参考信号", ref_widget)
+        form.addRow("对比参考信号", self._comparison_ref_list)
         form.addRow("algorithm_preset", self._algorithm_preset_combo)
         form.addRow("max_iterations", self._max_iter)
         form.addRow("num_seed_points", self._seed_pts)
         form.addRow("num_repeats", self._num_repeats)
         form.addRow("random_state", self._seed)
+        self._run_options_form = form
+        self._bo_option_widgets = (
+            self._max_iter,
+            self._seed_pts,
+            self._num_repeats,
+            self._seed,
+        )
         card.add(form)
         self.body().addWidget(card)
+        self._sync_bo_controls()
 
         row = QHBoxLayout()
         row.addStretch(1)
@@ -191,6 +211,30 @@ class V2BatchPipelinePage(_PageBase):
     def selected_algorithm_preset(self) -> str:
         return str(self._algorithm_preset_combo.currentData())
 
+    def selected_comparison_groups(self) -> tuple[tuple[str, ...], ...]:
+        groups: list[tuple[str, ...]] = []
+        for i in range(self._comparison_ref_list.count()):
+            item = self._comparison_ref_list.item(i)
+            if item is not None and item.checkState() == Qt.CheckState.Checked:
+                groups.append((item.text(),))
+        return tuple(groups)
+
+    def _sync_bo_controls(self) -> None:
+        try:
+            has_bo = bool(
+                v2_search_space_for_preset(
+                    str(self._filter_combo.currentData()),
+                    self.selected_algorithm_preset(),
+                ).names()
+            )
+        except Exception:
+            has_bo = True
+        for widget in getattr(self, "_bo_option_widgets", ()):
+            widget.setVisible(has_bo)
+            label = self._run_options_form.labelForField(widget)
+            if label is not None:
+                label.setVisible(has_bo)
+
     def _refresh(self) -> None:
         self._summary.set_rows([])
         self._log.clear()
@@ -216,6 +260,7 @@ class V2BatchPipelinePage(_PageBase):
             algorithm_preset=self.selected_algorithm_preset(),
             analysis_scope=str(self._scope_combo.currentData()),
             reference_groups_order=self.selected_reference_order(),
+            comparison_groups=self.selected_comparison_groups(),
             bayes_cfg=cfg,
         )
         worker.log.connect(self._log.info)
@@ -300,6 +345,9 @@ class V2GeneralizationPage(_PageBase):
             userData="dynamic_rest_bo",
         )
         self._algorithm_preset_combo.addItem("Lite", userData="lite")
+        self._algorithm_preset_combo.addItem("TraceRescue", userData="trace_rescue")
+        self._algorithm_preset_combo.currentIndexChanged.connect(self._sync_bo_controls)
+        self._filter_combo.currentIndexChanged.connect(self._sync_bo_controls)
         self._scope_combo = QComboBox()
         self._scope_combo.addItem("整段 full", userData="full")
         self._scope_combo.addItem("最长运动段 + 前30s", userData="motion")
@@ -314,6 +362,15 @@ class V2GeneralizationPage(_PageBase):
             )
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             self._ref_list.addItem(item)
+        self._comparison_ref_list = QListWidget()
+        self._comparison_ref_list.setMaximumHeight(86)
+        for group in ("HF", "CF", "ACC"):
+            item = QListWidgetItem(group)
+            item.setCheckState(
+                Qt.CheckState.Checked if group == "ACC" else Qt.CheckState.Unchecked
+            )
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            self._comparison_ref_list.addItem(item)
         self._eval_mode_combo = QComboBox()
         for label, value in (
             ("all_train", "all_train"),
@@ -345,6 +402,7 @@ class V2GeneralizationPage(_PageBase):
         form.addRow("自适应滤波", self._filter_combo)
         form.addRow("分析范围", self._scope_combo)
         form.addRow("参考信号", self._ref_list)
+        form.addRow("对比参考信号", self._comparison_ref_list)
         form.addRow("algorithm_preset", self._algorithm_preset_combo)
         form.addRow("evaluation_mode", self._eval_mode_combo)
         form.addRow(self._k_fold_label, self._k_fold_spin)
@@ -352,8 +410,16 @@ class V2GeneralizationPage(_PageBase):
         form.addRow("num_seed_points", self._seed_pts)
         form.addRow("num_repeats", self._num_repeats)
         form.addRow("random_state", self._seed)
+        self._run_options_form = form
+        self._bo_option_widgets = (
+            self._max_iter,
+            self._seed_pts,
+            self._num_repeats,
+            self._seed,
+        )
         card.add(form)
         self.body().addWidget(card)
+        self._sync_bo_controls()
 
         row = QHBoxLayout()
         row.addStretch(1)
@@ -410,6 +476,30 @@ class V2GeneralizationPage(_PageBase):
 
     def selected_algorithm_preset(self) -> str:
         return str(self._algorithm_preset_combo.currentData())
+
+    def selected_comparison_groups(self) -> tuple[tuple[str, ...], ...]:
+        groups: list[tuple[str, ...]] = []
+        for i in range(self._comparison_ref_list.count()):
+            item = self._comparison_ref_list.item(i)
+            if item is not None and item.checkState() == Qt.CheckState.Checked:
+                groups.append((item.text(),))
+        return tuple(groups)
+
+    def _sync_bo_controls(self) -> None:
+        try:
+            has_bo = bool(
+                v2_search_space_for_preset(
+                    str(self._filter_combo.currentData()),
+                    self.selected_algorithm_preset(),
+                ).names()
+            )
+        except Exception:
+            has_bo = True
+        for widget in getattr(self, "_bo_option_widgets", ()):
+            widget.setVisible(has_bo)
+            label = self._run_options_form.labelForField(widget)
+            if label is not None:
+                label.setVisible(has_bo)
 
     def _update_eval_mode_controls(self) -> None:
         mode = str(self._eval_mode_combo.currentData())
@@ -508,6 +598,7 @@ class V2GeneralizationPage(_PageBase):
             algorithm_preset=self.selected_algorithm_preset(),
             analysis_scope=str(self._scope_combo.currentData()),
             reference_groups_order=self.selected_reference_order(),
+            comparison_groups=self.selected_comparison_groups(),
             bayes_cfg=cfg,
             evaluation_modes=modes,
             k_fold_count=int(self._k_fold_spin.value()),

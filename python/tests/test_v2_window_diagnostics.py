@@ -39,6 +39,63 @@ def _line_labels(ax) -> set[str]:
     return {line.get_label() for line in ax.lines}
 
 
+def test_trace_rescue_session_uses_selected_candidate_params(tmp_path: Path) -> None:
+    data = tmp_path / "sample.csv"
+    ref = tmp_path / "sample_ref.csv"
+    data.write_text("sensor\n", encoding="utf-8")
+    ref.write_text("ref\n", encoding="utf-8")
+    report = tmp_path / "sample-v2.json"
+    report.write_text(
+        json.dumps(
+            {
+                "schema_version": "v2",
+                "data_path": str(data),
+                "ref_path": str(ref),
+                "algorithm_preset": "trace_rescue",
+                "adaptive_filter": "klms",
+                "reference_groups_order": ["HF"],
+                "time_bias": 5.0,
+                "hr": [[4.0, 72.0, 73.0, 74.0, 0.0, 0.0]],
+                "window_table": [
+                    {
+                        "window_idx": 0,
+                        "center_s": 4.0,
+                        "start_s": 0.0,
+                        "end_s": 8.0,
+                        "final_hr_bpm": 74.0,
+                        "window_kind": "rest",
+                        "spectrum_tracking": {},
+                    }
+                ],
+                "best_params": {"klms_sigma": 2.0},
+                "trace_rescue": {
+                    "selected_candidate": "high_rate_motion_reject",
+                    "candidate_params": {
+                        "high_rate_motion_reject": {
+                            "fs_target": 100,
+                            "max_order": 16,
+                            "smooth_win_len": 7,
+                            "spec_penalty_width": 0.3,
+                            "time_bias": 5.0,
+                        }
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    session = load_window_diagnostics_session(report)
+
+    assert session.config.algorithm_preset == "trace_rescue"
+    assert session.config.adaptive_filter == "klms"
+    assert session.config.klms_sigma == 2.0
+    assert session.config.fs_target == 100
+    assert session.config.max_order == 16
+    assert session.config.smooth_win_len == 7
+    assert session.config.spec_penalty_width == 0.3
+
+
 def test_session_exposes_contiguous_window_kind_ranges(kaihe_session) -> None:
     assert kaihe_session.window_kind_ranges() == [
         ("rest", 10.5, 67.5),

@@ -1285,6 +1285,108 @@ def test_solve_v2_lite_records_fixed_tracking_policy_in_metadata(tmp_path: Path)
     }
 
 
+def test_solve_v2_trace_rescue_runs_fixed_candidates_and_preserves_runtime_choices(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from ppg_hr.v2 import solver
+    from ppg_hr.v2.algorithm_presets import V2_ALGORITHM_PRESET_TRACE_RESCUE
+
+    data = tmp_path / "trace.csv"
+    ref = tmp_path / "trace_ref.csv"
+    _write_sensor(data, motion=True)
+    _write_ref(ref)
+    seen: list[V2RunConfig] = []
+
+    def fake_unified_solve(cfg: V2RunConfig) -> solver.V2SolverResult:
+        seen.append(cfg)
+        final = 78.0 + len(seen)
+        return solver.V2SolverResult(
+            HR=np.array(
+                [
+                    [4.0, 72.0, final, final, 0.0, 0.0],
+                    [5.0, 72.0, final, final, 1.0, 1.0],
+                    [6.0, 72.0, final, final, 0.0, 1.0],
+                ],
+                dtype=float,
+            ),
+            err_stats={"final_aae_bpm": float(len(seen))},
+            metadata={
+                "schema_version": "v2",
+                "algorithm_preset": cfg.algorithm_preset,
+                "adaptive_filter": cfg.adaptive_filter,
+                "reference_groups_order": list(cfg.reference_groups_order),
+                "fs_target": int(cfg.fs_target),
+                "max_order": int(cfg.max_order),
+            },
+            window_table=[
+                {
+                    "window_kind": "rest",
+                    "final_hr_bpm": final,
+                    "reliable": True,
+                    "spectrum_tracking": {
+                        "raw_candidate_hr_bpm": final,
+                        "previous_hr_bpm": final,
+                        "selected_peak_rank": 1,
+                        "candidate_source": "peak",
+                    },
+                },
+                {
+                    "window_kind": "motion",
+                    "final_hr_bpm": final,
+                    "reliable": True,
+                    "spectrum_tracking": {
+                        "raw_candidate_hr_bpm": final,
+                        "previous_hr_bpm": final,
+                        "selected_peak_rank": 1,
+                        "candidate_source": "peak",
+                    },
+                },
+                {
+                    "window_kind": "recovery",
+                    "final_hr_bpm": final,
+                    "reliable": True,
+                    "spectrum_tracking": {
+                        "raw_candidate_hr_bpm": final,
+                        "previous_hr_bpm": final,
+                        "selected_peak_rank": 1,
+                        "candidate_source": "peak",
+                    },
+                },
+            ],
+        )
+
+    monkeypatch.setattr(solver, "_unified_solve", fake_unified_solve)
+
+    result = solver.solve_v2(
+        V2RunConfig(
+            data_path=data,
+            ref_path=ref,
+            algorithm_preset=V2_ALGORITHM_PRESET_TRACE_RESCUE,
+            adaptive_filter="klms",
+            reference_groups_order=("CF", "ACC"),
+        )
+    )
+
+    assert [cfg.algorithm_preset for cfg in seen] == ["lite"] * 5
+    assert {cfg.adaptive_filter for cfg in seen} == {"klms"}
+    assert {cfg.reference_groups_order for cfg in seen} == {("CF", "ACC")}
+    assert [(cfg.fs_target, cfg.max_order) for cfg in seen] == [
+        (25, 12),
+        (25, 16),
+        (50, 16),
+        (100, 16),
+        (100, 12),
+    ]
+    assert result.metadata["algorithm_preset"] == "trace_rescue"
+    assert result.metadata["trace_rescue"]["selected_candidate"] == "low_rate_stable"
+    assert len(result.metadata["trace_rescue"]["candidate_diagnostics"]) == 5
+    assert all(
+        row["trace_rescue_selected_candidate"] == "low_rate_stable"
+        for row in result.window_table
+    )
+
+
 def test_solve_v2_non_hf_reference_uses_v1_fusion_kernel(tmp_path: Path) -> None:
     data = tmp_path / "cf.csv"
     ref = tmp_path / "cf_ref.csv"

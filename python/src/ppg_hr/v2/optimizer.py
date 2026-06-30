@@ -46,6 +46,38 @@ def optimise_v2(
         base.adaptive_filter,
         base.algorithm_preset,
     )
+    if not active_space.names():
+        result = solve_v2(base)
+        value = float(result.err_stats["final_aae_bpm"])
+        row = {
+            "repeat_idx": 1,
+            "repeat_total": 1,
+            "trial": 0,
+            "trial_idx": 1,
+            "trial_total": 1,
+            "global_trial": 1,
+            "global_total": 1,
+            "value": value,
+            "best_in_repeat": value,
+            "best_overall": value,
+        }
+        history = [row]
+        if on_trial_step is not None:
+            on_trial_step(row)
+        report = save_v2_report(
+            out_path,
+            result,
+            best_params={},
+            history=history,
+            qc=qc,
+        )
+        return V2OptimiseResult(
+            report_path=report,
+            best_error=value,
+            best_params={},
+            history=history,
+        )
+
     history: list[dict] = []
     trials_per_repeat = max(1, int(config.max_iterations))
     repeat_total = max(1, int(config.num_repeats))

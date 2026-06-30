@@ -52,6 +52,7 @@ def run_v2_batch_pipeline(
     bayes_cfg: V2BayesConfig,
     algorithm_preset: str = V2_ALGORITHM_PRESET_DEFAULT,
     search_space: V2SearchSpace | None = None,
+    comparison_groups: tuple[tuple[str, ...], ...] = (),
     on_log: Callable[[str], None] | None = None,
     on_progress: Callable[[dict], None] | None = None,
 ) -> dict[str, object]:
@@ -199,6 +200,7 @@ def run_v2_batch_pipeline(
                 out_dir=png_dir,
                 csv_dir=csv_dir,
                 output_prefix=prefix,
+                comparison_groups=comparison_groups,
             )
             if on_progress is not None:
                 on_progress(

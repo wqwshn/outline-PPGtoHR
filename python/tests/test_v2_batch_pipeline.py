@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -142,6 +143,55 @@ def test_run_v2_batch_pipeline_writes_algorithm_preset_metadata(
 
     report = json.loads(payload["records"][0].report_path.read_text(encoding="utf-8"))
     assert report["algorithm_preset"] == "lite"
+
+
+def test_run_v2_batch_pipeline_passes_comparison_groups_to_render(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from ppg_hr.v2 import batch_pipeline
+
+    _write_pair(tmp_path, "sample")
+    seen: list[tuple[tuple[str, ...], ...]] = []
+
+    def fake_render_v2_report(
+        report_path,
+        out_dir,
+        *,
+        csv_dir=None,
+        output_prefix=None,
+        comparison_groups=(),
+        **_kwargs,
+    ):
+        seen.append(comparison_groups)
+        png_dir = Path(out_dir)
+        csv_out = Path(csv_dir)
+        png_dir.mkdir(parents=True, exist_ok=True)
+        csv_out.mkdir(parents=True, exist_ok=True)
+        prefix = output_prefix or Path(report_path).stem
+        figure = png_dir / f"{prefix}-v2-hr.png"
+        err = csv_out / f"{prefix}-v2-error.csv"
+        hr = csv_out / f"{prefix}-v2-hr.csv"
+        figure.write_text("png", encoding="utf-8")
+        err.write_text("err", encoding="utf-8")
+        hr.write_text("hr", encoding="utf-8")
+        return SimpleNamespace(figure_png=figure, error_csv=err, hr_csv=hr)
+
+    monkeypatch.setattr(batch_pipeline, "render_v2_report", fake_render_v2_report)
+
+    payload = run_v2_batch_pipeline(
+        input_dir=tmp_path,
+        output_dir=tmp_path / "out",
+        ppg_modes=["green"],
+        adaptive_filter="lms",
+        analysis_scope="full",
+        reference_groups_order=("HF",),
+        bayes_cfg=V2BayesConfig(max_iterations=1, num_seed_points=1, random_state=1),
+        comparison_groups=(("ACC",),),
+    )
+
+    assert seen == [(("ACC",),)]
+    assert payload["records"][0].figure_png is not None
 
 
 def test_default_v2_batch_output_dir_includes_algorithm_preset(

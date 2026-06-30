@@ -122,12 +122,18 @@ def test_v2_batch_page_exposes_algorithm_preset_selection() -> None:
             str(page._algorithm_preset_combo.itemData(i))
             for i in range(page._algorithm_preset_combo.count())
         ]
-        assert presets == ["dynamic_rest_bo", "lite"]
+        assert presets == ["dynamic_rest_bo", "lite", "trace_rescue"]
         assert page.selected_algorithm_preset() == "dynamic_rest_bo"
         page._algorithm_preset_combo.setCurrentIndex(
-            page._algorithm_preset_combo.findData("lite")
+            page._algorithm_preset_combo.findData("trace_rescue")
         )
-        assert page.selected_algorithm_preset() == "lite"
+        assert page.selected_algorithm_preset() == "trace_rescue"
+        assert page.selected_comparison_groups() == (("ACC",),)
+        app.processEvents()
+        assert page._max_iter.isHidden() is True
+        page._filter_combo.setCurrentIndex(page._filter_combo.findData("klms"))
+        app.processEvents()
+        assert page._max_iter.isHidden() is False
     finally:
         page.deleteLater()
         app.processEvents()
@@ -179,12 +185,18 @@ def test_v2_generalization_page_exposes_algorithm_preset_selection() -> None:
             str(page._algorithm_preset_combo.itemData(i))
             for i in range(page._algorithm_preset_combo.count())
         ]
-        assert presets == ["dynamic_rest_bo", "lite"]
+        assert presets == ["dynamic_rest_bo", "lite", "trace_rescue"]
         assert page.selected_algorithm_preset() == "dynamic_rest_bo"
         page._algorithm_preset_combo.setCurrentIndex(
-            page._algorithm_preset_combo.findData("lite")
+            page._algorithm_preset_combo.findData("trace_rescue")
         )
-        assert page.selected_algorithm_preset() == "lite"
+        assert page.selected_algorithm_preset() == "trace_rescue"
+        assert page.selected_comparison_groups() == (("ACC",),)
+        app.processEvents()
+        assert page._max_iter.isHidden() is True
+        page._filter_combo.setCurrentIndex(page._filter_combo.findData("klms"))
+        app.processEvents()
+        assert page._max_iter.isHidden() is False
     finally:
         page.deleteLater()
         app.processEvents()

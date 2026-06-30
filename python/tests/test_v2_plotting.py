@@ -322,6 +322,77 @@ def test_render_v2_report_comparison_curve_uses_shared_fft_outside_adaptive(
     assert [float(row["K-LMS+A_bpm"]) for row in rows] == [190.0, 71.0, 72.0]
 
 
+def test_render_v2_report_trace_rescue_comparison_reuses_selected_candidate(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from ppg_hr.v2 import solver
+
+    report = tmp_path / "trace.json"
+    _write_report(report, ["HF"], time_bias=5.0)
+    payload = json.loads(report.read_text(encoding="utf-8"))
+    payload["algorithm_preset"] = "trace_rescue"
+    payload["adaptive_filter"] = "klms"
+    payload["metadata"]["adaptive_filter"] = "klms"
+    payload["best_params"] = {"klms_sigma": 2.0}
+    payload["trace_rescue"] = {
+        "selected_candidate": "high_rate_motion_reject",
+        "candidate_params": {
+            "high_rate_motion_reject": {
+                "fs_target": 100,
+                "max_order": 16,
+                "smooth_win_len": 7,
+                "spec_penalty_width": 0.3,
+                "time_bias": 5.0,
+            },
+            "low_rate_stable": {
+                "fs_target": 25,
+                "max_order": 12,
+                "smooth_win_len": 9,
+                "spec_penalty_width": 0.1,
+                "time_bias": 4.5,
+            },
+        },
+    }
+    report.write_text(json.dumps(payload), encoding="utf-8")
+    seen_configs = []
+
+    def fake_solve_v2(cfg):
+        seen_configs.append(cfg)
+        return V2SolverResult(
+            HR=np.asarray(
+                [
+                    [4.0, 75.0, 74.0, 175.0, 1.0, 1.0],
+                    [5.0, 76.0, 75.0, 176.0, 1.0, 1.0],
+                ],
+                dtype=float,
+            ),
+            err_stats={"fft_aae_bpm": 0.0, "final_aae_bpm": 0.0},
+            metadata={},
+            window_table=[],
+        )
+
+    monkeypatch.setattr(solver, "solve_v2", fake_solve_v2)
+
+    render_v2_report(
+        report,
+        out_dir=tmp_path / "out",
+        comparison_groups=(("ACC",),),
+    )
+
+    assert len(seen_configs) == 1
+    cfg = seen_configs[0]
+    assert cfg.algorithm_preset == "lite"
+    assert cfg.reference_groups_order == ("ACC",)
+    assert cfg.adaptive_filter == "klms"
+    assert cfg.klms_sigma == 2.0
+    assert cfg.fs_target == 100
+    assert cfg.max_order == 16
+    assert cfg.smooth_win_len == 7
+    assert cfg.spec_penalty_width == 0.3
+    assert cfg.time_bias == 5.0
+
+
 def test_render_v2_report_comparison_curve_aligns_by_window_time(
     tmp_path: Path,
     monkeypatch,

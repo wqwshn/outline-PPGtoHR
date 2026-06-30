@@ -1,0 +1,136 @@
+# v2 心率算法阶段性说明
+
+## 总览
+
+当前 v2 心率求解提供三种算法预设，差异主要在 BO 使用程度和参数自适应方式。
+
+| UI 名称 | 内部值 | BO 使用程度 | 定位 |
+| --- | --- | --- | --- |
+| 动态追踪-静息BO | `dynamic_rest_bo` | 保留静息段 BO，运动/恢复追踪参数固定 | 默认主算法，兼顾个体差异和泛化 |
+| Lite | `lite` | 固定静息、运动、恢复追踪参数，但仍搜索采样率、滤波阶数、平滑等核心参数 | 小搜索空间基线 |
+| TraceRescue | `trace_rescue` | 固定候选状态不使用 BO；`klms/as_lms/volterra/rff_lms` 等滤波器私有参数可继续 BO | 固定候选状态 + 无监督轨迹诊断选择 |
+
+三种算法都沿用同一套 v2 数据入口、PPG 通道、PPG 输入变换、参考信号顺序和自适应滤波器选择。也就是说，用户在 UI 中选择 `HF/CF/ACC` 顺序，或选择 `lms/as_lms/klms/volterra/noncausal_lms/rff_lms` 等滤波器时，三种算法都会透传这些设置。若未来新增 `vlms` 等滤波器，只要接入现有 `adaptive_filter` 主线，算法预设层不需要绑定具体滤波器名称。
+
+## 动态追踪-静息BO
+
+`dynamic_rest_bo` 是当前默认主算法。
+
+它固定运动段和恢复段的方向性频谱追踪参数，保留静息段 BO。设计原因是：运动/恢复段在前期统计和闭环实验中已经有较稳定的方向性约束，而静息段更容易受个体基线、设备噪声和静态伪峰影响，保留小范围 BO 更稳。
+
+保留 BO 的静息段参数：
+
+| 参数 | 候选值 |
+| --- | --- |
+| `hr_range_rest` | `20/60`, `30/60`, `60/60`, `80/60` Hz |
+| `slew_limit_rest` | `1`, `3`, `6`, `8` bpm |
+| `slew_step_rest` | `0.5`, `2`, `4` bpm |
+
+固定的方向性动态参数：
+
+| 状态 | 方向 | `hr_range` bpm | `slew_limit` bpm | `slew_step` bpm |
+| --- | --- | ---: | ---: | ---: |
+| 静息 | 上升 | BO | BO | BO |
+| 静息 | 下降 | BO | BO | BO |
+| 运动 | 上升 | 35 | 5.5 | 3.5 |
+| 运动 | 下降 | 15 | 2.0 | 1.5 |
+| 恢复 | 上升 | 20 | 1.5 | 1.5 |
+| 恢复 | 下降 | 25 | 3.5 | 3.0 |
+
+适用场景：作为 v2 默认算法，用于需要一定个体适应性但不希望运动段参数过度搜索的批量计算和泛化评估。
+
+## Lite
+
+`lite` 是固定动态追踪参数的轻量算法。
+
+它不再搜索静息、运动、恢复段的追踪范围和限速参数，但仍保留 Lite 核心参数搜索，例如 `fs_target`、`max_order`、`lms_mu_base`、`smooth_win_len`、`spec_penalty_width`、`time_bias`。设计原因是：先固定已验证的状态/方向追踪行为，再用小 BO 空间寻找每个样本或训练组的采样率、滤波阶数、时间对齐等参数。
+
+固定的方向性动态参数：
+
+| 状态 | 方向 | `hr_range` bpm | `slew_limit` bpm | `slew_step` bpm |
+| --- | --- | ---: | ---: | ---: |
+| 静息 | 上升 | 15 | 1.5 | 1.5 |
+| 静息 | 下降 | 20 | 3.0 | 1.5 |
+| 运动 | 上升 | 35 | 5.5 | 3.5 |
+| 运动 | 下降 | 15 | 2.0 | 1.5 |
+| 恢复 | 上升 | 20 | 1.5 | 1.5 |
+| 恢复 | 下降 | 25 | 3.5 | 3.0 |
+
+Lite 的 BO 空间已移除以下追踪参数：
+
+- `hr_range_hz`
+- `slew_limit_bpm`
+- `slew_step_bpm`
+- `hr_range_rest`
+- `slew_limit_rest`
+- `slew_step_rest`
+
+适用场景：效率优先、需要小搜索空间、或作为 TraceRescue 固定候选库的基础求解内核。
+
+## TraceRescue
+
+`trace_rescue` 是本阶段新增的固定状态救援算法。它可以类比为样本级状态机：每个状态是一套固定参数组合；每个样本先运行固定候选状态，再根据无监督轨迹诊断选择一个最终状态。当前实现是样本级选择，不是每个窗口动态切换不同参数。
+
+TraceRescue 不再 BO 搜索 `fs_target/max_order/lms_mu_base/smooth_win_len/spec_penalty_width/time_bias` 这些 Lite 状态参数。若选择的自适应滤波器本身有独立参数，则仍保留该滤波器的 BO 空间，例如 `klms_step_size/klms_sigma/klms_epsilon`、`volterra_max_order_vol`、`as_lms_rho/as_lms_mu_max`、`rff_D/rff_sigma`。当选择 `lms` 或 `noncausal_lms` 时，TraceRescue 搜索空间为空，批量全流程和泛化评估 UI 会隐藏 `max_iterations/num_seed_points/num_repeats/random_state` 等 BO 输入项。
+
+### 固定状态
+
+| 状态 | `fs_target` | `max_order` | `lms_mu_base` | `smooth_win_len` | `spec_penalty_width` | `time_bias` | 设计意图 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `low_rate_stable` | 25 | 12 | 0.010 | 9 | 0.10 | 4.5 | 默认低采样稳健状态 |
+| `low_rate_deeper_filter` | 25 | 16 | 0.010 | 9 | 0.15 | 4.5 | 低采样下增强滤波阶数 |
+| `mid_rate_balanced` | 50 | 16 | 0.010 | 9 | 0.20 | 4.5 | 中采样救援状态 |
+| `high_rate_motion_reject` | 100 | 16 | 0.010 | 7 | 0.30 | 5.0 | 强运动锁峰时的高采样救援 |
+| `high_rate_short_order` | 100 | 12 | 0.010 | 7 | 0.30 | 4.5 | 高采样但较短滤波阶数 |
+
+这些固定状态来自 Lite BO 空间的收缩结果和 LYX/TS 多轮泛化实验。`lms_mu_base` 固定为 0.010；对于 `klms/as_lms/volterra/rff_lms` 等滤波器，状态机仍保留用户选择的 `adaptive_filter`，不强制改成 LMS。与所选滤波器无关的参数会自然不参与对应滤波器内部计算，滤波器私有参数则可通过对应 BO 空间继续优化。
+
+### 无监督诊断指标
+
+TraceRescue 不用 `HR_ref` 选择状态。`HR_ref` 只用于最终误差统计。
+
+候选状态诊断指标：
+
+| 指标 | 计算口径 | 含义 |
+| --- | --- | --- |
+| `trace_risk` | 对窗口风险取平均；窗口风险由峰 rank、`held_previous`、`protection_suppressed`、`reacquire_triggered`、惩罚置信度、最终 HR 与原始候选峰差距、窗口可靠性组成 | 候选轨迹自身是否不可信 |
+| `jump_p90_bpm` | 候选最终 HR 相邻窗口跳变绝对值的 P90 | 轨迹是否异常抖动 |
+| `range_risk` | 最终 HR 落在 `<45` 或 `>210` bpm 的比例 | 生理范围异常比例 |
+| `median_gap_bpm` | 候选最终 HR 与候选间中位轨迹的平均差距 | 候选是否明显偏离群体轨迹 |
+| `median_gap_p90_bpm` | 上述差距的 P90 | 偶发大偏离程度 |
+| `no_ref_score` | 由 `median_gap`、`median_gap_p90`、`trace_risk`、`jump_risk`、`range_risk` 加权得到 | 候选总体无监督风险 |
+
+低采样锁峰指标 `low_lock_score` 只看 `low_rate_stable` 和 `low_rate_deeper_filter` 的运动/恢复窗口：
+
+- `final_hr_bpm` 与 `raw_candidate_hr_bpm` 差距越大，风险越高。
+- `final_hr_bpm` 与 `previous_hr_bpm` 差距越大，风险越高。
+- `selected_peak_rank` 越靠后，风险越高。
+- `candidate_source == "held_previous"` 时增加风险。
+- 使用这些窗口风险的 P75 作为低采样锁峰分数。
+
+### 状态切换规则
+
+1. 默认状态是 `low_rate_stable`。
+2. 如果 `low_rate_stable` 未出现明显锁峰，且 `low_rate_deeper_filter` 的 `trace_risk` 至少低 0.035，则切到 `low_rate_deeper_filter`。
+3. 如果低采样锁峰分数达到 0.34，或低采样 `trace_risk >= 0.18` 且 `jump_p90_bpm <= 4.0`，进入救援判断。
+4. 救援候选只在 `high_rate_motion_reject`、`high_rate_short_order`、`mid_rate_balanced` 中选择，按 `trace_risk`、`jump_p90_bpm`、`range_risk` 从低到高排序。
+5. 如果最佳救援候选相对 `low_rate_stable` 的 `trace_risk` 改善小于 0.08，则抑制救援，保持 `low_rate_stable`。
+6. 否则选择最低风险救援候选。
+
+该策略是保守救援，而不是候选多数投票。原因是前期实验发现：当多数候选同时锁到错误轨迹时，正确候选会被共识策略误判为离群。因此最终算法只在低采样结果自身暴露锁峰证据时才切换。
+
+### 在线部署性
+
+当前代码实现为样本级多候选选择：同一样本会运行五套固定状态，然后选择一个最终状态。状态选择不使用参考 HR；如果当前滤波器没有私有 BO 参数，则也不使用 BO。该计算形态仍偏离线。若要进一步在线部署，可改成级联状态机：
+
+1. 先运行 `low_rate_stable`。
+2. 低风险时直接输出。
+3. 连续窗口出现锁峰风险时，临时启动中/高采样救援候选。
+4. 救援候选风险明显更低时切换。
+5. 风险解除并满足最短驻留时间后回到低采样状态。
+
+批量全流程中的对比参考信号不会独立执行 TraceRescue 候选状态选择。主参考信号报告已确定的 `selected_candidate`、对应固定状态参数和滤波器私有 `best_params` 会被完整复用；对比曲线只替换 `reference_groups_order` 后重算，用于公平观察参考信号差异。
+
+## 当前结论
+
+`dynamic_rest_bo`、`lite`、`trace_rescue` 构成了三个不同程度使用 BO 的算法层级。`dynamic_rest_bo` 适合作为默认主算法；`lite` 适合作为小搜索空间固定动态基线；`trace_rescue` 则把第四轮无 BO 泛化研究沉淀为可选算法版本，用固定状态和无监督诊断提升跨人泛化稳定性，并仅在滤波器本身有私有参数时保留小范围 BO。

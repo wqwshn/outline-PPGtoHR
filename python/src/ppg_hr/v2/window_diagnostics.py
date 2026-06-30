@@ -13,14 +13,12 @@ import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from scipy.interpolate import interp1d
-from scipy.signal import butter, filtfilt, resample_poly
 from scipy.signal.windows import hamming
 
 from ppg_hr.core.adaptive_filter import apply_adaptive_cascade
 from ppg_hr.core.choose_delay import choose_delay
 from ppg_hr.core.fft_peaks import fft_peaks
 from ppg_hr.core.find_maxpeak import find_maxpeak
-from ppg_hr.core.heart_rate_solver import load_raw_data
 from ppg_hr.params import SolverParams
 
 from .algorithm_presets import (
@@ -28,27 +26,22 @@ from .algorithm_presets import (
     normalise_v2_algorithm_preset,
     v2_tracking_policy_for_preset,
 )
-from .preprocess import safe_cf_ratio
+from .output_paths import prepare_output_dir, safe_output_path
 from .reference_groups import (
     color_for_reference_order,
     method_label,
     normalise_reference_order,
     reference_order_key,
 )
-from .output_paths import prepare_output_dir, safe_output_path
 from .report import load_v2_report
+from .signal_preparation import prepare_v2_signals
 from .solver import (
-    _apply_ppg_input_transform,
     _candidate_peak_indices,
     _classify_window_kind,
     _continuity_protection_half_width_hz,
-    _detect_motion_from_raw_imu,
     _effective_penalty_weight,
     _motion_penalty_centers,
     _motion_penalty_confidence,
-    _ordered_reference_signals,
-    _select_ppg_raw,
-    _solver_params_from_v2,
     _spectrum_penalty_state,
     solve_v2,
 )
@@ -1004,6 +997,19 @@ def _config_from_payload(
         for key, value in best_params.items():
             if key in fields:
                 cfg[key] = value
+    trace_rescue = payload.get("trace_rescue")
+    if (
+        cfg.get("algorithm_preset") == "trace_rescue"
+        and isinstance(trace_rescue, dict)
+    ):
+        selected = trace_rescue.get("selected_candidate")
+        candidate_params = trace_rescue.get("candidate_params")
+        if isinstance(selected, str) and isinstance(candidate_params, dict):
+            params = candidate_params.get(selected)
+            if isinstance(params, dict):
+                for key, value in params.items():
+                    if key in fields:
+                        cfg[key] = value
     if "reference_groups_order" in cfg:
         cfg["reference_groups_order"] = normalise_reference_order(
             tuple(cfg["reference_groups_order"])
@@ -1125,82 +1131,13 @@ def _tracking_for_window(
 
 
 def _prepare_signals(cfg: V2RunConfig) -> _PreparedSignals:
-    params = _solver_params_from_v2(cfg)
-    params.extras["reference_groups_order"] = normalise_reference_order(
-        cfg.reference_groups_order
-    )
-    raw_data, _ref_data = load_raw_data(params)
-    fs_origin = int(cfg.fs_origin)
-    fs = int(cfg.fs_target)
-
-    ppg_raw = _select_ppg_raw(raw_data, cfg.ppg_mode)
-    uc1_raw = raw_data[:, 1]
-    uc2_raw = raw_data[:, 2]
-    ut1_raw = raw_data[:, 3]
-    ut2_raw = raw_data[:, 4]
-    accx_raw = raw_data[:, 8]
-    accy_raw = raw_data[:, 9]
-    accz_raw = raw_data[:, 10]
-    gyrox_raw = raw_data[:, 11]
-    gyroy_raw = raw_data[:, 12]
-    gyroz_raw = raw_data[:, 13]
-
-    ppg_source = _apply_ppg_input_transform(
-        ppg_raw,
-        cfg.ppg_input_transform,
-        fs_origin=fs_origin,
-        baseline_seconds=float(cfg.ppg_input_baseline_seconds),
-    )
-    ppg_ori = resample_poly(ppg_source, fs, fs_origin)
-    hf1_ori = resample_poly(ut1_raw, fs, fs_origin)
-    hf2_ori = resample_poly(ut2_raw, fs, fs_origin)
-    cf1_ori = resample_poly(safe_cf_ratio(uc1_raw, ut1_raw), fs, fs_origin)
-    cf2_ori = resample_poly(safe_cf_ratio(uc2_raw, ut2_raw), fs, fs_origin)
-    accx_ori = resample_poly(accx_raw, fs, fs_origin)
-    accy_ori = resample_poly(accy_raw, fs, fs_origin)
-    accz_ori = resample_poly(accz_raw, fs, fs_origin)
-
-    nyq = fs / 2.0
-    b, a = butter(
-        params.bp_order,
-        [params.bp_low_hz / nyq, params.bp_high_hz / nyq],
-        btype="bandpass",
-    )
-    ppg = filtfilt(b, a, ppg_ori)
-    hf1 = filtfilt(b, a, hf1_ori)
-    hf2 = filtfilt(b, a, hf2_ori)
-    cf1 = filtfilt(b, a, cf1_ori)
-    cf2 = filtfilt(b, a, cf2_ori)
-    accx = filtfilt(b, a, accx_ori)
-    accy = filtfilt(b, a, accy_ori)
-    accz = filtfilt(b, a, accz_ori)
-
-    motion_segment = _detect_motion_from_raw_imu(
-        accx_raw,
-        accy_raw,
-        accz_raw,
-        gyrox_raw,
-        gyroy_raw,
-        gyroz_raw,
-        cfg,
-        fs_origin=fs_origin,
-    ).motion_segment
-    references = _ordered_reference_signals(
-        normalise_reference_order(cfg.reference_groups_order),
-        hf1=hf1,
-        hf2=hf2,
-        cf1=cf1,
-        cf2=cf2,
-        accx=accx,
-        accy=accy,
-        accz=accz,
-    )
+    prepared = prepare_v2_signals(cfg)
     return _PreparedSignals(
-        fs=fs,
-        ppg=ppg,
-        references=references,
-        motion_segment=motion_segment,
-        params=params,
+        fs=prepared.fs,
+        ppg=prepared.ppg,
+        references=list(prepared.references),
+        motion_segment=prepared.motion_detection.motion_segment,
+        params=prepared.params,
     )
 
 

@@ -44,3 +44,17 @@ conda run -n ppg-hr ppg-hr-gui                                     # 启动 GUI
 
 - 每次较大改动后，需同步更新 `README.md`、`python/README.md`、`MATLAB/README.md`。
 - 向本文件新增硬规则必须先获得用户同意。
+
+## Agent skills
+
+### Issue tracker
+
+本项目的 issue 与外部 PR 通过 GitHub 进行跟踪和 triage；外部贡献者提交的 PR 也视为请求入口。详见 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+使用 Matt Pocock skills 的默认 triage 标签体系：`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`。详见 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+本项目采用 single-context 领域文档布局：根目录 `CONTEXT.md` 记录项目领域语言，`docs/adr/` 记录架构决策。详见 `docs/agents/domain.md`。

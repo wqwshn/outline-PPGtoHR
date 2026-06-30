@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
@@ -18,27 +19,57 @@ from ppg_hr.core.heart_rate_solver import (
     _data_quality_from_params,
     _interpolate_unreliable_hr_columns,
     _window_quality_from_valid_mask,
-    load_raw_data,
 )
 from ppg_hr.params import SolverParams
-from ppg_hr.preprocess.utils import (
-    fillmissing_linear,
-    fillmissing_nearest,
-    filloutliers_mean_previous,
-    smoothdata_movmedian,
-)
+from ppg_hr.preprocess.utils import smoothdata_movmedian
 
 from .algorithm_presets import (
+    V2_ALGORITHM_PRESET_LITE,
+    V2_ALGORITHM_PRESET_TRACE_RESCUE,
     DirectionalTrackingParams,
     normalise_v2_algorithm_preset,
+    v2_trace_rescue_candidates,
     v2_tracking_policy_for_preset,
 )
-from .preprocess import safe_cf_ratio
 from .reference_groups import (
     channel_names_for_group,
     normalise_reference_order,
     reference_order_key,
 )
+from .signal_preparation import (
+    apply_ppg_input_transform as _shared_apply_ppg_input_transform,
+)
+from .signal_preparation import (
+    detect_motion_from_raw_imu as _shared_detect_motion_from_raw_imu,
+)
+from .signal_preparation import (
+    finite_signal as _shared_finite_signal,
+)
+from .signal_preparation import (
+    motion_detection_metadata as _shared_motion_detection_metadata,
+)
+from .signal_preparation import (
+    motion_flag_at_center as _shared_motion_flag_at_center,
+)
+from .signal_preparation import (
+    normalise_ppg_input_transform as _shared_normalise_ppg_input_transform,
+)
+from .signal_preparation import (
+    ordered_reference_signals as _shared_ordered_reference_signals,
+)
+from .signal_preparation import (
+    prepare_v2_signals,
+)
+from .signal_preparation import (
+    select_ppg_raw as _shared_select_ppg_raw,
+)
+from .signal_preparation import (
+    slow_ppg_baseline as _shared_slow_ppg_baseline,
+)
+from .signal_preparation import (
+    solver_params_from_v2 as _shared_solver_params_from_v2,
+)
+from .spectrum_tracking import track_spectrum_window
 from .types import V2RunConfig
 
 WindowKind = Literal["rest", "motion", "recovery"]
@@ -156,6 +187,40 @@ class V2SolverResult:
 
 
 def _process_spectrum_with_trace(
+    sig_in: np.ndarray,
+    sig_penalty_ref: np.ndarray,
+    fs: int,
+    params: SolverParams,
+    times_idx: int,
+    history_arr: np.ndarray,
+    enable_penalty: bool,
+    tracking: DirectionalTrackingParams,
+    *,
+    path: str,
+    window_kind: WindowKind,
+    reacquire_state: SpectrumReacquireState | None = None,
+    reacquire_enable: bool = False,
+    penalty_confidence_enable: bool = False,
+) -> tuple[float, SpectrumTrackingTrace]:
+    return track_spectrum_window(
+        sig_in,
+        sig_penalty_ref,
+        fs,
+        params,
+        times_idx,
+        history_arr,
+        enable_penalty,
+        tracking,
+        path=path,
+        window_kind=window_kind,
+        reacquire_state=reacquire_state,
+        reacquire_enable=reacquire_enable,
+        penalty_confidence_enable=penalty_confidence_enable,
+        implementation=_process_spectrum_with_trace_impl,
+    )
+
+
+def _process_spectrum_with_trace_impl(
     sig_in: np.ndarray,
     sig_penalty_ref: np.ndarray,
     fs: int,
@@ -956,6 +1021,8 @@ def _process_spectrum(
 
 def solve_v2(config: V2RunConfig) -> V2SolverResult:
     cfg = _normalise_config(config)
+    if cfg.algorithm_preset == V2_ALGORITHM_PRESET_TRACE_RESCUE:
+        return _trace_rescue_solve(cfg)
     return _unified_solve(cfg)
 
 
@@ -963,6 +1030,7 @@ def _normalise_config(config: V2RunConfig) -> V2RunConfig:
     return V2RunConfig(
         **{
             **config.__dict__,
+            "algorithm_preset": normalise_v2_algorithm_preset(config.algorithm_preset),
             "ppg_input_transform": _normalise_ppg_input_transform(config.ppg_input_transform),
             "analysis_scope": str(config.analysis_scope).strip().lower(),
             "reference_groups_order": normalise_reference_order(config.reference_groups_order),
@@ -970,8 +1038,252 @@ def _normalise_config(config: V2RunConfig) -> V2RunConfig:
     )
 
 
+def _trace_rescue_solve(cfg: V2RunConfig) -> V2SolverResult:
+    results: dict[str, V2SolverResult] = {}
+    candidate_params: dict[str, dict[str, float | int]] = {}
+    for candidate in v2_trace_rescue_candidates():
+        candidate_params[candidate.name] = dict(candidate.params)
+        candidate_cfg = cfg.__class__(
+            **{
+                **cfg.__dict__,
+                **candidate.params,
+                "algorithm_preset": V2_ALGORITHM_PRESET_LITE,
+            }
+        )
+        results[candidate.name] = _unified_solve(candidate_cfg)
+
+    candidate_diagnostics = _trace_rescue_candidate_diagnostics(results)
+    selected_name, selected_score, reason = _select_trace_rescue_candidate(
+        results,
+        candidate_diagnostics,
+    )
+    selected = results[selected_name]
+    metadata = dict(selected.metadata)
+    metadata["algorithm_preset"] = V2_ALGORITHM_PRESET_TRACE_RESCUE
+    metadata["trace_rescue"] = {
+        "selection_scope": "sample_level",
+        "selected_candidate": selected_name,
+        "selected_score": float(selected_score),
+        "selection_reason": reason,
+        "candidate_params": candidate_params,
+        "candidate_diagnostics": candidate_diagnostics,
+        "notes": (
+            "Fixed no-BO candidate states are evaluated with the selected "
+            "reference_groups_order and adaptive_filter; HR_ref is used only "
+            "for final error statistics, not for candidate selection."
+        ),
+    }
+    window_table = []
+    for row in selected.window_table:
+        annotated = dict(row)
+        annotated["trace_rescue_selected_candidate"] = selected_name
+        annotated["trace_rescue_selected_score"] = float(selected_score)
+        window_table.append(annotated)
+    return V2SolverResult(
+        HR=selected.HR,
+        err_stats=dict(selected.err_stats),
+        metadata=metadata,
+        window_table=window_table,
+    )
+
+
+def _trace_rescue_candidate_diagnostics(
+    results: dict[str, V2SolverResult],
+) -> list[dict[str, Any]]:
+    consensus = _trace_rescue_consensus_series(results)
+    rows: list[dict[str, Any]] = []
+    for name, result in results.items():
+        final = result.HR[:, 3].astype(float) if result.HR.size else np.asarray([])
+        median = consensus.get(name)
+        if median is None or not final.size:
+            median_gap = 0.0
+            median_gap_p90 = 0.0
+        else:
+            gap = np.abs(final - median)
+            median_gap = _trace_rescue_finite_mean(gap)
+            median_gap_p90 = _trace_rescue_finite_quantile(gap, 0.90)
+        trace_risk = _trace_rescue_run_risk(result.window_table)
+        jump_p90 = (
+            _trace_rescue_finite_quantile(np.abs(np.diff(final)), 0.90)
+            if final.size > 1
+            else 0.0
+        )
+        jump_risk = max(0.0, float(jump_p90) - 8.0) / 18.0
+        range_risk = (
+            float(np.mean((final < 45.0) | (final > 210.0))) if final.size else 0.0
+        )
+        no_ref_score = (
+            0.26 * _trace_rescue_clipped_scale(median_gap, 3.0, 22.0)
+            + 0.18 * _trace_rescue_clipped_scale(median_gap_p90, 8.0, 45.0)
+            + 0.26 * trace_risk
+            + 0.20 * min(1.0, jump_risk)
+            + 0.10 * range_risk
+        )
+        rows.append(
+            {
+                "candidate": name,
+                "no_ref_score": float(no_ref_score),
+                "trace_risk": float(trace_risk),
+                "median_gap_bpm": float(median_gap),
+                "median_gap_p90_bpm": float(median_gap_p90),
+                "jump_p90_bpm": float(jump_p90),
+                "range_risk": float(range_risk),
+            }
+        )
+    return rows
+
+
+def _select_trace_rescue_candidate(
+    results: dict[str, V2SolverResult],
+    candidate_diagnostics: list[dict[str, Any]],
+) -> tuple[str, float, str]:
+    rows = {str(row["candidate"]): row for row in candidate_diagnostics}
+    low = rows["low_rate_stable"]
+    low_deep = rows["low_rate_deeper_filter"]
+    mid = rows["mid_rate_balanced"]
+    high = rows["high_rate_motion_reject"]
+    high_short = rows["high_rate_short_order"]
+    low_lock = _trace_rescue_low_lock_score(results["low_rate_stable"])
+    low_deep_lock = _trace_rescue_low_lock_score(results["low_rate_deeper_filter"])
+    rescue_needed = max(low_lock, low_deep_lock) >= 0.34 or (
+        float(low["trace_risk"]) >= 0.18 and float(low["jump_p90_bpm"]) <= 4.0
+    )
+    if not rescue_needed:
+        if float(low_deep["trace_risk"]) + 0.035 < float(low["trace_risk"]):
+            return (
+                "low_rate_deeper_filter",
+                float(low_deep["trace_risk"]),
+                "low-rate baseline stable; deeper filter has lower trace risk",
+            )
+        return (
+            "low_rate_stable",
+            float(low["trace_risk"]),
+            f"low-rate baseline stable; low_lock={low_lock:.3f}",
+        )
+
+    rescue_candidates = [
+        ("high_rate_motion_reject", high),
+        ("high_rate_short_order", high_short),
+        ("mid_rate_balanced", mid),
+    ]
+    best_name, best_row = min(
+        rescue_candidates,
+        key=lambda item: (
+            float(item[1]["trace_risk"]),
+            float(item[1]["jump_p90_bpm"]),
+            float(item[1]["range_risk"]),
+        ),
+    )
+    trace_improvement = float(low["trace_risk"]) - float(best_row["trace_risk"])
+    if trace_improvement < 0.08:
+        return (
+            "low_rate_stable",
+            float(low["trace_risk"]),
+            (
+                "rescue suppressed: best alternative trace improvement is only "
+                f"{trace_improvement:.3f}; low_lock={low_lock:.3f}"
+            ),
+        )
+    return (
+        best_name,
+        float(best_row["trace_risk"]),
+        (
+            "low-rate lock signature detected "
+            f"(low_lock={low_lock:.3f}, low_deep_lock={low_deep_lock:.3f}); "
+            "selected lowest-risk rescue"
+        ),
+    )
+
+
+def _trace_rescue_low_lock_score(result: V2SolverResult) -> float:
+    values: list[float] = []
+    for row in result.window_table:
+        if row.get("window_kind") not in {"motion", "recovery"}:
+            continue
+        trace = row.get("spectrum_tracking", {}) or {}
+        final = _trace_rescue_float(row.get("final_hr_bpm"))
+        raw = _trace_rescue_float(trace.get("raw_candidate_hr_bpm"))
+        previous = _trace_rescue_float(trace.get("previous_hr_bpm"))
+        rank = int(trace.get("selected_peak_rank", 1) or 1)
+        source = str(trace.get("candidate_source", ""))
+        score = 0.0
+        if math.isfinite(final) and math.isfinite(raw):
+            score += 0.45 * _trace_rescue_clipped_scale(abs(final - raw), 18.0, 70.0)
+        if math.isfinite(final) and math.isfinite(previous):
+            score += 0.18 * _trace_rescue_clipped_scale(abs(final - previous), 8.0, 28.0)
+        score += 0.20 * min(1.0, max(0, rank - 2) / 5.0)
+        if source == "held_previous":
+            score += 0.17
+        values.append(float(np.clip(score, 0.0, 1.0)))
+    return _trace_rescue_finite_quantile(np.asarray(values, dtype=float), 0.75) if values else 0.0
+
+
+def _trace_rescue_consensus_series(
+    results: dict[str, V2SolverResult],
+) -> dict[str, np.ndarray]:
+    finals = [res.HR[:, 3].astype(float) for res in results.values() if res.HR.size]
+    if not finals:
+        return {}
+    min_len = min(arr.size for arr in finals)
+    matrix = np.vstack([arr[:min_len] for arr in finals])
+    median = np.nanmedian(matrix, axis=0)
+    return {name: median[: results[name].HR.shape[0]] for name in results}
+
+
+def _trace_rescue_run_risk(window_table: list[dict[str, Any]]) -> float:
+    if not window_table:
+        return 1.0
+    risks = [_trace_rescue_window_risk(row) for row in window_table]
+    return _trace_rescue_finite_mean(np.asarray(risks, dtype=float))
+
+
+def _trace_rescue_window_risk(row: dict[str, Any]) -> float:
+    trace = row.get("spectrum_tracking", {}) or {}
+    source = str(trace.get("candidate_source", ""))
+    rank = int(trace.get("selected_peak_rank", 1) or 1)
+    confidence = _trace_rescue_float(trace.get("penalty_confidence", 1.0), default=1.0)
+    final = _trace_rescue_float(row.get("final_hr_bpm"))
+    raw = _trace_rescue_float(trace.get("raw_candidate_hr_bpm"), default=final)
+    risk = 0.0
+    risk += 0.16 * min(1.0, max(0, rank - 1) / 4.0)
+    risk += 0.18 if source in {"held_previous", "protection_suppressed"} else 0.0
+    risk += 0.10 if bool(trace.get("reacquire_triggered", False)) else 0.0
+    risk += 0.18 * max(0.0, 1.0 - confidence)
+    if math.isfinite(final) and math.isfinite(raw):
+        risk += 0.12 * _trace_rescue_clipped_scale(abs(final - raw), 8.0, 35.0)
+    if not bool(row.get("reliable", True)):
+        risk += 0.12
+    return float(np.clip(risk, 0.0, 1.0))
+
+
+def _trace_rescue_float(value: Any, *, default: float = float("nan")) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _trace_rescue_clipped_scale(value: float, low: float, high: float) -> float:
+    if not math.isfinite(value) or high <= low:
+        return 0.0
+    return float(np.clip((value - low) / (high - low), 0.0, 1.0))
+
+
+def _trace_rescue_finite_mean(values: np.ndarray) -> float:
+    arr = np.asarray(values, dtype=float)
+    arr = arr[np.isfinite(arr)]
+    return float(np.mean(arr)) if arr.size else 0.0
+
+
+def _trace_rescue_finite_quantile(values: np.ndarray, q: float) -> float:
+    arr = np.asarray(values, dtype=float)
+    arr = arr[np.isfinite(arr)]
+    return float(np.quantile(arr, q)) if arr.size else 0.0
+
+
 def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
-    params = _solver_params_from_v2(cfg)
+    prepared = prepare_v2_signals(cfg)
+    params = prepared.params
     algorithm_preset = normalise_v2_algorithm_preset(cfg.algorithm_preset)
     tracking_policy = v2_tracking_policy_for_preset(algorithm_preset)
     rest_tracking = (
@@ -983,74 +1295,18 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
             params.slew_step_rest,
         )
     )
-    raw_data, ref_data = load_raw_data(params)
-    fs_origin = 100
-    fs = int(cfg.fs_target)
-
-    ppg_raw = _select_ppg_raw(raw_data, cfg.ppg_mode)
-    uc1_raw = raw_data[:, 1]
-    uc2_raw = raw_data[:, 2]
-    ut1_raw = raw_data[:, 3]
-    ut2_raw = raw_data[:, 4]
-    accx_raw = raw_data[:, 8]
-    accy_raw = raw_data[:, 9]
-    accz_raw = raw_data[:, 10]
-    gyrox_raw = raw_data[:, 11]
-    gyroy_raw = raw_data[:, 12]
-    gyroz_raw = raw_data[:, 13]
-
-    ppg_source = _apply_ppg_input_transform(
-        ppg_raw,
-        cfg.ppg_input_transform,
-        fs_origin=fs_origin,
-        baseline_seconds=float(cfg.ppg_input_baseline_seconds),
-    )
-    ppg_ori = resample_poly(ppg_source, fs, fs_origin)
-    hf1_ori = resample_poly(ut1_raw, fs, fs_origin)
-    hf2_ori = resample_poly(ut2_raw, fs, fs_origin)
-    cf1_ori = resample_poly(safe_cf_ratio(uc1_raw, ut1_raw), fs, fs_origin)
-    cf2_ori = resample_poly(safe_cf_ratio(uc2_raw, ut2_raw), fs, fs_origin)
-    accx_ori = resample_poly(accx_raw, fs, fs_origin)
-    accy_ori = resample_poly(accy_raw, fs, fs_origin)
-    accz_ori = resample_poly(accz_raw, fs, fs_origin)
-
-    nyq = fs / 2.0
-    b, a = butter(
-        params.bp_order,
-        [params.bp_low_hz / nyq, params.bp_high_hz / nyq],
-        btype="bandpass",
-    )
-    ppg = filtfilt(b, a, ppg_ori)
-    hf1 = filtfilt(b, a, hf1_ori)
-    hf2 = filtfilt(b, a, hf2_ori)
-    cf1 = filtfilt(b, a, cf1_ori)
-    cf2 = filtfilt(b, a, cf2_ori)
-    accx = filtfilt(b, a, accx_ori)
-    accy = filtfilt(b, a, accy_ori)
-    accz = filtfilt(b, a, accz_ori)
-
-    motion_detection = _detect_motion_from_raw_imu(
-        accx_raw,
-        accy_raw,
-        accz_raw,
-        gyrox_raw,
-        gyroy_raw,
-        gyroz_raw,
-        cfg,
-        fs_origin=fs_origin,
-    )
+    ref_data = prepared.ref_data
+    fs_origin = prepared.fs_origin
+    fs = prepared.fs
+    ppg_ori = prepared.ppg_ori
+    ppg = prepared.ppg
+    accx = prepared.accx
+    accy = prepared.accy
+    accz = prepared.accz
+    motion_detection = prepared.motion_detection
     motion_segment = motion_detection.motion_segment
     reference_order = normalise_reference_order(cfg.reference_groups_order)
-    references = _ordered_reference_signals(
-        reference_order,
-        hf1=hf1,
-        hf2=hf2,
-        cf1=cf1,
-        cf2=cf2,
-        accx=accx,
-        accy=accy,
-        accz=accz,
-    )
+    references = list(prepared.references)
 
     fallback_reason = ""
     if not reference_order:
@@ -1357,72 +1613,15 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
 
 
 def _solver_params_from_v2(cfg: V2RunConfig) -> SolverParams:
-    return SolverParams(
-        file_name=cfg.data_path,
-        ref_file=cfg.ref_path,
-        adaptive_filter=cfg.adaptive_filter,
-        ppg_mode=cfg.ppg_mode,
-        analysis_scope=cfg.analysis_scope,
-        fs_target=int(cfg.fs_target),
-        calib_time=float(cfg.calib_time),
-        motion_th_scale=float(cfg.motion_th_scale),
-        lms_mu_base=float(cfg.lms_mu_base),
-        lms_mu_min=float(cfg.lms_mu_min),
-        max_order=int(cfg.max_order),
-        smooth_win_len=int(cfg.smooth_win_len),
-        max_missing_ratio_per_window=float(cfg.max_missing_ratio_per_window),
-        max_consecutive_missing_seconds=float(cfg.max_consecutive_missing_seconds),
-        interpolate_unreliable_hr=bool(cfg.interpolate_unreliable_hr),
-        spec_penalty_enable=bool(cfg.spec_penalty_enable),
-        spec_penalty_weight=float(cfg.spec_penalty_weight),
-        spec_penalty_width=float(cfg.spec_penalty_width),
-        hr_range_hz=float(cfg.hr_range_hz),
-        slew_limit_bpm=float(cfg.slew_limit_bpm),
-        slew_step_bpm=float(cfg.slew_step_bpm),
-        hr_range_rest=float(cfg.hr_range_rest),
-        slew_limit_rest=float(cfg.slew_limit_rest),
-        slew_step_rest=float(cfg.slew_step_rest),
-        time_bias=float(cfg.time_bias),
-        max_recovery_seconds=float(cfg.max_recovery_seconds),
-        klms_step_size=float(cfg.klms_step_size),
-        klms_sigma=float(cfg.klms_sigma),
-        klms_epsilon=float(cfg.klms_epsilon),
-        as_lms_rho=float(cfg.as_lms_rho),
-        as_lms_mu_max=float(cfg.as_lms_mu_max),
-        volterra_max_order_vol=int(cfg.volterra_max_order_vol),
-        rff_D=int(cfg.rff_D),
-        rff_sigma=float(cfg.rff_sigma),
-        rff_seed=int(cfg.rff_seed),
-    )
+    return _shared_solver_params_from_v2(cfg)
 
 
 def _select_ppg_raw(raw_data: np.ndarray, mode: str) -> np.ndarray:
-    value = str(mode).strip().lower()
-    if value == "green":
-        return raw_data[:, 5]
-    if value == "red":
-        return raw_data[:, 6]
-    if value in {"ir", "infrared"}:
-        return raw_data[:, 7]
-    raise ValueError(f"Unsupported ppg_mode: {mode!r}")
+    return _shared_select_ppg_raw(raw_data, mode)
 
 
 def _normalise_ppg_input_transform(transform: str) -> str:
-    value = str(transform).strip().lower()
-    aliases = {
-        "raw": "raw_bandpass",
-        "raw_bandpass": "raw_bandpass",
-        "none": "raw_bandpass",
-        "log": "log_absorbance",
-        "absorbance": "log_absorbance",
-        "log_absorbance": "log_absorbance",
-    }
-    if value not in aliases:
-        raise ValueError(
-            f"Unsupported ppg_input_transform={transform!r}; expected "
-            "'raw_bandpass' or 'log_absorbance'."
-        )
-    return aliases[value]
+    return _shared_normalise_ppg_input_transform(transform)
 
 
 def _apply_ppg_input_transform(
@@ -1432,27 +1631,12 @@ def _apply_ppg_input_transform(
     fs_origin: int,
     baseline_seconds: float = 5.0,
 ) -> np.ndarray:
-    """Return the PPG signal expression used before resampling and band-pass."""
-    mode = _normalise_ppg_input_transform(transform)
-    cleaned = _finite_signal(filloutliers_mean_previous(np.asarray(values, dtype=float)))
-    if mode == "raw_bandpass":
-        return cleaned
-
-    positive = cleaned[np.isfinite(cleaned) & (cleaned > 0)]
-    if positive.size == 0:
-        return np.zeros_like(cleaned, dtype=float)
-    eps = max(float(np.nanmedian(positive)) * 1e-6, 1e-9)
-    intensity = np.clip(cleaned, eps, None)
-    baseline = _slow_ppg_baseline(
-        intensity,
-        fs_origin=int(fs_origin),
-        baseline_seconds=float(baseline_seconds),
+    return _shared_apply_ppg_input_transform(
+        values,
+        transform,
+        fs_origin=fs_origin,
+        baseline_seconds=baseline_seconds,
     )
-    baseline = np.clip(baseline, eps, None)
-    absorbance = -np.log(intensity / baseline)
-    absorbance = _finite_signal(absorbance)
-    absorbance -= float(np.nanmean(absorbance)) if absorbance.size else 0.0
-    return absorbance
 
 
 def _slow_ppg_baseline(
@@ -1461,20 +1645,15 @@ def _slow_ppg_baseline(
     fs_origin: int,
     baseline_seconds: float,
 ) -> np.ndarray:
-    window = max(3, int(round(float(baseline_seconds) * int(fs_origin))))
-    if window % 2 == 0:
-        window += 1
-    baseline = smoothdata_movmedian(values, window)
-    return _finite_signal(baseline)
+    return _shared_slow_ppg_baseline(
+        values,
+        fs_origin=fs_origin,
+        baseline_seconds=baseline_seconds,
+    )
 
 
 def _finite_signal(values: np.ndarray) -> np.ndarray:
-    out = np.asarray(values, dtype=float).copy()
-    out[~np.isfinite(out)] = np.nan
-    out = fillmissing_linear(out)
-    out = fillmissing_nearest(out)
-    out[~np.isfinite(out)] = 0.0
-    return out
+    return _shared_finite_signal(values)
 
 
 def _ordered_reference_signals(
@@ -1488,16 +1667,16 @@ def _ordered_reference_signals(
     accy: np.ndarray,
     accz: np.ndarray,
 ) -> list[dict[str, Any]]:
-    by_group = {
-        "HF": [("hf1", hf1, 0), ("hf2", hf2, 0)],
-        "CF": [("cf1", cf1, 0), ("cf2", cf2, 0)],
-        "ACC": [("accx", accx, 1), ("accy", accy, 1), ("accz", accz, 1)],
-    }
-    refs: list[dict[str, Any]] = []
-    for group in reference_order:
-        for channel, signal, K in by_group[group]:
-            refs.append({"group": group, "channel": channel, "signal": signal, "K": K})
-    return refs
+    return _shared_ordered_reference_signals(
+        reference_order,
+        hf1=hf1,
+        hf2=hf2,
+        cf1=cf1,
+        cf2=cf2,
+        accx=accx,
+        accy=accy,
+        accz=accz,
+    )
 
 
 def _run_v1_style_reference_cascade(
@@ -1605,60 +1784,15 @@ def _detect_motion_from_raw_imu(
     *,
     fs_origin: int,
 ) -> MotionDetectionResult:
-    acc_mag = _source_imu_magnitude(
-        (accx_raw, accy_raw, accz_raw),
-        fs_origin=fs_origin,
-        high_hz=5.0,
-    )
-    gyro_mag = _source_imu_magnitude(
-        (gyrox_raw, gyroy_raw, gyroz_raw),
-        fs_origin=fs_origin,
-        high_hz=10.0,
-    )
-    acc_scores, centers_s = _source_window_std(acc_mag, cfg, fs_origin=fs_origin)
-    gyro_scores, gyro_centers_s = _source_window_std(
-        gyro_mag,
+    return _shared_detect_motion_from_raw_imu(
+        accx_raw,
+        accy_raw,
+        accz_raw,
+        gyrox_raw,
+        gyroy_raw,
+        gyroz_raw,
         cfg,
         fs_origin=fs_origin,
-    )
-    n = min(acc_scores.size, gyro_scores.size, centers_s.size, gyro_centers_s.size)
-    if n == 0:
-        empty = np.zeros(0, dtype=float)
-        return MotionDetectionResult(
-            motion_segment=None,
-            flags=np.zeros(0, dtype=bool),
-            centers_s=empty,
-            scores=empty,
-            threshold=1.0,
-            acc_threshold=0.0,
-            gyro_threshold=0.0,
-            acc_score_max=0.0,
-            gyro_score_max=0.0,
-        )
-    acc_scores = acc_scores[:n]
-    gyro_scores = gyro_scores[:n]
-    centers_s = centers_s[:n]
-
-    acc_threshold = _imu_motion_threshold(acc_mag, acc_scores, cfg, fs_origin)
-    gyro_threshold = _imu_motion_threshold(gyro_mag, gyro_scores, cfg, fs_origin)
-    acc_flags = acc_scores > acc_threshold
-    gyro_flags = gyro_scores > gyro_threshold
-    flags = _keep_longest_true_run_flags(_postprocess_motion_flags(acc_flags | gyro_flags))
-    scores = np.maximum(
-        _normalised_scores(acc_scores, acc_threshold),
-        _normalised_scores(gyro_scores, gyro_threshold),
-    )
-    motion_segment = _longest_true_run(flags, cfg)
-    return MotionDetectionResult(
-        motion_segment=motion_segment,
-        flags=flags,
-        centers_s=centers_s,
-        scores=scores,
-        threshold=1.0,
-        acc_threshold=float(acc_threshold),
-        gyro_threshold=float(gyro_threshold),
-        acc_score_max=float(np.nanmax(acc_scores)) if acc_scores.size else 0.0,
-        gyro_score_max=float(np.nanmax(gyro_scores)) if gyro_scores.size else 0.0,
     )
 
 
@@ -1816,26 +1950,11 @@ def _motion_flag_at_center(
     center_s: float,
     detection: MotionDetectionResult,
 ) -> bool:
-    if detection.flags.size == 0 or detection.centers_s.size == 0:
-        return False
-    idx = int(np.argmin(np.abs(detection.centers_s - float(center_s))))
-    return bool(detection.flags[idx])
+    return _shared_motion_flag_at_center(center_s, detection)
 
 
 def _motion_detection_metadata(detection: MotionDetectionResult) -> dict[str, Any]:
-    return {
-        "source": "raw_imu_acc_gyro",
-        "threshold": float(detection.threshold),
-        "acc_threshold": float(detection.acc_threshold),
-        "gyro_threshold": float(detection.gyro_threshold),
-        "acc_score_max": float(detection.acc_score_max),
-        "gyro_score_max": float(detection.gyro_score_max),
-        "relative_floor": float(_MOTION_IMU_RELATIVE_FLOOR),
-        "gap_bridge_windows": int(_MOTION_IMU_GAP_BRIDGE_WINDOWS),
-        "min_run_windows": int(_MOTION_IMU_MIN_RUN_WINDOWS),
-        "window_count": int(detection.flags.size),
-        "motion_window_count": int(np.count_nonzero(detection.flags)),
-    }
+    return _shared_motion_detection_metadata(detection)
 
 
 def _motion_flags(acc_mag: np.ndarray, cfg: V2RunConfig) -> np.ndarray:
