@@ -30,6 +30,14 @@ class V2RunConfig:
     calib_time: float = 30.0
     motion_th_scale: float = 2.5
     post_motion_adaptive_seconds: float = 10.0
+    post_motion_reacquire_enable: bool = True
+    post_motion_guard_seconds: float = 20.0
+    post_motion_reacquire_adaptive_min_bpm: float = 115.0
+    post_motion_reacquire_gap_bpm: float = 25.0
+    post_motion_reacquire_fft_min_bpm: float = 55.0
+    post_motion_reacquire_first_drop_limit_bpm: float = 70.0
+    post_motion_reacquire_up_step_bpm: float = 2.0
+    post_motion_reacquire_down_step_bpm: float = 10.0
     max_recovery_seconds: float = 30.0
     recovery_trigger_bpm: float = 20.0
     pre_motion_context_seconds: float = 30.0

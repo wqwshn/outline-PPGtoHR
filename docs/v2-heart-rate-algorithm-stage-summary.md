@@ -131,6 +131,29 @@ TraceRescue 不用 `HR_ref` 选择状态。`HR_ref` 只用于最终误差统计�
 
 批量全流程中的对比参考信号不会独立执行 TraceRescue 候选状态选择。主参考信号报告已确定的 `selected_candidate`、对应固定状态参数和滤波器私有 `best_params` 会被完整复用；对比曲线只替换 `reference_groups_order` 后重算，用于公平观察参考信号差异。
 
+## 运动后静息 FFT 重捕获
+
+运动后静息 FFT 重捕获是 v2 solver 的共享阶段机制，不属于 TraceRescue 私有逻辑。`dynamic_rest_bo`、`lite`、`trace_rescue` 都默认启用该机制，因此批量输出目录和文件名不再额外加入 `_post_motion_reacquire` 后缀；这既反映它是默认求解行为，也避免 Windows 长路径风险。
+
+该机制把运动后的静息拆成两个阶段：
+
+| 阶段 | `window_stage` | 主要目的 |
+| --- | --- | --- |
+| 运动后保护窗 | `post_motion_guard` | 保留 adaptive/final 路径，避免刚离开运动段时直接回到纯 FFT 导致心率陡降 |
+| 运动后静息 FFT 重捕获 | `post_motion_reacquire` | 当 adaptive/final 出现高心率漂移且 FFT 已回到合理主频时，切回 FFT 主导路径 |
+
+默认保护窗长度是 `post_motion_guard_seconds=20.0`。该值只是当前 LYX 批次上的平衡点，不应视为生理常数；后续实验可继续调整或纳入搜索。保护窗结束后不会无条件切 FFT，因为离线 replay 证明“统一切 FFT”会救回 fuwo/tiaosheng 的高漂移失败样本，但会破坏 kaihe/bobi 中 FFT 低频误锁而 adaptive 正确的样本。
+
+当前触发条件是高漂移触发，而不是固定时间触发：
+
+1. adaptive/final HR 至少达到 `post_motion_reacquire_adaptive_min_bpm=115.0`。
+2. adaptive/final HR 比 FFT 高至少 `post_motion_reacquire_gap_bpm=25.0`。
+3. FFT 不能低于 `post_motion_reacquire_fft_min_bpm=55.0`，用于避免低频误锁。
+
+触发后，`used_adaptive` 从该窗口开始关闭，`final_hr_bpm` 回到 FFT 主导路径。动态后处理对 `post_motion_reacquire` 使用独立限幅参数：首个重捕获窗口允许最多 `70 BPM` 的快速下降，后续下降步长为 `10 BPM/window`，上升步长为 `2 BPM/window`。这套参数不同于普通恢复段和运动前静息段，避免坏的保护窗末端 adaptive 估计继续锚定运动后静息。
+
+报告输出中保留旧的 `window_kind` 字段用于兼容，同时新增 `window_stage` 暴露更细阶段：`pre_motion_rest`、`motion`、`post_motion_guard`、`post_motion_reacquire`、`rest`。JSON metadata 中的 `post_motion_reacquire.switch_idx` 记录实际进入重捕获的窗口索引；为 `null` 时表示该样本未触发切换。
+
 ## 当前结论
 
 `dynamic_rest_bo`、`lite`、`trace_rescue` 构成了三个不同程度使用 BO 的算法层级。`dynamic_rest_bo` 适合作为默认主算法；`lite` 适合作为小搜索空间固定动态基线；`trace_rescue` 则把第四轮无 BO 泛化研究沉淀为可选算法版本，用固定状态和无监督诊断提升跨人泛化稳定性，并仅在滤波器本身有私有参数时保留小范围 BO。

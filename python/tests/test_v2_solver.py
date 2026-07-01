@@ -1571,6 +1571,58 @@ def test_recovery_trigger_gating() -> None:
     assert not _recovery_should_trigger(source, motion_end_idx, 20.0)
 
 
+def test_post_motion_reacquire_mask_switches_on_high_drift() -> None:
+    from ppg_hr.v2.solver import _post_motion_adaptive_mask
+
+    source = np.zeros((8, 9), dtype=float)
+    source[:, 0] = [80, 90, 100, 110, 120, 125, 130, 135]
+    source[:, 2] = np.asarray([80, 95, 120, 124, 124, 124, 124, 124], dtype=float) / 60.0
+    source[:, 4] = np.asarray([80, 78, 65, 60, 60, 60, 60, 60], dtype=float) / 60.0
+    cfg = V2RunConfig(
+        data_path=Path("sample.csv"),
+        ref_path=Path("sample_ref.csv"),
+        post_motion_guard_seconds=20.0,
+        post_motion_reacquire_adaptive_min_bpm=115.0,
+        post_motion_reacquire_gap_bpm=25.0,
+        post_motion_reacquire_fft_min_bpm=55.0,
+    )
+
+    mask, switch_idx = _post_motion_adaptive_mask(
+        source,
+        {"start_s": 90.0, "end_s": 100.0},
+        cfg,
+    )
+
+    assert switch_idx == 5
+    assert mask.tolist() == [False, True, True, True, True, False, False, False]
+
+
+def test_post_motion_reacquire_mask_keeps_adaptive_when_fft_low_locks() -> None:
+    from ppg_hr.v2.solver import _post_motion_adaptive_mask
+
+    source = np.zeros((8, 9), dtype=float)
+    source[:, 0] = [80, 90, 100, 110, 120, 125, 130, 135]
+    source[:, 2] = np.asarray([80, 95, 110, 108, 106, 104, 102, 100], dtype=float) / 60.0
+    source[:, 4] = np.asarray([80, 78, 47, 47, 47, 47, 47, 47], dtype=float) / 60.0
+    cfg = V2RunConfig(
+        data_path=Path("sample.csv"),
+        ref_path=Path("sample_ref.csv"),
+        post_motion_guard_seconds=20.0,
+        post_motion_reacquire_adaptive_min_bpm=115.0,
+        post_motion_reacquire_gap_bpm=25.0,
+        post_motion_reacquire_fft_min_bpm=55.0,
+    )
+
+    mask, switch_idx = _post_motion_adaptive_mask(
+        source,
+        {"start_s": 90.0, "end_s": 100.0},
+        cfg,
+    )
+
+    assert switch_idx is None
+    assert mask.tolist() == [False, True, True, True, True, True, True, True]
+
+
 def test_final_hr_blend_keeps_fft_on_nonadaptive_windows() -> None:
     from ppg_hr.v2.solver import _blend_final_hr_by_mask
 
@@ -1604,6 +1656,35 @@ def test_dynamic_postprocess_uses_state_and_direction_specific_limits() -> None:
 
     assert out_bpm == pytest.approx([70.0, 71.5, 75.0, 72.0])
     assert applied == 3
+
+
+def test_dynamic_postprocess_allows_post_motion_reacquire_first_drop() -> None:
+    from ppg_hr.v2.solver import _postprocess_dynamic_final_hr_bpm
+
+    source = np.zeros((4, 9), dtype=float)
+    source[:, 0] = [100.0, 120.0, 121.0, 122.0]
+    source[:, 5] = np.asarray([124.0, 60.0, 60.0, 60.0], dtype=float) / 60.0
+    cfg = V2RunConfig(
+        data_path=Path("sample.csv"),
+        ref_path=Path("sample_ref.csv"),
+        post_motion_reacquire_first_drop_limit_bpm=70.0,
+        post_motion_reacquire_down_step_bpm=10.0,
+    )
+
+    out_bpm, _applied = _postprocess_dynamic_final_hr_bpm(
+        source,
+        np.asarray([True, False, False, False]),
+        {"start_s": 80.0, "end_s": 100.0},
+        cfg,
+        window_stages=[
+            "post_motion_guard",
+            "post_motion_reacquire",
+            "post_motion_reacquire",
+            "post_motion_reacquire",
+        ],
+    )
+
+    assert out_bpm == pytest.approx([124.0, 60.0, 60.0, 60.0])
 
 
 def test_dynamic_postprocess_can_be_disabled() -> None:

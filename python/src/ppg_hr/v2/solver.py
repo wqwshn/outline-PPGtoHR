@@ -1439,6 +1439,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
             break
 
     postprocess_applied_count = 0
+    post_motion_reacquire_start_idx: int | None = None
     source = np.asarray(rows, dtype=float) if rows else np.zeros((0, 9), dtype=float)
     if source.size:
         source[:, 2] = smoothdata_movmedian(source[:, 2], int(cfg.smooth_win_len))
@@ -1446,38 +1447,11 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
 
         used_adaptive_mask = np.zeros(source.shape[0], dtype=bool)
         if references and motion_segment is not None:
-            adaptive_start_time = float(motion_segment["start_s"])
-            motion_end_time = float(motion_segment["end_s"])
-            adaptive_end_time = motion_end_time
-            if cfg.analysis_scope == "full":
-                adaptive_end_time += float(cfg.post_motion_adaptive_seconds)
-
-            adaptive_start_idx = 0
-            motion_end_idx = -1
-            adaptive_end_idx = -1
-            for i in range(source.shape[0]):
-                t = float(source[i, 0])
-                if t <= adaptive_start_time + 1e-9:
-                    adaptive_start_idx = i
-                if t <= motion_end_time + 1e-9:
-                    motion_end_idx = i
-                if t <= adaptive_end_time + 1e-9:
-                    adaptive_end_idx = i
-
-            if motion_end_idx >= 0:
-                should_recover = _recovery_should_trigger(
-                    source, motion_end_idx, float(cfg.recovery_trigger_bpm)
-                )
-            else:
-                should_recover = False
-
-            if should_recover and cfg.analysis_scope == "full":
-                crossover_idx = _find_crossover_idx(source, motion_end_idx)
-                used_adaptive_mask = np.zeros(source.shape[0], dtype=bool)
-                used_adaptive_mask[adaptive_start_idx : crossover_idx + 1] = True
-            else:
-                used_adaptive_mask = np.zeros(source.shape[0], dtype=bool)
-                used_adaptive_mask[adaptive_start_idx : adaptive_end_idx + 1] = True
+            used_adaptive_mask, post_motion_reacquire_start_idx = _post_motion_adaptive_mask(
+                source,
+                motion_segment,
+                cfg,
+            )
 
             source[:, 5] = _blend_final_hr_by_mask(source, used_adaptive_mask)
             source[:, 8] = used_adaptive_mask.astype(float)
@@ -1490,6 +1464,16 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
             used_adaptive_mask,
             motion_segment,
             cfg,
+            window_stages=[
+                _classify_window_stage(
+                    float(source[i, 0]),
+                    motion_segment,
+                    bool(used_adaptive_mask[i]),
+                    post_motion_reacquire_start_idx,
+                    i,
+                )
+                for i in range(source.shape[0])
+            ],
         )
         source[:, 5] = final_bpm / 60.0
 
@@ -1517,6 +1501,13 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
         c = float(hr_row[0])
         used_adaptive = bool(hr_row[5])
         window_kind = _classify_window_kind(c, motion_segment, used_adaptive)
+        window_stage = _classify_window_stage(
+            c,
+            motion_segment,
+            used_adaptive,
+            post_motion_reacquire_start_idx,
+            idx,
+        )
         trace = (
             adaptive_tracking_rows[idx]
             if used_adaptive and idx < len(adaptive_tracking_rows)
@@ -1542,6 +1533,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 "is_motion": bool(hr_row[4]),
                 "used_adaptive": used_adaptive,
                 "window_kind": window_kind,
+                "window_stage": window_stage,
                 "spectrum_tracking": trace.to_dict() if trace is not None else {},
                 "missing_count": int(
                     quality_rows[idx].get("missing_count", 0) if idx < len(quality_rows) else 0
@@ -1603,6 +1595,17 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
         "postprocess_dynamics_enable": bool(cfg.postprocess_dynamics_enable),
         "postprocess_dynamics_params": _postprocess_dynamics_params(cfg),
         "postprocess_dynamics_applied_windows": int(postprocess_applied_count),
+        "post_motion_reacquire": {
+            "enabled": bool(cfg.post_motion_reacquire_enable),
+            "guard_seconds": float(cfg.post_motion_guard_seconds),
+            "adaptive_min_bpm": float(cfg.post_motion_reacquire_adaptive_min_bpm),
+            "gap_bpm": float(cfg.post_motion_reacquire_gap_bpm),
+            "fft_min_bpm": float(cfg.post_motion_reacquire_fft_min_bpm),
+            "first_drop_limit_bpm": float(cfg.post_motion_reacquire_first_drop_limit_bpm),
+            "up_step_bpm": float(cfg.post_motion_reacquire_up_step_bpm),
+            "down_step_bpm": float(cfg.post_motion_reacquire_down_step_bpm),
+            "switch_idx": post_motion_reacquire_start_idx,
+        },
     }
     return V2SolverResult(
         HR=HR,
@@ -2036,6 +2039,32 @@ def _classify_window_kind(
     return "rest"
 
 
+def _classify_window_stage(
+    center_s: float,
+    motion_segment: dict[str, float] | None,
+    used_adaptive: bool,
+    post_motion_reacquire_start_idx: int | None = None,
+    window_idx: int | None = None,
+) -> str:
+    if motion_segment is None:
+        return "rest"
+    start = float(motion_segment["start_s"])
+    end = float(motion_segment["end_s"])
+    if float(center_s) < start:
+        return "pre_motion_rest"
+    if start <= float(center_s) <= end:
+        return "motion"
+    if (
+        post_motion_reacquire_start_idx is not None
+        and window_idx is not None
+        and int(window_idx) >= int(post_motion_reacquire_start_idx)
+    ):
+        return "post_motion_reacquire"
+    if float(center_s) > end and bool(used_adaptive):
+        return "post_motion_guard"
+    return "rest"
+
+
 def _window_in_analysis_scope(
     center_s: float,
     motion_segment: dict[str, float] | None,
@@ -2093,6 +2122,104 @@ def _recovery_should_trigger(
     return (adaptive_mean - fft_mean) > float(trigger_bpm)
 
 
+def _post_motion_adaptive_mask(
+    source: np.ndarray,
+    motion_segment: dict[str, float],
+    cfg: V2RunConfig,
+) -> tuple[np.ndarray, int | None]:
+    src = np.asarray(source, dtype=float)
+    mask = np.zeros(src.shape[0], dtype=bool)
+    if src.size == 0:
+        return mask, None
+
+    adaptive_start_idx, motion_end_idx, legacy_end_idx = _adaptive_boundary_indices(
+        src,
+        motion_segment,
+        cfg,
+    )
+    if adaptive_start_idx is None:
+        return mask, None
+
+    if not bool(cfg.post_motion_reacquire_enable) or cfg.analysis_scope != "full":
+        return _legacy_recovery_adaptive_mask(
+            src,
+            adaptive_start_idx,
+            motion_end_idx,
+            legacy_end_idx,
+            cfg,
+        ), None
+
+    guard_end_time = float(motion_segment["end_s"]) + max(0.0, float(cfg.post_motion_guard_seconds))
+    switch_idx: int | None = None
+    for idx in range(src.shape[0]):
+        center = float(src[idx, 0])
+        if center <= guard_end_time + 1e-9:
+            continue
+        adaptive_bpm = float(src[idx, 2]) * 60.0
+        fft_bpm = float(src[idx, 4]) * 60.0
+        if adaptive_bpm < float(cfg.post_motion_reacquire_adaptive_min_bpm):
+            continue
+        if fft_bpm < float(cfg.post_motion_reacquire_fft_min_bpm):
+            continue
+        if adaptive_bpm - fft_bpm >= float(cfg.post_motion_reacquire_gap_bpm):
+            switch_idx = idx
+            break
+
+    if switch_idx is None:
+        mask[adaptive_start_idx:] = True
+    else:
+        mask[adaptive_start_idx:switch_idx] = True
+    return mask, switch_idx
+
+
+def _adaptive_boundary_indices(
+    source: np.ndarray,
+    motion_segment: dict[str, float],
+    cfg: V2RunConfig,
+) -> tuple[int | None, int, int]:
+    adaptive_start_time = float(motion_segment["start_s"])
+    motion_end_time = float(motion_segment["end_s"])
+    adaptive_end_time = motion_end_time
+    if cfg.analysis_scope == "full":
+        adaptive_end_time += float(cfg.post_motion_adaptive_seconds)
+
+    adaptive_start_idx: int | None = None
+    motion_end_idx = -1
+    adaptive_end_idx = -1
+    for idx in range(source.shape[0]):
+        t = float(source[idx, 0])
+        if adaptive_start_idx is None and t >= adaptive_start_time - 1e-9:
+            adaptive_start_idx = idx
+        if t <= motion_end_time + 1e-9:
+            motion_end_idx = idx
+        if t <= adaptive_end_time + 1e-9:
+            adaptive_end_idx = idx
+    if adaptive_start_idx is None and source.shape[0] > 0:
+        adaptive_start_idx = source.shape[0] - 1
+    return adaptive_start_idx, motion_end_idx, adaptive_end_idx
+
+
+def _legacy_recovery_adaptive_mask(
+    source: np.ndarray,
+    adaptive_start_idx: int,
+    motion_end_idx: int,
+    adaptive_end_idx: int,
+    cfg: V2RunConfig,
+) -> np.ndarray:
+    mask = np.zeros(source.shape[0], dtype=bool)
+    should_recover = (
+        _recovery_should_trigger(source, motion_end_idx, float(cfg.recovery_trigger_bpm))
+        if motion_end_idx >= 0
+        else False
+    )
+    if should_recover and cfg.analysis_scope == "full":
+        crossover_idx = _find_crossover_idx(source, motion_end_idx)
+        mask[adaptive_start_idx : crossover_idx + 1] = True
+    elif adaptive_end_idx >= adaptive_start_idx:
+        mask[adaptive_start_idx : adaptive_end_idx + 1] = True
+    return mask
+
+
 def _blend_final_hr_by_mask(
     source: np.ndarray,
     used_adaptive_mask: np.ndarray,
@@ -2111,6 +2238,7 @@ def _postprocess_dynamic_final_hr_bpm(
     used_adaptive_mask: np.ndarray,
     motion_segment: dict[str, float] | None,
     cfg: V2RunConfig,
+    window_stages: list[str] | None = None,
 ) -> tuple[np.ndarray, int]:
     src = np.asarray(source, dtype=float)
     if src.ndim != 2 or src.shape[1] <= 5:
@@ -2135,8 +2263,20 @@ def _postprocess_dynamic_final_hr_bpm(
         if abs(diff) <= 1e-9:
             out[idx] = current
             continue
-        kind = _dynamic_window_kind(float(src[idx, 0]), bool(mask[idx]), motion_segment)
-        limit_bpm, step_bpm = _directional_slew_limit_bpm(kind, diff, cfg)
+        stage = (
+            window_stages[idx]
+            if window_stages is not None and idx < len(window_stages)
+            else _dynamic_window_kind(float(src[idx, 0]), bool(mask[idx]), motion_segment)
+        )
+        if stage == "post_motion_reacquire":
+            previous_stage = window_stages[idx - 1] if window_stages is not None and idx > 0 else ""
+            if previous_stage != "post_motion_reacquire" and diff < 0.0:
+                out[idx] = previous - min(abs(diff), max(0.0, float(cfg.post_motion_reacquire_first_drop_limit_bpm)))
+                applied += int(abs(diff) > float(cfg.post_motion_reacquire_first_drop_limit_bpm))
+                continue
+            limit_bpm, step_bpm = _post_motion_reacquire_slew_limit_bpm(diff, cfg)
+        else:
+            limit_bpm, step_bpm = _directional_slew_limit_bpm(stage, diff, cfg)
         if abs(diff) > limit_bpm:
             out[idx] = previous + np.sign(diff) * min(abs(diff), step_bpm)
             applied += 1
@@ -2189,6 +2329,17 @@ def _directional_slew_limit_bpm(
     )
 
 
+def _post_motion_reacquire_slew_limit_bpm(
+    diff_bpm: float,
+    cfg: V2RunConfig,
+) -> tuple[float, float]:
+    if diff_bpm >= 0.0:
+        step = max(0.0, float(cfg.post_motion_reacquire_up_step_bpm))
+        return step, step
+    step = max(0.0, float(cfg.post_motion_reacquire_down_step_bpm))
+    return step, step
+
+
 def _postprocess_dynamics_params(cfg: V2RunConfig) -> dict[str, float]:
     return {
         "rest_up_limit_bpm": float(cfg.postprocess_limit_rest_up_bpm),
@@ -2203,6 +2354,11 @@ def _postprocess_dynamics_params(cfg: V2RunConfig) -> dict[str, float]:
         "recovery_up_step_bpm": float(cfg.postprocess_step_recovery_up_bpm),
         "recovery_down_limit_bpm": float(cfg.postprocess_limit_recovery_down_bpm),
         "recovery_down_step_bpm": float(cfg.postprocess_step_recovery_down_bpm),
+        "post_motion_reacquire_first_drop_limit_bpm": float(
+            cfg.post_motion_reacquire_first_drop_limit_bpm
+        ),
+        "post_motion_reacquire_up_step_bpm": float(cfg.post_motion_reacquire_up_step_bpm),
+        "post_motion_reacquire_down_step_bpm": float(cfg.post_motion_reacquire_down_step_bpm),
     }
 
 
