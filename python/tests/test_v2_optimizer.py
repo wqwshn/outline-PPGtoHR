@@ -102,7 +102,11 @@ def test_trace_rescue_search_space_keeps_only_filter_specific_bo() -> None:
     assert v2_search_space_for_preset(
         "klms",
         V2_ALGORITHM_PRESET_TRACE_RESCUE,
-    ).names() == ["klms_step_size", "klms_sigma", "klms_epsilon"]
+    ).names() == ["klms_sigma", "klms_epsilon"]
+    assert v2_search_space_for_preset(
+        "klms",
+        V2_ALGORITHM_PRESET_TRACE_RESCUE,
+    ).options("klms_epsilon") == [0.05, 0.1]
     assert v2_search_space_for_preset(
         "volterra",
         V2_ALGORITHM_PRESET_TRACE_RESCUE,
@@ -141,9 +145,10 @@ def test_default_search_space_has_strategy_specific_fields() -> None:
     assert "rff_sigma" not in lms_names
     assert "rff_D" in rff_names
     assert "rff_sigma" in rff_names
-    assert "klms_step_size" in klms_names
+    assert "klms_step_size" not in klms_names
     assert "klms_sigma" in klms_names
     assert "klms_epsilon" in klms_names
+    assert default_v2_search_space("klms").options("klms_epsilon") == [0.05, 0.1]
     assert "lms_mu_base" not in klms_names
     assert "volterra_max_order_vol" not in klms_names
     assert "volterra_max_order_vol" in volterra_names
@@ -403,11 +408,7 @@ def test_optimise_v2_trace_rescue_klms_searches_filter_params(
     assert len(calls) >= 2
     assert {call.algorithm_preset for call in calls} == {V2_ALGORITHM_PRESET_TRACE_RESCUE}
     assert {call.adaptive_filter for call in calls} == {"klms"}
-    assert set(result.best_params) <= {
-        "klms_step_size",
-        "klms_sigma",
-        "klms_epsilon",
-    }
+    assert set(result.best_params) <= {"klms_sigma", "klms_epsilon"}
     assert len(result.history) == 2
 
 

@@ -50,7 +50,7 @@ class V2RunConfig:
     M_base: int = 1
     C_scale: float = 1.0
     K_max: int = 16
-    klms_step_size: float = 0.1
+    klms_step_size: float = 0.2
     klms_sigma: float = 1.0
     klms_epsilon: float = 0.1
     as_lms_rho: float = 1e-4

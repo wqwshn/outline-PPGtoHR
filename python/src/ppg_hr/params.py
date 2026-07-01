@@ -88,7 +88,7 @@ class SolverParams:
     delay_prefit_min_span_samples: int = 6
 
     # KLMS-specific parameters (only used when adaptive_filter == "klms")
-    klms_step_size: float = 0.1
+    klms_step_size: float = 0.2
     klms_sigma: float = 1.0
     klms_epsilon: float = 0.1
 

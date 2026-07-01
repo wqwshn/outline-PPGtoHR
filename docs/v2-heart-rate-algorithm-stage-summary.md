@@ -71,7 +71,7 @@ Lite 的 BO 空间已移除以下追踪参数：
 
 `trace_rescue` 是本阶段新增的固定状态救援算法。它可以类比为样本级状态机：每个状态是一套固定参数组合；每个样本先运行固定候选状态，再根据无监督轨迹诊断选择一个最终状态。当前实现是样本级选择，不是每个窗口动态切换不同参数。
 
-TraceRescue 不再 BO 搜索 `fs_target/max_order/lms_mu_base/smooth_win_len/spec_penalty_width/time_bias` 这些 Lite 状态参数。若选择的自适应滤波器本身有独立参数，则仍保留该滤波器的 BO 空间，例如 `klms_step_size/klms_sigma/klms_epsilon`、`volterra_max_order_vol`、`as_lms_rho/as_lms_mu_max`、`rff_D/rff_sigma`。当选择 `lms` 或 `noncausal_lms` 时，TraceRescue 搜索空间为空，批量全流程和泛化评估 UI 会隐藏 `max_iterations/num_seed_points/num_repeats/random_state` 等 BO 输入项。
+TraceRescue 不再 BO 搜索 `fs_target/max_order/lms_mu_base/smooth_win_len/spec_penalty_width/time_bias` 这些 Lite 状态参数。若选择的自适应滤波器本身有独立参数，则仍保留该滤波器的 BO 空间；其中 KLMS 的 `klms_step_size` 固定为 `0.2`，`klms_epsilon` 收缩为 `{0.05, 0.10}`，因此只继续搜索 `klms_sigma/klms_epsilon`。其他滤波器仍保留原有私有 BO 空间，例如 `volterra_max_order_vol`、`as_lms_rho/as_lms_mu_max`、`rff_D/rff_sigma`。当选择 `lms` 或 `noncausal_lms` 时，TraceRescue 搜索空间为空，批量全流程和泛化评估 UI 会隐藏 `max_iterations/num_seed_points/num_repeats/random_state` 等 BO 输入项。
 
 ### 固定状态
 

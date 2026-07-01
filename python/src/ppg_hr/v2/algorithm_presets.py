@@ -101,7 +101,7 @@ def v2_search_space_for_preset(adaptive_filter: str, preset: str | None):
     if preset == V2_ALGORITHM_PRESET_TRACE_RESCUE:
         filter_specific = {
             "rff_lms": {"rff_D", "rff_sigma"},
-            "klms": {"klms_step_size", "klms_sigma", "klms_epsilon"},
+            "klms": {"klms_sigma", "klms_epsilon"},
             "as_lms": {"as_lms_rho", "as_lms_mu_max"},
             "volterra": {"volterra_max_order_vol"},
         }.get(str(adaptive_filter).strip().lower(), set())

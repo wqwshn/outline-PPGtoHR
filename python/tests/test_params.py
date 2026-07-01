@@ -18,7 +18,7 @@ def test_num_cascade_hf_default_is_two() -> None:
 
 def test_klms_defaults() -> None:
     p = SolverParams()
-    assert p.klms_step_size == pytest.approx(0.1)
+    assert p.klms_step_size == pytest.approx(0.2)
     assert p.klms_sigma == pytest.approx(1.0)
     assert p.klms_epsilon == pytest.approx(0.1)
 
