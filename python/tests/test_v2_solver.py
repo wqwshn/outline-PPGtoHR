@@ -579,6 +579,89 @@ def test_motion_reacquire_unlocks_from_stable_far_challenger(monkeypatch) -> Non
     )
 
 
+def test_motion_high_lock_escape_descends_to_stable_lower_challenger(monkeypatch) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.9, 2.0, 2.1, 2.25, 2.3, 2.35],
+        [0.0, 0.80, 0.0, 0.0, 0.30, 0.0],
+    )
+    params = SolverParams(spec_penalty_enable=False)
+    state = solver.SpectrumHighLockEscapeState()
+    history = np.asarray([3.0, 3.0, 3.0, 0.0])
+    traces = []
+    values = []
+
+    for idx in range(1, 4):
+        value, trace = solver._process_spectrum_with_trace(
+            np.ones(128),
+            np.ones(128),
+            50,
+            params,
+            idx,
+            history,
+            False,
+            _tracking(10.0 / 60.0, 10.0, 3.0),
+            path="adaptive",
+            window_kind="motion",
+            high_lock_state=state,
+            high_lock_enable=True,
+        )
+        history[idx] = value
+        values.append(value)
+        traces.append(trace)
+
+    assert traces[0].high_lock_mode == "challenge"
+    assert traces[0].high_lock_candidate_bpm == pytest.approx(120.0)
+    assert traces[2].high_lock_triggered is True
+    assert traces[2].high_lock_reason == "held_previous"
+    assert values[-1] == pytest.approx(160.0 / 60.0)
+
+
+def test_motion_high_lock_escape_requires_stable_challenger(monkeypatch) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    spectra = iter(
+        [
+            ([1.9, 2.0, 2.1, 2.25, 2.3, 2.35], [0.0, 0.80, 0.0, 0.0, 0.30, 0.0]),
+            ([1.6, 1.7, 1.8, 2.25, 2.3, 2.35], [0.0, 0.80, 0.0, 0.0, 0.30, 0.0]),
+            ([2.05, 2.15, 2.25, 2.3, 2.35], [0.80, 0.0, 0.0, 0.30, 0.0]),
+        ]
+    )
+    monkeypatch.setattr(
+        solver,
+        "_candidate_peak_spectrum",
+        lambda _sig, _fs: tuple(np.asarray(v, dtype=float) for v in next(spectra)),
+    )
+    params = SolverParams(spec_penalty_enable=False)
+    state = solver.SpectrumHighLockEscapeState()
+    history = np.asarray([3.0, 3.0, 3.0, 0.0])
+
+    for idx in range(1, 4):
+        value, trace = solver._process_spectrum_with_trace(
+            np.ones(128),
+            np.ones(128),
+            50,
+            params,
+            idx,
+            history,
+            False,
+            _tracking(10.0 / 60.0, 10.0, 3.0),
+            path="adaptive",
+            window_kind="motion",
+            high_lock_state=state,
+            high_lock_enable=True,
+        )
+        history[idx] = value
+
+    assert trace.high_lock_triggered is False
+    assert trace.high_lock_mode == "challenge"
+    assert value == pytest.approx(3.0)
+
+
 def test_motion_reacquire_requires_sustained_low_lock(monkeypatch) -> None:
     from ppg_hr.params import SolverParams
     from ppg_hr.v2 import solver

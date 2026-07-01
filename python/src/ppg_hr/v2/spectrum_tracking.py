@@ -52,6 +52,15 @@ class SpectrumTrackingTrace:
     reacquire_count: int = 0
     reacquire_low_lock_count: int = 0
     reacquire_triggered: bool = False
+    high_lock_mode: str = "disabled"
+    high_lock_candidate_bpm: float | None = None
+    high_lock_count: int = 0
+    high_lock_cooldown: int = 0
+    high_lock_reason: str = "none"
+    high_lock_labels: tuple[str, ...] = ()
+    high_lock_suppressed_reason: str = ""
+    high_lock_gap_bpm: float | None = None
+    high_lock_triggered: bool = False
     source: str = "report"
 
     def to_dict(self) -> dict[str, Any]:
@@ -116,6 +125,9 @@ def track_spectrum_window(
     window_kind: WindowKind,
     reacquire_state: SpectrumReacquireState | None = None,
     reacquire_enable: bool = False,
+    high_lock_state: Any | None = None,
+    high_lock_enable: bool = False,
+    high_lock_params: Any | None = None,
     penalty_confidence_enable: bool = False,
     implementation: Callable[..., tuple[float, SpectrumTrackingTrace]] | None = None,
 ) -> tuple[float, SpectrumTrackingTrace]:
@@ -140,5 +152,8 @@ def track_spectrum_window(
         window_kind=window_kind,
         reacquire_state=reacquire_state,
         reacquire_enable=reacquire_enable,
+        high_lock_state=high_lock_state,
+        high_lock_enable=high_lock_enable,
+        high_lock_params=high_lock_params,
         penalty_confidence_enable=penalty_confidence_enable,
     )

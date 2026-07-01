@@ -64,6 +64,16 @@ class V2RunConfig:
     spec_penalty_weight: float = 0.4
     spec_penalty_width: float = 0.2
     reacquire_enable: bool = True
+    high_lock_escape_enable: bool = True
+    high_lock_escape_confirm_windows: int = 3
+    high_lock_escape_cooldown_windows: int = 4
+    high_lock_escape_min_gap_bpm: float = 20.0
+    high_lock_escape_min_amp_ratio: float = 0.45
+    high_lock_escape_candidate_min_bpm: float = 85.0
+    high_lock_escape_candidate_stable_bpm: float = 10.0
+    high_lock_escape_penalty_exclusion_bpm: float = 10.0
+    high_lock_escape_down_step_bpm: float = 20.0
+    high_lock_escape_up_step_bpm: float = 3.0
     penalty_confidence_enable: bool = True
     hr_range_hz: float = 25.0 / 60.0
     slew_limit_bpm: float = 10.0

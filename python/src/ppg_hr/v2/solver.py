@@ -86,6 +86,15 @@ _REACQUIRE_LOW_LOCK_MIN_HZ = 50.0 / 60.0
 _REACQUIRE_LOW_LOCK_MAX_HZ = 80.0 / 60.0
 _REACQUIRE_LOW_LOCK_MIN_WINDOWS = 4
 _REACQUIRE_TARGET_MIN_HZ = 90.0 / 60.0
+_HIGH_LOCK_CONFIRM_WINDOWS = 3
+_HIGH_LOCK_COOLDOWN_WINDOWS = 4
+_HIGH_LOCK_MIN_GAP_HZ = 20.0 / 60.0
+_HIGH_LOCK_MIN_AMP_RATIO = 0.45
+_HIGH_LOCK_CANDIDATE_MIN_HZ = 85.0 / 60.0
+_HIGH_LOCK_CANDIDATE_STABLE_HZ = 10.0 / 60.0
+_HIGH_LOCK_PENALTY_EXCLUSION_HZ = 10.0 / 60.0
+_HIGH_LOCK_DOWN_STEP_HZ = 20.0 / 60.0
+_HIGH_LOCK_UP_STEP_HZ = 3.0 / 60.0
 _MOTION_PENALTY_MIN_EFFECTIVE_CONFIDENCE = 0.9
 _PROTECTION_CHALLENGER_MIN_AMP_RATIO = 0.45
 _MOTION_IMU_RELATIVE_FLOOR = 0.05
@@ -130,6 +139,15 @@ class SpectrumTrackingTrace:
     reacquire_count: int = 0
     reacquire_low_lock_count: int = 0
     reacquire_triggered: bool = False
+    high_lock_mode: str = "disabled"
+    high_lock_candidate_bpm: float | None = None
+    high_lock_count: int = 0
+    high_lock_cooldown: int = 0
+    high_lock_reason: str = "none"
+    high_lock_labels: tuple[str, ...] = ()
+    high_lock_suppressed_reason: str = ""
+    high_lock_gap_bpm: float | None = None
+    high_lock_triggered: bool = False
     source: str = "report"
 
     def to_dict(self) -> dict[str, Any]:
@@ -151,6 +169,28 @@ class SpectrumReacquireDecision:
     candidate_hz: float | None
     count: int
     low_lock_count: int
+    triggered: bool
+
+
+@dataclass
+class SpectrumHighLockEscapeState:
+    mode: str = "locked"
+    candidate_hz: float | None = None
+    count: int = 0
+    cooldown: int = 0
+
+
+@dataclass(frozen=True)
+class SpectrumHighLockEscapeDecision:
+    hr_hz: float
+    mode: str
+    candidate_hz: float | None
+    count: int
+    cooldown: int
+    reason: str
+    labels: tuple[str, ...]
+    suppressed_reason: str
+    gap_hz: float | None
     triggered: bool
 
 
@@ -200,6 +240,9 @@ def _process_spectrum_with_trace(
     window_kind: WindowKind,
     reacquire_state: SpectrumReacquireState | None = None,
     reacquire_enable: bool = False,
+    high_lock_state: SpectrumHighLockEscapeState | None = None,
+    high_lock_enable: bool = False,
+    high_lock_params: dict[str, float | int] | None = None,
     penalty_confidence_enable: bool = False,
 ) -> tuple[float, SpectrumTrackingTrace]:
     return track_spectrum_window(
@@ -215,6 +258,9 @@ def _process_spectrum_with_trace(
         window_kind=window_kind,
         reacquire_state=reacquire_state,
         reacquire_enable=reacquire_enable,
+        high_lock_state=high_lock_state,
+        high_lock_enable=high_lock_enable,
+        high_lock_params=high_lock_params,
         penalty_confidence_enable=penalty_confidence_enable,
         implementation=_process_spectrum_with_trace_impl,
     )
@@ -234,6 +280,9 @@ def _process_spectrum_with_trace_impl(
     window_kind: WindowKind,
     reacquire_state: SpectrumReacquireState | None = None,
     reacquire_enable: bool = False,
+    high_lock_state: SpectrumHighLockEscapeState | None = None,
+    high_lock_enable: bool = False,
+    high_lock_params: dict[str, float | int] | None = None,
     penalty_confidence_enable: bool = False,
 ) -> tuple[float, SpectrumTrackingTrace]:
     freqs, amps_in = _candidate_peak_spectrum(sig_in, fs)
@@ -461,6 +510,30 @@ def _process_spectrum_with_trace_impl(
             selected_rank = int(raw_rank[0]) + 1 if raw_rank.size else selected_rank
             candidate_source = "reacquire"
 
+    high_lock_decision = _apply_motion_high_lock_escape(
+        freqs=freqs,
+        raw_amps=raw_amps,
+        raw_order=raw_order,
+        previous_hz=previous_hz,
+        legacy_hz=limited_hz,
+        state=high_lock_state,
+        enabled=bool(high_lock_enable),
+        params=high_lock_params,
+        window_kind=window_kind,
+        selected_peak_rank=selected_rank,
+        candidate_source=candidate_source,
+        penalty_centers_hz=penalty_centers_hz,
+        protection_applied=bool(protected_penalty_state.protected_mask.any()),
+        protected_penalty_overlap=bool(protected_penalty_state.protected_penalty_overlap),
+    )
+    limited_hz = high_lock_decision.hr_hz
+    if high_lock_decision.triggered or high_lock_decision.mode == "reacquiring":
+        if high_lock_decision.candidate_hz is not None:
+            tracked_hz = high_lock_decision.candidate_hz
+            raw_rank = np.flatnonzero(np.isclose(freqs[raw_order], high_lock_decision.candidate_hz))
+            selected_rank = int(raw_rank[0]) + 1 if raw_rank.size else selected_rank
+            candidate_source = "high_lock_escape"
+
     trace_protection_state = protected_penalty_state
     protection_has_corridor = bool(trace_protection_state.protected_mask.any())
     trace = SpectrumTrackingTrace(
@@ -512,6 +585,21 @@ def _process_spectrum_with_trace_impl(
         reacquire_count=int(reacquire_decision.count),
         reacquire_low_lock_count=int(reacquire_decision.low_lock_count),
         reacquire_triggered=bool(reacquire_decision.triggered),
+        high_lock_mode=high_lock_decision.mode,
+        high_lock_candidate_bpm=(
+            None
+            if high_lock_decision.candidate_hz is None
+            else high_lock_decision.candidate_hz * 60.0
+        ),
+        high_lock_count=int(high_lock_decision.count),
+        high_lock_cooldown=int(high_lock_decision.cooldown),
+        high_lock_reason=high_lock_decision.reason,
+        high_lock_labels=tuple(high_lock_decision.labels),
+        high_lock_suppressed_reason=high_lock_decision.suppressed_reason,
+        high_lock_gap_bpm=(
+            None if high_lock_decision.gap_hz is None else high_lock_decision.gap_hz * 60.0
+        ),
+        high_lock_triggered=bool(high_lock_decision.triggered),
     )
     return limited_hz, trace
 
@@ -761,6 +849,267 @@ def _strongest_reacquire_candidate_hz(
             continue
         return candidate_hz
     return None
+
+
+def _apply_motion_high_lock_escape(
+    *,
+    freqs: np.ndarray,
+    raw_amps: np.ndarray,
+    raw_order: np.ndarray,
+    previous_hz: float | None,
+    legacy_hz: float,
+    state: SpectrumHighLockEscapeState | None,
+    enabled: bool,
+    params: dict[str, float | int] | None,
+    window_kind: WindowKind,
+    selected_peak_rank: int,
+    candidate_source: str,
+    penalty_centers_hz: tuple[float, ...],
+    protection_applied: bool,
+    protected_penalty_overlap: bool,
+) -> SpectrumHighLockEscapeDecision:
+    settings = _normalise_high_lock_params(params)
+    if state is None or not enabled:
+        return SpectrumHighLockEscapeDecision(
+            legacy_hz, "disabled", None, 0, 0, "none", (), "", None, False
+        )
+    if window_kind != "motion" or previous_hz is None:
+        _reset_high_lock_state(state)
+        return SpectrumHighLockEscapeDecision(
+            legacy_hz, state.mode, state.candidate_hz, state.count, state.cooldown, "none", (), "", None, False
+        )
+
+    current_hz = float(legacy_hz)
+    labels = _high_lock_risk_labels(
+        current_hz=current_hz,
+        selected_peak_rank=selected_peak_rank,
+        candidate_source=candidate_source,
+        penalty_centers_hz=penalty_centers_hz,
+        protection_applied=protection_applied,
+        protected_penalty_overlap=protected_penalty_overlap,
+    )
+    reason = labels[0] if labels else "none"
+    challenger_hz = _strongest_high_lock_challenger_hz(
+        freqs=freqs,
+        raw_amps=raw_amps,
+        raw_order=raw_order,
+        current_hz=current_hz,
+        penalty_centers_hz=penalty_centers_hz,
+        settings=settings,
+    )
+    gap_hz = None if challenger_hz is None else current_hz - challenger_hz
+    suppressed_reason = ""
+    triggered = False
+
+    if state.cooldown > 0:
+        state.cooldown -= 1
+        suppressed_reason = "cooldown"
+        return SpectrumHighLockEscapeDecision(
+            legacy_hz,
+            state.mode,
+            state.candidate_hz,
+            state.count,
+            state.cooldown,
+            reason,
+            labels,
+            suppressed_reason,
+            gap_hz,
+            False,
+        )
+
+    if state.mode == "reacquiring":
+        if challenger_hz is not None and _high_lock_candidate_stable(
+            challenger_hz, state.candidate_hz, settings
+        ):
+            state.candidate_hz = challenger_hz
+        if state.candidate_hz is None:
+            _reset_high_lock_state(state, cooldown=int(settings["cooldown_windows"]))
+            return SpectrumHighLockEscapeDecision(
+                legacy_hz,
+                state.mode,
+                state.candidate_hz,
+                state.count,
+                state.cooldown,
+                reason,
+                labels,
+                "candidate_lost",
+                gap_hz,
+                False,
+            )
+        next_hz = _move_toward_high_lock_hz(current_hz, state.candidate_hz, settings)
+        if abs(next_hz - state.candidate_hz) <= max(float(settings["up_step_hz"]), np.finfo(float).eps):
+            _reset_high_lock_state(state, cooldown=int(settings["cooldown_windows"]))
+        return SpectrumHighLockEscapeDecision(
+            next_hz,
+            state.mode,
+            state.candidate_hz,
+            state.count,
+            state.cooldown,
+            reason,
+            labels,
+            "",
+            gap_hz,
+            False,
+        )
+
+    if challenger_hz is None:
+        _reset_high_lock_state(state)
+        suppressed_reason = "no_stable_challenger"
+    elif not labels:
+        _reset_high_lock_state(state)
+        suppressed_reason = "no_high_lock_risk"
+    elif state.mode == "challenge" and _high_lock_candidate_stable(
+        challenger_hz, state.candidate_hz, settings
+    ):
+        state.candidate_hz = challenger_hz
+        state.count += 1
+    else:
+        state.mode = "challenge"
+        state.candidate_hz = challenger_hz
+        state.count = 1
+
+    if state.mode == "challenge" and state.count >= int(settings["confirm_windows"]):
+        state.mode = "reacquiring"
+        triggered = True
+        next_hz = _move_toward_high_lock_hz(current_hz, float(state.candidate_hz), settings)
+        return SpectrumHighLockEscapeDecision(
+            next_hz,
+            state.mode,
+            state.candidate_hz,
+            state.count,
+            state.cooldown,
+            reason,
+            labels,
+            "",
+            gap_hz,
+            triggered,
+        )
+
+    return SpectrumHighLockEscapeDecision(
+        legacy_hz,
+        state.mode,
+        state.candidate_hz,
+        state.count,
+        state.cooldown,
+        reason,
+        labels,
+        suppressed_reason,
+        gap_hz,
+        False,
+    )
+
+
+def _strongest_high_lock_challenger_hz(
+    *,
+    freqs: np.ndarray,
+    raw_amps: np.ndarray,
+    raw_order: np.ndarray,
+    current_hz: float,
+    penalty_centers_hz: tuple[float, ...],
+    settings: dict[str, float | int],
+) -> float | None:
+    if raw_order.size == 0 or not np.isfinite(current_hz):
+        return None
+    ordered_amps = np.asarray(raw_amps, dtype=float)[raw_order]
+    finite = ordered_amps[np.isfinite(ordered_amps)]
+    if finite.size == 0:
+        return None
+    amp_floor = float(np.nanmax(finite)) * float(settings["min_amp_ratio"])
+    viable: list[tuple[int, float, bool]] = []
+    for peak_idx in raw_order:
+        idx = int(peak_idx)
+        candidate_hz = float(freqs[idx])
+        candidate_amp = float(raw_amps[idx])
+        if not np.isfinite(candidate_hz) or not np.isfinite(candidate_amp):
+            continue
+        if candidate_hz < float(settings["candidate_min_hz"]):
+            continue
+        if current_hz - candidate_hz < float(settings["min_gap_hz"]):
+            continue
+        if candidate_amp < amp_floor:
+            continue
+        near_penalty = any(
+            abs(candidate_hz - center) <= float(settings["penalty_exclusion_hz"])
+            for center in penalty_centers_hz
+        )
+        viable.append((idx, candidate_amp, near_penalty))
+    if not viable:
+        return None
+    outside_penalty = [item for item in viable if not item[2]]
+    if outside_penalty:
+        viable = outside_penalty
+    viable.sort(key=lambda item: (-item[1], float(freqs[item[0]])))
+    return float(freqs[viable[0][0]])
+
+
+def _high_lock_risk_labels(
+    *,
+    current_hz: float,
+    selected_peak_rank: int,
+    candidate_source: str,
+    penalty_centers_hz: tuple[float, ...],
+    protection_applied: bool,
+    protected_penalty_overlap: bool,
+) -> tuple[str, ...]:
+    labels: list[str] = []
+    if candidate_source == "held_previous":
+        labels.append("held_previous")
+    if int(selected_peak_rank or 0) >= 4:
+        labels.append("late_rank")
+    if protection_applied and protected_penalty_overlap:
+        labels.append("protected_wrong_track")
+    if any(abs(current_hz - center) <= 8.0 / 60.0 for center in penalty_centers_hz):
+        labels.append("near_motion_peak")
+    return tuple(labels)
+
+
+def _high_lock_candidate_stable(
+    candidate_hz: float,
+    previous_hz: float | None,
+    settings: dict[str, float | int],
+) -> bool:
+    return previous_hz is None or abs(float(candidate_hz) - float(previous_hz)) <= float(
+        settings["candidate_stable_hz"]
+    )
+
+
+def _move_toward_high_lock_hz(
+    current_hz: float,
+    target_hz: float,
+    settings: dict[str, float | int],
+) -> float:
+    diff = float(target_hz) - float(current_hz)
+    if diff < 0.0:
+        return float(current_hz) - min(abs(diff), float(settings["down_step_hz"]))
+    return float(current_hz) + min(diff, float(settings["up_step_hz"]))
+
+
+def _normalise_high_lock_params(
+    params: dict[str, float | int] | None,
+) -> dict[str, float | int]:
+    values = dict(params or {})
+    return {
+        "confirm_windows": int(values.get("confirm_windows", _HIGH_LOCK_CONFIRM_WINDOWS)),
+        "cooldown_windows": int(values.get("cooldown_windows", _HIGH_LOCK_COOLDOWN_WINDOWS)),
+        "min_gap_hz": float(values.get("min_gap_hz", _HIGH_LOCK_MIN_GAP_HZ)),
+        "min_amp_ratio": float(values.get("min_amp_ratio", _HIGH_LOCK_MIN_AMP_RATIO)),
+        "candidate_min_hz": float(values.get("candidate_min_hz", _HIGH_LOCK_CANDIDATE_MIN_HZ)),
+        "candidate_stable_hz": float(
+            values.get("candidate_stable_hz", _HIGH_LOCK_CANDIDATE_STABLE_HZ)
+        ),
+        "penalty_exclusion_hz": float(
+            values.get("penalty_exclusion_hz", _HIGH_LOCK_PENALTY_EXCLUSION_HZ)
+        ),
+        "down_step_hz": float(values.get("down_step_hz", _HIGH_LOCK_DOWN_STEP_HZ)),
+        "up_step_hz": float(values.get("up_step_hz", _HIGH_LOCK_UP_STEP_HZ)),
+    }
+
+
+def _reset_high_lock_state(state: SpectrumHighLockEscapeState, *, cooldown: int = 0) -> None:
+    state.mode = "locked"
+    state.candidate_hz = None
+    state.count = 0
+    state.cooldown = max(0, int(cooldown))
 
 
 def _is_low_lock_hz(value_hz: float) -> bool:
@@ -1319,6 +1668,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
     fft_tracking_rows: list[SpectrumTrackingTrace] = []
     adaptive_tracking_rows: list[SpectrumTrackingTrace | None] = []
     adaptive_reacquire_state = SpectrumReacquireState()
+    adaptive_high_lock_state = SpectrumHighLockEscapeState()
     quality_rows: list[dict[str, Any]] = []
     valid_mask, quality_fs_origin = _data_quality_from_params(params)
     time_1 = float(params.time_start)
@@ -1420,6 +1770,15 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                     and _reacquire_enabled_for_filter(cfg.adaptive_filter)
                     and provisional_kind == "motion"
                 ),
+                high_lock_state=(
+                    adaptive_high_lock_state if provisional_kind == "motion" else None
+                ),
+                high_lock_enable=bool(
+                    cfg.high_lock_escape_enable
+                    and _reacquire_enabled_for_filter(cfg.adaptive_filter)
+                    and provisional_kind == "motion"
+                ),
+                high_lock_params=_high_lock_params_from_cfg(cfg),
                 penalty_confidence_enable=bool(
                     cfg.penalty_confidence_enable and provisional_kind == "motion"
                 ),
@@ -1591,6 +1950,27 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
         "time_bias": float(cfg.time_bias),
         "pre_motion_context_seconds": float(cfg.pre_motion_context_seconds),
         "reacquire_enable": bool(cfg.reacquire_enable),
+        "high_lock_escape": {
+            "enabled": bool(cfg.high_lock_escape_enable),
+            "confirm_windows": int(cfg.high_lock_escape_confirm_windows),
+            "cooldown_windows": int(cfg.high_lock_escape_cooldown_windows),
+            "min_gap_bpm": float(cfg.high_lock_escape_min_gap_bpm),
+            "min_amp_ratio": float(cfg.high_lock_escape_min_amp_ratio),
+            "candidate_min_bpm": float(cfg.high_lock_escape_candidate_min_bpm),
+            "candidate_stable_bpm": float(cfg.high_lock_escape_candidate_stable_bpm),
+            "penalty_exclusion_bpm": float(cfg.high_lock_escape_penalty_exclusion_bpm),
+            "down_step_bpm": float(cfg.high_lock_escape_down_step_bpm),
+            "up_step_bpm": float(cfg.high_lock_escape_up_step_bpm),
+            "trigger_count": int(
+                sum(
+                    1
+                    for row in window_table
+                    if bool(
+                        ((row.get("spectrum_tracking") or {}).get("high_lock_triggered"))
+                    )
+                )
+            ),
+        },
         "penalty_confidence_enable": bool(cfg.penalty_confidence_enable),
         "postprocess_dynamics_enable": bool(cfg.postprocess_dynamics_enable),
         "postprocess_dynamics_params": _postprocess_dynamics_params(cfg),
@@ -1617,6 +1997,20 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
 
 def _solver_params_from_v2(cfg: V2RunConfig) -> SolverParams:
     return _shared_solver_params_from_v2(cfg)
+
+
+def _high_lock_params_from_cfg(cfg: V2RunConfig) -> dict[str, float | int]:
+    return {
+        "confirm_windows": int(cfg.high_lock_escape_confirm_windows),
+        "cooldown_windows": int(cfg.high_lock_escape_cooldown_windows),
+        "min_gap_hz": float(cfg.high_lock_escape_min_gap_bpm) / 60.0,
+        "min_amp_ratio": float(cfg.high_lock_escape_min_amp_ratio),
+        "candidate_min_hz": float(cfg.high_lock_escape_candidate_min_bpm) / 60.0,
+        "candidate_stable_hz": float(cfg.high_lock_escape_candidate_stable_bpm) / 60.0,
+        "penalty_exclusion_hz": float(cfg.high_lock_escape_penalty_exclusion_bpm) / 60.0,
+        "down_step_hz": float(cfg.high_lock_escape_down_step_bpm) / 60.0,
+        "up_step_hz": float(cfg.high_lock_escape_up_step_bpm) / 60.0,
+    }
 
 
 def _select_ppg_raw(raw_data: np.ndarray, mode: str) -> np.ndarray:

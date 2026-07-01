@@ -131,6 +131,59 @@ TraceRescue 不用 `HR_ref` 选择状态。`HR_ref` 只用于最终误差统计�
 
 批量全流程中的对比参考信号不会独立执行 TraceRescue 候选状态选择。主参考信号报告已确定的 `selected_candidate`、对应固定状态参数和滤波器私有 `best_params` 会被完整复用；对比曲线只替换 `reference_groups_order` 后重算，用于公平观察参考信号差异。
 
+## 运动段高频锁定逃逸
+
+运动段高频锁定逃逸是 v2 solver 的共享运动段谱峰追踪机制，不属于 TraceRescue 私有逻辑，也不作为 final HR 后处理补丁。`dynamic_rest_bo`、`lite`、`trace_rescue` 共用同一套运动段 adaptive 谱峰追踪路径；当该路径被高频运动伪峰、谐波或错误保护轨迹持续吸引时，该机制允许 solver 在运动段内部承认历史轨迹已经不可信，并用更激进但有门控保护的方式回到稳定的较低候选峰。
+
+该机制只在 `is_motion && used_adaptive` 的窗口启用。静息段、运动后保护窗和运动后静息 FFT 重捕获阶段不触发高频逃逸，避免与运动后阶段机互相干扰。
+
+### 触发思路
+
+高频逃逸不使用 `HR_ref`、Lite 对比曲线或其它答案派生信号。在线判断只依赖当前窗口的候选峰、谱峰追踪状态、惩罚/保护诊断和历史 HR：
+
+1. 从原始候选峰中寻找稳定的较低 challenger。优先选择不落在运动惩罚中心附近的候选；若不存在带外候选，允许惩罚带内候选作为兜底，避免真实 HR 峰靠近运动频率时被硬排除。
+2. 当前 HR 与 challenger 至少相差 `high_lock_escape_min_gap_bpm=20.0`，且 challenger 不低于 `high_lock_escape_candidate_min_bpm=85.0`。
+3. challenger 幅值至少达到当前选峰幅值的 `high_lock_escape_min_amp_ratio=0.45`。
+4. challenger 在连续窗口内保持稳定，默认稳定门限为 `high_lock_escape_candidate_stable_bpm=10.0`。
+5. 当前追踪路径必须暴露高频锁定风险标签，例如 `held_previous`、`late_rank`、`protected_wrong_track` 或 `near_motion_peak`。
+6. 满足上述证据连续 `high_lock_escape_confirm_windows=3` 个窗口后触发一次逃逸。
+
+这里刻意不定义“当前 HR 过高”的绝对概念。不同运动场景的真实心率范围不同，绝对高低阈值容易把高强度运动中的真实上升误判为锁峰；因此触发核心是“当前追踪路径与稳定较低 challenger 的相对关系 + 锁定风险证据”。
+
+### 逃逸动作
+
+触发后，solver 不会瞬间跳到 challenger，而是使用独立于正常生理限幅的逃逸限幅参数把谱峰追踪 history 写回到更合理的位置：
+
+| 参数 | 默认值 | 含义 |
+| --- | ---: | --- |
+| `high_lock_escape_down_step_bpm` | 20.0 | 逃逸下行时每窗最大下降 |
+| `high_lock_escape_up_step_bpm` | 3.0 | 逃逸靠近 challenger 时允许的上行修正 |
+| `high_lock_escape_cooldown_windows` | 4 | 触发后的冷却窗口数 |
+
+由于触发本身已经表示“此前历史轨迹大概率错误”，逃逸阶段不再完全遵循正常运动生理变化限幅，而采用更激进的下行步长尽快修正 history。冷却期结束后，同一运动段仍可再次触发逃逸，用于长运动段中多次锁错的情况。
+
+### 诊断输出
+
+`window_table.spectrum_tracking` 中新增高频逃逸诊断字段，便于后续按窗口失效原因分类：
+
+| 字段 | 含义 |
+| --- | --- |
+| `high_lock_mode` | `disabled`、`locked`、`challenging`、`escaping`、`cooldown` 等状态 |
+| `high_lock_candidate_bpm` | 当前较低 challenger 心率 |
+| `high_lock_count` | 连续确认计数 |
+| `high_lock_cooldown` | 剩余冷却窗口数 |
+| `high_lock_reason` | 主触发原因，例如 `late_rank` |
+| `high_lock_labels` | 辅助风险标签集合 |
+| `high_lock_suppressed_reason` | 未触发时的主要抑制原因 |
+| `high_lock_gap_bpm` | 当前 HR 与 challenger 的差距 |
+| `high_lock_triggered` | 该窗口是否实际触发逃逸 |
+
+JSON 顶层 `high_lock_escape` 记录本次求解使用的默认参数和 `trigger_count`。这些诊断字段可继续扩展为窗口失效原因分类术语，例如“真实峰存在但 rank 靠后”“保护轨迹错误延续”“接近运动伪峰”等。
+
+### 参数定位
+
+该机制当前不新增 BO 参数。默认值来自本轮 LYX 全批数据的 replay 与 solver A/B 验收，目标是先用可解释门控修复明确的高频锁定失效，同时保持原本表现较好的样本不退化。若后续批次发现新的误触发或漏触发，应优先分析窗口诊断字段，再决定是否调整默认门控，而不是把该机制直接放入黑盒搜索空间。
+
 ## 运动后静息 FFT 重捕获
 
 运动后静息 FFT 重捕获是 v2 solver 的共享阶段机制，不属于 TraceRescue 私有逻辑。`dynamic_rest_bo`、`lite`、`trace_rescue` 都默认启用该机制，因此批量输出目录和文件名不再额外加入 `_post_motion_reacquire` 后缀；这既反映它是默认求解行为，也避免 Windows 长路径风险。
