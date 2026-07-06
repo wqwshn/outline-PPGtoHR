@@ -1113,7 +1113,7 @@ def _tracking_for_window(
         {},
     )
     saved = meta.get("spectrum_tracking")
-    if isinstance(saved, dict):
+    if isinstance(saved, dict) and saved:
         return dict(saved)
 
     if session.replay_tracking_by_window is None:
@@ -1453,8 +1453,14 @@ def _summary_from_window(
     final_hr_bpm: float | None = None,
     tracking: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    tracking_data = tracking or {}
     motion_peak = float(spectrum["motion_peak_hz"][0])
-    candidate = float(spectrum["candidate_hr_bpm"][0])
+    replay_candidate = float(spectrum["candidate_hr_bpm"][0])
+    candidate = _trace_first_float(
+        tracking_data,
+        "raw_candidate_hr_bpm",
+        replay_candidate,
+    )
     final_hr = window.final_hr_bpm if final_hr_bpm is None else float(final_hr_bpm)
     error = final_hr - window.ref_hr_bpm if np.isfinite(final_hr) else float("nan")
     ref_order = (
@@ -1462,7 +1468,6 @@ def _summary_from_window(
         if reference_groups_order is None
         else reference_groups_order
     )
-    tracking_data = tracking or {}
     return {
         "report_path": str(session.report_path),
         "data_path": str(session.data_path),
@@ -1478,6 +1483,7 @@ def _summary_from_window(
         "final_hr_bpm": final_hr,
         "error_bpm": error,
         "candidate_hr_bpm": candidate,
+        "replay_candidate_hr_bpm": replay_candidate,
         "motion_peak_hz": motion_peak,
         "has_motion_peak": bool(np.isfinite(motion_peak)),
         "spec_penalty_width_hz": float(session.config.spec_penalty_width),
@@ -1558,7 +1564,8 @@ def _summary_from_window(
             tracking_data.get("candidate_peak_amplitudes", []),
             ensure_ascii=False,
         ),
-        "raw_candidate_hr_bpm": tracking_data.get(
+        "raw_candidate_hr_bpm": _trace_first_float(
+            tracking_data,
             "raw_candidate_hr_bpm",
             candidate,
         ),
@@ -1644,6 +1651,17 @@ def _finite_float(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return numeric if np.isfinite(numeric) else None
+
+
+def _trace_first_float(
+    tracking_data: dict[str, Any],
+    key: str,
+    fallback: float,
+) -> float:
+    value = _finite_float(tracking_data.get(key))
+    if value is not None:
+        return value
+    return float(fallback)
 
 
 def _apply_diagnostic_axes_style(

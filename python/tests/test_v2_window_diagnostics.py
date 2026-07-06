@@ -7,8 +7,11 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from ppg_hr.v2.types import V2RunConfig
 from ppg_hr.v2.window_diagnostics import (
     DiagnosticPlotOptions,
+    DiagnosticWindow,
+    WindowDiagnosticsSession,
     diagnostic_panel_figsize,
     load_window_diagnostics_session,
     plot_peak_tracking,
@@ -111,6 +114,104 @@ def test_old_report_replays_tracking_and_marks_source(kaihe_session) -> None:
     assert result.summary["tracking_source"] == "diagnostic_replay"
     assert len(result.summary["candidate_peaks_bpm"]) <= 5
     assert np.isfinite(result.summary["slew_limited_hr_bpm"])
+
+
+def test_render_window_diagnostics_uses_saved_trace_as_decision_source(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import window_diagnostics as wd
+
+    tracking = {
+        "source": "report",
+        "path": "fft",
+        "raw_candidate_hr_bpm": 123.0,
+        "candidate_peaks_bpm": (123.0, 147.0),
+        "candidate_peak_amplitudes": (1.0, 0.4),
+        "previous_hr_bpm": 118.0,
+        "search_min_bpm": 108.0,
+        "search_max_bpm": 128.0,
+        "selected_peak_rank": 1,
+        "tracked_hr_bpm": 123.0,
+        "slew_limited_hr_bpm": 121.0,
+        "penalty_applied": False,
+    }
+    cfg = V2RunConfig(
+        data_path=tmp_path / "sample.csv",
+        ref_path=tmp_path / "sample_ref.csv",
+    )
+    window = DiagnosticWindow(
+        window_idx=0,
+        start_s=0.0,
+        center_s=4.0,
+        end_s=8.0,
+        aligned_time_s=4.0,
+        ref_hr_bpm=120.0,
+        fft_hr_bpm=119.0,
+        final_hr_bpm=121.0,
+        error_bpm=1.0,
+        is_motion=False,
+        used_adaptive=False,
+        reliable=True,
+        window_kind="rest",
+    )
+    session = WindowDiagnosticsSession(
+        report_path=tmp_path / "sample-v2.json",
+        payload={
+            "window_table": [
+                {
+                    "window_idx": 0,
+                    "center_s": 4.0,
+                    "spectrum_tracking": tracking,
+                }
+            ]
+        },
+        data_path=cfg.data_path,
+        ref_path=cfg.ref_path,
+        config=cfg,
+        windows=[window],
+        time_bias=0.0,
+    )
+    monkeypatch.setattr(
+        wd,
+        "_prepare_signals",
+        lambda _cfg: wd._PreparedSignals(
+            fs=25,
+            ppg=np.ones(256, dtype=float),
+            references=[],
+            motion_segment=None,
+            params=SolverParams(),
+        ),
+    )
+    monkeypatch.setattr(
+        wd,
+        "_compute_spectrum",
+        lambda *_args, **_kwargs: {
+            "freq_hz": np.asarray([1.85]),
+            "bpm": np.asarray([111.0]),
+            "raw_amp_norm": np.asarray([1.0]),
+            "filtered_amp_norm": np.asarray([1.0]),
+            "penalized_amp_norm": np.asarray([1.0]),
+            "penalty_weight": np.asarray([1.0]),
+            "is_penalty_band": np.asarray([0.0]),
+            "nominal_penalty_band": np.asarray([0.0]),
+            "actual_penalty_band": np.asarray([0.0]),
+            "protection_band": np.asarray([0.0]),
+            "motion_peak_hz": np.asarray([float("nan")]),
+            "penalty_centers_bpm": np.asarray([], dtype=float),
+            "candidate_hr_bpm": np.asarray([111.0]),
+        },
+    )
+
+    result = render_window_diagnostics(session, 4.0)
+
+    assert result.summary["tracking_source"] == "report"
+    assert result.summary["candidate_hr_bpm"] == pytest.approx(123.0)
+    assert result.summary["raw_candidate_hr_bpm"] == pytest.approx(123.0)
+    assert result.summary["replay_candidate_hr_bpm"] == pytest.approx(111.0)
+    assert result.summary["candidate_peaks_bpm"] == pytest.approx((123.0, 147.0))
+    assert result.summary["slew_limited_hr_bpm"] == pytest.approx(121.0)
 
 
 def test_rest_window_hides_adaptive_waveform_and_penalty_layers(
