@@ -339,6 +339,8 @@ def run_v2_generalization(
     k_fold_count: int = 5,
     test_dir: str | Path | None = None,
     comparison_groups: tuple[tuple[str, ...], ...] = (),
+    run_config_overrides: dict[str, object] | None = None,
+    holdout_sample_stems: tuple[str, ...] | None = None,
     on_log: Callable[[str], None] | None = None,
     on_progress: Callable[[dict], None] | None = None,
 ) -> V2GeneralizationResult:
@@ -414,6 +416,7 @@ def run_v2_generalization(
     )
 
     records: list[V2GeneralizationRecord] = []
+    selected_holdouts = {str(stem) for stem in (holdout_sample_stems or ())}
     for group in plan.groups:
         motion_type = group.motion_type
         samples = list(group.pairs)
@@ -424,6 +427,12 @@ def run_v2_generalization(
         )
         for mode in selected_modes:
             folds = [f for f in group.folds if f.evaluation_mode == mode]
+            if selected_holdouts:
+                folds = [
+                    fold
+                    for fold in folds
+                    if any(pair.stem in selected_holdouts for pair in fold.test_pairs)
+                ]
             for fold_index, fold in enumerate(folds, start=1):
                 json_dir, png_dir, csv_dir = _fold_output_dirs(
                     out,
@@ -463,6 +472,7 @@ def run_v2_generalization(
                     png_dir=png_dir,
                     csv_dir=csv_dir,
                     comparison_groups=comparison_groups,
+                    run_config_overrides=run_config_overrides,
                     on_log=on_log,
                     on_progress=on_progress,
                     progress=progress,
@@ -757,6 +767,7 @@ def _run_generalization_fold(
     png_dir: Path,
     csv_dir: Path,
     comparison_groups: tuple[tuple[str, ...], ...],
+    run_config_overrides: dict[str, object] | None,
     on_log: Callable[[str], None] | None,
     on_progress: Callable[[dict], None] | None,
     progress: _ProgressCounter,
@@ -770,6 +781,7 @@ def _run_generalization_fold(
             analysis_scope=analysis_scope,
             reference_groups_order=reference_groups_order,
             algorithm_preset=algorithm_preset,
+            run_config_overrides=run_config_overrides,
         )
         for pair in train_pairs
     ]
@@ -943,10 +955,11 @@ def _run_generalization_fold(
             analysis_scope=analysis_scope,
             reference_groups_order=reference_groups_order,
             algorithm_preset=algorithm_preset,
+            run_config_overrides=run_config_overrides,
         )
         cfg = cfg.__class__(**{**cfg.__dict__, **shared.best_params})
         result = solve_v2(cfg)
-        replay_prefix = safe_name(f"{pair.stem}-{split}")
+        replay_prefix = _replay_output_prefix(split, pair.stem)
         report_path = safe_output_path(json_dir, f"{replay_prefix}-v2.json")
         save_v2_report(
             report_path,
@@ -1040,17 +1053,20 @@ def _base_config(
     analysis_scope: str,
     reference_groups_order: tuple[str, ...],
     algorithm_preset: str,
+    run_config_overrides: dict[str, object] | None = None,
 ) -> V2RunConfig:
-    return V2RunConfig(
-        data_path=pair.data_path,
-        ref_path=pair.ref_path,
-        ppg_mode=ppg_mode,
-        ppg_input_transform=ppg_input_transform,
-        adaptive_filter=adaptive_filter,
-        analysis_scope=analysis_scope,
-        algorithm_preset=algorithm_preset,
-        reference_groups_order=reference_groups_order,
-    )
+    values = {
+        "data_path": pair.data_path,
+        "ref_path": pair.ref_path,
+        "ppg_mode": ppg_mode,
+        "ppg_input_transform": ppg_input_transform,
+        "adaptive_filter": adaptive_filter,
+        "analysis_scope": analysis_scope,
+        "algorithm_preset": algorithm_preset,
+        "reference_groups_order": reference_groups_order,
+    }
+    values.update(run_config_overrides or {})
+    return V2RunConfig(**values)
 
 
 def _folds_for_mode(
@@ -1292,6 +1308,26 @@ def _write_summary(output_dir: Path, records: list[V2GeneralizationRecord]) -> P
                 ]
             )
     return path
+
+
+def _replay_output_prefix(split: str, sample_stem: str) -> str:
+    """Keep replay artefact names readable under deep Windows output paths."""
+    split_label = {"train": "tr", "test": "test"}.get(str(split), str(split))
+    sample = str(sample_stem)
+    if sample.startswith("multi_"):
+        sample = sample[len("multi_") :]
+    sample_aliases = {
+        "tiaosheng": "ts",
+        "kaihe": "kh",
+        "wanju": "wj",
+        "bobi": "bb",
+        "fuwo": "fw",
+    }
+    for prefix, alias in sample_aliases.items():
+        if sample.startswith(prefix):
+            sample = f"{alias}{sample[len(prefix):]}"
+            break
+    return safe_name(f"{split_label}_{sample}")
 
 
 def _jsonify(obj: Any) -> Any:

@@ -53,6 +53,7 @@ def run_v2_batch_pipeline(
     algorithm_preset: str = V2_ALGORITHM_PRESET_DEFAULT,
     search_space: V2SearchSpace | None = None,
     comparison_groups: tuple[tuple[str, ...], ...] = (),
+    run_config_overrides: dict[str, object] | None = None,
     on_log: Callable[[str], None] | None = None,
     on_progress: Callable[[dict], None] | None = None,
 ) -> dict[str, object]:
@@ -111,16 +112,18 @@ def run_v2_batch_pipeline(
                 reference_groups_order,
             )
             report_path = safe_output_path(json_dir, f"{prefix}-v2.json")
-            cfg = V2RunConfig(
-                data_path=sample,
-                ref_path=ref,
-                ppg_mode=mode,
-                ppg_input_transform=ppg_input_transform,
-                analysis_scope=analysis_scope,
-                adaptive_filter=adaptive_filter,
-                algorithm_preset=preset,
-                reference_groups_order=reference_groups_order,
-            )
+            cfg_values = {
+                "data_path": sample,
+                "ref_path": ref,
+                "ppg_mode": mode,
+                "ppg_input_transform": ppg_input_transform,
+                "analysis_scope": analysis_scope,
+                "adaptive_filter": adaptive_filter,
+                "algorithm_preset": preset,
+                "reference_groups_order": reference_groups_order,
+            }
+            cfg_values.update(run_config_overrides or {})
+            cfg = V2RunConfig(**cfg_values)
             _log(on_log, f"algorithm_preset={preset}")
             _log(
                 on_log,

@@ -250,3 +250,61 @@ def test_run_v2_batch_pipeline_accepts_custom_search_space(tmp_path: Path) -> No
 
     report_text = payload["records"][0].report_path.read_text(encoding="utf-8")
     assert '"fs_target": 25' in report_text
+
+
+def test_run_v2_batch_pipeline_applies_run_config_overrides(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    sample = tmp_path / "multi_fuwo1_0613.csv"
+    ref = tmp_path / "multi_fuwo1_0613_HR_ref.csv"
+    sample.write_text("sensor", encoding="utf-8")
+    ref.write_text("ref", encoding="utf-8")
+    seen = []
+
+    monkeypatch.setattr(
+        "ppg_hr.v2.batch_pipeline.quality_filter_sample_v2",
+        lambda *args, **kwargs: type(
+            "Qc",
+            (),
+            {"status": "good", "to_dict": lambda self: {"status": "good"}},
+        )(),
+    )
+
+    def fake_optimise_v2(cfg, *args, **kwargs):
+        seen.append(cfg)
+        path = kwargs["out_path"]
+        path.write_text("{}", encoding="utf-8")
+        return type("Result", (), {"best_error": 0.0, "report_path": path})()
+
+    monkeypatch.setattr("ppg_hr.v2.batch_pipeline.optimise_v2", fake_optimise_v2)
+    monkeypatch.setattr(
+        "ppg_hr.v2.batch_pipeline.render_v2_report",
+        lambda *args, **kwargs: type(
+            "Arte",
+            (),
+            {
+                "figure_png": tmp_path / "x.png",
+                "error_csv": tmp_path / "e.csv",
+                "hr_csv": tmp_path / "h.csv",
+            },
+        )(),
+    )
+
+    run_v2_batch_pipeline(
+        input_dir=tmp_path,
+        output_dir=tmp_path / "out",
+        ppg_modes=["green"],
+        adaptive_filter="lms",
+        analysis_scope="full",
+        reference_groups_order=("HF",),
+        algorithm_preset="lite",
+        bayes_cfg=V2BayesConfig(max_iterations=1, num_repeats=1),
+        run_config_overrides={
+            "post_motion_dynamic_guard_enable": True,
+            "post_motion_dynamic_guard_stable_windows": 2,
+        },
+    )
+
+    assert seen[0].post_motion_dynamic_guard_enable is True
+    assert seen[0].post_motion_dynamic_guard_stable_windows == 2

@@ -350,6 +350,9 @@ def test_run_v2_generalization_builds_all_train_and_logo_folds(
         rows = list(csv.DictReader(f))
     assert rows[0]["ppg_input_transform"] == "log_absorbance"
     assert rows[0]["motion_type"] == "tiaosheng"
+    figure_names = [Path(row["figure_png"]).name for row in rows]
+    assert any(name.startswith("test_ts4-") for name in figure_names)
+    assert any(name.startswith("tr_ts4-") for name in figure_names)
     assert result.fold_stats_csv is not None and result.fold_stats_csv.is_file()
     assert result.aggregate_stats_csv is not None and result.aggregate_stats_csv.is_file()
     assert result.analysis_tables_dir is not None and result.analysis_tables_dir.is_dir()
@@ -1089,7 +1092,7 @@ def test_run_v2_generalization_uses_compact_logo_output_prefixes(
     assert all("leave_one_group_out" not in name for name in params_names)
     assert all("leave_one_group_out" not in prefix for prefix in render_prefixes)
     assert all("test_multi_tiaosheng" not in prefix for prefix in render_prefixes)
-    assert "multi_tiaosheng4-test" in render_prefixes
+    assert "test_ts4" in render_prefixes
 
 
 def test_run_v2_generalization_partitions_outputs_by_mode_fold_then_format(
@@ -1187,3 +1190,192 @@ def test_run_v2_generalization_partitions_outputs_by_mode_fold_then_format(
     assert result.summary_csv == tmp_path / "out" / "v2_generalization_summary.csv"
     assert observed_render_dirs
     assert all(png_dir.parent == csv_dir.parent for png_dir, csv_dir in observed_render_dirs)
+
+
+def test_run_v2_generalization_applies_run_config_overrides_to_train_and_replay(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from ppg_hr.v2 import generalization
+    from ppg_hr.v2.generalization import run_v2_generalization
+
+    _touch_pair(tmp_path, "multi_bobi1")
+    seen_train: list[bool] = []
+    seen_replay: list[tuple[bool, float]] = []
+
+    def fake_optimise_shared_params(base_configs, _bayes_cfg, *, out_path, **_kwargs):
+        seen_train.extend(
+            bool(cfg.post_motion_dynamic_guard_enable) for cfg in base_configs
+        )
+        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(out_path).write_text(
+            json.dumps({"schema_version": "v2_generalization_params"}),
+            encoding="utf-8",
+        )
+        return generalization.V2SharedOptimiseResult(
+            report_path=Path(out_path),
+            best_error=1.0,
+            best_params={},
+            history=[],
+        )
+
+    def fake_solve_v2(cfg):
+        seen_replay.append(
+            (
+                bool(cfg.post_motion_dynamic_guard_enable),
+                float(cfg.post_motion_dynamic_guard_crossover_gap_bpm),
+            )
+        )
+        return V2SolverResult(
+            HR=np.array([[0.0, 72.0, 73.0, 74.0, 0.0, 0.0]], dtype=float),
+            err_stats={"fft_aae_bpm": 1.0, "final_aae_bpm": 1.0},
+            metadata={
+                "schema_version": "v2",
+                "data_path": str(cfg.data_path),
+                "ref_path": str(cfg.ref_path),
+                "post_motion_dynamic_guard": {
+                    "enabled": cfg.post_motion_dynamic_guard_enable,
+                },
+            },
+            window_table=[],
+        )
+
+    def fake_render_v2_report(
+        report_path,
+        out_dir,
+        *,
+        csv_dir=None,
+        output_prefix=None,
+        **_kwargs,
+    ):
+        png_dir = Path(out_dir)
+        csv_out = Path(csv_dir)
+        png_dir.mkdir(parents=True, exist_ok=True)
+        csv_out.mkdir(parents=True, exist_ok=True)
+        prefix = output_prefix or Path(report_path).stem
+        figure = png_dir / f"{prefix}-v2-hr.png"
+        err = csv_out / f"{prefix}-v2-error.csv"
+        hr = csv_out / f"{prefix}-v2-hr.csv"
+        figure.write_text("png", encoding="utf-8")
+        err.write_text("err", encoding="utf-8")
+        hr.write_text(
+            "time_s,reference_bpm,final_bpm,fft_bpm\n0,72,73,74\n",
+            encoding="utf-8",
+        )
+        return generalization.V2GeneralizationArtefacts(figure, err, hr)
+
+    monkeypatch.setattr(
+        generalization, "optimise_v2_shared_params", fake_optimise_shared_params
+    )
+    monkeypatch.setattr(generalization, "solve_v2", fake_solve_v2)
+    monkeypatch.setattr(generalization, "render_v2_report", fake_render_v2_report)
+
+    run_v2_generalization(
+        input_dir=tmp_path,
+        output_dir=tmp_path / "out",
+        ppg_mode="green",
+        adaptive_filter="lms",
+        analysis_scope="full",
+        reference_groups_order=("HF",),
+        bayes_cfg=V2BayesConfig(max_iterations=1, num_seed_points=1, num_repeats=1),
+        evaluation_modes=("all_train",),
+        run_config_overrides={
+            "post_motion_dynamic_guard_enable": True,
+            "post_motion_dynamic_guard_crossover_gap_bpm": 2.0,
+        },
+    )
+
+    assert seen_train == [True]
+    assert seen_replay == [(True, 2.0)]
+
+
+def test_run_v2_generalization_filters_kfold_by_holdout_sample_stem(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from ppg_hr.v2 import generalization
+    from ppg_hr.v2.generalization import run_v2_generalization
+
+    for stem in (
+        "multi_tiaosheng1",
+        "multi_tiaosheng2",
+        "multi_tiaosheng3",
+        "multi_tiaosheng4",
+    ):
+        _touch_pair(tmp_path, stem)
+
+    def fake_optimise_shared_params(base_configs, _bayes_cfg, *, out_path, **_kwargs):
+        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(out_path).write_text(
+            json.dumps({"schema_version": "v2_generalization_params"}),
+            encoding="utf-8",
+        )
+        return generalization.V2SharedOptimiseResult(
+            report_path=Path(out_path),
+            best_error=1.0,
+            best_params={},
+            history=[],
+        )
+
+    def fake_solve_v2(cfg):
+        return V2SolverResult(
+            HR=np.array([[0.0, 72.0, 73.0, 74.0, 0.0, 0.0]], dtype=float),
+            err_stats={"fft_aae_bpm": 1.0, "final_aae_bpm": 1.0},
+            metadata={
+                "schema_version": "v2",
+                "data_path": str(cfg.data_path),
+                "ref_path": str(cfg.ref_path),
+            },
+            window_table=[],
+        )
+
+    def fake_render_v2_report(
+        report_path,
+        out_dir,
+        *,
+        csv_dir=None,
+        output_prefix=None,
+        **_kwargs,
+    ):
+        png_dir = Path(out_dir)
+        csv_out = Path(csv_dir)
+        png_dir.mkdir(parents=True, exist_ok=True)
+        csv_out.mkdir(parents=True, exist_ok=True)
+        prefix = output_prefix or Path(report_path).stem
+        figure = png_dir / f"{prefix}-v2-hr.png"
+        err = csv_out / f"{prefix}-v2-error.csv"
+        hr = csv_out / f"{prefix}-v2-hr.csv"
+        figure.write_text("png", encoding="utf-8")
+        err.write_text("err", encoding="utf-8")
+        hr.write_text(
+            "time_s,reference_bpm,final_bpm,fft_bpm\n0,72,73,74\n",
+            encoding="utf-8",
+        )
+        return generalization.V2GeneralizationArtefacts(figure, err, hr)
+
+    monkeypatch.setattr(
+        generalization, "optimise_v2_shared_params", fake_optimise_shared_params
+    )
+    monkeypatch.setattr(generalization, "solve_v2", fake_solve_v2)
+    monkeypatch.setattr(generalization, "render_v2_report", fake_render_v2_report)
+
+    result = run_v2_generalization(
+        input_dir=tmp_path,
+        output_dir=tmp_path / "out",
+        adaptive_filter="lms",
+        analysis_scope="full",
+        reference_groups_order=("HF",),
+        bayes_cfg=V2BayesConfig(max_iterations=1, num_seed_points=1, num_repeats=1),
+        evaluation_modes=("k_fold_holdout",),
+        k_fold_count=4,
+        holdout_sample_stems=("multi_tiaosheng3",),
+    )
+
+    test_records = [record for record in result.records if record.split == "test"]
+    assert [record.sample_stem for record in test_records] == ["multi_tiaosheng3"]
+    assert {record.sample_stem for record in result.records} == {
+        "multi_tiaosheng1",
+        "multi_tiaosheng2",
+        "multi_tiaosheng3",
+        "multi_tiaosheng4",
+    }

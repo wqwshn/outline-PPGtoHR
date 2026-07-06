@@ -98,6 +98,62 @@ def _motion_segment_span_aligned(
     return start, end
 
 
+def _draw_dynamic_guard_switch_markers(
+    ax,
+    payload: dict,
+    time_bias: float,
+) -> None:
+    guard = _payload_value(payload, "post_motion_dynamic_guard", default={})
+    if not isinstance(guard, dict) or not bool(guard.get("enabled", False)):
+        return
+    events = guard.get("switch_events") or []
+    if not isinstance(events, list):
+        return
+
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        try:
+            center = float(event.get("center_s"))
+        except (TypeError, ValueError):
+            continue
+        if not np.isfinite(center):
+            continue
+
+        x = center + float(time_bias)
+        reason = str(event.get("switch_reason", "switch"))
+        ax.axvline(
+            x,
+            color="#4A5568",
+            linestyle=(0, (1.2, 1.2)),
+            linewidth=0.7,
+            alpha=0.75,
+            zorder=1.5,
+        )
+        ax.text(
+            x,
+            0.98,
+            reason,
+            transform=ax.get_xaxis_transform(),
+            rotation=90,
+            va="top",
+            ha="right",
+            fontsize=4.8,
+            color="#4A5568",
+        )
+
+
+def _dynamic_guard_uses_reset_fft(payload: dict) -> bool:
+    guard = _payload_value(payload, "post_motion_dynamic_guard", default={})
+    if not isinstance(guard, dict) or not bool(guard.get("enabled", False)):
+        return False
+    return bool(guard.get("reset_fft_enabled", True))
+
+
+def _fft_curve_label(payload: dict) -> str:
+    return "reset FFT" if _dynamic_guard_uses_reset_fft(payload) else "FFT"
+
+
 def _compute_comparison_curves(
     payload: dict,
     comparison_groups: tuple[tuple[str, ...], ...],
@@ -239,6 +295,7 @@ def render_v2_report(
     time_bias = float(_payload_value(payload, "time_bias", default=5.0))
     adaptive_filter = str(_payload_value(payload, "adaptive_filter", default="lms"))
     adaptive_label = method_label(adaptive_filter, order)
+    fft_label = _fft_curve_label(payload)
     fig_path = safe_output_path(fig_dir, f"{prefix}-v2-hr.png")
     fig_base = fig_path.with_suffix("")
     err_path = safe_output_path(csv_out, f"{prefix}-v2-error.csv")
@@ -255,10 +312,12 @@ def render_v2_report(
         motion_segment=_payload_value(payload, "motion_segment"),
         pre_motion_context_seconds=float(_payload_value(payload, "pre_motion_context_seconds", default=30.0)),
         comparison_curves=comparison_curves,
+        fft_label=fft_label,
     )
     _plot_hr(
         fig_base, hr, key, order, payload, adaptive_label,
         plot_curves=plot_curves, comparison_curves=comparison_curves,
+        fft_label=fft_label,
     )
     return V2PlotArtefacts(
         report_path=report,
@@ -315,6 +374,7 @@ def _plot_hr(
     *,
     plot_curves: tuple[str, ...] | list[str] | None = None,
     comparison_curves: list[dict[str, object]] | None = None,
+    fft_label: str = "FFT",
 ) -> None:
     _apply_style()
     curves = _normalise_plot_curves(plot_curves)
@@ -382,6 +442,7 @@ def _plot_hr(
             label="Motion",
             zorder=0.2,
         )
+    _draw_dynamic_guard_switch_markers(ax, payload, time_bias)
 
     y_series: list[np.ndarray] = []
     if "reference" in curves:
@@ -394,7 +455,7 @@ def _plot_hr(
         ax.plot(
             t_plot, fft_plot,
             color="#A8ADB3", linestyle=(0, (2.0, 1.6)), linewidth=0.9,
-            label="FFT", zorder=2,
+            label=fft_label, zorder=2,
         )
         y_series.append(fft_plot)
     if "adaptive" in curves:
@@ -439,6 +500,7 @@ def _plot_hr(
         adaptive_label,
         plot_curves=tuple(curves),
         comparison_curves=comp_curves,
+        fft_label=fft_label,
     )
 
     handles, labels = ax.get_legend_handles_labels()
@@ -643,6 +705,7 @@ def _write_error_csv(
     motion_segment: dict | None = None,
     pre_motion_context_seconds: float = 30.0,
     comparison_curves: list[dict[str, object]] | None = None,
+    fft_label: str = "FFT",
 ) -> None:
     rows = _detailed_stats_v2(
         hr, time_bias, order, adaptive_filter,
@@ -650,6 +713,7 @@ def _write_error_csv(
         motion_segment=motion_segment,
         pre_motion_context_seconds=pre_motion_context_seconds,
         comparison_curves=comparison_curves,
+        fft_label=fft_label,
     )
     with path.open("w", encoding="utf-8-sig", newline="") as f:
         writer = csv.writer(f)
@@ -676,6 +740,7 @@ def _detailed_stats_v2(
     motion_segment: dict | None = None,
     pre_motion_context_seconds: float = 30.0,
     comparison_curves: list[dict[str, object]] | None = None,
+    fft_label: str = "FFT",
 ) -> list[dict[str, float | str]]:
     if hr.size == 0:
         return []
@@ -698,7 +763,7 @@ def _detailed_stats_v2(
     adaptive_label = method_label(adaptive_filter, order)
     base_final = _base_final_bpm_on_mask(hr)
     result: list[dict[str, float | str]] = []
-    for col, name in ((2, "FFT"), (3, adaptive_label)):
+    for col, name in ((2, fft_label), (3, adaptive_label)):
         pred = hr[:, col] if col == 2 else base_final
         abs_err = np.abs(pred[scope_mask] - ref[scope_mask])
         abs_err = abs_err[np.isfinite(abs_err)]
@@ -760,6 +825,7 @@ def _draw_error_table(
     *,
     plot_curves: tuple[str, ...] = _PLOT_CURVES,
     comparison_curves: list[dict[str, object]] | None = None,
+    fft_label: str = "FFT",
 ) -> None:
     rows = _figure_error_rows(
         hr,
@@ -768,6 +834,7 @@ def _draw_error_table(
         adaptive_label=adaptive_label,
         plot_curves=plot_curves,
         comparison_curves=comparison_curves,
+        fft_label=fft_label,
     )
     if not rows:
         return
@@ -804,6 +871,7 @@ def _figure_error_rows(
     adaptive_label: str,
     plot_curves: tuple[str, ...] | list[str] | None = None,
     comparison_curves: list[dict[str, object]] | None = None,
+    fft_label: str = "FFT",
 ) -> list[tuple[str, float, float]]:
     curves = _normalise_plot_curves(plot_curves)
     t_aligned = hr[:, 0] + time_bias
@@ -836,7 +904,7 @@ def _figure_error_rows(
 
     rows: list[tuple[str, float, float]] = []
     if "fft" in curves:
-        rows.append(("FFT", fft_all, fft_motion))
+        rows.append((fft_label, fft_all, fft_motion))
     if "adaptive" in curves:
         rows.append(
             (

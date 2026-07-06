@@ -586,3 +586,66 @@ def test_render_v2_report_compacts_long_output_prefix(tmp_path: Path) -> None:
     assert arte.figure_png.is_file()
     assert arte.hr_csv.is_file()
     assert arte.error_csv.is_file()
+
+
+def test_render_v2_report_draws_dynamic_guard_switch_marker(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from matplotlib.axes import Axes
+
+    from ppg_hr.v2.report import save_v2_report
+
+    vlines: list[float] = []
+    texts: list[tuple[float, str]] = []
+    original_axvline = Axes.axvline
+    original_text = Axes.text
+
+    def record_axvline(self, x=0, *args, **kwargs):
+        vlines.append(float(x))
+        return original_axvline(self, x, *args, **kwargs)
+
+    def record_text(self, x, y, s, *args, **kwargs):
+        texts.append((float(x), str(s)))
+        return original_text(self, x, y, s, *args, **kwargs)
+
+    monkeypatch.setattr(Axes, "axvline", record_axvline)
+    monkeypatch.setattr(Axes, "text", record_text)
+    result = V2SolverResult(
+        metadata={
+            "schema_version": "v2",
+            "data_path": str(tmp_path / "raw.csv"),
+            "ref_path": str(tmp_path / "raw_HR_ref.csv"),
+            "analysis_scope": "full",
+            "adaptive_filter": "lms",
+            "reference_groups_order": ["HF"],
+            "reference_order_key": "HF",
+            "time_bias": 5.0,
+            "motion_segment": {"start_s": 10.0, "end_s": 20.0},
+            "post_motion_dynamic_guard": {
+                "enabled": True,
+                "switch_events": [
+                    {"center_s": 24.0, "switch_reason": "stable_crossover"}
+                ],
+            },
+        },
+        err_stats={},
+        window_table=[],
+        HR=np.asarray(
+            [
+                [18.0, 90.0, 88.0, 90.0, 1.0, 1.0],
+                [22.0, 85.0, 84.0, 85.0, 0.0, 1.0],
+                [24.0, 82.0, 82.0, 82.0, 0.0, 0.0],
+                [26.0, 80.0, 80.0, 80.0, 0.0, 0.0],
+            ],
+            dtype=float,
+        ),
+    )
+    report = save_v2_report(tmp_path / "report.json", result)
+
+    arte = render_v2_report(report, out_dir=tmp_path, csv_dir=tmp_path)
+
+    assert arte.figure_png.is_file()
+    assert 29.0 in vlines
+    assert (29.0, "stable_crossover") in texts
+    assert "reset FFT" in arte.error_csv.read_text(encoding="utf-8-sig")

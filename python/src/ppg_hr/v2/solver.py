@@ -31,6 +31,11 @@ from .algorithm_presets import (
     v2_trace_rescue_candidates,
     v2_tracking_policy_for_preset,
 )
+from .post_motion_dynamic_guard_policy import (
+    DynamicGuardConfig,
+    event_dicts,
+    switch_mask_and_events,
+)
 from .reference_groups import (
     channel_names_for_group,
     normalise_reference_order,
@@ -1669,6 +1674,9 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
     adaptive_tracking_rows: list[SpectrumTrackingTrace | None] = []
     adaptive_reacquire_state = SpectrumReacquireState()
     adaptive_high_lock_state = SpectrumHighLockEscapeState()
+    reset_fft_history: list[float] = []
+    reset_fft_started = False
+    reset_fft_applied_windows = 0
     quality_rows: list[dict[str, Any]] = []
     valid_mask, quality_fs_origin = _data_quality_from_params(params)
     time_1 = float(params.time_start)
@@ -1712,19 +1720,41 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
         sig_a = [accx[idx_s:idx_e], accy[idx_s:idx_e], accz[idx_s:idx_e]]
         sig_fft = (sig_p - sig_p.mean()) * hamming(len(sig_p))
 
-        history_fft = np.array([r[4] for r in rows] + [0.0])
+        reset_fft_active = _post_motion_dynamic_guard_reset_fft_active(
+            center,
+            motion_segment,
+            cfg,
+        )
+        if reset_fft_active:
+            if not reset_fft_started:
+                reset_fft_history = []
+                reset_fft_started = True
+            history_fft = np.asarray(reset_fft_history + [0.0], dtype=float)
+            fft_times_idx = len(reset_fft_history)
+            fft_tracking = _post_motion_dynamic_guard_reset_fft_tracking(cfg)
+            fft_path = "fft_post_motion_reset"
+            fft_window_kind: WindowKind = "recovery"
+        else:
+            history_fft = np.array([r[4] for r in rows] + [0.0])
+            fft_times_idx = times_idx
+            fft_tracking = rest_tracking
+            fft_path = "fft"
+            fft_window_kind = "rest"
         row[4], fft_trace = _process_spectrum_with_trace(
             sig_fft,
             sig_a[2],
             fs,
             params,
-            times_idx,
+            fft_times_idx,
             history_fft,
             False,
-            rest_tracking,
-            path="fft",
-            window_kind="rest",
+            fft_tracking,
+            path=fft_path,
+            window_kind=fft_window_kind,
         )
+        if reset_fft_active:
+            reset_fft_history.append(float(row[4]))
+            reset_fft_applied_windows += 1
 
         stages: list[dict[str, Any]] = []
         adaptive_trace: SpectrumTrackingTrace | None = None
@@ -1799,6 +1829,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
 
     postprocess_applied_count = 0
     post_motion_reacquire_start_idx: int | None = None
+    post_motion_dynamic_guard_events: list[dict[str, Any]] = []
     source = np.asarray(rows, dtype=float) if rows else np.zeros((0, 9), dtype=float)
     if source.size:
         source[:, 2] = smoothdata_movmedian(source[:, 2], int(cfg.smooth_win_len))
@@ -1806,7 +1837,11 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
 
         used_adaptive_mask = np.zeros(source.shape[0], dtype=bool)
         if references and motion_segment is not None:
-            used_adaptive_mask, post_motion_reacquire_start_idx = _post_motion_adaptive_mask(
+            (
+                used_adaptive_mask,
+                post_motion_reacquire_start_idx,
+                post_motion_dynamic_guard_events,
+            ) = _post_motion_adaptive_mask(
                 source,
                 motion_segment,
                 cfg,
@@ -1855,6 +1890,11 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
     else:
         HR = np.zeros((0, 6), dtype=float)
 
+    switch_reason_by_idx = {
+        int(event["window_idx"]): str(event["switch_reason"])
+        for event in post_motion_dynamic_guard_events
+        if "window_idx" in event and "switch_reason" in event
+    }
     window_table: list[dict[str, Any]] = []
     for idx, hr_row in enumerate(HR):
         c = float(hr_row[0])
@@ -1893,6 +1933,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 "used_adaptive": used_adaptive,
                 "window_kind": window_kind,
                 "window_stage": window_stage,
+                "switch_reason": switch_reason_by_idx.get(idx, ""),
                 "spectrum_tracking": trace.to_dict() if trace is not None else {},
                 "missing_count": int(
                     quality_rows[idx].get("missing_count", 0) if idx < len(quality_rows) else 0
@@ -1985,6 +2026,45 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
             "up_step_bpm": float(cfg.post_motion_reacquire_up_step_bpm),
             "down_step_bpm": float(cfg.post_motion_reacquire_down_step_bpm),
             "switch_idx": post_motion_reacquire_start_idx,
+        },
+        "post_motion_dynamic_guard": {
+            "enabled": bool(cfg.post_motion_dynamic_guard_enable),
+            "reset_fft_enabled": bool(
+                _post_motion_dynamic_guard_reset_fft_enabled(motion_segment, cfg)
+            ),
+            "reset_fft_applied_windows": int(reset_fft_applied_windows),
+            "min_elapsed_s": float(cfg.post_motion_dynamic_guard_min_elapsed_s),
+            "stable_windows": int(cfg.post_motion_dynamic_guard_stable_windows),
+            "crossover_gap_bpm": float(cfg.post_motion_dynamic_guard_crossover_gap_bpm),
+            "upward_gap_bpm": float(cfg.post_motion_dynamic_guard_upward_gap_bpm),
+            "fft_floor_bpm": float(cfg.post_motion_dynamic_guard_fft_floor_bpm),
+            "recovery_step_up_bpm": float(
+                cfg.post_motion_dynamic_guard_recovery_step_up_bpm
+            ),
+            "recovery_step_down_bpm": float(
+                cfg.post_motion_dynamic_guard_recovery_step_down_bpm
+            ),
+            "rising_windows": int(cfg.post_motion_dynamic_guard_rising_windows),
+            "rising_slope_bpm_per_window": float(
+                cfg.post_motion_dynamic_guard_rising_slope_bpm_per_window
+            ),
+            "rescue_gap_bpm": float(cfg.post_motion_dynamic_guard_rescue_gap_bpm),
+            "gap_rescue_enable": bool(
+                cfg.post_motion_dynamic_guard_gap_rescue_enable
+            ),
+            "gap_rescue_windows": int(
+                cfg.post_motion_dynamic_guard_gap_rescue_windows
+            ),
+            "gap_rescue_min_hits": int(
+                cfg.post_motion_dynamic_guard_gap_rescue_min_hits
+            ),
+            "gap_rescue_fft_stable_windows": int(
+                cfg.post_motion_dynamic_guard_gap_rescue_fft_stable_windows
+            ),
+            "gap_rescue_fft_stable_bpm": float(
+                cfg.post_motion_dynamic_guard_gap_rescue_fft_stable_bpm
+            ),
+            "switch_events": post_motion_dynamic_guard_events,
         },
     }
     return V2SolverResult(
@@ -2520,11 +2600,11 @@ def _post_motion_adaptive_mask(
     source: np.ndarray,
     motion_segment: dict[str, float],
     cfg: V2RunConfig,
-) -> tuple[np.ndarray, int | None]:
+) -> tuple[np.ndarray, int | None, list[dict[str, Any]]]:
     src = np.asarray(source, dtype=float)
     mask = np.zeros(src.shape[0], dtype=bool)
     if src.size == 0:
-        return mask, None
+        return mask, None, []
 
     adaptive_start_idx, motion_end_idx, legacy_end_idx = _adaptive_boundary_indices(
         src,
@@ -2532,7 +2612,51 @@ def _post_motion_adaptive_mask(
         cfg,
     )
     if adaptive_start_idx is None:
-        return mask, None
+        return mask, None, []
+
+    if bool(getattr(cfg, "post_motion_dynamic_guard_enable", False)) and cfg.analysis_scope == "full":
+        guard_cfg = DynamicGuardConfig(
+            name="solver_dynamic_guard",
+            min_elapsed_s=float(cfg.post_motion_dynamic_guard_min_elapsed_s),
+            stable_windows=int(cfg.post_motion_dynamic_guard_stable_windows),
+            crossover_gap_bpm=float(cfg.post_motion_dynamic_guard_crossover_gap_bpm),
+            upward_gap_bpm=float(cfg.post_motion_dynamic_guard_upward_gap_bpm),
+            fft_floor_bpm=float(cfg.post_motion_dynamic_guard_fft_floor_bpm),
+            recovery_step_up_bpm=float(
+                cfg.post_motion_dynamic_guard_recovery_step_up_bpm
+            ),
+            recovery_step_down_bpm=float(
+                cfg.post_motion_dynamic_guard_recovery_step_down_bpm
+            ),
+            rising_windows=int(cfg.post_motion_dynamic_guard_rising_windows),
+            rising_slope_bpm_per_window=float(
+                cfg.post_motion_dynamic_guard_rising_slope_bpm_per_window
+            ),
+            rescue_gap_bpm=float(cfg.post_motion_dynamic_guard_rescue_gap_bpm),
+            gap_rescue_enable=bool(
+                cfg.post_motion_dynamic_guard_gap_rescue_enable
+            ),
+            gap_rescue_windows=int(
+                cfg.post_motion_dynamic_guard_gap_rescue_windows
+            ),
+            gap_rescue_min_hits=int(
+                cfg.post_motion_dynamic_guard_gap_rescue_min_hits
+            ),
+            gap_rescue_fft_stable_windows=int(
+                cfg.post_motion_dynamic_guard_gap_rescue_fft_stable_windows
+            ),
+            gap_rescue_fft_stable_bpm=float(
+                cfg.post_motion_dynamic_guard_gap_rescue_fft_stable_bpm
+            ),
+        )
+        dynamic_mask, events = switch_mask_and_events(
+            src,
+            motion_segment=motion_segment,
+            config=guard_cfg,
+        )
+        event_rows = event_dicts(events)
+        switch_idx = int(event_rows[0]["window_idx"]) if event_rows else None
+        return dynamic_mask, switch_idx, event_rows
 
     if not bool(cfg.post_motion_reacquire_enable) or cfg.analysis_scope != "full":
         return _legacy_recovery_adaptive_mask(
@@ -2541,7 +2665,7 @@ def _post_motion_adaptive_mask(
             motion_end_idx,
             legacy_end_idx,
             cfg,
-        ), None
+        ), None, []
 
     guard_end_time = float(motion_segment["end_s"]) + max(0.0, float(cfg.post_motion_guard_seconds))
     switch_idx: int | None = None
@@ -2563,7 +2687,45 @@ def _post_motion_adaptive_mask(
         mask[adaptive_start_idx:] = True
     else:
         mask[adaptive_start_idx:switch_idx] = True
-    return mask, switch_idx
+    return mask, switch_idx, []
+
+
+def _post_motion_dynamic_guard_reset_fft_enabled(
+    motion_segment: dict[str, float] | None,
+    cfg: V2RunConfig,
+) -> bool:
+    return bool(
+        motion_segment is not None
+        and bool(getattr(cfg, "post_motion_dynamic_guard_enable", False))
+        and str(cfg.analysis_scope).strip().lower() == "full"
+    )
+
+
+def _post_motion_dynamic_guard_reset_fft_active(
+    center_s: float,
+    motion_segment: dict[str, float] | None,
+    cfg: V2RunConfig,
+) -> bool:
+    if not _post_motion_dynamic_guard_reset_fft_enabled(motion_segment, cfg):
+        return False
+    guard_end = float(motion_segment["end_s"]) + max(
+        0.0,
+        float(cfg.post_motion_dynamic_guard_min_elapsed_s),
+    )
+    return float(center_s) > guard_end + 1e-9
+
+
+def _post_motion_dynamic_guard_reset_fft_tracking(
+    cfg: V2RunConfig,
+) -> DirectionalTrackingParams:
+    return DirectionalTrackingParams(
+        range_up_bpm=20.0,
+        range_down_bpm=25.0,
+        limit_up_bpm=float(cfg.post_motion_dynamic_guard_recovery_step_up_bpm),
+        step_up_bpm=float(cfg.post_motion_dynamic_guard_recovery_step_up_bpm),
+        limit_down_bpm=float(cfg.post_motion_dynamic_guard_recovery_step_down_bpm),
+        step_down_bpm=float(cfg.post_motion_dynamic_guard_recovery_step_down_bpm),
+    )
 
 
 def _adaptive_boundary_indices(

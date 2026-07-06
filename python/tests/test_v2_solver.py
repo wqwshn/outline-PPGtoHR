@@ -1670,13 +1670,14 @@ def test_post_motion_reacquire_mask_switches_on_high_drift() -> None:
         post_motion_reacquire_fft_min_bpm=55.0,
     )
 
-    mask, switch_idx = _post_motion_adaptive_mask(
+    mask, switch_idx, events = _post_motion_adaptive_mask(
         source,
         {"start_s": 90.0, "end_s": 100.0},
         cfg,
     )
 
     assert switch_idx == 5
+    assert events == []
     assert mask.tolist() == [False, True, True, True, True, False, False, False]
 
 
@@ -1696,14 +1697,163 @@ def test_post_motion_reacquire_mask_keeps_adaptive_when_fft_low_locks() -> None:
         post_motion_reacquire_fft_min_bpm=55.0,
     )
 
-    mask, switch_idx = _post_motion_adaptive_mask(
+    mask, switch_idx, events = _post_motion_adaptive_mask(
         source,
         {"start_s": 90.0, "end_s": 100.0},
         cfg,
     )
 
     assert switch_idx is None
+    assert events == []
     assert mask.tolist() == [False, True, True, True, True, True, True, True]
+
+
+def test_post_motion_dynamic_guard_switches_on_stable_reachable_crossover() -> None:
+    from ppg_hr.v2.solver import _post_motion_adaptive_mask
+
+    source = np.zeros((8, 9), dtype=float)
+    source[:, 0] = np.asarray([98, 99, 100, 101, 102, 103, 104, 105], dtype=float)
+    source[:, 2] = np.asarray([120, 115, 110, 104, 101, 98, 95, 92], dtype=float) / 60.0
+    source[:, 4] = np.asarray([118, 112, 108, 103, 100, 97, 94, 91], dtype=float) / 60.0
+    cfg = V2RunConfig(
+        data_path=Path("sample.csv"),
+        ref_path=Path("sample_HR_ref.csv"),
+        post_motion_dynamic_guard_enable=True,
+        post_motion_dynamic_guard_min_elapsed_s=1.0,
+        post_motion_dynamic_guard_stable_windows=3,
+        post_motion_dynamic_guard_crossover_gap_bpm=3.0,
+        post_motion_dynamic_guard_recovery_step_down_bpm=3.0,
+        post_motion_dynamic_guard_recovery_step_up_bpm=1.5,
+    )
+
+    mask, switch_idx, events = _post_motion_adaptive_mask(
+        source,
+        {"start_s": 80.0, "end_s": 100.0},
+        cfg,
+    )
+
+    assert switch_idx == 6
+    assert mask.tolist() == [True, True, True, True, True, True, False, False]
+    assert events[0]["switch_reason"] == "stable_crossover"
+
+
+def test_post_motion_dynamic_guard_switches_on_configured_gap_rescue() -> None:
+    from ppg_hr.v2.solver import _post_motion_adaptive_mask
+
+    source = np.zeros((9, 9), dtype=float)
+    source[:, 0] = np.asarray([98, 99, 100, 101, 102, 103, 104, 105, 106], dtype=float)
+    source[:, 2] = (
+        np.asarray([130, 128, 126, 124, 121, 118, 115, 112, 109], dtype=float)
+        / 60.0
+    )
+    source[:, 4] = (
+        np.asarray([118, 112, 108, 108, 88, 86, 84, 82, 80], dtype=float) / 60.0
+    )
+    cfg = V2RunConfig(
+        data_path=Path("sample.csv"),
+        ref_path=Path("sample_HR_ref.csv"),
+        post_motion_dynamic_guard_enable=True,
+        post_motion_dynamic_guard_min_elapsed_s=1.0,
+        post_motion_dynamic_guard_crossover_gap_bpm=2.0,
+        post_motion_dynamic_guard_recovery_step_down_bpm=3.0,
+        post_motion_dynamic_guard_rescue_gap_bpm=20.0,
+        post_motion_dynamic_guard_gap_rescue_windows=4,
+        post_motion_dynamic_guard_gap_rescue_min_hits=4,
+        post_motion_dynamic_guard_gap_rescue_fft_stable_windows=3,
+        post_motion_dynamic_guard_gap_rescue_fft_stable_bpm=5.0,
+    )
+
+    mask, switch_idx, events = _post_motion_adaptive_mask(
+        source,
+        {"start_s": 80.0, "end_s": 100.0},
+        cfg,
+    )
+
+    assert switch_idx == 7
+    assert mask.tolist() == [True, True, True, True, True, True, True, False, False]
+    assert events[0]["switch_reason"] == "gap_rescue"
+    assert events[0]["hard_switch"] is True
+    assert events[0]["gap_rescue_count"] == 4
+    assert events[0]["fft_stable_count"] == 3
+    assert events[0]["fft_stable_delta_bpm"] == pytest.approx(4.0)
+
+
+def test_post_motion_dynamic_guard_metadata_records_switch_reason(tmp_path: Path) -> None:
+    from ppg_hr.v2 import solver
+
+    data = tmp_path / "raw.csv"
+    ref = tmp_path / "ref.csv"
+    _write_sensor(data, motion=True)
+    _write_ref(ref)
+
+    cfg = V2RunConfig(
+        data_path=data,
+        ref_path=ref,
+        analysis_scope="full",
+        reference_groups_order=("HF",),
+        post_motion_dynamic_guard_enable=True,
+        post_motion_dynamic_guard_min_elapsed_s=0.0,
+        post_motion_dynamic_guard_stable_windows=1,
+        post_motion_dynamic_guard_crossover_gap_bpm=60.0,
+    )
+
+    result = solver.solve_v2(cfg)
+
+    assert "post_motion_dynamic_guard" in result.metadata
+    assert "switch_events" in result.metadata["post_motion_dynamic_guard"]
+    assert all(
+        "switch_reason" in row
+        for row in result.window_table
+        if row["window_stage"] == "post_motion_reacquire"
+    )
+
+
+def test_post_motion_dynamic_guard_resets_fft_history_after_guard(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from ppg_hr.v2 import solver
+
+    data = tmp_path / "raw.csv"
+    ref = tmp_path / "ref.csv"
+    _write_sensor(data, motion=True)
+    _write_ref(ref)
+    original = solver._process_spectrum_with_trace
+    fft_calls: list[tuple[str, int, int]] = []
+
+    def spy(*args, path, window_kind, **kwargs):
+        if str(path).startswith("fft"):
+            fft_calls.append((str(path), int(args[4]), len(args[5])))
+        return original(
+            *args,
+            path=path,
+            window_kind=window_kind,
+            **kwargs,
+        )
+
+    monkeypatch.setattr(solver, "_process_spectrum_with_trace", spy)
+
+    result = solver.solve_v2(
+        V2RunConfig(
+            data_path=data,
+            ref_path=ref,
+            analysis_scope="full",
+            reference_groups_order=("HF",),
+            post_motion_dynamic_guard_enable=True,
+            post_motion_dynamic_guard_min_elapsed_s=1.0,
+            post_motion_dynamic_guard_stable_windows=1,
+            post_motion_dynamic_guard_crossover_gap_bpm=60.0,
+        )
+    )
+
+    assert any(
+        path == "fft_post_motion_reset" and times_idx == 0 and history_len == 1
+        for path, times_idx, history_len in fft_calls
+    )
+    assert result.metadata["post_motion_dynamic_guard"]["reset_fft_enabled"] is True
+    assert (
+        result.metadata["post_motion_dynamic_guard"]["reset_fft_applied_windows"] > 0
+    )
 
 
 def test_final_hr_blend_keeps_fft_on_nonadaptive_windows() -> None:
