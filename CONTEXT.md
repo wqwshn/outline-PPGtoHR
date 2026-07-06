@@ -4,6 +4,10 @@ This context defines the domain language used when discussing PPG heart-rate est
 
 ## Language
 
+**v2 运行策略束**:
+由动态追踪算法预设和运行配置共同派生的策略集合，用来描述一次 v2 心率求解中的追踪、回切、限幅和保护窗规则。它把策略语义从兼容参数记录中分离出来，供各算法模块一致消费。
+_Avoid_: 参数散列表, 单个预设名称
+
 **运动段**:
 PPG 信号受到显著运动伪影影响、算法需要借助运动参考信号或运动感知策略估计心率的时间段。
 _Avoid_: motion 区间, 运动窗口

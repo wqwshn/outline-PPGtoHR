@@ -29,10 +29,8 @@ from .algorithm_presets import (
     DirectionalTrackingParams,
     normalise_v2_algorithm_preset,
     v2_trace_rescue_candidates,
-    v2_tracking_policy_for_preset,
 )
 from .post_motion_dynamic_guard_policy import (
-    dynamic_guard_config_from_run_config,
     dynamic_guard_metadata_from_run_config,
     dynamic_guard_reset_fft_active,
     dynamic_guard_reset_fft_tracking,
@@ -44,6 +42,7 @@ from .reference_groups import (
     normalise_reference_order,
     reference_order_key,
 )
+from .runtime_policy import V2RuntimePolicy, runtime_policy_from_config
 from .signal_preparation import (
     motion_detection_metadata,
     motion_flag_at_center,
@@ -1530,8 +1529,9 @@ def _trace_rescue_finite_quantile(values: np.ndarray, q: float) -> float:
 def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
     prepared = prepare_v2_signals(cfg)
     params = prepared.params
-    algorithm_preset = normalise_v2_algorithm_preset(cfg.algorithm_preset)
-    tracking_policy = v2_tracking_policy_for_preset(algorithm_preset)
+    runtime_policy = runtime_policy_from_config(cfg)
+    algorithm_preset = runtime_policy.algorithm_preset
+    tracking_policy = runtime_policy.tracking
     rest_tracking = (
         tracking_policy.rest
         if tracking_policy.rest is not None
@@ -1673,6 +1673,9 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 if provisional_kind == "motion"
                 else tracking_policy.recovery
             )
+            filter_reacquire_supported = _reacquire_enabled_for_filter(
+                cfg.adaptive_filter
+            )
             row[2], adaptive_trace = _process_spectrum_with_trace(
                 filtered,
                 penalty_ref,
@@ -1689,18 +1692,18 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 ),
                 reacquire_enable=bool(
                     cfg.reacquire_enable
-                    and _reacquire_enabled_for_filter(cfg.adaptive_filter)
+                    and filter_reacquire_supported
                     and provisional_kind == "motion"
                 ),
                 high_lock_state=(
                     adaptive_high_lock_state if provisional_kind == "motion" else None
                 ),
                 high_lock_enable=bool(
-                    cfg.high_lock_escape_enable
-                    and _reacquire_enabled_for_filter(cfg.adaptive_filter)
+                    runtime_policy.high_lock_escape.enabled
+                    and filter_reacquire_supported
                     and provisional_kind == "motion"
                 ),
-                high_lock_params=_high_lock_params_from_cfg(cfg),
+                high_lock_params=runtime_policy.high_lock_escape.as_solver_params(),
                 penalty_confidence_enable=bool(
                     cfg.penalty_confidence_enable and provisional_kind == "motion"
                 ),
@@ -1737,6 +1740,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 source,
                 motion_segment,
                 cfg,
+                runtime_policy=runtime_policy,
             )
 
             source[:, 5] = _blend_final_hr_by_mask(source, used_adaptive_mask)
@@ -1750,6 +1754,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
             used_adaptive_mask,
             motion_segment,
             cfg,
+            runtime_policy=runtime_policy,
             window_stages=[
                 _classify_window_stage(
                     float(source[i, 0]),
@@ -1883,40 +1888,24 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
         "time_bias": float(cfg.time_bias),
         "pre_motion_context_seconds": float(cfg.pre_motion_context_seconds),
         "reacquire_enable": bool(cfg.reacquire_enable),
-        "high_lock_escape": {
-            "enabled": bool(cfg.high_lock_escape_enable),
-            "confirm_windows": int(cfg.high_lock_escape_confirm_windows),
-            "cooldown_windows": int(cfg.high_lock_escape_cooldown_windows),
-            "min_gap_bpm": float(cfg.high_lock_escape_min_gap_bpm),
-            "min_amp_ratio": float(cfg.high_lock_escape_min_amp_ratio),
-            "candidate_min_bpm": float(cfg.high_lock_escape_candidate_min_bpm),
-            "candidate_stable_bpm": float(cfg.high_lock_escape_candidate_stable_bpm),
-            "penalty_exclusion_bpm": float(cfg.high_lock_escape_penalty_exclusion_bpm),
-            "down_step_bpm": float(cfg.high_lock_escape_down_step_bpm),
-            "up_step_bpm": float(cfg.high_lock_escape_up_step_bpm),
-            "trigger_count": int(
+        "high_lock_escape": runtime_policy.high_lock_escape.metadata(
+            trigger_count=int(
                 sum(
                     1
                     for row in window_table
                     if bool((row.get("spectrum_tracking") or {}).get("high_lock_triggered"))
                 )
             ),
-        },
+        ),
         "penalty_confidence_enable": bool(cfg.penalty_confidence_enable),
-        "postprocess_dynamics_enable": bool(cfg.postprocess_dynamics_enable),
-        "postprocess_dynamics_params": _postprocess_dynamics_params(cfg),
+        "postprocess_dynamics_enable": bool(runtime_policy.postprocess_dynamics.enabled),
+        "postprocess_dynamics_params": runtime_policy.postprocess_dynamics.metadata(
+            runtime_policy.post_motion_reacquire
+        ),
         "postprocess_dynamics_applied_windows": int(postprocess_applied_count),
-        "post_motion_reacquire": {
-            "enabled": bool(cfg.post_motion_reacquire_enable),
-            "guard_seconds": float(cfg.post_motion_guard_seconds),
-            "adaptive_min_bpm": float(cfg.post_motion_reacquire_adaptive_min_bpm),
-            "gap_bpm": float(cfg.post_motion_reacquire_gap_bpm),
-            "fft_min_bpm": float(cfg.post_motion_reacquire_fft_min_bpm),
-            "first_drop_limit_bpm": float(cfg.post_motion_reacquire_first_drop_limit_bpm),
-            "up_step_bpm": float(cfg.post_motion_reacquire_up_step_bpm),
-            "down_step_bpm": float(cfg.post_motion_reacquire_down_step_bpm),
-            "switch_idx": post_motion_reacquire_start_idx,
-        },
+        "post_motion_reacquire": runtime_policy.post_motion_reacquire.metadata(
+            switch_idx=post_motion_reacquire_start_idx
+        ),
         "post_motion_dynamic_guard": dynamic_guard_metadata_from_run_config(
             cfg,
             motion_segment,
@@ -1933,17 +1922,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
 
 
 def _high_lock_params_from_cfg(cfg: V2RunConfig) -> dict[str, float | int]:
-    return {
-        "confirm_windows": int(cfg.high_lock_escape_confirm_windows),
-        "cooldown_windows": int(cfg.high_lock_escape_cooldown_windows),
-        "min_gap_hz": float(cfg.high_lock_escape_min_gap_bpm) / 60.0,
-        "min_amp_ratio": float(cfg.high_lock_escape_min_amp_ratio),
-        "candidate_min_hz": float(cfg.high_lock_escape_candidate_min_bpm) / 60.0,
-        "candidate_stable_hz": float(cfg.high_lock_escape_candidate_stable_bpm) / 60.0,
-        "penalty_exclusion_hz": float(cfg.high_lock_escape_penalty_exclusion_bpm) / 60.0,
-        "down_step_hz": float(cfg.high_lock_escape_down_step_bpm) / 60.0,
-        "up_step_hz": float(cfg.high_lock_escape_up_step_bpm) / 60.0,
-    }
+    return runtime_policy_from_config(cfg).high_lock_escape.as_solver_params()
 
 
 def _run_v1_style_reference_cascade(
@@ -2112,11 +2091,14 @@ def _post_motion_adaptive_mask(
     source: np.ndarray,
     motion_segment: dict[str, float],
     cfg: V2RunConfig,
+    *,
+    runtime_policy: V2RuntimePolicy | None = None,
 ) -> tuple[np.ndarray, int | None, list[dict[str, Any]]]:
     src = np.asarray(source, dtype=float)
     mask = np.zeros(src.shape[0], dtype=bool)
     if src.size == 0:
         return mask, None, []
+    policy = runtime_policy or runtime_policy_from_config(cfg)
 
     adaptive_start_idx, motion_end_idx, legacy_end_idx = _adaptive_boundary_indices(
         src,
@@ -2126,8 +2108,8 @@ def _post_motion_adaptive_mask(
     if adaptive_start_idx is None:
         return mask, None, []
 
-    if bool(getattr(cfg, "post_motion_dynamic_guard_enable", False)) and cfg.analysis_scope == "full":
-        guard_cfg = dynamic_guard_config_from_run_config(cfg)
+    if policy.post_motion_dynamic_guard.active_for_scope(cfg.analysis_scope):
+        guard_cfg = policy.post_motion_dynamic_guard.config
         dynamic_mask, events = switch_mask_and_events(
             src,
             motion_segment=motion_segment,
@@ -2137,7 +2119,8 @@ def _post_motion_adaptive_mask(
         switch_idx = int(event_rows[0]["window_idx"]) if event_rows else None
         return dynamic_mask, switch_idx, event_rows
 
-    if not bool(cfg.post_motion_reacquire_enable) or cfg.analysis_scope != "full":
+    reacquire = policy.post_motion_reacquire
+    if not bool(reacquire.enabled) or cfg.analysis_scope != "full":
         return _legacy_recovery_adaptive_mask(
             src,
             adaptive_start_idx,
@@ -2146,7 +2129,10 @@ def _post_motion_adaptive_mask(
             cfg,
         ), None, []
 
-    guard_end_time = float(motion_segment["end_s"]) + max(0.0, float(cfg.post_motion_guard_seconds))
+    guard_end_time = float(motion_segment["end_s"]) + max(
+        0.0,
+        float(reacquire.guard_seconds),
+    )
     switch_idx: int | None = None
     for idx in range(src.shape[0]):
         center = float(src[idx, 0])
@@ -2154,11 +2140,11 @@ def _post_motion_adaptive_mask(
             continue
         adaptive_bpm = float(src[idx, 2]) * 60.0
         fft_bpm = float(src[idx, 4]) * 60.0
-        if adaptive_bpm < float(cfg.post_motion_reacquire_adaptive_min_bpm):
+        if adaptive_bpm < float(reacquire.adaptive_min_bpm):
             continue
-        if fft_bpm < float(cfg.post_motion_reacquire_fft_min_bpm):
+        if fft_bpm < float(reacquire.fft_min_bpm):
             continue
-        if adaptive_bpm - fft_bpm >= float(cfg.post_motion_reacquire_gap_bpm):
+        if adaptive_bpm - fft_bpm >= float(reacquire.gap_bpm):
             switch_idx = idx
             break
 
@@ -2236,6 +2222,8 @@ def _postprocess_dynamic_final_hr_bpm(
     motion_segment: dict[str, float] | None,
     cfg: V2RunConfig,
     window_stages: list[str] | None = None,
+    *,
+    runtime_policy: V2RuntimePolicy | None = None,
 ) -> tuple[np.ndarray, int]:
     src = np.asarray(source, dtype=float)
     if src.ndim != 2 or src.shape[1] <= 5:
@@ -2245,7 +2233,10 @@ def _postprocess_dynamic_final_hr_bpm(
         raise ValueError("used_adaptive_mask length must match source rows")
 
     candidates = src[:, 5].astype(float) * 60.0
-    if not bool(cfg.postprocess_dynamics_enable) or candidates.size == 0:
+    policy = runtime_policy or runtime_policy_from_config(cfg)
+    postprocess = policy.postprocess_dynamics
+    reacquire = policy.post_motion_reacquire
+    if not bool(postprocess.enabled) or candidates.size == 0:
         return candidates.copy(), 0
 
     out = candidates.copy()
@@ -2268,12 +2259,13 @@ def _postprocess_dynamic_final_hr_bpm(
         if stage == "post_motion_reacquire":
             previous_stage = window_stages[idx - 1] if window_stages is not None and idx > 0 else ""
             if previous_stage != "post_motion_reacquire" and diff < 0.0:
-                out[idx] = previous - min(abs(diff), max(0.0, float(cfg.post_motion_reacquire_first_drop_limit_bpm)))
-                applied += int(abs(diff) > float(cfg.post_motion_reacquire_first_drop_limit_bpm))
+                first_drop_limit = max(0.0, float(reacquire.first_drop_limit_bpm))
+                out[idx] = previous - min(abs(diff), first_drop_limit)
+                applied += int(abs(diff) > first_drop_limit)
                 continue
-            limit_bpm, step_bpm = _post_motion_reacquire_slew_limit_bpm(diff, cfg)
+            limit_bpm, step_bpm = reacquire.slew_limit(diff)
         else:
-            limit_bpm, step_bpm = _directional_slew_limit_bpm(stage, diff, cfg)
+            limit_bpm, step_bpm = postprocess.limits_for(stage, diff)
         if abs(diff) > limit_bpm:
             out[idx] = previous + np.sign(diff) * min(abs(diff), step_bpm)
             applied += 1
@@ -2291,38 +2283,13 @@ def _dynamic_window_kind(
 
 
 def _directional_slew_limit_bpm(
-    kind: WindowKind,
+    kind: str,
     diff_bpm: float,
     cfg: V2RunConfig,
 ) -> tuple[float, float]:
-    if kind == "motion":
-        if diff_bpm >= 0.0:
-            return (
-                max(0.0, float(cfg.postprocess_limit_motion_up_bpm)),
-                max(0.0, float(cfg.postprocess_step_motion_up_bpm)),
-            )
-        return (
-            max(0.0, float(cfg.postprocess_limit_motion_down_bpm)),
-            max(0.0, float(cfg.postprocess_step_motion_down_bpm)),
-        )
-    if kind == "recovery":
-        if diff_bpm >= 0.0:
-            return (
-                max(0.0, float(cfg.postprocess_limit_recovery_up_bpm)),
-                max(0.0, float(cfg.postprocess_step_recovery_up_bpm)),
-            )
-        return (
-            max(0.0, float(cfg.postprocess_limit_recovery_down_bpm)),
-            max(0.0, float(cfg.postprocess_step_recovery_down_bpm)),
-        )
-    if diff_bpm >= 0.0:
-        return (
-            max(0.0, float(cfg.postprocess_limit_rest_up_bpm)),
-            max(0.0, float(cfg.postprocess_step_rest_up_bpm)),
-        )
-    return (
-        max(0.0, float(cfg.postprocess_limit_rest_down_bpm)),
-        max(0.0, float(cfg.postprocess_step_rest_down_bpm)),
+    return runtime_policy_from_config(cfg).postprocess_dynamics.limits_for(
+        kind,
+        diff_bpm,
     )
 
 
@@ -2330,33 +2297,12 @@ def _post_motion_reacquire_slew_limit_bpm(
     diff_bpm: float,
     cfg: V2RunConfig,
 ) -> tuple[float, float]:
-    if diff_bpm >= 0.0:
-        step = max(0.0, float(cfg.post_motion_reacquire_up_step_bpm))
-        return step, step
-    step = max(0.0, float(cfg.post_motion_reacquire_down_step_bpm))
-    return step, step
+    return runtime_policy_from_config(cfg).post_motion_reacquire.slew_limit(diff_bpm)
 
 
 def _postprocess_dynamics_params(cfg: V2RunConfig) -> dict[str, float]:
-    return {
-        "rest_up_limit_bpm": float(cfg.postprocess_limit_rest_up_bpm),
-        "rest_up_step_bpm": float(cfg.postprocess_step_rest_up_bpm),
-        "rest_down_limit_bpm": float(cfg.postprocess_limit_rest_down_bpm),
-        "rest_down_step_bpm": float(cfg.postprocess_step_rest_down_bpm),
-        "motion_up_limit_bpm": float(cfg.postprocess_limit_motion_up_bpm),
-        "motion_up_step_bpm": float(cfg.postprocess_step_motion_up_bpm),
-        "motion_down_limit_bpm": float(cfg.postprocess_limit_motion_down_bpm),
-        "motion_down_step_bpm": float(cfg.postprocess_step_motion_down_bpm),
-        "recovery_up_limit_bpm": float(cfg.postprocess_limit_recovery_up_bpm),
-        "recovery_up_step_bpm": float(cfg.postprocess_step_recovery_up_bpm),
-        "recovery_down_limit_bpm": float(cfg.postprocess_limit_recovery_down_bpm),
-        "recovery_down_step_bpm": float(cfg.postprocess_step_recovery_down_bpm),
-        "post_motion_reacquire_first_drop_limit_bpm": float(
-            cfg.post_motion_reacquire_first_drop_limit_bpm
-        ),
-        "post_motion_reacquire_up_step_bpm": float(cfg.post_motion_reacquire_up_step_bpm),
-        "post_motion_reacquire_down_step_bpm": float(cfg.post_motion_reacquire_down_step_bpm),
-    }
+    policy = runtime_policy_from_config(cfg)
+    return policy.postprocess_dynamics.metadata(policy.post_motion_reacquire)
 
 
 def _find_crossover_idx(
