@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from ppg_hr.v2.optimizer import V2BayesConfig, optimise_v2
 from ppg_hr.v2.algorithm_presets import (
     V2_ALGORITHM_PRESET_DYNAMIC_REST_BO,
     V2_ALGORITHM_PRESET_LITE,
@@ -14,8 +13,10 @@ from ppg_hr.v2.algorithm_presets import (
     normalise_v2_algorithm_preset,
     v2_search_space_for_preset,
 )
+from ppg_hr.v2.optimizer import V2BayesConfig, optimise_v2
 from ppg_hr.v2.search_space import V2SearchSpace, default_v2_search_space, reduced_v2_search_space
-from ppg_hr.v2.solver import V2SolverResult, _solver_params_from_v2
+from ppg_hr.v2.signal_preparation import solver_params_from_v2
+from ppg_hr.v2.solver import V2SolverResult
 from ppg_hr.v2.types import V2RunConfig
 
 
@@ -171,7 +172,7 @@ def test_v2_config_defaults_and_strategy_params_pass_to_solver_params(tmp_path: 
         as_lms_mu_max=0.08,
     )
 
-    params = _solver_params_from_v2(cfg)
+    params = solver_params_from_v2(cfg)
 
     assert cfg.spec_penalty_weight == 0.4
     assert cfg.reacquire_enable is True

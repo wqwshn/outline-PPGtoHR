@@ -6,7 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from ppg_hr.v2.solver import _apply_ppg_input_transform, solve_v2
+from ppg_hr.v2.signal_preparation import apply_ppg_input_transform, detect_motion_from_raw_imu
+from ppg_hr.v2.solver import solve_v2
 from ppg_hr.v2.types import V2RunConfig
 
 
@@ -1072,10 +1073,8 @@ def _make_low_acc_gyro_motion_raw(
 
 
 def test_raw_imu_motion_detector_uses_gyro_for_low_acc_motion() -> None:
-    from ppg_hr.v2.solver import _detect_motion_from_raw_imu
-
     accx, accy, accz, gyrox, gyroy, gyroz = _make_low_acc_gyro_motion_raw()
-    result = _detect_motion_from_raw_imu(
+    result = detect_motion_from_raw_imu(
         accx,
         accy,
         accz,
@@ -1093,8 +1092,6 @@ def test_raw_imu_motion_detector_uses_gyro_for_low_acc_motion() -> None:
 
 
 def test_raw_imu_motion_detector_is_fs_target_independent() -> None:
-    from ppg_hr.v2.solver import _detect_motion_from_raw_imu
-
     accx, accy, accz, gyrox, gyroy, gyroz = _make_low_acc_gyro_motion_raw()
     cfg_25 = V2RunConfig(
         data_path=Path("dummy.csv"),
@@ -1107,10 +1104,10 @@ def test_raw_imu_motion_detector_is_fs_target_independent() -> None:
         fs_target=100,
     )
 
-    result_25 = _detect_motion_from_raw_imu(
+    result_25 = detect_motion_from_raw_imu(
         accx, accy, accz, gyrox, gyroy, gyroz, cfg_25, fs_origin=100
     )
-    result_100 = _detect_motion_from_raw_imu(
+    result_100 = detect_motion_from_raw_imu(
         accx, accy, accz, gyrox, gyroy, gyroz, cfg_100, fs_origin=100
     )
 
@@ -1156,7 +1153,7 @@ def test_log_absorbance_input_transform_estimates_relative_absorption() -> None:
     absorption = 0.025 * np.sin(2 * np.pi * 1.2 * t)
     raw_intensity = baseline * np.exp(-absorption)
 
-    transformed = _apply_ppg_input_transform(
+    transformed = apply_ppg_input_transform(
         raw_intensity,
         "log_absorbance",
         fs_origin=fs,

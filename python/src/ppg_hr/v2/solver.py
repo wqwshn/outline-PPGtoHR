@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import math
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
-from scipy.signal import butter, filtfilt, find_peaks, resample_poly
+from scipy.signal import find_peaks
 from scipy.signal.windows import hamming
 
 from ppg_hr.core.adaptive_filter import apply_adaptive_cascade
@@ -32,7 +32,10 @@ from .algorithm_presets import (
     v2_tracking_policy_for_preset,
 )
 from .post_motion_dynamic_guard_policy import (
-    DynamicGuardConfig,
+    dynamic_guard_config_from_run_config,
+    dynamic_guard_metadata_from_run_config,
+    dynamic_guard_reset_fft_active,
+    dynamic_guard_reset_fft_tracking,
     event_dicts,
     switch_mask_and_events,
 )
@@ -42,39 +45,17 @@ from .reference_groups import (
     reference_order_key,
 )
 from .signal_preparation import (
-    apply_ppg_input_transform as _shared_apply_ppg_input_transform,
-)
-from .signal_preparation import (
-    detect_motion_from_raw_imu as _shared_detect_motion_from_raw_imu,
-)
-from .signal_preparation import (
-    finite_signal as _shared_finite_signal,
-)
-from .signal_preparation import (
-    motion_detection_metadata as _shared_motion_detection_metadata,
-)
-from .signal_preparation import (
-    motion_flag_at_center as _shared_motion_flag_at_center,
-)
-from .signal_preparation import (
-    normalise_ppg_input_transform as _shared_normalise_ppg_input_transform,
-)
-from .signal_preparation import (
-    ordered_reference_signals as _shared_ordered_reference_signals,
-)
-from .signal_preparation import (
+    motion_detection_metadata,
+    motion_flag_at_center,
+    normalise_ppg_input_transform,
     prepare_v2_signals,
 )
-from .signal_preparation import (
-    select_ppg_raw as _shared_select_ppg_raw,
+from .spectrum_tracking import (
+    SpectrumPenaltyState,
+    SpectrumReacquireState,
+    SpectrumTrackingTrace,
+    track_spectrum_window,
 )
-from .signal_preparation import (
-    slow_ppg_baseline as _shared_slow_ppg_baseline,
-)
-from .signal_preparation import (
-    solver_params_from_v2 as _shared_solver_params_from_v2,
-)
-from .spectrum_tracking import track_spectrum_window
 from .types import V2RunConfig
 
 WindowKind = Literal["rest", "motion", "recovery"]
@@ -102,71 +83,6 @@ _HIGH_LOCK_DOWN_STEP_HZ = 20.0 / 60.0
 _HIGH_LOCK_UP_STEP_HZ = 3.0 / 60.0
 _MOTION_PENALTY_MIN_EFFECTIVE_CONFIDENCE = 0.9
 _PROTECTION_CHALLENGER_MIN_AMP_RATIO = 0.45
-_MOTION_IMU_RELATIVE_FLOOR = 0.05
-_MOTION_IMU_GAP_BRIDGE_WINDOWS = 3
-_MOTION_IMU_MIN_RUN_WINDOWS = 5
-
-
-@dataclass
-class SpectrumTrackingTrace:
-    path: str
-    window_kind: str
-    penalty_applied: bool
-    penalty_centers_bpm: tuple[float, ...]
-    penalty_half_width_bpm: float
-    candidate_peaks_bpm: tuple[float, ...]
-    candidate_peak_amplitudes: tuple[float, ...]
-    raw_candidate_hr_bpm: float
-    previous_hr_bpm: float | None
-    search_min_bpm: float | None
-    search_max_bpm: float | None
-    selected_peak_rank: int
-    tracked_hr_bpm: float
-    slew_limited_hr_bpm: float
-    penalty_weight_min: float = 1.0
-    protection_center_bpm: float | None = None
-    protection_half_width_bpm: float | None = None
-    protection_applied: bool = False
-    protected_penalty_overlap: bool = False
-    protection_suppressed: bool = False
-    protection_suppression_reason: str = ""
-    protection_challenger_bpm: float | None = None
-    candidate_source: str = "raw_local_peaks"
-    smoothed_path_hr_bpm: float = float("nan")
-    final_hr_bpm: float = float("nan")
-    ref_hr_bpm: float = float("nan")
-    unpenalized_candidate_peaks_bpm: tuple[float, ...] = ()
-    unpenalized_candidate_peak_amplitudes: tuple[float, ...] = ()
-    penalty_confidence: float = 1.0
-    harmonic_penalty_applied: bool = False
-    reacquire_mode: str = "disabled"
-    reacquire_candidate_bpm: float | None = None
-    reacquire_count: int = 0
-    reacquire_low_lock_count: int = 0
-    reacquire_triggered: bool = False
-    high_lock_mode: str = "disabled"
-    high_lock_candidate_bpm: float | None = None
-    high_lock_count: int = 0
-    high_lock_cooldown: int = 0
-    high_lock_reason: str = "none"
-    high_lock_labels: tuple[str, ...] = ()
-    high_lock_suppressed_reason: str = ""
-    high_lock_gap_bpm: float | None = None
-    high_lock_triggered: bool = False
-    source: str = "report"
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-
-@dataclass
-class SpectrumReacquireState:
-    mode: str = "locked"
-    candidate_hz: float | None = None
-    count: int = 0
-    low_lock_count: int = 0
-
-
 @dataclass(frozen=True)
 class SpectrumReacquireDecision:
     hr_hz: float
@@ -197,30 +113,6 @@ class SpectrumHighLockEscapeDecision:
     suppressed_reason: str
     gap_hz: float | None
     triggered: bool
-
-
-@dataclass(frozen=True)
-class SpectrumPenaltyState:
-    weights: np.ndarray
-    protected_mask: np.ndarray
-    nominal_mask: np.ndarray
-    active_mask: np.ndarray
-    protection_center_hz: float | None
-    protection_half_width_hz: float | None
-    protected_penalty_overlap: bool
-
-
-@dataclass(frozen=True)
-class MotionDetectionResult:
-    motion_segment: dict[str, float] | None
-    flags: np.ndarray
-    centers_s: np.ndarray
-    scores: np.ndarray
-    threshold: float
-    acc_threshold: float
-    gyro_threshold: float
-    acc_score_max: float
-    gyro_score_max: float
 
 
 @dataclass
@@ -1385,7 +1277,7 @@ def _normalise_config(config: V2RunConfig) -> V2RunConfig:
         **{
             **config.__dict__,
             "algorithm_preset": normalise_v2_algorithm_preset(config.algorithm_preset),
-            "ppg_input_transform": _normalise_ppg_input_transform(config.ppg_input_transform),
+            "ppg_input_transform": normalise_ppg_input_transform(config.ppg_input_transform),
             "analysis_scope": str(config.analysis_scope).strip().lower(),
             "reference_groups_order": normalise_reference_order(config.reference_groups_order),
         }
@@ -1697,7 +1589,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
             in_adaptive_range = False
         idx_s_motion = int(round(time_1 * fs_origin))
         idx_e_motion = int(round(time_2 * fs_origin))
-        is_motion_flag = _motion_flag_at_center(center, motion_detection)
+        is_motion_flag = motion_flag_at_center(center, motion_detection)
         quality = _window_quality_from_valid_mask(
             valid_mask,
             idx_s_motion,
@@ -1720,7 +1612,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
         sig_a = [accx[idx_s:idx_e], accy[idx_s:idx_e], accz[idx_s:idx_e]]
         sig_fft = (sig_p - sig_p.mean()) * hamming(len(sig_p))
 
-        reset_fft_active = _post_motion_dynamic_guard_reset_fft_active(
+        reset_fft_active = dynamic_guard_reset_fft_active(
             center,
             motion_segment,
             cfg,
@@ -1731,7 +1623,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 reset_fft_started = True
             history_fft = np.asarray(reset_fft_history + [0.0], dtype=float)
             fft_times_idx = len(reset_fft_history)
-            fft_tracking = _post_motion_dynamic_guard_reset_fft_tracking(cfg)
+            fft_tracking = dynamic_guard_reset_fft_tracking(cfg)
             fft_path = "fft_post_motion_reset"
             fft_window_kind: WindowKind = "recovery"
         else:
@@ -1983,7 +1875,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
         "reference_groups_order": list(reference_order),
         "reference_order_key": reference_order_key(reference_order),
         "motion_segment": motion_segment,
-        "motion_detection": _motion_detection_metadata(motion_detection),
+        "motion_detection": motion_detection_metadata(motion_detection),
         "used_adaptive_windows": int(sum(1 for row in window_table if row["used_adaptive"])),
         "unreliable_windows": int(sum(1 for row in window_table if not row["reliable"])),
         "fallback_reason": fallback_reason,
@@ -2006,9 +1898,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 sum(
                     1
                     for row in window_table
-                    if bool(
-                        ((row.get("spectrum_tracking") or {}).get("high_lock_triggered"))
-                    )
+                    if bool((row.get("spectrum_tracking") or {}).get("high_lock_triggered"))
                 )
             ),
         },
@@ -2027,45 +1917,12 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
             "down_step_bpm": float(cfg.post_motion_reacquire_down_step_bpm),
             "switch_idx": post_motion_reacquire_start_idx,
         },
-        "post_motion_dynamic_guard": {
-            "enabled": bool(cfg.post_motion_dynamic_guard_enable),
-            "reset_fft_enabled": bool(
-                _post_motion_dynamic_guard_reset_fft_enabled(motion_segment, cfg)
-            ),
-            "reset_fft_applied_windows": int(reset_fft_applied_windows),
-            "min_elapsed_s": float(cfg.post_motion_dynamic_guard_min_elapsed_s),
-            "stable_windows": int(cfg.post_motion_dynamic_guard_stable_windows),
-            "crossover_gap_bpm": float(cfg.post_motion_dynamic_guard_crossover_gap_bpm),
-            "upward_gap_bpm": float(cfg.post_motion_dynamic_guard_upward_gap_bpm),
-            "fft_floor_bpm": float(cfg.post_motion_dynamic_guard_fft_floor_bpm),
-            "recovery_step_up_bpm": float(
-                cfg.post_motion_dynamic_guard_recovery_step_up_bpm
-            ),
-            "recovery_step_down_bpm": float(
-                cfg.post_motion_dynamic_guard_recovery_step_down_bpm
-            ),
-            "rising_windows": int(cfg.post_motion_dynamic_guard_rising_windows),
-            "rising_slope_bpm_per_window": float(
-                cfg.post_motion_dynamic_guard_rising_slope_bpm_per_window
-            ),
-            "rescue_gap_bpm": float(cfg.post_motion_dynamic_guard_rescue_gap_bpm),
-            "gap_rescue_enable": bool(
-                cfg.post_motion_dynamic_guard_gap_rescue_enable
-            ),
-            "gap_rescue_windows": int(
-                cfg.post_motion_dynamic_guard_gap_rescue_windows
-            ),
-            "gap_rescue_min_hits": int(
-                cfg.post_motion_dynamic_guard_gap_rescue_min_hits
-            ),
-            "gap_rescue_fft_stable_windows": int(
-                cfg.post_motion_dynamic_guard_gap_rescue_fft_stable_windows
-            ),
-            "gap_rescue_fft_stable_bpm": float(
-                cfg.post_motion_dynamic_guard_gap_rescue_fft_stable_bpm
-            ),
-            "switch_events": post_motion_dynamic_guard_events,
-        },
+        "post_motion_dynamic_guard": dynamic_guard_metadata_from_run_config(
+            cfg,
+            motion_segment,
+            reset_fft_applied_windows=reset_fft_applied_windows,
+            switch_events=post_motion_dynamic_guard_events,
+        ),
     }
     return V2SolverResult(
         HR=HR,
@@ -2073,10 +1930,6 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
         metadata=metadata,
         window_table=window_table,
     )
-
-
-def _solver_params_from_v2(cfg: V2RunConfig) -> SolverParams:
-    return _shared_solver_params_from_v2(cfg)
 
 
 def _high_lock_params_from_cfg(cfg: V2RunConfig) -> dict[str, float | int]:
@@ -2091,69 +1944,6 @@ def _high_lock_params_from_cfg(cfg: V2RunConfig) -> dict[str, float | int]:
         "down_step_hz": float(cfg.high_lock_escape_down_step_bpm) / 60.0,
         "up_step_hz": float(cfg.high_lock_escape_up_step_bpm) / 60.0,
     }
-
-
-def _select_ppg_raw(raw_data: np.ndarray, mode: str) -> np.ndarray:
-    return _shared_select_ppg_raw(raw_data, mode)
-
-
-def _normalise_ppg_input_transform(transform: str) -> str:
-    return _shared_normalise_ppg_input_transform(transform)
-
-
-def _apply_ppg_input_transform(
-    values: np.ndarray,
-    transform: str,
-    *,
-    fs_origin: int,
-    baseline_seconds: float = 5.0,
-) -> np.ndarray:
-    return _shared_apply_ppg_input_transform(
-        values,
-        transform,
-        fs_origin=fs_origin,
-        baseline_seconds=baseline_seconds,
-    )
-
-
-def _slow_ppg_baseline(
-    values: np.ndarray,
-    *,
-    fs_origin: int,
-    baseline_seconds: float,
-) -> np.ndarray:
-    return _shared_slow_ppg_baseline(
-        values,
-        fs_origin=fs_origin,
-        baseline_seconds=baseline_seconds,
-    )
-
-
-def _finite_signal(values: np.ndarray) -> np.ndarray:
-    return _shared_finite_signal(values)
-
-
-def _ordered_reference_signals(
-    reference_order: tuple[str, ...],
-    *,
-    hf1: np.ndarray,
-    hf2: np.ndarray,
-    cf1: np.ndarray,
-    cf2: np.ndarray,
-    accx: np.ndarray,
-    accy: np.ndarray,
-    accz: np.ndarray,
-) -> list[dict[str, Any]]:
-    return _shared_ordered_reference_signals(
-        reference_order,
-        hf1=hf1,
-        hf2=hf2,
-        cf1=cf1,
-        cf2=cf2,
-        accx=accx,
-        accy=accy,
-        accz=accz,
-    )
 
 
 def _run_v1_style_reference_cascade(
@@ -2209,284 +1999,6 @@ def _run_v1_style_reference_cascade(
         )
     penalty_ref = np.asarray(references[best_idx]["signal"][idx_s:idx_e], dtype=float)
     return current, penalty_ref, stages
-
-
-def _ppg_column(mode: str) -> str:
-    value = str(mode).strip().lower()
-    if value == "green":
-        return "ppg_green"
-    if value == "red":
-        return "ppg_red"
-    if value in {"ir", "infrared"}:
-        return "ppg_ir"
-    raise ValueError(f"Unsupported ppg_mode: {mode!r}")
-
-
-def _resample_frame(frame: pd.DataFrame, fs_origin: int, fs_target: int) -> pd.DataFrame:
-    if int(fs_origin) == int(fs_target):
-        return frame.copy()
-
-    import math
-
-    gcd = math.gcd(int(fs_origin), int(fs_target))
-    up = int(fs_target) // gcd
-    down = int(fs_origin) // gcd
-    out = {}
-    for column in frame.columns:
-        if column == "time_s":
-            continue
-        out[column] = resample_poly(frame[column].to_numpy(dtype=float), up, down)
-    n = min(len(v) for v in out.values())
-    data = {"time_s": np.arange(n, dtype=float) / float(fs_target)}
-    data.update({k: v[:n] for k, v in out.items()})
-    return pd.DataFrame(data)
-
-
-def _acc_mag(frame: pd.DataFrame) -> np.ndarray:
-    return np.sqrt(
-        frame["accx"].to_numpy(dtype=float) ** 2
-        + frame["accy"].to_numpy(dtype=float) ** 2
-        + frame["accz"].to_numpy(dtype=float) ** 2
-    )
-
-
-def _detect_motion_from_raw_imu(
-    accx_raw: np.ndarray,
-    accy_raw: np.ndarray,
-    accz_raw: np.ndarray,
-    gyrox_raw: np.ndarray,
-    gyroy_raw: np.ndarray,
-    gyroz_raw: np.ndarray,
-    cfg: V2RunConfig,
-    *,
-    fs_origin: int,
-) -> MotionDetectionResult:
-    return _shared_detect_motion_from_raw_imu(
-        accx_raw,
-        accy_raw,
-        accz_raw,
-        gyrox_raw,
-        gyroy_raw,
-        gyroz_raw,
-        cfg,
-        fs_origin=fs_origin,
-    )
-
-
-def _source_imu_magnitude(
-    axes: tuple[np.ndarray, np.ndarray, np.ndarray],
-    *,
-    fs_origin: int,
-    high_hz: float,
-) -> np.ndarray:
-    filtered = [_safe_source_bandpass(axis, fs_origin=fs_origin, high_hz=high_hz) for axis in axes]
-    return np.sqrt(sum(axis**2 for axis in filtered))
-
-
-def _safe_source_bandpass(
-    values: np.ndarray,
-    *,
-    fs_origin: int,
-    high_hz: float,
-) -> np.ndarray:
-    arr = _finite_signal(np.asarray(values, dtype=float))
-    baseline = arr - float(np.nanmean(arr)) if arr.size else arr
-    if arr.size < 16:
-        return baseline
-    nyq = float(fs_origin) / 2.0
-    low = 0.5
-    high = min(float(high_hz), 0.45 * float(fs_origin))
-    if not (0.0 < low < high < nyq):
-        return baseline
-    try:
-        b, a = butter(4, [low / nyq, high / nyq], btype="bandpass")
-        return filtfilt(b, a, arr)
-    except ValueError:
-        return baseline
-
-
-def _source_window_std(
-    values: np.ndarray,
-    cfg: V2RunConfig,
-    *,
-    fs_origin: int,
-) -> tuple[np.ndarray, np.ndarray]:
-    win = int(round(float(cfg.window_seconds) * int(fs_origin)))
-    step = int(round(float(cfg.window_step_seconds) * int(fs_origin)))
-    if win <= 1 or step <= 0:
-        return np.zeros(0, dtype=float), np.zeros(0, dtype=float)
-    starts = range(0, max(0, values.size - win + 1), step)
-    scores: list[float] = []
-    centers: list[float] = []
-    for start in starts:
-        segment = values[start : start + win]
-        scores.append(float(np.std(segment, ddof=1)) if segment.size > 1 else 0.0)
-        centers.append((float(start) + 0.5 * float(win)) / float(fs_origin))
-    return np.asarray(scores, dtype=float), np.asarray(centers, dtype=float)
-
-
-def _imu_motion_threshold(
-    source_mag: np.ndarray,
-    window_scores: np.ndarray,
-    cfg: V2RunConfig,
-    fs_origin: int,
-) -> float:
-    calib_len = min(
-        max(2, int(round(float(cfg.calib_time) * int(fs_origin)))),
-        int(source_mag.size),
-    )
-    baseline = source_mag[:calib_len]
-    baseline_std = float(np.std(baseline, ddof=1)) if baseline.size > 1 else 0.0
-    max_score = (
-        float(np.nanmax(window_scores))
-        if window_scores.size and np.isfinite(window_scores).any()
-        else 0.0
-    )
-    return max(
-        float(cfg.motion_th_scale) * baseline_std,
-        _MOTION_IMU_RELATIVE_FLOOR * max_score,
-        1e-12,
-    )
-
-
-def _normalised_scores(scores: np.ndarray, threshold: float) -> np.ndarray:
-    denom = max(float(threshold), 1e-12)
-    return np.asarray(scores, dtype=float) / denom
-
-
-def _postprocess_motion_flags(flags: np.ndarray) -> np.ndarray:
-    out = np.asarray(flags, dtype=bool).copy()
-    out = _bridge_short_false_runs(out, _MOTION_IMU_GAP_BRIDGE_WINDOWS)
-    out = _remove_short_true_runs(out, _MOTION_IMU_MIN_RUN_WINDOWS)
-    return out
-
-
-def _bridge_short_false_runs(flags: np.ndarray, max_gap: int) -> np.ndarray:
-    out = np.asarray(flags, dtype=bool).copy()
-    idx = 0
-    while idx < out.size:
-        if out[idx]:
-            idx += 1
-            continue
-        start = idx
-        while idx + 1 < out.size and not out[idx + 1]:
-            idx += 1
-        end = idx
-        if (
-            start > 0
-            and end + 1 < out.size
-            and out[start - 1]
-            and out[end + 1]
-            and end - start + 1 <= int(max_gap)
-        ):
-            out[start : end + 1] = True
-        idx += 1
-    return out
-
-
-def _remove_short_true_runs(flags: np.ndarray, min_len: int) -> np.ndarray:
-    out = np.asarray(flags, dtype=bool).copy()
-    idx = 0
-    while idx < out.size:
-        if not out[idx]:
-            idx += 1
-            continue
-        start = idx
-        while idx + 1 < out.size and out[idx + 1]:
-            idx += 1
-        end = idx
-        if end - start + 1 < int(min_len):
-            out[start : end + 1] = False
-        idx += 1
-    return out
-
-
-def _keep_longest_true_run_flags(flags: np.ndarray) -> np.ndarray:
-    out = np.zeros_like(np.asarray(flags, dtype=bool))
-    best_start = best_end = -1
-    best_len = 0
-    idx = 0
-    while idx < flags.size:
-        if not flags[idx]:
-            idx += 1
-            continue
-        start = idx
-        while idx + 1 < flags.size and flags[idx + 1]:
-            idx += 1
-        end = idx
-        run_len = end - start + 1
-        if run_len > best_len:
-            best_start, best_end, best_len = start, end, run_len
-        idx += 1
-    if best_len > 0:
-        out[best_start : best_end + 1] = True
-    return out
-
-
-def _motion_flag_at_center(
-    center_s: float,
-    detection: MotionDetectionResult,
-) -> bool:
-    return _shared_motion_flag_at_center(center_s, detection)
-
-
-def _motion_detection_metadata(detection: MotionDetectionResult) -> dict[str, Any]:
-    return _shared_motion_detection_metadata(detection)
-
-
-def _motion_flags(acc_mag: np.ndarray, cfg: V2RunConfig) -> np.ndarray:
-    win = int(round(cfg.window_seconds * cfg.fs_target))
-    step = int(round(cfg.window_step_seconds * cfg.fs_target))
-    starts = range(0, max(0, acc_mag.size - win + 1), step)
-    calib_len = max(2, int(round(cfg.calib_time * cfg.fs_target)))
-    calib = acc_mag[:calib_len]
-    baseline_std = float(np.std(calib, ddof=1)) if calib.size > 1 else 0.0
-    stds = []
-    for start in starts:
-        segment = acc_mag[start : start + win]
-        stds.append(float(np.std(segment, ddof=1)) if segment.size > 1 else 0.0)
-    std_arr = np.asarray(stds, dtype=float)
-    if std_arr.size == 0:
-        return np.zeros(0, dtype=bool)
-    max_std = float(np.nanmax(std_arr)) if np.isfinite(std_arr).any() else 0.0
-    threshold = max(float(cfg.motion_th_scale) * baseline_std, 0.05 * max_std)
-    return std_arr > threshold
-
-
-def _window_starts(frame: pd.DataFrame, cfg: V2RunConfig) -> list[int]:
-    win = int(round(cfg.window_seconds * cfg.fs_target))
-    step = int(round(cfg.window_step_seconds * cfg.fs_target))
-    return list(range(0, max(0, len(frame) - win + 1), step))
-
-
-def _longest_true_run(flags: np.ndarray, cfg: V2RunConfig) -> dict[str, float] | None:
-    if not flags.any():
-        return None
-
-    best_start = best_end = 0
-    best_len = 0
-    idx = 0
-    while idx < flags.size:
-        if not flags[idx]:
-            idx += 1
-            continue
-        current = idx
-        while idx < flags.size and flags[idx]:
-            idx += 1
-        run_len = idx - current
-        if run_len > best_len:
-            best_len = run_len
-            best_start, best_end = current, idx - 1
-
-    half_window = float(cfg.window_seconds) / 2.0
-    start_s = float(best_start) * float(cfg.window_step_seconds) + half_window
-    end_s = float(best_end) * float(cfg.window_step_seconds) + half_window
-    return {
-        "start_s": start_s,
-        "end_s": end_s,
-        "window_start_idx": float(best_start),
-        "window_end_idx": float(best_end),
-    }
 
 
 def _window_in_motion(
@@ -2615,40 +2127,7 @@ def _post_motion_adaptive_mask(
         return mask, None, []
 
     if bool(getattr(cfg, "post_motion_dynamic_guard_enable", False)) and cfg.analysis_scope == "full":
-        guard_cfg = DynamicGuardConfig(
-            name="solver_dynamic_guard",
-            min_elapsed_s=float(cfg.post_motion_dynamic_guard_min_elapsed_s),
-            stable_windows=int(cfg.post_motion_dynamic_guard_stable_windows),
-            crossover_gap_bpm=float(cfg.post_motion_dynamic_guard_crossover_gap_bpm),
-            upward_gap_bpm=float(cfg.post_motion_dynamic_guard_upward_gap_bpm),
-            fft_floor_bpm=float(cfg.post_motion_dynamic_guard_fft_floor_bpm),
-            recovery_step_up_bpm=float(
-                cfg.post_motion_dynamic_guard_recovery_step_up_bpm
-            ),
-            recovery_step_down_bpm=float(
-                cfg.post_motion_dynamic_guard_recovery_step_down_bpm
-            ),
-            rising_windows=int(cfg.post_motion_dynamic_guard_rising_windows),
-            rising_slope_bpm_per_window=float(
-                cfg.post_motion_dynamic_guard_rising_slope_bpm_per_window
-            ),
-            rescue_gap_bpm=float(cfg.post_motion_dynamic_guard_rescue_gap_bpm),
-            gap_rescue_enable=bool(
-                cfg.post_motion_dynamic_guard_gap_rescue_enable
-            ),
-            gap_rescue_windows=int(
-                cfg.post_motion_dynamic_guard_gap_rescue_windows
-            ),
-            gap_rescue_min_hits=int(
-                cfg.post_motion_dynamic_guard_gap_rescue_min_hits
-            ),
-            gap_rescue_fft_stable_windows=int(
-                cfg.post_motion_dynamic_guard_gap_rescue_fft_stable_windows
-            ),
-            gap_rescue_fft_stable_bpm=float(
-                cfg.post_motion_dynamic_guard_gap_rescue_fft_stable_bpm
-            ),
-        )
+        guard_cfg = dynamic_guard_config_from_run_config(cfg)
         dynamic_mask, events = switch_mask_and_events(
             src,
             motion_segment=motion_segment,
@@ -2688,44 +2167,6 @@ def _post_motion_adaptive_mask(
     else:
         mask[adaptive_start_idx:switch_idx] = True
     return mask, switch_idx, []
-
-
-def _post_motion_dynamic_guard_reset_fft_enabled(
-    motion_segment: dict[str, float] | None,
-    cfg: V2RunConfig,
-) -> bool:
-    return bool(
-        motion_segment is not None
-        and bool(getattr(cfg, "post_motion_dynamic_guard_enable", False))
-        and str(cfg.analysis_scope).strip().lower() == "full"
-    )
-
-
-def _post_motion_dynamic_guard_reset_fft_active(
-    center_s: float,
-    motion_segment: dict[str, float] | None,
-    cfg: V2RunConfig,
-) -> bool:
-    if not _post_motion_dynamic_guard_reset_fft_enabled(motion_segment, cfg):
-        return False
-    guard_end = float(motion_segment["end_s"]) + max(
-        0.0,
-        float(cfg.post_motion_dynamic_guard_min_elapsed_s),
-    )
-    return float(center_s) > guard_end + 1e-9
-
-
-def _post_motion_dynamic_guard_reset_fft_tracking(
-    cfg: V2RunConfig,
-) -> DirectionalTrackingParams:
-    return DirectionalTrackingParams(
-        range_up_bpm=20.0,
-        range_down_bpm=25.0,
-        limit_up_bpm=float(cfg.post_motion_dynamic_guard_recovery_step_up_bpm),
-        step_up_bpm=float(cfg.post_motion_dynamic_guard_recovery_step_up_bpm),
-        limit_down_bpm=float(cfg.post_motion_dynamic_guard_recovery_step_down_bpm),
-        step_down_bpm=float(cfg.post_motion_dynamic_guard_recovery_step_down_bpm),
-    )
 
 
 def _adaptive_boundary_indices(

@@ -6,9 +6,10 @@ import argparse
 import csv
 import json
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import numpy as np
 from scipy.signal.windows import hamming
@@ -16,10 +17,9 @@ from scipy.signal.windows import hamming
 from ppg_hr.preprocess.utils import smoothdata_movmedian
 
 from .algorithm_presets import DirectionalTrackingParams
-from .signal_preparation import prepare_v2_signals
+from .signal_preparation import motion_flag_at_center, prepare_v2_signals
 from .solver import (
     _classify_window_stage,
-    _motion_flag_at_center,
     _process_spectrum_with_trace,
     _ref_at,
     _symmetric_tracking_params,
@@ -279,7 +279,7 @@ def run_baseline_sample(
             local_history.append(float(hr_hz))
 
         ref_bpm = _ref_at(center + float(cfg.time_bias), prepared.ref_data) if prepared.ref_data.size else float("nan")
-        is_motion = _motion_flag_at_center(center, motion_detection)
+        is_motion = motion_flag_at_center(center, motion_detection)
         window_stage = _baseline_window_stage(center, motion_segment, guard_end_s)
         error_bpm = float(hr_hz) * 60.0 - float(ref_bpm) if np.isfinite(ref_bpm) else float("nan")
         row = {

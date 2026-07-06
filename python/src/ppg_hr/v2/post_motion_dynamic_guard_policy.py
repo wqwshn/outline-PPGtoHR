@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
-from typing import Any, Iterable
+from typing import Any
 
 import numpy as np
+
+from .algorithm_presets import DirectionalTrackingParams
+from .types import V2RunConfig
 
 SWITCH_REASON_STABLE_CROSSOVER = "stable_crossover"
 SWITCH_REASON_ADAPTIVE_RISING_RESCUE = "adaptive_rising_rescue"
@@ -55,6 +59,105 @@ class DynamicGuardSwitchEvent:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+def dynamic_guard_config_from_run_config(
+    cfg: V2RunConfig,
+    *,
+    name: str = "solver_dynamic_guard",
+) -> DynamicGuardConfig:
+    return DynamicGuardConfig(
+        name=name,
+        min_elapsed_s=float(cfg.post_motion_dynamic_guard_min_elapsed_s),
+        stable_windows=int(cfg.post_motion_dynamic_guard_stable_windows),
+        crossover_gap_bpm=float(cfg.post_motion_dynamic_guard_crossover_gap_bpm),
+        upward_gap_bpm=float(cfg.post_motion_dynamic_guard_upward_gap_bpm),
+        fft_floor_bpm=float(cfg.post_motion_dynamic_guard_fft_floor_bpm),
+        recovery_step_up_bpm=float(cfg.post_motion_dynamic_guard_recovery_step_up_bpm),
+        recovery_step_down_bpm=float(cfg.post_motion_dynamic_guard_recovery_step_down_bpm),
+        rising_windows=int(cfg.post_motion_dynamic_guard_rising_windows),
+        rising_slope_bpm_per_window=float(
+            cfg.post_motion_dynamic_guard_rising_slope_bpm_per_window
+        ),
+        rescue_gap_bpm=float(cfg.post_motion_dynamic_guard_rescue_gap_bpm),
+        gap_rescue_enable=bool(cfg.post_motion_dynamic_guard_gap_rescue_enable),
+        gap_rescue_windows=int(cfg.post_motion_dynamic_guard_gap_rescue_windows),
+        gap_rescue_min_hits=int(cfg.post_motion_dynamic_guard_gap_rescue_min_hits),
+        gap_rescue_fft_stable_windows=int(
+            cfg.post_motion_dynamic_guard_gap_rescue_fft_stable_windows
+        ),
+        gap_rescue_fft_stable_bpm=float(
+            cfg.post_motion_dynamic_guard_gap_rescue_fft_stable_bpm
+        ),
+    )
+
+
+def dynamic_guard_reset_fft_enabled(
+    motion_segment: dict[str, float] | None,
+    cfg: V2RunConfig,
+) -> bool:
+    return bool(
+        motion_segment is not None
+        and bool(getattr(cfg, "post_motion_dynamic_guard_enable", False))
+        and str(getattr(cfg, "analysis_scope", "")).strip().lower() == "full"
+    )
+
+
+def dynamic_guard_reset_fft_active(
+    center_s: float,
+    motion_segment: dict[str, float] | None,
+    cfg: V2RunConfig,
+) -> bool:
+    if not dynamic_guard_reset_fft_enabled(motion_segment, cfg):
+        return False
+    guard_cfg = dynamic_guard_config_from_run_config(cfg)
+    return float(center_s) > float(motion_segment["end_s"]) + max(
+        0.0,
+        float(guard_cfg.min_elapsed_s),
+    ) + 1e-9
+
+
+def dynamic_guard_reset_fft_tracking(cfg: V2RunConfig) -> DirectionalTrackingParams:
+    guard_cfg = dynamic_guard_config_from_run_config(cfg)
+    return DirectionalTrackingParams(
+        range_up_bpm=20.0,
+        range_down_bpm=25.0,
+        limit_up_bpm=float(guard_cfg.recovery_step_up_bpm),
+        step_up_bpm=float(guard_cfg.recovery_step_up_bpm),
+        limit_down_bpm=float(guard_cfg.recovery_step_down_bpm),
+        step_down_bpm=float(guard_cfg.recovery_step_down_bpm),
+    )
+
+
+def dynamic_guard_metadata_from_run_config(
+    cfg: V2RunConfig,
+    motion_segment: dict[str, float] | None,
+    *,
+    reset_fft_applied_windows: int,
+    switch_events: list[dict[str, Any]],
+) -> dict[str, Any]:
+    guard_cfg = dynamic_guard_config_from_run_config(cfg)
+    return {
+        "enabled": bool(getattr(cfg, "post_motion_dynamic_guard_enable", False)),
+        "reset_fft_enabled": dynamic_guard_reset_fft_enabled(motion_segment, cfg),
+        "reset_fft_applied_windows": int(reset_fft_applied_windows),
+        "min_elapsed_s": float(guard_cfg.min_elapsed_s),
+        "stable_windows": int(guard_cfg.stable_windows),
+        "crossover_gap_bpm": float(guard_cfg.crossover_gap_bpm),
+        "upward_gap_bpm": float(guard_cfg.upward_gap_bpm),
+        "fft_floor_bpm": float(guard_cfg.fft_floor_bpm),
+        "recovery_step_up_bpm": float(guard_cfg.recovery_step_up_bpm),
+        "recovery_step_down_bpm": float(guard_cfg.recovery_step_down_bpm),
+        "rising_windows": int(guard_cfg.rising_windows),
+        "rising_slope_bpm_per_window": float(guard_cfg.rising_slope_bpm_per_window),
+        "rescue_gap_bpm": float(guard_cfg.rescue_gap_bpm),
+        "gap_rescue_enable": bool(guard_cfg.gap_rescue_enable),
+        "gap_rescue_windows": int(guard_cfg.gap_rescue_windows),
+        "gap_rescue_min_hits": int(guard_cfg.gap_rescue_min_hits),
+        "gap_rescue_fft_stable_windows": int(guard_cfg.gap_rescue_fft_stable_windows),
+        "gap_rescue_fft_stable_bpm": float(guard_cfg.gap_rescue_fft_stable_bpm),
+        "switch_events": switch_events,
+    }
 
 
 def transition_is_reachable(
