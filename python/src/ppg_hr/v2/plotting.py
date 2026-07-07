@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 from .output_paths import prepare_output_dir, safe_output_path
 from .reference_groups import color_for_reference_order, method_label, reference_order_key
+from .reference_overlap import reference_overlap_mask
 from .report import is_v2_report, load_v2_report
 
 _PLOT_CURVES = ("reference", "fft", "adaptive")
@@ -300,12 +301,19 @@ def render_v2_report(
     fig_base = fig_path.with_suffix("")
     err_path = safe_output_path(csv_out, f"{prefix}-v2-error.csv")
     hr_path = safe_output_path(csv_out, f"{prefix}-v2-hr.csv")
+    ref_data = _load_ref_data(str(_payload_value(payload, "ref_path", default="")))
 
     comparison_curves = _compute_comparison_curves(
         payload, comparison_groups, key, adaptive_filter, report.parent
     )
 
-    _write_hr_csv(hr_path, hr, time_bias=time_bias, comparison_curves=comparison_curves)
+    _write_hr_csv(
+        hr_path,
+        hr,
+        time_bias=time_bias,
+        comparison_curves=comparison_curves,
+        ref_data=ref_data,
+    )
     _write_error_csv(
         err_path, hr, time_bias, order, adaptive_filter,
         analysis_scope=str(_payload_value(payload, "analysis_scope", default="full")),
@@ -313,6 +321,7 @@ def render_v2_report(
         pre_motion_context_seconds=float(_payload_value(payload, "pre_motion_context_seconds", default=30.0)),
         comparison_curves=comparison_curves,
         fft_label=fft_label,
+        ref_data=ref_data,
     )
     _plot_hr(
         fig_base, hr, key, order, payload, adaptive_label,
@@ -396,14 +405,8 @@ def _plot_hr(
     pre_motion_context = float(_payload_value(payload, "pre_motion_context_seconds", default=30.0))
 
     t_aligned = hr[:, 0] + time_bias
-
-    ref_interp = interp1d(
-        hr[:, 0], hr[:, 1],
-        kind="linear", fill_value="extrapolate", assume_sorted=False,
-    )
-    ref_aligned = ref_interp(t_aligned)
-
     ref_data = _load_ref_data(str(_payload_value(payload, "ref_path", default="")))
+    ref_aligned = _aligned_reference_bpm(hr, time_bias)
     if ref_data is not None and ref_data.size:
         t_min = max(float(t_aligned[0]), float(ref_data[0, 0]))
         t_max = min(float(t_aligned[-1]), float(ref_data[-1, 0]))
@@ -519,6 +522,7 @@ def _write_hr_csv(
     hr: np.ndarray,
     time_bias: float = 0.0,
     comparison_curves: list[dict[str, object]] | None = None,
+    ref_data: np.ndarray | None = None,
 ) -> None:
     comp_curves = comparison_curves or []
     comp_labels = [str(c["label"]) for c in comp_curves]
@@ -528,6 +532,8 @@ def _write_hr_csv(
         for c in comp_curves
     ]
     base_final = _base_final_bpm_on_mask(hr)
+    t_aligned = hr[:, 0] + float(time_bias) if hr.size else np.asarray([], dtype=float)
+    output_mask = reference_overlap_mask(t_aligned, ref_data)
     ref_aligned = _aligned_reference_bpm(hr, time_bias)
     headers = [
         "time_s", "ref_bpm", "fft_bpm", "final_bpm",
@@ -537,6 +543,8 @@ def _write_hr_csv(
         writer = csv.writer(f)
         writer.writerow(headers)
         for i, row in enumerate(hr):
+            if not output_mask[i]:
+                continue
             aligned_row = row.tolist()
             aligned_row[0] = row[0] + time_bias
             if i < ref_aligned.size:
@@ -683,6 +691,7 @@ def _aligned_reference_bpm(hr: np.ndarray, time_bias: float) -> np.ndarray:
     arr = np.asarray(hr, dtype=float)
     if arr.ndim != 2 or arr.shape[1] < 2:
         return np.asarray([], dtype=float)
+    t_aligned = arr[:, 0] + float(time_bias)
     if arr.shape[0] < 2:
         return arr[:, 1].copy()
     ref_interp = interp1d(
@@ -692,7 +701,7 @@ def _aligned_reference_bpm(hr: np.ndarray, time_bias: float) -> np.ndarray:
         fill_value="extrapolate",
         assume_sorted=False,
     )
-    return np.asarray(ref_interp(arr[:, 0] + float(time_bias)), dtype=float)
+    return np.asarray(ref_interp(t_aligned), dtype=float)
 
 
 def _write_error_csv(
@@ -706,6 +715,7 @@ def _write_error_csv(
     pre_motion_context_seconds: float = 30.0,
     comparison_curves: list[dict[str, object]] | None = None,
     fft_label: str = "FFT",
+    ref_data: np.ndarray | None = None,
 ) -> None:
     rows = _detailed_stats_v2(
         hr, time_bias, order, adaptive_filter,
@@ -714,6 +724,7 @@ def _write_error_csv(
         pre_motion_context_seconds=pre_motion_context_seconds,
         comparison_curves=comparison_curves,
         fft_label=fft_label,
+        ref_data=ref_data,
     )
     with path.open("w", encoding="utf-8-sig", newline="") as f:
         writer = csv.writer(f)
@@ -741,15 +752,12 @@ def _detailed_stats_v2(
     pre_motion_context_seconds: float = 30.0,
     comparison_curves: list[dict[str, object]] | None = None,
     fft_label: str = "FFT",
+    ref_data: np.ndarray | None = None,
 ) -> list[dict[str, float | str]]:
     if hr.size == 0:
         return []
     t_aligned = hr[:, 0] + time_bias
-    ref_interp = interp1d(
-        hr[:, 0], hr[:, 1],
-        kind="linear", fill_value="extrapolate", assume_sorted=False,
-    )
-    ref = ref_interp(t_aligned)
+    ref = _aligned_reference_bpm(hr, time_bias)
     motion_flag = hr[:, 4] > 0.5 if hr.shape[1] > 4 else np.zeros(hr.shape[0], dtype=bool)
 
     scope_mask = np.ones(hr.shape[0], dtype=bool)
@@ -757,6 +765,7 @@ def _detailed_stats_v2(
         view_start = float(motion_segment.get("start_s", 0)) - pre_motion_context_seconds
         view_end = float(motion_segment.get("end_s", float("inf")))
         scope_mask = (t_aligned >= view_start) & (t_aligned <= view_end)
+    scope_mask &= reference_overlap_mask(t_aligned, ref_data)
 
     rest_flag = ~motion_flag & scope_mask
     motion_flag_scoped = motion_flag & scope_mask
@@ -875,11 +884,7 @@ def _figure_error_rows(
 ) -> list[tuple[str, float, float]]:
     curves = _normalise_plot_curves(plot_curves)
     t_aligned = hr[:, 0] + time_bias
-    ref_interp = interp1d(
-        hr[:, 0], hr[:, 1],
-        kind="linear", fill_value="extrapolate", assume_sorted=False,
-    )
-    ref = ref_interp(t_aligned)
+    ref = _aligned_reference_bpm(hr, time_bias)
 
     motion_flag = (
         hr[:, 4] > 0.5 if hr.shape[1] > 4

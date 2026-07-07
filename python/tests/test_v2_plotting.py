@@ -537,6 +537,8 @@ def test_render_v2_report_motion_scope_crops_to_analysis_window(
 
 
 def test_render_v2_report_full_scope_uses_all_data(tmp_path: Path) -> None:
+    import csv
+
     times = np.arange(0, 50.0, 1.0, dtype=float)
     hr_rows = [[t - 5.0, 75.0, 73.0, 74.0, 0.0, 0.0] for t in times]
     payload = {
@@ -569,6 +571,57 @@ def test_render_v2_report_full_scope_uses_all_data(tmp_path: Path) -> None:
 
     arte = render_v2_report(report, out_dir=tmp_path / "figures")
     assert arte.figure_png.is_file()
+    with arte.hr_csv.open("r", encoding="utf-8-sig", newline="") as f:
+        rows = list(csv.DictReader(f))
+    assert len(rows) == 50
+
+
+def test_render_v2_report_limits_outputs_to_reference_time_range(
+    tmp_path: Path,
+) -> None:
+    import csv
+
+    payload = {
+        "schema_version": "v2",
+        "data_path": "sample.csv",
+        "ref_path": str(tmp_path / "sample_ref.csv"),
+        "ppg_mode": "green",
+        "analysis_scope": "full",
+        "adaptive_filter": "lms",
+        "reference_groups_order": ["HF"],
+        "err_stats": {"fft_aae_bpm": 2.0, "final_aae_bpm": 1.0},
+        "hr": [
+            [0.0, 75.0, 75.0, 75.0, 0.0, 1.0],
+            [10.0, 75.0, 75.0, 75.0, 0.0, 1.0],
+            [20.0, 75.0, 75.0, 75.0, 0.0, 1.0],
+            [30.0, 75.0, 180.0, 180.0, 0.0, 1.0],
+        ],
+        "metadata": {
+            "time_bias": 0.0,
+            "analysis_scope": "full",
+            "adaptive_filter": "lms",
+            "ref_path": str(tmp_path / "sample_ref.csv"),
+        },
+        "best_params": {"max_order": 16},
+    }
+    report = tmp_path / "tail.json"
+    report.write_text(json.dumps(payload), encoding="utf-8")
+    (tmp_path / "sample_ref.csv").write_text(
+        "h1,h2,h3\n"
+        + "".join(f"{i},00:00:{i:02d},75.0\n" for i in range(21)),
+        encoding="utf-8",
+    )
+
+    arte = render_v2_report(report, out_dir=tmp_path / "figures")
+
+    with arte.error_csv.open("r", encoding="utf-8-sig", newline="") as f:
+        error_rows = {row["method"]: row for row in csv.DictReader(f)}
+    assert float(error_rows["FFT"]["total_aae"]) == 0.0
+    assert float(error_rows["LMS+H"]["total_aae"]) == 0.0
+
+    with arte.hr_csv.open("r", encoding="utf-8-sig", newline="") as f:
+        hr_rows = list(csv.DictReader(f))
+    assert [float(row["time_s"]) for row in hr_rows] == [0.0, 10.0, 20.0]
 
 
 def test_render_v2_report_compacts_long_output_prefix(tmp_path: Path) -> None:

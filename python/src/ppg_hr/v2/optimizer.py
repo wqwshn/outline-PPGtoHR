@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -15,6 +16,8 @@ from .solver import solve_v2
 from .types import V2RunConfig
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+_INVALID_OBJECTIVE_PENALTY = 1e9
 
 
 @dataclass(frozen=True)
@@ -48,7 +51,7 @@ def optimise_v2(
     )
     if not active_space.names():
         result = solve_v2(base)
-        value = float(result.err_stats["final_aae_bpm"])
+        value = _finite_objective_value(result.err_stats["final_aae_bpm"])
         row = {
             "repeat_idx": 1,
             "repeat_total": 1,
@@ -102,7 +105,7 @@ def optimise_v2(
             params = decode_v2(active_space, idx_map)
             cfg = base.__class__(**{**base.__dict__, **params})
             result = solve_v2(cfg)
-            value = float(result.err_stats["final_aae_bpm"])
+            value = _finite_objective_value(result.err_stats["final_aae_bpm"])
             _repeat_best_ref[0] = min(_repeat_best_ref[0], value)
             best_overall_ref[0] = min(best_overall_ref[0], value)
             global_trial = _repeat_idx0 * trials_per_repeat + trial.number + 1
@@ -157,3 +160,11 @@ def optimise_v2(
         best_params=best_params,
         history=history,
     )
+
+
+def _finite_objective_value(value: object) -> float:
+    try:
+        objective = float(value)
+    except (TypeError, ValueError):
+        return _INVALID_OBJECTIVE_PENALTY
+    return objective if math.isfinite(objective) else _INVALID_OBJECTIVE_PENALTY

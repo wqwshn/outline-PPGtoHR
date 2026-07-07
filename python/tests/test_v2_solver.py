@@ -1940,6 +1940,38 @@ def test_dynamic_postprocess_can_be_disabled() -> None:
     assert applied == 0
 
 
+def test_error_stats_limits_metrics_to_reference_time_range() -> None:
+    from ppg_hr.v2 import solver
+
+    hr = np.asarray(
+        [
+            [0.0, 75.0, 75.0, 75.0, 0.0, 1.0],
+            [10.0, 75.0, 75.0, 75.0, 0.0, 1.0],
+            [20.0, 75.0, 75.0, 75.0, 0.0, 1.0],
+            [30.0, 75.0, 180.0, 180.0, 0.0, 1.0],
+        ],
+        dtype=float,
+    )
+    ref_data = np.asarray(
+        [
+            [0.0, 75.0],
+            [10.0, 75.0],
+            [20.0, 75.0],
+        ],
+        dtype=float,
+    )
+    cfg = V2RunConfig(
+        data_path=Path("sample.csv"),
+        ref_path=Path("sample_ref.csv"),
+        time_bias=0.0,
+    )
+
+    stats = solver._error_stats(hr, cfg, None, ref_data=ref_data)
+
+    assert stats["fft_aae_bpm"] == 0.0
+    assert stats["final_aae_bpm"] == 0.0
+
+
 def test_find_crossover_detects_fft_rise() -> None:
     from ppg_hr.v2.solver import _find_crossover_idx
 

@@ -42,6 +42,10 @@ from .reference_groups import (
     normalise_reference_order,
     reference_order_key,
 )
+from .reference_overlap import (
+    reference_overlap_mask,
+    reference_time_bounds,
+)
 from .runtime_policy import V2RuntimePolicy, runtime_policy_from_config
 from .signal_preparation import (
     motion_detection_metadata,
@@ -1859,7 +1863,23 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
 
     HR = _apply_v2_analysis_scope(HR, cfg, motion_segment)
 
-    err_stats = _error_stats(HR, cfg, motion_segment, window_table)
+    err_stats = _error_stats(HR, cfg, motion_segment, window_table, ref_data=ref_data)
+    ref_bounds = reference_time_bounds(ref_data)
+    if HR.size:
+        ref_mask = reference_overlap_mask(HR[:, 0] + float(cfg.time_bias), ref_data)
+        reference_overlap = {
+            "ref_start_s": float(ref_bounds[0]) if ref_bounds is not None else float("nan"),
+            "ref_end_s": float(ref_bounds[1]) if ref_bounds is not None else float("nan"),
+            "valid_windows": int(np.count_nonzero(ref_mask)),
+            "dropped_windows": int(HR.shape[0] - np.count_nonzero(ref_mask)),
+        }
+    else:
+        reference_overlap = {
+            "ref_start_s": float(ref_bounds[0]) if ref_bounds is not None else float("nan"),
+            "ref_end_s": float(ref_bounds[1]) if ref_bounds is not None else float("nan"),
+            "valid_windows": 0,
+            "dropped_windows": 0,
+        }
     metadata = {
         "schema_version": "v2",
         "data_path": str(cfg.data_path),
@@ -1879,6 +1899,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
         "adaptive_filter": cfg.adaptive_filter,
         "reference_groups_order": list(reference_order),
         "reference_order_key": reference_order_key(reference_order),
+        "reference_overlap": reference_overlap,
         "motion_segment": motion_segment,
         "motion_detection": motion_detection_metadata(motion_detection),
         "used_adaptive_windows": int(sum(1 for row in window_table if row["used_adaptive"])),
@@ -2432,6 +2453,7 @@ def _error_stats(
     cfg: V2RunConfig,
     motion_segment: dict[str, float] | None,
     window_table: list[dict[str, Any]] | None = None,
+    ref_data: np.ndarray | None = None,
 ) -> dict[str, float]:
     if HR.size == 0:
         return {"fft_aae_bpm": float("nan"), "final_aae_bpm": float("nan")}
@@ -2453,6 +2475,7 @@ def _error_stats(
             mask &= reliable
 
     t_aligned = HR[:, 0] + float(cfg.time_bias)
+    mask &= reference_overlap_mask(t_aligned, ref_data)
     ref_interp = interp1d(
         HR[:, 0],
         HR[:, 1],
