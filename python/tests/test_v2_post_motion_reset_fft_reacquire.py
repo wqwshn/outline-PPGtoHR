@@ -162,6 +162,33 @@ def test_load_lite_report_config_merges_best_params_and_disables_reacquire(
     assert cfg.smooth_win_len == 9
     assert cfg.time_bias == pytest.approx(4.5)
     assert cfg.post_motion_reacquire_enable is False
+    assert cfg.post_motion_dynamic_guard_enable is False
+
+
+def test_load_lite_report_config_respects_recorded_dynamic_guard_state(
+    tmp_path: Path,
+) -> None:
+    payload = {
+        "schema_version": "v2",
+        "data_path": str(tmp_path / "sample.csv"),
+        "ref_path": str(tmp_path / "sample_ref.csv"),
+        "algorithm_preset": "lite",
+        "adaptive_filter": "lms",
+        "reference_groups_order": ["HF"],
+        "post_motion_dynamic_guard": {
+            "enabled": True,
+            "stable_windows": 2,
+            "crossover_gap_bpm": 1.25,
+            "rescue_gap_bpm": 18.0,
+        },
+    }
+
+    cfg = load_lite_report_config(payload)
+
+    assert cfg.post_motion_dynamic_guard_enable is True
+    assert cfg.post_motion_dynamic_guard_stable_windows == 2
+    assert cfg.post_motion_dynamic_guard_crossover_gap_bpm == pytest.approx(1.25)
+    assert cfg.post_motion_dynamic_guard_rescue_gap_bpm == pytest.approx(18.0)
 
 
 def test_run_lite_source_replay_audit_writes_structured_diff_csv(

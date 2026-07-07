@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from typing import Any
 
 import numpy as np
@@ -59,6 +59,68 @@ class DynamicGuardSwitchEvent:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+DEFAULT_POST_MOTION_DYNAMIC_GUARD_CONFIG = DynamicGuardConfig(
+    name="gap20_c3",
+    crossover_gap_bpm=2.0,
+    rescue_gap_bpm=20.0,
+    gap_rescue_windows=4,
+    gap_rescue_min_hits=3,
+    gap_rescue_fft_stable_windows=3,
+    gap_rescue_fft_stable_bpm=6.0,
+)
+
+
+def default_post_motion_dynamic_guard_config() -> DynamicGuardConfig:
+    return replace(DEFAULT_POST_MOTION_DYNAMIC_GUARD_CONFIG)
+
+
+def dynamic_guard_overrides_from_config(
+    config: DynamicGuardConfig,
+) -> dict[str, object]:
+    return {
+        "post_motion_dynamic_guard_enable": True,
+        "post_motion_dynamic_guard_min_elapsed_s": float(config.min_elapsed_s),
+        "post_motion_dynamic_guard_stable_windows": int(config.stable_windows),
+        "post_motion_dynamic_guard_crossover_gap_bpm": float(
+            config.crossover_gap_bpm
+        ),
+        "post_motion_dynamic_guard_upward_gap_bpm": float(config.upward_gap_bpm),
+        "post_motion_dynamic_guard_fft_floor_bpm": float(config.fft_floor_bpm),
+        "post_motion_dynamic_guard_recovery_step_up_bpm": float(
+            config.recovery_step_up_bpm
+        ),
+        "post_motion_dynamic_guard_recovery_step_down_bpm": float(
+            config.recovery_step_down_bpm
+        ),
+        "post_motion_dynamic_guard_rising_windows": int(config.rising_windows),
+        "post_motion_dynamic_guard_rising_slope_bpm_per_window": float(
+            config.rising_slope_bpm_per_window
+        ),
+        "post_motion_dynamic_guard_rescue_gap_bpm": float(config.rescue_gap_bpm),
+        "post_motion_dynamic_guard_gap_rescue_enable": bool(
+            config.gap_rescue_enable
+        ),
+        "post_motion_dynamic_guard_gap_rescue_windows": int(
+            config.gap_rescue_windows
+        ),
+        "post_motion_dynamic_guard_gap_rescue_min_hits": int(
+            config.gap_rescue_min_hits
+        ),
+        "post_motion_dynamic_guard_gap_rescue_fft_stable_windows": int(
+            config.gap_rescue_fft_stable_windows
+        ),
+        "post_motion_dynamic_guard_gap_rescue_fft_stable_bpm": float(
+            config.gap_rescue_fft_stable_bpm
+        ),
+    }
+
+
+def default_post_motion_dynamic_guard_overrides() -> dict[str, object]:
+    return dynamic_guard_overrides_from_config(
+        default_post_motion_dynamic_guard_config()
+    )
 
 
 def dynamic_guard_config_from_run_config(

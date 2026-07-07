@@ -106,6 +106,24 @@ def test_runtime_policy_groups_dynamic_guard_config() -> None:
     assert guard.config.crossover_gap_bpm == pytest.approx(1.5)
 
 
+def test_runtime_policy_enables_gap20_dynamic_guard_by_default() -> None:
+    cfg = _cfg(algorithm_preset="lite", analysis_scope="full")
+
+    guard = runtime_policy_from_config(cfg).post_motion_dynamic_guard
+
+    assert cfg.post_motion_dynamic_guard_enable is True
+    assert guard.enabled is True
+    assert guard.active_for_scope("full") is True
+    assert guard.config.min_elapsed_s == pytest.approx(5.0)
+    assert guard.config.stable_windows == 3
+    assert guard.config.crossover_gap_bpm == pytest.approx(2.0)
+    assert guard.config.rescue_gap_bpm == pytest.approx(20.0)
+    assert guard.config.gap_rescue_windows == 4
+    assert guard.config.gap_rescue_min_hits == 3
+    assert guard.config.gap_rescue_fft_stable_windows == 3
+    assert guard.config.gap_rescue_fft_stable_bpm == pytest.approx(6.0)
+
+
 def test_post_motion_mask_consumes_supplied_runtime_policy() -> None:
     from ppg_hr.v2.solver import _post_motion_adaptive_mask
 
@@ -114,11 +132,13 @@ def test_post_motion_mask_consumes_supplied_runtime_policy() -> None:
     source[:, 2] = np.asarray([100.0, 120.0, 125.0, 125.0], dtype=float) / 60.0
     source[:, 4] = np.asarray([90.0, 80.0, 80.0, 80.0], dtype=float) / 60.0
     cfg_with_late_guard = _cfg(
+        post_motion_dynamic_guard_enable=False,
         post_motion_guard_seconds=60.0,
         post_motion_reacquire_adaptive_min_bpm=200.0,
     )
     early_policy = runtime_policy_from_config(
         _cfg(
+            post_motion_dynamic_guard_enable=False,
             post_motion_guard_seconds=0.0,
             post_motion_reacquire_adaptive_min_bpm=100.0,
             post_motion_reacquire_gap_bpm=20.0,

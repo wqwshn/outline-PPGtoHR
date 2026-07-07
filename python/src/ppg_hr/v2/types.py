@@ -38,10 +38,10 @@ class V2RunConfig:
     post_motion_reacquire_first_drop_limit_bpm: float = 70.0
     post_motion_reacquire_up_step_bpm: float = 2.0
     post_motion_reacquire_down_step_bpm: float = 10.0
-    post_motion_dynamic_guard_enable: bool = False
+    post_motion_dynamic_guard_enable: bool = True
     post_motion_dynamic_guard_min_elapsed_s: float = 5.0
     post_motion_dynamic_guard_stable_windows: int = 3
-    post_motion_dynamic_guard_crossover_gap_bpm: float = 3.0
+    post_motion_dynamic_guard_crossover_gap_bpm: float = 2.0
     post_motion_dynamic_guard_upward_gap_bpm: float = 1.5
     post_motion_dynamic_guard_fft_floor_bpm: float = 55.0
     post_motion_dynamic_guard_recovery_step_up_bpm: float = 1.5

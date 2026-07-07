@@ -6,6 +6,9 @@ from pathlib import Path
 
 import pytest
 
+from ppg_hr.v2.post_motion_dynamic_guard_policy import (
+    default_post_motion_dynamic_guard_overrides,
+)
 from ppg_hr.v2.post_motion_dynamic_guard_generalization import (
     GeneralizationBoOption,
     compare_generalization_metrics,
@@ -27,6 +30,7 @@ def _write_csv(path: Path, rows: list[dict[str, object]]) -> None:
 def test_dynamic_guard_lite_overrides_uses_selected_candidate() -> None:
     values = dynamic_guard_lite_overrides()
 
+    assert values == default_post_motion_dynamic_guard_overrides()
     assert values["post_motion_dynamic_guard_enable"] is True
     assert values["post_motion_dynamic_guard_crossover_gap_bpm"] == 2.0
     assert values["post_motion_dynamic_guard_stable_windows"] == 3

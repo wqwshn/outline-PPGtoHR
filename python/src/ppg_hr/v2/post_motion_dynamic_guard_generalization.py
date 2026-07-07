@@ -13,12 +13,10 @@ import numpy as np
 
 from .generalization import run_v2_generalization
 from .optimizer import V2BayesConfig
-from .post_motion_dynamic_guard import (
-    build_dynamic_guard_candidate_configs,
-    full_lyx_overrides_for_candidate,
+from .post_motion_dynamic_guard_policy import (
+    default_post_motion_dynamic_guard_overrides,
 )
 
-SELECTED_DYNAMIC_GUARD_CANDIDATE = "gap20_c3"
 PARAM_KEYS = (
     "time_bias",
     "fs_target",
@@ -37,10 +35,7 @@ class GeneralizationBoOption:
 
 
 def dynamic_guard_lite_overrides() -> dict[str, object]:
-    configs = {cfg.name: cfg for cfg in build_dynamic_guard_candidate_configs()}
-    return full_lyx_overrides_for_candidate(
-        configs[SELECTED_DYNAMIC_GUARD_CANDIDATE]
-    )
+    return default_post_motion_dynamic_guard_overrides()
 
 
 def load_generalization_post_motion_metrics(

@@ -141,6 +141,7 @@ def load_lite_report_config(report: Path | str | dict[str, Any]) -> V2RunConfig:
     best_params = payload.get("best_params") or {}
     if isinstance(best_params, dict):
         values.update({key: value for key, value in best_params.items() if key in field_names})
+    _apply_report_dynamic_guard_state(values, payload, field_names)
     if "data_path" not in values or "ref_path" not in values:
         raise ValueError("Lite report must include data_path and ref_path")
     values["data_path"] = Path(values["data_path"])
@@ -149,6 +150,46 @@ def load_lite_report_config(report: Path | str | dict[str, Any]) -> V2RunConfig:
         values["reference_groups_order"] = tuple(values["reference_groups_order"])
     values["post_motion_reacquire_enable"] = False
     return V2RunConfig(**values)
+
+
+def _apply_report_dynamic_guard_state(
+    values: dict[str, Any],
+    payload: dict[str, Any],
+    field_names: set[str],
+) -> None:
+    guard = payload.get("post_motion_dynamic_guard")
+    if isinstance(guard, dict):
+        mapping = {
+            "enabled": "post_motion_dynamic_guard_enable",
+            "min_elapsed_s": "post_motion_dynamic_guard_min_elapsed_s",
+            "stable_windows": "post_motion_dynamic_guard_stable_windows",
+            "crossover_gap_bpm": "post_motion_dynamic_guard_crossover_gap_bpm",
+            "upward_gap_bpm": "post_motion_dynamic_guard_upward_gap_bpm",
+            "fft_floor_bpm": "post_motion_dynamic_guard_fft_floor_bpm",
+            "recovery_step_up_bpm": "post_motion_dynamic_guard_recovery_step_up_bpm",
+            "recovery_step_down_bpm": "post_motion_dynamic_guard_recovery_step_down_bpm",
+            "rising_windows": "post_motion_dynamic_guard_rising_windows",
+            "rising_slope_bpm_per_window": (
+                "post_motion_dynamic_guard_rising_slope_bpm_per_window"
+            ),
+            "rescue_gap_bpm": "post_motion_dynamic_guard_rescue_gap_bpm",
+            "gap_rescue_enable": "post_motion_dynamic_guard_gap_rescue_enable",
+            "gap_rescue_windows": "post_motion_dynamic_guard_gap_rescue_windows",
+            "gap_rescue_min_hits": "post_motion_dynamic_guard_gap_rescue_min_hits",
+            "gap_rescue_fft_stable_windows": (
+                "post_motion_dynamic_guard_gap_rescue_fft_stable_windows"
+            ),
+            "gap_rescue_fft_stable_bpm": (
+                "post_motion_dynamic_guard_gap_rescue_fft_stable_bpm"
+            ),
+        }
+        for report_key, cfg_key in mapping.items():
+            if cfg_key in field_names and report_key in guard:
+                values[cfg_key] = guard[report_key]
+        return
+
+    if "post_motion_dynamic_guard_enable" not in values:
+        values["post_motion_dynamic_guard_enable"] = False
 
 
 def run_lite_source_replay_audit(

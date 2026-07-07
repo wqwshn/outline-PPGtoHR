@@ -15,6 +15,7 @@ from .motion_aware_fft_baseline import FFT_CHAIN_POST_GUARD_RESET, run_baseline_
 from .plotting import render_v2_report
 from .post_motion_dynamic_guard_policy import (
     DynamicGuardConfig,
+    dynamic_guard_overrides_from_config,
     event_dicts,
     rank_dynamic_guard_candidates,
     switch_mask_and_events,
@@ -104,42 +105,7 @@ def build_dynamic_guard_candidate_configs() -> list[DynamicGuardConfig]:
 
 
 def full_lyx_overrides_for_candidate(config: DynamicGuardConfig) -> dict[str, object]:
-    return {
-        "post_motion_dynamic_guard_enable": True,
-        "post_motion_dynamic_guard_min_elapsed_s": float(config.min_elapsed_s),
-        "post_motion_dynamic_guard_stable_windows": int(config.stable_windows),
-        "post_motion_dynamic_guard_crossover_gap_bpm": float(
-            config.crossover_gap_bpm
-        ),
-        "post_motion_dynamic_guard_upward_gap_bpm": float(config.upward_gap_bpm),
-        "post_motion_dynamic_guard_fft_floor_bpm": float(config.fft_floor_bpm),
-        "post_motion_dynamic_guard_recovery_step_up_bpm": float(
-            config.recovery_step_up_bpm
-        ),
-        "post_motion_dynamic_guard_recovery_step_down_bpm": float(
-            config.recovery_step_down_bpm
-        ),
-        "post_motion_dynamic_guard_rising_windows": int(config.rising_windows),
-        "post_motion_dynamic_guard_rising_slope_bpm_per_window": float(
-            config.rising_slope_bpm_per_window
-        ),
-        "post_motion_dynamic_guard_rescue_gap_bpm": float(config.rescue_gap_bpm),
-        "post_motion_dynamic_guard_gap_rescue_enable": bool(
-            config.gap_rescue_enable
-        ),
-        "post_motion_dynamic_guard_gap_rescue_windows": int(
-            config.gap_rescue_windows
-        ),
-        "post_motion_dynamic_guard_gap_rescue_min_hits": int(
-            config.gap_rescue_min_hits
-        ),
-        "post_motion_dynamic_guard_gap_rescue_fft_stable_windows": int(
-            config.gap_rescue_fft_stable_windows
-        ),
-        "post_motion_dynamic_guard_gap_rescue_fft_stable_bpm": float(
-            config.gap_rescue_fft_stable_bpm
-        ),
-    }
+    return dynamic_guard_overrides_from_config(config)
 
 
 def run_post_motion_dynamic_guard_stage1(

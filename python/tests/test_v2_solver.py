@@ -1661,6 +1661,7 @@ def test_post_motion_reacquire_mask_switches_on_high_drift() -> None:
     cfg = V2RunConfig(
         data_path=Path("sample.csv"),
         ref_path=Path("sample_ref.csv"),
+        post_motion_dynamic_guard_enable=False,
         post_motion_guard_seconds=20.0,
         post_motion_reacquire_adaptive_min_bpm=115.0,
         post_motion_reacquire_gap_bpm=25.0,
@@ -1688,6 +1689,7 @@ def test_post_motion_reacquire_mask_keeps_adaptive_when_fft_low_locks() -> None:
     cfg = V2RunConfig(
         data_path=Path("sample.csv"),
         ref_path=Path("sample_ref.csv"),
+        post_motion_dynamic_guard_enable=False,
         post_motion_guard_seconds=20.0,
         post_motion_reacquire_adaptive_min_bpm=115.0,
         post_motion_reacquire_gap_bpm=25.0,
