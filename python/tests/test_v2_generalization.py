@@ -35,6 +35,10 @@ def test_infer_known_motion_type_uses_fixed_motion_library() -> None:
         "fuwo",
         "kaihe",
         "tiaosheng",
+        "jianpan",
+        "quanji",
+        "woli",
+        "xiezi",
         "wanju",
         "run",
         "rest",
@@ -46,7 +50,41 @@ def test_infer_known_motion_type_uses_fixed_motion_library() -> None:
     assert infer_known_motion_type("multi_fuwo2_TS") == "fuwo"
     assert infer_known_motion_type("run_01") == "run"
     assert infer_known_motion_type("multi_gaotai12_TS") == "gaotai"
+    assert infer_known_motion_type("jianpan1_QYC_0615") == "jianpan"
+    assert infer_known_motion_type("multi_quanji2_QYC_0615") == "quanji"
+    assert infer_known_motion_type("woli3_QYC_0615") == "woli"
+    assert infer_known_motion_type("multi_xiezi1_QYC_0615") == "xiezi"
     assert infer_known_motion_type("custom_jump_rope") is None
+
+
+def test_build_v2_generalization_plan_accepts_new_qyc_motion_names(
+    tmp_path: Path,
+) -> None:
+    from ppg_hr.v2.generalization import build_v2_generalization_plan
+
+    for stem in (
+        "jianpan1_QYC_0615",
+        "quanji2_QYC_0615",
+        "woli3_QYC_0615",
+        "xiezi1_QYC_0615",
+        "multi_xiezi2_QYC_0615",
+    ):
+        _touch_pair(tmp_path, stem)
+
+    plan = build_v2_generalization_plan(tmp_path, evaluation_modes=("all_train",))
+
+    assert [group.motion_type for group in plan.groups] == [
+        "jianpan",
+        "quanji",
+        "woli",
+        "xiezi",
+    ]
+    xiezi = next(group for group in plan.groups if group.motion_type == "xiezi")
+    assert xiezi.sample_stems == (
+        "multi_xiezi2_QYC_0615",
+        "xiezi1_QYC_0615",
+    )
+    assert plan.unknown_pairs == ()
 
 
 def test_build_v2_generalization_plan_groups_known_motions_and_tracks_skips(
