@@ -99,51 +99,6 @@ def _motion_segment_span_aligned(
     return start, end
 
 
-def _draw_dynamic_guard_switch_markers(
-    ax,
-    payload: dict,
-    time_bias: float,
-) -> None:
-    guard = _payload_value(payload, "post_motion_dynamic_guard", default={})
-    if not isinstance(guard, dict) or not bool(guard.get("enabled", False)):
-        return
-    events = guard.get("switch_events") or []
-    if not isinstance(events, list):
-        return
-
-    for event in events:
-        if not isinstance(event, dict):
-            continue
-        try:
-            center = float(event.get("center_s"))
-        except (TypeError, ValueError):
-            continue
-        if not np.isfinite(center):
-            continue
-
-        x = center + float(time_bias)
-        reason = str(event.get("switch_reason", "switch"))
-        ax.axvline(
-            x,
-            color="#4A5568",
-            linestyle=(0, (1.2, 1.2)),
-            linewidth=0.7,
-            alpha=0.75,
-            zorder=1.5,
-        )
-        ax.text(
-            x,
-            0.98,
-            reason,
-            transform=ax.get_xaxis_transform(),
-            rotation=90,
-            va="top",
-            ha="right",
-            fontsize=4.8,
-            color="#4A5568",
-        )
-
-
 def _dynamic_guard_uses_reset_fft(payload: dict) -> bool:
     guard = _payload_value(payload, "post_motion_dynamic_guard", default={})
     if not isinstance(guard, dict) or not bool(guard.get("enabled", False)):
@@ -445,7 +400,6 @@ def _plot_hr(
             label="Motion",
             zorder=0.2,
         )
-    _draw_dynamic_guard_switch_markers(ax, payload, time_bias)
 
     y_series: list[np.ndarray] = []
     if "reference" in curves:

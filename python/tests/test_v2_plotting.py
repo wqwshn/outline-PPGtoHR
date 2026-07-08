@@ -641,7 +641,7 @@ def test_render_v2_report_compacts_long_output_prefix(tmp_path: Path) -> None:
     assert arte.error_csv.is_file()
 
 
-def test_render_v2_report_draws_dynamic_guard_switch_marker(
+def test_render_v2_report_hides_dynamic_guard_switch_marker(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -699,6 +699,6 @@ def test_render_v2_report_draws_dynamic_guard_switch_marker(
     arte = render_v2_report(report, out_dir=tmp_path, csv_dir=tmp_path)
 
     assert arte.figure_png.is_file()
-    assert 29.0 in vlines
-    assert (29.0, "stable_crossover") in texts
+    assert 29.0 not in vlines
+    assert (29.0, "stable_crossover") not in texts
     assert "reset FFT" in arte.error_csv.read_text(encoding="utf-8-sig")
