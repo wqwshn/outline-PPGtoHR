@@ -1557,17 +1557,22 @@ def test_solve_v2_does_not_enable_reacquire_for_klms(
     ref = tmp_path / "motion_ref.csv"
     _write_sensor(data, motion=True)
     _write_ref(ref)
-    flags: list[bool] = []
+    flags: list[tuple[bool, bool]] = []
     original = solver._process_spectrum_with_trace
 
     def spy(*args, path, window_kind, **kwargs):
         if path == "adaptive" and window_kind == "motion":
-            flags.append(bool(kwargs.get("reacquire_enable", False)))
+            flags.append(
+                (
+                    bool(kwargs.get("reacquire_enable", False)),
+                    bool(kwargs.get("high_lock_enable", False)),
+                )
+            )
         return original(*args, path=path, window_kind=window_kind, **kwargs)
 
     monkeypatch.setattr(solver, "_process_spectrum_with_trace", spy)
 
-    solver.solve_v2(
+    result = solver.solve_v2(
         V2RunConfig(
             data_path=data,
             ref_path=ref,
@@ -1578,7 +1583,71 @@ def test_solve_v2_does_not_enable_reacquire_for_klms(
     )
 
     assert flags
-    assert not any(flags)
+    assert not any(reacquire for reacquire, _high_lock in flags)
+    assert not any(high_lock for _reacquire, high_lock in flags)
+    assert result.metadata["motion_gate_filter_allowlist"] == ["lms", "noncausal_lms"]
+    assert result.metadata["motion_low_reacquire_effective"] is False
+    assert result.metadata["motion_high_lock_escape_effective"] is False
+
+
+@pytest.mark.parametrize(
+    ("reacquire_enable", "high_lock_escape_enable", "expected"),
+    [
+        (True, False, (True, False)),
+        (False, True, (False, True)),
+        (True, True, (True, True)),
+    ],
+)
+def test_solve_v2_can_enable_klms_motion_gates_with_experiment_allowlist(
+    tmp_path: Path,
+    monkeypatch,
+    reacquire_enable: bool,
+    high_lock_escape_enable: bool,
+    expected: tuple[bool, bool],
+) -> None:
+    from ppg_hr.v2 import solver
+
+    data = tmp_path / "motion.csv"
+    ref = tmp_path / "motion_ref.csv"
+    _write_sensor(data, motion=True)
+    _write_ref(ref)
+    flags: list[tuple[bool, bool]] = []
+    original = solver._process_spectrum_with_trace
+
+    def spy(*args, path, window_kind, **kwargs):
+        if path == "adaptive" and window_kind == "motion":
+            flags.append(
+                (
+                    bool(kwargs.get("reacquire_enable", False)),
+                    bool(kwargs.get("high_lock_enable", False)),
+                )
+            )
+        return original(*args, path=path, window_kind=window_kind, **kwargs)
+
+    monkeypatch.setattr(solver, "_process_spectrum_with_trace", spy)
+
+    result = solver.solve_v2(
+        V2RunConfig(
+            data_path=data,
+            ref_path=ref,
+            analysis_scope="full",
+            adaptive_filter="klms",
+            reference_groups_order=("HF",),
+            motion_gate_filter_allowlist=("lms", "noncausal_lms", "klms"),
+            reacquire_enable=reacquire_enable,
+            high_lock_escape_enable=high_lock_escape_enable,
+        )
+    )
+
+    assert flags
+    assert all(flag == expected for flag in flags)
+    assert result.metadata["motion_gate_filter_allowlist"] == [
+        "lms",
+        "noncausal_lms",
+        "klms",
+    ]
+    assert result.metadata["motion_low_reacquire_effective"] is expected[0]
+    assert result.metadata["motion_high_lock_escape_effective"] is expected[1]
 
 
 def test_solve_v2_disables_penalty_after_motion_but_keeps_adaptive(

@@ -1018,8 +1018,17 @@ def _is_low_lock_hz(value_hz: float) -> bool:
     return _REACQUIRE_LOW_LOCK_MIN_HZ <= float(value_hz) <= _REACQUIRE_LOW_LOCK_MAX_HZ
 
 
-def _reacquire_enabled_for_filter(adaptive_filter: str) -> bool:
-    return str(adaptive_filter).strip().lower() in {"lms", "noncausal_lms"}
+def _normalise_motion_gate_filter_allowlist(allowlist: tuple[str, ...] | list[str]) -> tuple[str, ...]:
+    return tuple(str(value).strip().lower() for value in allowlist if str(value).strip())
+
+
+def _reacquire_enabled_for_filter(
+    adaptive_filter: str,
+    allowlist: tuple[str, ...] | list[str] = ("lms", "noncausal_lms"),
+) -> bool:
+    return str(adaptive_filter).strip().lower() in _normalise_motion_gate_filter_allowlist(
+        allowlist
+    )
 
 
 def _move_toward_hz(current_hz: float, target_hz: float, max_step_hz: float) -> float:
@@ -1570,6 +1579,13 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
     adaptive_tracking_rows: list[SpectrumTrackingTrace | None] = []
     adaptive_reacquire_state = SpectrumReacquireState()
     adaptive_high_lock_state = SpectrumHighLockEscapeState()
+    motion_gate_filter_allowlist = _normalise_motion_gate_filter_allowlist(
+        cfg.motion_gate_filter_allowlist
+    )
+    motion_gate_filter_supported = _reacquire_enabled_for_filter(
+        cfg.adaptive_filter,
+        motion_gate_filter_allowlist,
+    )
     reset_fft_history: list[float] = []
     reset_fft_started = False
     reset_fft_applied_windows = 0
@@ -1677,9 +1693,6 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 if provisional_kind == "motion"
                 else tracking_policy.recovery
             )
-            filter_reacquire_supported = _reacquire_enabled_for_filter(
-                cfg.adaptive_filter
-            )
             row[2], adaptive_trace = _process_spectrum_with_trace(
                 filtered,
                 penalty_ref,
@@ -1696,7 +1709,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 ),
                 reacquire_enable=bool(
                     cfg.reacquire_enable
-                    and filter_reacquire_supported
+                    and motion_gate_filter_supported
                     and provisional_kind == "motion"
                 ),
                 high_lock_state=(
@@ -1704,7 +1717,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 ),
                 high_lock_enable=bool(
                     runtime_policy.high_lock_escape.enabled
-                    and filter_reacquire_supported
+                    and motion_gate_filter_supported
                     and provisional_kind == "motion"
                 ),
                 high_lock_params=runtime_policy.high_lock_escape.as_solver_params(),
@@ -1908,6 +1921,14 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
         "solver_kernel": "v1_fusion_reference_path",
         "time_bias": float(cfg.time_bias),
         "pre_motion_context_seconds": float(cfg.pre_motion_context_seconds),
+        "motion_gate_filter_allowlist": list(motion_gate_filter_allowlist),
+        "motion_gate_filter_supported": bool(motion_gate_filter_supported),
+        "motion_low_reacquire_effective": bool(
+            cfg.reacquire_enable and motion_gate_filter_supported
+        ),
+        "motion_high_lock_escape_effective": bool(
+            runtime_policy.high_lock_escape.enabled and motion_gate_filter_supported
+        ),
         "reacquire_enable": bool(cfg.reacquire_enable),
         "high_lock_escape": runtime_policy.high_lock_escape.metadata(
             trigger_count=int(
