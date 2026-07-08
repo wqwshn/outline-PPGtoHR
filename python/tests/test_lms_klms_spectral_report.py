@@ -30,3 +30,4 @@ def test_render_spectral_report_figures_writes_pngs(tmp_path: Path) -> None:
     assert result.overview_png.is_file()
     assert result.scenario_png.is_file()
     assert result.failure_png.is_file()
+    assert result.evidence_png.is_file()

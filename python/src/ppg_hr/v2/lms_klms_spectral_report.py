@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -44,6 +45,7 @@ class SpectralFigureResult:
     overview_png: Path
     scenario_png: Path
     failure_png: Path
+    evidence_png: Path
 
 
 def render_spectral_report_figures(
@@ -60,11 +62,13 @@ def render_spectral_report_figures(
     overview = _plot_overview(sample, out / "overview_metrics")
     scenario_png = _plot_scenario_facets(scenario, out / "scenario_facets")
     failure = _plot_failure_reasons(windows, out / "failure_reasons")
+    evidence = _plot_representative_windows(windows, analysis_dir.parent, out / "representative_windows")
     return SpectralFigureResult(
         output_dir=out,
         overview_png=overview,
         scenario_png=scenario_png,
         failure_png=failure,
+        evidence_png=evidence,
     )
 
 
@@ -213,6 +217,178 @@ def _plot_failure_reasons(windows: pd.DataFrame, output_base: Path) -> Path:
     return _export_png(fig, output_base)
 
 
+def _plot_representative_windows(
+    windows: pd.DataFrame,
+    result_root: Path,
+    output_base: Path,
+) -> Path:
+    examples = _select_representative_examples(windows)
+    fig, axes = plt.subplots(2, 2, figsize=(7.1, 3.8), constrained_layout=True)
+    axes_flat = axes.ravel()
+    if not examples:
+        for ax in axes_flat:
+            ax.axis("off")
+        axes_flat[0].text(
+            0.02,
+            0.85,
+            "No paired representative windows were available in the analysis table.",
+            transform=axes_flat[0].transAxes,
+            va="top",
+        )
+        return _export_png(fig, output_base)
+
+    for ax, example in zip(axes_flat, examples):
+        _draw_window_pair(ax, example, result_root)
+    for ax in axes_flat[len(examples) :]:
+        ax.axis("off")
+    return _export_png(fig, output_base)
+
+
+def _select_representative_examples(windows: pd.DataFrame) -> list[dict[str, object]]:
+    examples: list[dict[str, object]] = []
+    for family in ("lms", "klms"):
+        off = f"{family}_gate_off"
+        low = f"{family}_low_reacquire_only"
+        off_rows = windows[windows["condition"] == off]
+        low_rows = windows[windows["condition"] == low]
+        if off_rows.empty or low_rows.empty:
+            continue
+        cols = ["sample", "window_idx", "primary_failure_reason", "abs_error_bpm"]
+        merged = off_rows[cols].merge(
+            low_rows[cols],
+            on=["sample", "window_idx"],
+            suffixes=("_off", "_low"),
+        )
+        selected = merged[
+            (merged["primary_failure_reason_off"] == "already_correct")
+            & (merged["primary_failure_reason_low"] == "visible_not_in_range")
+        ].copy()
+        if selected.empty:
+            continue
+        selected["delta"] = (
+            pd.to_numeric(selected["abs_error_bpm_low"], errors="coerce")
+            - pd.to_numeric(selected["abs_error_bpm_off"], errors="coerce")
+        )
+        for _, row in selected.sort_values("delta", ascending=False).head(2).iterrows():
+            examples.append(
+                {
+                    "family": family.upper(),
+                    "sample": str(row["sample"]),
+                    "window_idx": int(row["window_idx"]),
+                    "off_condition": off,
+                    "low_condition": low,
+                }
+            )
+    return examples[:4]
+
+
+def _draw_window_pair(ax, example: dict[str, object], result_root: Path) -> None:
+    sample = str(example["sample"])
+    window_idx = int(example["window_idx"])
+    off_condition = str(example["off_condition"])
+    low_condition = str(example["low_condition"])
+    traces = []
+    for label, condition, color in [
+        ("gate-off", off_condition, "#4C78A8"),
+        ("low-reacq", low_condition, "#D95F02"),
+    ]:
+        row = _load_window_row(result_root, condition, sample, window_idx)
+        if row is None:
+            continue
+        trace = row.get("spectrum_tracking") or {}
+        traces.append((label, condition, row, trace, color))
+    if not traces:
+        ax.axis("off")
+        ax.text(0.02, 0.85, f"{sample} #{window_idx}\nmissing JSON", transform=ax.transAxes)
+        return
+
+    ref_bpm = _first_present([t[3].get("ref_hr_bpm") for t in traces])
+    if ref_bpm is not None:
+        ref_bpm = float(ref_bpm)
+        ax.axvspan(ref_bpm - 5.0, ref_bpm + 5.0, color="#8DD3C7", alpha=0.24, lw=0)
+        ax.axvline(ref_bpm, color="#222222", lw=0.8, ls="-", label="ref HR")
+
+    y_offsets = [0.0, 1.15]
+    for offset, (label, _condition, _row, trace, color) in zip(y_offsets, traces):
+        peaks = _numeric_list(trace.get("unpenalized_candidate_peaks_bpm"))
+        amps = _numeric_list(trace.get("unpenalized_candidate_peak_amplitudes"))
+        max_amp = max(amps) if amps else 1.0
+        for bpm, amp in zip(peaks, amps):
+            height = 0.8 * (float(amp) / max_amp if max_amp else 0.0)
+            ax.vlines(float(bpm), offset, offset + height, color=color, lw=1.0, alpha=0.9)
+            ax.plot(float(bpm), offset + height, "o", ms=2.2, color=color)
+        search_min = _as_float(trace.get("search_min_bpm"))
+        search_max = _as_float(trace.get("search_max_bpm"))
+        if search_min is not None and search_max is not None:
+            ax.hlines(offset + 0.92, search_min, search_max, color=color, lw=1.2)
+        previous = _as_float(trace.get("previous_hr_bpm"))
+        final = _as_float(trace.get("final_hr_bpm"))
+        if previous is not None:
+            ax.axvline(previous, color=color, lw=0.7, ls=":", alpha=0.85)
+        if final is not None:
+            ax.axvline(final, color=color, lw=0.9, ls="--", alpha=0.85)
+        ax.text(
+            0.01,
+            (offset + 0.38) / 2.1,
+            f"{label}\nfinal {final:.1f}" if final is not None else label,
+            transform=ax.transAxes,
+            color=color,
+            fontsize=5.8,
+            va="center",
+        )
+    ax.set_title(f"{example['family']} {sample} window {window_idx}", fontsize=7)
+    ax.set_xlabel("Candidate / state HR (BPM)")
+    ax.set_yticks([])
+    ax.set_ylim(-0.05, 2.15)
+    ax.grid(axis="x", color="#E5E8EC", linewidth=0.5)
+
+
+def _load_window_row(
+    result_root: Path,
+    condition: str,
+    sample: str,
+    window_idx: int,
+) -> dict[str, object] | None:
+    json_dir = result_root / condition / "json"
+    matches = sorted(json_dir.glob(f"{sample}-*-v2.json"))
+    if not matches:
+        return None
+    payload = json.loads(matches[0].read_text(encoding="utf-8"))
+    for row in payload.get("window_table", []):
+        try:
+            if int(row.get("window_idx")) == int(window_idx):
+                return row
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _numeric_list(value: object) -> list[float]:
+    if not isinstance(value, list | tuple):
+        return []
+    output = []
+    for item in value:
+        parsed = _as_float(item)
+        if parsed is not None:
+            output.append(parsed)
+    return output
+
+
+def _as_float(value: object) -> float | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if np.isfinite(parsed) else None
+
+
+def _first_present(values: list[object]) -> object | None:
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
 def _apply_style() -> None:
     repo_root = Path(__file__).resolve().parents[4]
     scripts = repo_root / "skills" / "publication-plotting" / "scripts"
@@ -294,6 +470,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"overview_png={result.overview_png}")
     print(f"scenario_png={result.scenario_png}")
     print(f"failure_png={result.failure_png}")
+    print(f"evidence_png={result.evidence_png}")
     return 0
 
 
