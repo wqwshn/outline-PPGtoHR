@@ -71,3 +71,32 @@ def test_gate_factorial_dry_run_plans_selected_sample_and_conditions(tmp_path: P
         "klms_gate_full",
     ]
     assert not (tmp_path / "out").exists()
+
+
+def test_gate_factorial_resume_skips_existing_report(tmp_path: Path) -> None:
+    from ppg_hr.v2.lms_klms_gate_factorial import run_gate_factorial_experiment
+
+    _write_sample_pair(tmp_path, "xiezi2_LYX_0708")
+    report = (
+        tmp_path
+        / "out"
+        / "lms_gate_off"
+        / "json"
+        / "xiezi2_LYX_0708-green-raw_bandpass-lms-full-HF-v2.json"
+    )
+    report.parent.mkdir(parents=True)
+    report.write_text('{"err_stats": {"final_aae_bpm": 1.25}}', encoding="utf-8")
+
+    result = run_gate_factorial_experiment(
+        data_root=tmp_path,
+        output_root=tmp_path / "out",
+        sample_ids=("xiezi2_LYX_0708",),
+        condition_names=("lms_gate_off",),
+        dry_run=False,
+        render=False,
+        resume=True,
+    )
+
+    assert len(result.completed_runs) == 1
+    assert result.completed_runs[0].report_path == report
+    assert result.completed_runs[0].best_error == 1.25

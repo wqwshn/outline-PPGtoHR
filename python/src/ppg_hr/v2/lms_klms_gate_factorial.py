@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -152,6 +153,7 @@ def run_gate_factorial_experiment(
     dry_run: bool = False,
     bayes_cfg: V2BayesConfig | None = None,
     render: bool = True,
+    resume: bool = False,
     on_log: Callable[[str], None] | None = None,
 ) -> GateFactorialResult:
     data_root = Path(data_root)
@@ -174,6 +176,11 @@ def run_gate_factorial_experiment(
     completed: list[CompletedGateRun] = []
     cfg_bayes = bayes_cfg or V2BayesConfig()
     for run in planned:
+        existing = _existing_completed_run(run) if resume else None
+        if existing is not None:
+            _log(on_log, f"跳过已存在结果 {run.condition.name}: {run.sample.sample_id}")
+            completed.append(existing)
+            continue
         completed.append(
             _run_one(
                 run,
@@ -259,6 +266,65 @@ def _run_one(
     )
 
 
+def _existing_completed_run(run: PlannedGateRun) -> CompletedGateRun | None:
+    report_path = _planned_report_path(run)
+    if not report_path.is_file():
+        return None
+    try:
+        payload = json.loads(report_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    best_error = _best_error_from_payload(payload)
+    prefix = report_path.name[: -len("-v2.json")] if report_path.name.endswith("-v2.json") else report_path.stem
+    png = run.output_dir / "png" / f"{prefix}-v2-hr.png"
+    err = run.output_dir / "csv" / f"{prefix}-v2-error.csv"
+    hr = run.output_dir / "csv" / f"{prefix}-v2-hr.csv"
+    return CompletedGateRun(
+        sample=run.sample,
+        condition=run.condition,
+        report_path=report_path,
+        best_error=best_error,
+        figure_png=png if png.is_file() else None,
+        error_csv=err if err.is_file() else None,
+        hr_csv=hr if hr.is_file() else None,
+    )
+
+
+def _planned_report_path(run: PlannedGateRun) -> Path:
+    reference_groups_order = ("HF",)
+    prefix = safe_run_prefix(
+        run.sample.sample_id,
+        "green",
+        "raw_bandpass",
+        run.condition.adaptive_filter,
+        "full",
+        reference_groups_order,
+    )
+    return safe_output_path(run.output_dir / "json", f"{prefix}-v2.json")
+
+
+def _best_error_from_payload(payload: dict[str, object]) -> float:
+    err_stats = payload.get("err_stats")
+    if isinstance(err_stats, dict):
+        value = err_stats.get("final_aae_bpm")
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            pass
+    history = payload.get("history")
+    if isinstance(history, list):
+        values = []
+        for row in history:
+            if isinstance(row, dict):
+                try:
+                    values.append(float(row.get("value")))
+                except (TypeError, ValueError):
+                    pass
+        if values:
+            return min(values)
+    return float("nan")
+
+
 def _select_samples(
     discovered: list[GateFactorialSample],
     sample_ids: Sequence[str],
@@ -336,6 +402,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--all", action="store_true", help="Run all included motion samples.")
     parser.add_argument("--condition", action="append", default=[])
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--resume", action="store_true")
     parser.add_argument("--skip-render", action="store_true")
     parser.add_argument("--max-iterations", type=int, default=75)
     parser.add_argument("--num-seed-points", type=int, default=10)
@@ -363,6 +430,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         dry_run=bool(args.dry_run),
         bayes_cfg=bayes_cfg,
         render=not bool(args.skip_render),
+        resume=bool(args.resume),
         on_log=print,
     )
     print(f"output_root={result.output_root}")
