@@ -414,12 +414,15 @@ def _reference_order_from_report(report_path: Path) -> str:
         payload = json.loads(report_path.read_text(encoding="utf-8"))
     except Exception:
         return ""
-    metadata = payload.get("metadata")
     groups = ()
+    raw = payload.get("reference_groups_order")
+    if isinstance(raw, (list, tuple)):
+        groups = tuple(str(item) for item in raw)
+    metadata = payload.get("metadata")
     if isinstance(metadata, dict):
-        raw = metadata.get("reference_groups_order")
-        if isinstance(raw, (list, tuple)):
-            groups = tuple(str(item) for item in raw)
+        metadata_raw = metadata.get("reference_groups_order")
+        if not groups and isinstance(metadata_raw, (list, tuple)):
+            groups = tuple(str(item) for item in metadata_raw)
     try:
         return reference_order_key(normalise_reference_order(groups))
     except ValueError:

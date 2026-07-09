@@ -37,6 +37,21 @@ DEFAULT_HIGHLOCK_SUMMARY = Path(
     r"\202607-multiperson\0708-LYX\low_lock_upward_outputs"
     r"\20260709_highlock_step_fraction\gate_factorial_summary.csv"
 )
+DEFAULT_CURRENT_ACC_SUMMARY = Path(
+    r"D:\data\PPG_HeartRate\Algorithm\Algorithm\outline-PPGtoHR\data"
+    r"\202607-multiperson\0708-LYX\low_lock_upward_outputs"
+    r"\20260709_current_acc_step_fraction\gate_factorial_summary.csv"
+)
+DEFAULT_HISTORICAL_ACC_SUMMARY = Path(
+    r"D:\data\PPG_HeartRate\Algorithm\Algorithm\outline-PPGtoHR\data"
+    r"\202607-multiperson\0708-LYX\low_lock_upward_outputs"
+    r"\20260709_historical_acc_step_fraction\gate_factorial_summary.csv"
+)
+DEFAULT_HIGHLOCK_ACC_SUMMARY = Path(
+    r"D:\data\PPG_HeartRate\Algorithm\Algorithm\outline-PPGtoHR\data"
+    r"\202607-multiperson\0708-LYX\low_lock_upward_outputs"
+    r"\20260709_highlock_acc_step_fraction\gate_factorial_summary.csv"
+)
 DEFAULT_CURRENT_COHORT = Path(
     r"D:\data\PPG_HeartRate\Algorithm\Algorithm\outline-PPGtoHR\data"
     r"\202607-multiperson\0708-LYX\low_lock_upward_outputs"
@@ -91,6 +106,29 @@ def _cohort_rows(frames: list[pd.DataFrame]) -> list[dict[str, Any]]:
                 "delta_mean_mae": _mean(row["delta_mae"] for row in deltas),
                 "delta_max_mae": max(row["delta_mae"] for row in deltas),
                 "delta_min_mae": min(row["delta_mae"] for row in deltas),
+            }
+        )
+    return rows
+
+
+def _reference_comparison_rows(
+    hf_rows: list[dict[str, Any]],
+    acc_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    acc_by_cohort = {str(row["cohort"]): row for row in acc_rows}
+    rows: list[dict[str, Any]] = []
+    for hf in hf_rows:
+        cohort = str(hf["cohort"])
+        acc = acc_by_cohort[cohort]
+        rows.append(
+            {
+                "cohort": cohort,
+                "hf_gate_off_mean_mae": float(hf["gate_off_mean_mae"]),
+                "hf_low_reacquire_mean_mae": float(hf["low_reacquire_mean_mae"]),
+                "hf_delta_mean_mae": float(hf["delta_mean_mae"]),
+                "acc_gate_off_mean_mae": float(acc["gate_off_mean_mae"]),
+                "acc_low_reacquire_mean_mae": float(acc["low_reacquire_mean_mae"]),
+                "acc_delta_mean_mae": float(acc["delta_mean_mae"]),
             }
         )
     return rows
@@ -209,6 +247,35 @@ def _plot_reason_counts(current_cohort: Path, output_dir: Path) -> Path:
     return path
 
 
+def _plot_reference_delta(rows: list[dict[str, Any]], output_dir: Path) -> Path:
+    path = safe_output_path(output_dir, "fig5_reference_delta_comparison.png")
+    labels = [str(row["cohort"]) for row in rows]
+    x = list(range(len(rows)))
+    width = 0.36
+    hf = [float(row["hf_delta_mean_mae"]) for row in rows]
+    acc = [float(row["acc_delta_mean_mae"]) for row in rows]
+    max_abs = max([abs(value) for value in hf + acc] + [0.05])
+    fig, ax = plt.subplots(figsize=(6.4, 3.0))
+    ax.axhline(0, color="#444444", linewidth=0.8)
+    hf_x = [value - width / 2 for value in x]
+    acc_x = [value + width / 2 for value in x]
+    ax.bar(hf_x, hf, width, label="HF", color="#4C78A8", alpha=0.55)
+    ax.bar(acc_x, acc, width, label="ACC", color="#5B8FC0", alpha=0.55)
+    ax.scatter(hf_x, hf, color="#4C78A8", s=24, zorder=3)
+    ax.scatter(acc_x, acc, color="#5B8FC0", s=24, zorder=3)
+    for xpos, value in zip(hf_x + acc_x, hf + acc):
+        ax.text(xpos, 0.006, f"{value:.3f}", ha="center", va="bottom", fontsize=7)
+    ax.set_ylabel("Low reacquire delta MAE (BPM)")
+    ax.set_xticks(x, labels, rotation=18, ha="right")
+    ax.set_ylim(-max_abs * 1.2, max_abs * 1.2)
+    ax.legend(frameon=False)
+    ax.set_title("Low-lock gate remains neutral in HF and ACC reference chains")
+    fig.tight_layout()
+    fig.savefig(path, bbox_inches="tight")
+    plt.close(fig)
+    return path
+
+
 def _plot_representative_replay_window(old_replay_windows: Path, output_dir: Path) -> Path:
     path = safe_output_path(output_dir, "fig4_representative_historical_replay.png")
     frame = pd.read_csv(old_replay_windows)
@@ -265,6 +332,9 @@ def render_report(
     current_summary: Path = DEFAULT_CURRENT_SUMMARY,
     historical_summary: Path = DEFAULT_HISTORICAL_SUMMARY,
     highlock_summary: Path = DEFAULT_HIGHLOCK_SUMMARY,
+    current_acc_summary: Path = DEFAULT_CURRENT_ACC_SUMMARY,
+    historical_acc_summary: Path = DEFAULT_HISTORICAL_ACC_SUMMARY,
+    highlock_acc_summary: Path = DEFAULT_HIGHLOCK_ACC_SUMMARY,
     current_cohort: Path = DEFAULT_CURRENT_COHORT,
     old_replay_cohort: Path = DEFAULT_OLD_REPLAY_COHORT,
     old_replay_windows: Path = DEFAULT_OLD_REPLAY_WINDOWS,
@@ -274,14 +344,21 @@ def render_report(
     current = _load_condition_summary(current_summary, "current anti-regression")
     historical = _load_condition_summary(historical_summary, "historical rescue")
     highlock = _load_condition_summary(highlock_summary, "historical high-lock")
+    current_acc = _load_condition_summary(current_acc_summary, "current anti-regression")
+    historical_acc = _load_condition_summary(historical_acc_summary, "historical rescue")
+    highlock_acc = _load_condition_summary(highlock_acc_summary, "historical high-lock")
     current_deltas = _sample_delta_rows(current)
     cohort_rows = _cohort_rows([current, historical, highlock])
+    acc_cohort_rows = _cohort_rows([current_acc, historical_acc, highlock_acc])
+    reference_rows = _reference_comparison_rows(cohort_rows, acc_cohort_rows)
     _write_csv(safe_output_path(out, "cohort_mae_summary.csv"), cohort_rows)
     _write_csv(safe_output_path(out, "current_sample_deltas.csv"), current_deltas)
+    _write_csv(safe_output_path(out, "reference_comparison_summary.csv"), reference_rows)
     fig1 = _plot_cohort_mae(cohort_rows, out)
     fig2 = _plot_current_deltas(current_deltas, out)
     fig3 = _plot_reason_counts(current_cohort, out)
     fig4 = _plot_representative_replay_window(old_replay_windows, out)
+    fig5 = _plot_reference_delta(reference_rows, out)
     old = pd.read_csv(old_replay_cohort)
     old_rescue = old.loc[old["cohort"] == "historical_rescue"].iloc[0]
     current_low = pd.read_csv(current_cohort)
@@ -291,12 +368,14 @@ def render_report(
     doc_path.write_text(
         _markdown(
             cohort_rows=cohort_rows,
+            reference_rows=reference_rows,
             current_low_row=current_low_row,
             old_rescue=old_rescue,
             fig1=fig1,
             fig2=fig2,
             fig3=fig3,
             fig4=fig4,
+            fig5=fig5,
             output_dir=out,
         ),
         encoding="utf-8",
@@ -307,22 +386,30 @@ def render_report(
 def _markdown(
     *,
     cohort_rows: list[dict[str, Any]],
+    reference_rows: list[dict[str, Any]],
     current_low_row: pd.Series,
     old_rescue: pd.Series,
     fig1: Path,
     fig2: Path,
     fig3: Path,
     fig4: Path,
+    fig5: Path,
     output_dir: Path,
 ) -> str:
     fig1_md = fig1.as_posix()
     fig2_md = fig2.as_posix()
     fig3_md = fig3.as_posix()
     fig4_md = fig4.as_posix()
+    fig5_md = fig5.as_posix()
     rows_md = "\n".join(
         "| {cohort} | {sample_count} | {gate_off_mean_mae:.3f} | "
         "{low_reacquire_mean_mae:.3f} | {delta_mean_mae:.3f} |".format(**row)
         for row in cohort_rows
+    )
+    reference_rows_md = "\n".join(
+        "| {cohort} | {hf_gate_off_mean_mae:.3f} | {hf_delta_mean_mae:.3f} | "
+        "{acc_gate_off_mean_mae:.3f} | {acc_delta_mean_mae:.3f} |".format(**row)
+        for row in reference_rows
     )
     return f"""# 运动段低锁上跳重捕获机制优化实验报告
 
@@ -331,6 +418,8 @@ def _markdown(
 本轮将原“低频重捕获”收敛为更保守的 **运动段低锁上跳重捕获**：它只在低锁持续、远端候选足够远离普通搜索范围、候选不贴惩罚主频、挑战窗口稳定，且低锁轨迹自身出现与目标缺口相称的上行漂移时才进入 confirmed reacquire。未确认的 challenge 只记录证据，不再关闭连续性保护，也不再改写主链路可达性。
 
 在 2026-07-08 LYX 当前防误伤全量 14 个样本上，`lms_low_reacquire_only` 与 `lms_gate_off` 的逐样本 MAE 完全一致，平均 delta 为 0.000 BPM；这说明写字、键盘、握力、拳击等心率变化不大的场景不再因低锁上跳产生额外误伤。在历史救援 3 样本和历史高锁防回归 6 样本上，本轮中等 BO 配置同样保持 delta 为 0.000 BPM，没有观察到副作用。
+
+ACC 对比链路也复跑了相同三组样本和相同门控开关，low-only 相对 gate-off 的平均 delta 同样为 0.000 BPM。该结果仅用于证明 ACC 对比读数接受同一套机制且不被额外污染；HF 主链路的触发、候选选择和门控判断仍不使用 ACC。
 
 需要保留一个边界判断：本轮中等 BO 实验没有复现 2026-06-21 旧机制在 `multi_kaihe1`、`multi_kaihe2`、`multi_bobi3` 上的大幅收益，因此当前结论不是“收益已重新证明”，而是“误触发已被压住，且历史救援窗口在旧 trace replay 中仍可被新门控确认”。旧历史结果 replay 显示，历史救援组仍有 {float(old_rescue["qualified_upward_candidate_rate"]):.3f} 的运动窗口满足新候选资格，并有 {int(old_rescue["offline_confirmed_upward_count"])} 个窗口通过多窗口确认，其中包含 `multi_kaihe1` 的真实上升触发窗口。
 
@@ -351,6 +440,16 @@ def _markdown(
 {rows_md}
 
 ![Current sample deltas]({fig2_md})
+
+## ACC 对比链路
+
+ACC 作为对比参考信号单独运行，不参与 HF 主链路决策。三组样本中，ACC 链路的低锁上跳门控同样没有引入额外 MAE 偏移。
+
+| Cohort | HF gate off mean MAE | HF delta | ACC gate off mean MAE | ACC delta |
+| --- | ---: | ---: | ---: | ---: |
+{reference_rows_md}
+
+![Reference delta comparison]({fig5_md})
 
 ## 防误触发证据
 

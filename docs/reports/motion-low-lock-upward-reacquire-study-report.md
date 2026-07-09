@@ -6,6 +6,8 @@
 
 在 2026-07-08 LYX 当前防误伤全量 14 个样本上，`lms_low_reacquire_only` 与 `lms_gate_off` 的逐样本 MAE 完全一致，平均 delta 为 0.000 BPM；这说明写字、键盘、握力、拳击等心率变化不大的场景不再因低锁上跳产生额外误伤。在历史救援 3 样本和历史高锁防回归 6 样本上，本轮中等 BO 配置同样保持 delta 为 0.000 BPM，没有观察到副作用。
 
+ACC 对比链路也复跑了相同三组样本和相同门控开关，low-only 相对 gate-off 的平均 delta 同样为 0.000 BPM。该结果仅用于证明 ACC 对比读数接受同一套机制且不被额外污染；HF 主链路的触发、候选选择和门控判断仍不使用 ACC。
+
 需要保留一个边界判断：本轮中等 BO 实验没有复现 2026-06-21 旧机制在 `multi_kaihe1`、`multi_kaihe2`、`multi_bobi3` 上的大幅收益，因此当前结论不是“收益已重新证明”，而是“误触发已被压住，且历史救援窗口在旧 trace replay 中仍可被新门控确认”。旧历史结果 replay 显示，历史救援组仍有 0.030 的运动窗口满足新候选资格，并有 1 个窗口通过多窗口确认，其中包含 `multi_kaihe1` 的真实上升触发窗口。
 
 ![Cohort MAE](D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/low_lock_upward_outputs/20260709_report/fig1_cohort_mae.png)
@@ -27,6 +29,18 @@
 | historical high-lock | 6 | 3.917 | 3.917 | 0.000 |
 
 ![Current sample deltas](D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/low_lock_upward_outputs/20260709_report/fig2_current_sample_deltas.png)
+
+## ACC 对比链路
+
+ACC 作为对比参考信号单独运行，不参与 HF 主链路决策。三组样本中，ACC 链路的低锁上跳门控同样没有引入额外 MAE 偏移。
+
+| Cohort | HF gate off mean MAE | HF delta | ACC gate off mean MAE | ACC delta |
+| --- | ---: | ---: | ---: | ---: |
+| current anti-regression | 3.211 | 0.000 | 4.099 | 0.000 |
+| historical rescue | 3.534 | 0.000 | 4.421 | 0.000 |
+| historical high-lock | 3.917 | 0.000 | 3.550 | 0.000 |
+
+![Reference delta comparison](D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/low_lock_upward_outputs/20260709_report/fig5_reference_delta_comparison.png)
 
 ## 防误触发证据
 
