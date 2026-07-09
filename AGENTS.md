@@ -29,9 +29,10 @@
 
 ## Scientific plotting rules
 
-- 论文级科研绘图优先使用项目内 `skills/publication-plotting` Skill。
-- 默认只导出600 dpi PNG；提交或交付前使用 `figure_check.py` 检查输出文件。
-- 绘图风格、配色、尺寸和字体优先复用 `plot_style.py` 与 `assets/*.mplstyle`，避免在脚本中分散硬编码。
+- 论文级科研绘图优先使用全局 `nature-figure` Skill；不再依赖项目内 `skills/publication-plotting`。
+- 迭代审阅默认导出 600 dpi PNG；正式交付按 figure contract 决定是否补 PDF/SVG/TIFF。
+- 心率算法图优先使用固定层级：参考深灰、主算法暖橙、次算法冷蓝、baseline 灰色虚线、事件背景低饱和灰蓝。
+- 保持统一字体、明确单位、稠密时序少量 marker、多面板比较统一 y 轴，避免默认 Matplotlib 配色。
 
 ## Agent skills
 
