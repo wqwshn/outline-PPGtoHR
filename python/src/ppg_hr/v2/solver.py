@@ -78,6 +78,7 @@ _REACQUIRE_TARGET_MIN_HZ = 90.0 / 60.0
 _REACQUIRE_SUSPICIOUS_HIGH_HZ = 180.0 / 60.0
 _REACQUIRE_MIN_RANGE_UP_MULTIPLIER = 1.5
 _REACQUIRE_MIN_DRIFT_TO_TARGET_RATIO = 0.12
+_REACQUIRE_CONFIRM_DRIFT_STEP_FRACTION = 0.75
 _HIGH_LOCK_CONFIRM_WINDOWS = 3
 _HIGH_LOCK_COOLDOWN_WINDOWS = 4
 _HIGH_LOCK_MIN_GAP_HZ = 20.0 / 60.0
@@ -418,7 +419,12 @@ def _process_spectrum_with_trace_impl(
             _REACQUIRE_MIN_JUMP_HZ,
             float(tracking.range_up_hz) * _REACQUIRE_MIN_RANGE_UP_MULTIPLIER,
         ),
-        min_confirm_drift_hz=max(float(tracking.step_up_bpm) / 60.0, 0.0),
+        min_confirm_drift_hz=max(
+            float(tracking.step_up_bpm)
+            * _REACQUIRE_CONFIRM_DRIFT_STEP_FRACTION
+            / 60.0,
+            0.0,
+        ),
     )
     limited_hz = reacquire_decision.hr_hz
     if reacquire_decision.triggered or reacquire_decision.mode == "reacquiring":

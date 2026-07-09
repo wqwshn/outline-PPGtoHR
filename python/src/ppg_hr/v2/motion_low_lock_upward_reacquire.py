@@ -42,6 +42,12 @@ LEGACY_UPWARD_MIN_JUMP_BPM = 20.0
 LEGACY_UPWARD_MIN_AMP_RATIO = 0.45
 RELATIVE_UPWARD_MIN_RANGE_UP_BPM = 25.0
 RELATIVE_UPWARD_MIN_RANGE_MULTIPLIER = 1.5
+CONFIRM_DRIFT_STEP_BPM = 7.0
+CONFIRM_DRIFT_STEP_FRACTION = 0.75
+CONFIRM_DRIFT_TO_TARGET_RATIO = 0.12
+UPWARD_CANDIDATE_STABLE_BPM = 10.0
+UPWARD_CONFIRM_WINDOWS = 3
+LOW_LOCK_MIN_WINDOWS = 4
 NEAR_PENALTY_TOLERANCE_BPM = 10.0
 SUSPICIOUS_HIGH_BPM = 180.0
 
@@ -70,6 +76,15 @@ class LowLockAnalysisResult:
     matrix_csv: Path
     window_csv: Path
     cohort_summary_csv: Path
+
+
+@dataclass
+class OfflineUpwardGateState:
+    mode: str = "locked"
+    candidate_bpm: float | None = None
+    challenge_start_bpm: float | None = None
+    count: int = 0
+    low_lock_count: int = 0
 
 
 def build_low_lock_study_matrix(
@@ -207,6 +222,89 @@ def qualified_upward_candidate_from_row(row: dict[str, Any]) -> dict[str, Any]:
     return _candidate_decision(None, rejected_reasons[0] if rejected_reasons else "all_rejected")
 
 
+def offline_upward_gate_from_row(
+    row: dict[str, Any],
+    state: OfflineUpwardGateState,
+    candidate: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Replay the new multi-window gate on saved window traces."""
+
+    trace = row.get("spectrum_tracking") or {}
+    previous_bpm = _first_float(trace.get("previous_hr_bpm"))
+    decision = candidate or qualified_upward_candidate_from_row(row)
+    candidate_bpm = _first_float(decision.get("candidate_bpm"))
+    rejected_reason = str(decision.get("rejected_reason") or "")
+
+    if previous_bpm is None or not (LOW_LOCK_MIN_BPM <= previous_bpm <= LOW_LOCK_MAX_BPM):
+        if state.mode != "reacquiring":
+            _reset_offline_gate(state)
+        return _offline_gate_decision("previous_not_low_lock", None, rejected_reason, False, state)
+
+    state.low_lock_count += 1
+    if state.mode != "reacquiring" and state.low_lock_count < LOW_LOCK_MIN_WINDOWS:
+        state.mode = "locked"
+        state.candidate_bpm = None
+        state.challenge_start_bpm = None
+        state.count = 0
+        return _offline_gate_decision("low_lock_not_sustained", None, rejected_reason, False, state)
+
+    if candidate_bpm is None:
+        _reset_offline_gate(state, reset_low_lock=False)
+        return _offline_gate_decision(
+            "no_qualified_upward_candidate", None, rejected_reason, False, state
+        )
+
+    if state.mode == "challenge" and state.candidate_bpm is not None:
+        if abs(candidate_bpm - state.candidate_bpm) <= UPWARD_CANDIDATE_STABLE_BPM:
+            state.count += 1
+            state.candidate_bpm = candidate_bpm
+        else:
+            state.candidate_bpm = candidate_bpm
+            state.challenge_start_bpm = previous_bpm
+            state.count = 1
+    else:
+        state.mode = "challenge"
+        state.candidate_bpm = candidate_bpm
+        state.challenge_start_bpm = previous_bpm
+        state.count = 1
+
+    if state.count < UPWARD_CONFIRM_WINDOWS:
+        return _offline_gate_decision(
+            "candidate_challenge_pending", state.candidate_bpm, rejected_reason, False, state
+        )
+
+    start_bpm = state.challenge_start_bpm
+    target_gap = (
+        0.0
+        if start_bpm is None or state.candidate_bpm is None
+        else max(0.0, float(state.candidate_bpm) - float(start_bpm))
+    )
+    required_drift = max(
+        CONFIRM_DRIFT_STEP_BPM * CONFIRM_DRIFT_STEP_FRACTION,
+        target_gap * CONFIRM_DRIFT_TO_TARGET_RATIO,
+    )
+    if start_bpm is None or previous_bpm - start_bpm < required_drift:
+        rejected_candidate = state.candidate_bpm
+        _reset_offline_gate(state, reset_low_lock=False)
+        return _offline_gate_decision(
+            "insufficient_low_track_upward_drift",
+            rejected_candidate,
+            rejected_reason,
+            False,
+            state,
+        )
+
+    confirmed_candidate = state.candidate_bpm
+    state.mode = "reacquiring"
+    return _offline_gate_decision(
+        "offline_confirmed_upward_candidate",
+        confirmed_candidate,
+        rejected_reason,
+        True,
+        state,
+    )
+
+
 def analyze_low_lock_result_root(
     result_root: Path | str,
     *,
@@ -241,8 +339,10 @@ def _iter_low_lock_window_rows(
         sample_id = Path(str(payload.get("data_path", report_path.stem))).stem
         sample = by_sample.get(sample_id)
         scenario = sample.scenario if sample is not None else _scenario_for_sample(sample_id)
+        offline_state = OfflineUpwardGateState()
         for row in payload.get("window_table", []):
             if not (bool(row.get("is_motion")) and bool(row.get("used_adaptive"))):
+                _reset_offline_gate(offline_state)
                 continue
             spectral = window_metrics_from_row(
                 row=row,
@@ -253,6 +353,7 @@ def _iter_low_lock_window_rows(
             )
             low_lock = low_lock_features_from_row(row)
             candidate = qualified_upward_candidate_from_row(row)
+            offline_gate = offline_upward_gate_from_row(row, offline_state, candidate)
             yield {
                 **spectral,
                 **low_lock,
@@ -261,6 +362,7 @@ def _iter_low_lock_window_rows(
                 "qualified_upward_candidate_nearest_penalty_bpm": candidate[
                     "nearest_penalty_bpm"
                 ],
+                **offline_gate,
                 "cohort": sample.cohort if sample is not None else "unclassified",
                 "data_path": str(payload.get("data_path", "")),
                 "report_path": str(report_path),
@@ -325,6 +427,12 @@ def _cohort_summary_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 ),
                 "qualified_upward_candidate_rate": _rate(
                     row.get("qualified_upward_candidate_bpm") is not None for row in grouped
+                ),
+                "offline_confirmed_upward_count": sum(
+                    1 for row in grouped if row.get("offline_upward_triggered")
+                ),
+                "offline_confirmed_upward_rate": _rate(
+                    row.get("offline_upward_triggered") for row in grouped
                 ),
                 "jumped_to_suspicious_high_rate": _rate(
                     row.get("jumped_to_suspicious_high_bpm") for row in grouped
@@ -444,6 +552,37 @@ def _candidate_decision(candidate_bpm: float | None, reason: str) -> dict[str, A
         "rejected_reason": reason,
         "nearest_penalty_bpm": None,
     }
+
+
+def _offline_gate_decision(
+    reason: str,
+    candidate_bpm: float | None,
+    rejected_reason: str,
+    triggered: bool,
+    state: OfflineUpwardGateState,
+) -> dict[str, Any]:
+    return {
+        "offline_upward_reason": reason,
+        "offline_upward_candidate_bpm": candidate_bpm,
+        "offline_upward_rejected_reason": rejected_reason,
+        "offline_upward_triggered": bool(triggered),
+        "offline_upward_mode": state.mode,
+        "offline_upward_count": int(state.count),
+        "offline_upward_low_lock_count": int(state.low_lock_count),
+    }
+
+
+def _reset_offline_gate(
+    state: OfflineUpwardGateState,
+    *,
+    reset_low_lock: bool = True,
+) -> None:
+    state.mode = "locked"
+    state.candidate_bpm = None
+    state.challenge_start_bpm = None
+    state.count = 0
+    if reset_low_lock:
+        state.low_lock_count = 0
 
 
 def _legacy_upward_candidates(

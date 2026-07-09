@@ -215,6 +215,43 @@ def test_solver_reacquire_rejects_primary_penalty_core_candidate(monkeypatch) ->
     assert traces[-1].reacquire_candidate_rejected_reason == "near_primary_penalty_core"
 
 
+def test_offline_gate_confirms_historical_style_upward_drift() -> None:
+    from ppg_hr.v2.motion_low_lock_upward_reacquire import (
+        OfflineUpwardGateState,
+        offline_upward_gate_from_row,
+    )
+
+    state = OfflineUpwardGateState(low_lock_count=8)
+    rows = [
+        _offline_gate_row(previous=60.0, candidate=118.0, amp=0.52),
+        _offline_gate_row(previous=64.0, candidate=116.0, amp=0.53),
+        _offline_gate_row(previous=68.0, candidate=114.0, amp=0.57),
+    ]
+    decisions = [offline_upward_gate_from_row(row, state) for row in rows]
+
+    assert decisions[-1]["offline_upward_triggered"] is True
+    assert decisions[-1]["offline_upward_reason"] == "offline_confirmed_upward_candidate"
+    assert decisions[-1]["offline_upward_candidate_bpm"] == 114.0
+
+
+def test_offline_gate_rejects_far_candidate_without_low_track_drift() -> None:
+    from ppg_hr.v2.motion_low_lock_upward_reacquire import (
+        OfflineUpwardGateState,
+        offline_upward_gate_from_row,
+    )
+
+    state = OfflineUpwardGateState(low_lock_count=8)
+    rows = [
+        _offline_gate_row(previous=60.0, candidate=118.0, amp=0.52),
+        _offline_gate_row(previous=61.0, candidate=116.0, amp=0.53),
+        _offline_gate_row(previous=62.0, candidate=114.0, amp=0.57),
+    ]
+    decisions = [offline_upward_gate_from_row(row, state) for row in rows]
+
+    assert decisions[-1]["offline_upward_triggered"] is False
+    assert decisions[-1]["offline_upward_reason"] == "insufficient_low_track_upward_drift"
+
+
 def test_analyze_low_lock_result_root_writes_window_and_cohort_tables(tmp_path: Path) -> None:
     from ppg_hr.v2.motion_low_lock_upward_reacquire import (
         LowLockStudyMatrix,
@@ -254,3 +291,19 @@ def test_analyze_low_lock_result_root_writes_window_and_cohort_tables(tmp_path: 
     assert "reacquire_candidate_rejected_reason" in window_text
     assert "jumped_to_suspicious_high_rate" in cohort_text
     assert "solver_reacquire_rejection_counts" in cohort_text
+    assert "offline_confirmed_upward_count" in cohort_text
+
+
+def _offline_gate_row(*, previous: float, candidate: float, amp: float) -> dict:
+    return {
+        "is_motion": True,
+        "used_adaptive": True,
+        "ref_hr_bpm": candidate,
+        "final_hr_bpm": previous,
+        "spectrum_tracking": {
+            "previous_hr_bpm": previous,
+            "unpenalized_candidate_peaks_bpm": [previous, candidate],
+            "unpenalized_candidate_peak_amplitudes": [1.0, amp],
+            "penalty_centers_bpm": [previous - 8.0],
+        },
+    }

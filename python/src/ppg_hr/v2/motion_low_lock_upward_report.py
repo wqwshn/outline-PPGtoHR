@@ -25,27 +25,27 @@ DEFAULT_DOC_PATH = Path(
 DEFAULT_CURRENT_SUMMARY = Path(
     r"D:\data\PPG_HeartRate\Algorithm\Algorithm\outline-PPGtoHR\data"
     r"\202607-multiperson\0708-LYX\low_lock_upward_outputs"
-    r"\20260709_current_full_drift_ratio\gate_factorial_summary.csv"
+    r"\20260709_current_full_step_fraction\gate_factorial_summary.csv"
 )
 DEFAULT_HISTORICAL_SUMMARY = Path(
     r"D:\data\PPG_HeartRate\Algorithm\Algorithm\outline-PPGtoHR\data"
     r"\202607-multiperson\0708-LYX\low_lock_upward_outputs"
-    r"\20260709_historical_drift_ratio\gate_factorial_summary.csv"
+    r"\20260709_historical_step_fraction\gate_factorial_summary.csv"
 )
 DEFAULT_HIGHLOCK_SUMMARY = Path(
     r"D:\data\PPG_HeartRate\Algorithm\Algorithm\outline-PPGtoHR\data"
     r"\202607-multiperson\0708-LYX\low_lock_upward_outputs"
-    r"\20260709_highlock_drift_ratio\gate_factorial_summary.csv"
+    r"\20260709_highlock_step_fraction\gate_factorial_summary.csv"
 )
 DEFAULT_CURRENT_COHORT = Path(
     r"D:\data\PPG_HeartRate\Algorithm\Algorithm\outline-PPGtoHR\data"
     r"\202607-multiperson\0708-LYX\low_lock_upward_outputs"
-    r"\20260709_current_full_drift_ratio_analysis\low_lock_cohort_summary.csv"
+    r"\20260709_current_full_step_fraction_analysis\low_lock_cohort_summary.csv"
 )
 DEFAULT_OLD_REPLAY_COHORT = Path(
     r"D:\data\PPG_HeartRate\Algorithm\Algorithm\outline-PPGtoHR\data"
     r"\202607-multiperson\0708-LYX\low_lock_upward_outputs"
-    r"\20260709_old_historical_replay_new_gate_analysis\low_lock_cohort_summary.csv"
+    r"\20260709_old_historical_offline_gate_analysis\low_lock_cohort_summary.csv"
 )
 
 
@@ -265,7 +265,7 @@ def _markdown(
 
 在 2026-07-08 LYX 当前防误伤全量 14 个样本上，`lms_low_reacquire_only` 与 `lms_gate_off` 的逐样本 MAE 完全一致，平均 delta 为 0.000 BPM；这说明写字、键盘、握力、拳击等心率变化不大的场景不再因低锁上跳产生额外误伤。在历史救援 3 样本和历史高锁防回归 6 样本上，本轮中等 BO 配置同样保持 delta 为 0.000 BPM，没有观察到副作用。
 
-需要保留一个边界判断：本轮中等 BO 实验没有复现 2026-06-21 旧机制在 `multi_kaihe1`、`multi_kaihe2`、`multi_bobi3` 上的大幅收益，因此当前结论不是“收益已重新证明”，而是“误触发已被压住，历史救援窗口在 replay 中仍有合格入口”。旧历史结果 replay 显示，历史救援组仍有 {float(old_rescue["qualified_upward_candidate_rate"]):.3f} 的运动窗口满足新候选资格，其中包含 `multi_kaihe1` 的真实上升触发窗口。
+需要保留一个边界判断：本轮中等 BO 实验没有复现 2026-06-21 旧机制在 `multi_kaihe1`、`multi_kaihe2`、`multi_bobi3` 上的大幅收益，因此当前结论不是“收益已重新证明”，而是“误触发已被压住，且历史救援窗口在旧 trace replay 中仍可被新门控确认”。旧历史结果 replay 显示，历史救援组仍有 {float(old_rescue["qualified_upward_candidate_rate"]):.3f} 的运动窗口满足新候选资格，并有 {int(old_rescue["offline_confirmed_upward_count"])} 个窗口通过多窗口确认，其中包含 `multi_kaihe1` 的真实上升触发窗口。
 
 ![Cohort MAE]({fig1_md})
 
@@ -274,7 +274,7 @@ def _markdown(
 新机制采用三层门控：
 
 1. 候选资格过滤：低锁必须持续；候选上跳幅度至少达到 `max(20 BPM, 1.5 * 当前运动搜索上行范围)`；候选不能贴惩罚主频核心；180 BPM 以上且贴惩罚中心或谐波的候选直接拒绝。
-2. 真实上升证据：候选需连续稳定 3 个窗口；确认时低锁轨迹自身的上行漂移必须达到 `max(运动上行 step, 0.12 * 候选目标缺口)`。
+2. 真实上升证据：候选需连续稳定 3 个窗口；确认时低锁轨迹自身的上行漂移必须达到 `max(0.75 * 运动上行 step, 0.12 * 候选目标缺口)`。
 3. 可达性保护：challenge 阶段只观察，不关闭连续性保护；只有进入 reacquiring 后才允许上跳修复。候选丢失、漂移不足或资格失败时快速退出，不设置长冷却。
 
 ## 实验矩阵
@@ -287,13 +287,13 @@ def _markdown(
 
 ## 防误触发证据
 
-当前防误伤组共有 {int(current_low_row["window_count"])} 个运动 adaptive 窗口。新机制下没有 confirmed reacquire 进入污染轨迹；主要退出原因是候选不合格、challenge 仍在观察、低锁未持续或低轨迹上行证据不足。`visible_not_in_range_count` 与 gate off 保持一致，为 {int(current_low_row["visible_not_in_range_count"])} 个窗口。
+当前防误伤组共有 {int(current_low_row["window_count"])} 个运动 adaptive 窗口。新机制下 solver confirmed reacquire 没有进入污染轨迹，离线多窗口 replay 的确认数也为 {int(current_low_row["offline_confirmed_upward_count"])}；主要退出原因是候选不合格、challenge 仍在观察、低锁未持续或低轨迹上行证据不足。`visible_not_in_range_count` 与 gate off 保持一致，为 {int(current_low_row["visible_not_in_range_count"])} 个窗口。
 
 ![Gate reasons]({fig3_md})
 
 ## 历史收益与边界
 
-2026-06-21 旧结果说明，低锁上跳机制曾在开合跳、波比跳样本上提供明显收益；本轮新机制保留了这些窗口的 replay 资格，但在中等 BO 重新运行中没有实际触发并产生新增收益。这意味着当前版本应作为“安全门控版本”进入下一轮更充分的历史收益复现实验，而不应直接宣称收益已经完全恢复。
+2026-06-21 旧结果说明，低锁上跳机制曾在开合跳、波比跳样本上提供明显收益。旧 trace replay 进一步显示，新门控不会把所有历史救援窗口关掉：`multi_kaihe1` window 68 在新规则下仍会被确认，且旧输出已经到达约 98 BPM 的真实上升心率。受限于旧 JSON 记录的 `20260622recal` 源数据目录当前不可用，本轮没有完成同源 CSV 级重放；因此当前版本应作为“安全门控版本 + 历史救援入口保留”的阶段性结论，而不应直接宣称收益已经完全恢复。
 
 ## 建议
 
