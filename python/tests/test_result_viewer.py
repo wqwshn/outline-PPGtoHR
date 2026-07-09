@@ -444,13 +444,14 @@ def test_plot_panel_uses_nature_single_column_style() -> None:
     res.HR[:, 8] = res.HR[:, 7]
     res.T_Pred = res.HR[:, 0]
 
-    fig, ax = plt.subplots()
-    result_viewer._plot_panel(
-        ax,
-        res,
-        fill_reference_to_t_pred_end=False,
-        legend_loc="lower right",
-    )
+    with matplotlib.rc_context({"axes.grid": True}):
+        fig, ax = plt.subplots()
+        result_viewer._plot_panel(
+            ax,
+            res,
+            fill_reference_to_t_pred_end=False,
+            legend_loc="lower right",
+        )
 
     labels = ax.get_legend_handles_labels()[1]
     assert labels == ["Reference", "FFT", "HF-LMS", "ACC-LMS"]

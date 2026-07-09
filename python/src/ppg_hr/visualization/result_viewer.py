@@ -429,6 +429,7 @@ def _plot_panel(
         )
     )
     ax.grid(True, axis="y", alpha=0.12, linewidth=0.45)
+    ax.grid(False, axis="x")
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.legend(
