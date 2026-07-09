@@ -38,6 +38,8 @@
 
 2026-06-21 旧结果说明，低锁上跳机制曾在开合跳、波比跳样本上提供明显收益。旧 trace replay 进一步显示，新门控不会把所有历史救援窗口关掉：`multi_kaihe1` window 68 在新规则下仍会被确认，且旧输出已经到达约 98 BPM 的真实上升心率。受限于旧 JSON 记录的 `20260622recal` 源数据目录当前不可用，本轮没有完成同源 CSV 级重放；因此当前版本应作为“安全门控版本 + 历史救援入口保留”的阶段性结论，而不应直接宣称收益已经完全恢复。
 
+![Representative historical replay](D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/low_lock_upward_outputs/20260709_report/fig4_representative_historical_replay.png)
+
 ## 建议
 
 保留该机制作为公共 solver 行为，但继续维持显式实验 allowlist。KLMS 生产默认不应因为本轮实验自动打开低锁上跳；ACC 仍只作为运动段划分与公平对比参考，不参与 HF 主链路决策。下一轮若要追求开合跳收益，应固定历史 BO 配置或复用 2026-06-21 参数，再验证新门控下的 confirmed reacquire 是否能在真实上升段稳定触发。

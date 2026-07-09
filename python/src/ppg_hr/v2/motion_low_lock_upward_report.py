@@ -47,6 +47,9 @@ DEFAULT_OLD_REPLAY_COHORT = Path(
     r"\202607-multiperson\0708-LYX\low_lock_upward_outputs"
     r"\20260709_old_historical_offline_gate_analysis\low_lock_cohort_summary.csv"
 )
+DEFAULT_OLD_REPLAY_WINDOWS = DEFAULT_OLD_REPLAY_COHORT.with_name(
+    "low_lock_window_metrics.csv"
+)
 
 
 def _load_condition_summary(path: Path, cohort: str) -> pd.DataFrame:
@@ -172,6 +175,16 @@ def _parse_counts(value: str) -> dict[str, int]:
     return counts
 
 
+def _parse_bpm_list(value: str) -> list[float]:
+    items: list[float] = []
+    for part in str(value or "").split(";"):
+        try:
+            items.append(float(part))
+        except ValueError:
+            continue
+    return items
+
+
 def _plot_reason_counts(current_cohort: Path, output_dir: Path) -> Path:
     path = safe_output_path(output_dir, "fig3_current_gate_reasons.png")
     frame = pd.read_csv(current_cohort)
@@ -196,6 +209,55 @@ def _plot_reason_counts(current_cohort: Path, output_dir: Path) -> Path:
     return path
 
 
+def _plot_representative_replay_window(old_replay_windows: Path, output_dir: Path) -> Path:
+    path = safe_output_path(output_dir, "fig4_representative_historical_replay.png")
+    frame = pd.read_csv(old_replay_windows)
+    triggered = frame.loc[frame["offline_upward_triggered"].astype(str) == "True"]
+    if triggered.empty:
+        fig, ax = plt.subplots(figsize=(6.4, 2.4))
+        ax.text(0.5, 0.5, "No confirmed replay window", ha="center", va="center")
+        ax.axis("off")
+        fig.tight_layout()
+        fig.savefig(path, bbox_inches="tight")
+        plt.close(fig)
+        return path
+
+    row = triggered.iloc[0]
+    search_min = float(row["search_min_bpm"])
+    search_max = float(row["search_max_bpm"])
+    values = [
+        ("previous", float(row["previous_hr_bpm"]), "#4C78A8"),
+        ("ref", float(row["ref_bpm"]), "#59A14F"),
+        ("final", float(row["final_bpm"]), "#72B7B2"),
+        ("candidate", float(row["offline_upward_candidate_bpm"]), "#E15759"),
+    ]
+    true_peak = row.get("true_peak_bpm")
+    if pd.notna(true_peak):
+        values.append(("true peak", float(true_peak), "#B07AA1"))
+
+    fig, ax = plt.subplots(figsize=(6.4, 2.6))
+    ax.axvspan(search_min, search_max, color="#D9EAF7", alpha=0.75, label="search range")
+    for label, bpm, color in values:
+        ax.axvline(bpm, color=color, linewidth=1.8)
+        ax.text(bpm, 0.66, label, rotation=90, va="bottom", ha="center", color=color)
+    penalties = _parse_bpm_list(str(row.get("penalty_centers_bpm", "")))
+    for penalty in penalties:
+        ax.axvline(penalty, color="#777777", linestyle="--", linewidth=0.9, alpha=0.8)
+    ax.set_yticks([])
+    ax.set_xlabel("BPM")
+    ax.set_title(
+        "Representative replay window: "
+        f"{row['sample']} window {int(row['window_idx'])}"
+    )
+    min_bpm = min(search_min, *(bpm for _label, bpm, _color in values))
+    max_bpm = max(search_max, *(bpm for _label, bpm, _color in values))
+    ax.set_xlim(min_bpm - 8, max_bpm + 8)
+    fig.tight_layout()
+    fig.savefig(path, bbox_inches="tight")
+    plt.close(fig)
+    return path
+
+
 def render_report(
     *,
     output_dir: Path = DEFAULT_OUTPUT_DIR,
@@ -205,6 +267,7 @@ def render_report(
     highlock_summary: Path = DEFAULT_HIGHLOCK_SUMMARY,
     current_cohort: Path = DEFAULT_CURRENT_COHORT,
     old_replay_cohort: Path = DEFAULT_OLD_REPLAY_COHORT,
+    old_replay_windows: Path = DEFAULT_OLD_REPLAY_WINDOWS,
 ) -> Path:
     out = prepare_output_dir(output_dir)
     _setup_style()
@@ -218,6 +281,7 @@ def render_report(
     fig1 = _plot_cohort_mae(cohort_rows, out)
     fig2 = _plot_current_deltas(current_deltas, out)
     fig3 = _plot_reason_counts(current_cohort, out)
+    fig4 = _plot_representative_replay_window(old_replay_windows, out)
     old = pd.read_csv(old_replay_cohort)
     old_rescue = old.loc[old["cohort"] == "historical_rescue"].iloc[0]
     current_low = pd.read_csv(current_cohort)
@@ -232,6 +296,7 @@ def render_report(
             fig1=fig1,
             fig2=fig2,
             fig3=fig3,
+            fig4=fig4,
             output_dir=out,
         ),
         encoding="utf-8",
@@ -247,11 +312,13 @@ def _markdown(
     fig1: Path,
     fig2: Path,
     fig3: Path,
+    fig4: Path,
     output_dir: Path,
 ) -> str:
     fig1_md = fig1.as_posix()
     fig2_md = fig2.as_posix()
     fig3_md = fig3.as_posix()
+    fig4_md = fig4.as_posix()
     rows_md = "\n".join(
         "| {cohort} | {sample_count} | {gate_off_mean_mae:.3f} | "
         "{low_reacquire_mean_mae:.3f} | {delta_mean_mae:.3f} |".format(**row)
@@ -294,6 +361,8 @@ def _markdown(
 ## 历史收益与边界
 
 2026-06-21 旧结果说明，低锁上跳机制曾在开合跳、波比跳样本上提供明显收益。旧 trace replay 进一步显示，新门控不会把所有历史救援窗口关掉：`multi_kaihe1` window 68 在新规则下仍会被确认，且旧输出已经到达约 98 BPM 的真实上升心率。受限于旧 JSON 记录的 `20260622recal` 源数据目录当前不可用，本轮没有完成同源 CSV 级重放；因此当前版本应作为“安全门控版本 + 历史救援入口保留”的阶段性结论，而不应直接宣称收益已经完全恢复。
+
+![Representative historical replay]({fig4_md})
 
 ## 建议
 
