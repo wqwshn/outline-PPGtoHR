@@ -70,6 +70,25 @@ DEFAULT_OLD_REPLAY_COHORT = Path(
 DEFAULT_OLD_REPLAY_WINDOWS = DEFAULT_OLD_REPLAY_COHORT.with_name(
     "low_lock_window_metrics.csv"
 )
+FIGURE_STYLE = (
+    Path(__file__).resolve().parents[4]
+    / "skills"
+    / "publication-plotting"
+    / "assets"
+    / "nature_single_column.mplstyle"
+)
+PLOT_COLORS = {
+    "hf": "#4C78A8",
+    "acc": "#5B8FC0",
+    "low_reacquire": "#72B7B2",
+    "ok": "#59A14F",
+    "warning": "#E15759",
+    "gate_reason": "#F28E2B",
+    "zero_line": "#444444",
+    "true_peak": "#B07AA1",
+    "search_span": "#D9DDE3",
+    "penalty": "#777777",
+}
 
 
 def _load_condition_summary(path: Path, cohort: str) -> pd.DataFrame:
@@ -154,17 +173,7 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 
 
 def _setup_style() -> None:
-    plt.rcParams.update(
-        {
-            "font.family": "DejaVu Sans",
-            "font.size": 8,
-            "axes.spines.top": False,
-            "axes.spines.right": False,
-            "axes.linewidth": 0.8,
-            "figure.dpi": 150,
-            "savefig.dpi": 600,
-        }
-    )
+    plt.style.use(FIGURE_STYLE)
 
 
 def _plot_cohort_mae(rows: list[dict[str, Any]], output_dir: Path) -> Path:
@@ -175,8 +184,14 @@ def _plot_cohort_mae(rows: list[dict[str, Any]], output_dir: Path) -> Path:
     fig, ax = plt.subplots(figsize=(6.4, 3.2))
     off = [float(row["gate_off_mean_mae"]) for row in rows]
     low = [float(row["low_reacquire_mean_mae"]) for row in rows]
-    ax.bar([v - width / 2 for v in x], off, width, label="gate off", color="#4C78A8")
-    ax.bar([v + width / 2 for v in x], low, width, label="low reacquire", color="#72B7B2")
+    ax.bar([v - width / 2 for v in x], off, width, label="gate off", color=PLOT_COLORS["hf"])
+    ax.bar(
+        [v + width / 2 for v in x],
+        low,
+        width,
+        label="low reacquire",
+        color=PLOT_COLORS["low_reacquire"],
+    )
     ax.set_ylabel("Mean MAE (BPM)")
     ax.set_xticks(x, labels, rotation=18, ha="right")
     ax.legend(frameon=False)
@@ -192,9 +207,9 @@ def _plot_current_deltas(rows: list[dict[str, Any]], output_dir: Path) -> Path:
     sorted_rows = sorted(rows, key=lambda row: (row["scenario"], row["sample"]))
     labels = [str(row["sample"]).replace("_LYX_0708", "") for row in sorted_rows]
     deltas = [float(row["delta_mae"]) for row in sorted_rows]
-    colors = ["#59A14F" if value <= 0 else "#E15759" for value in deltas]
+    colors = [PLOT_COLORS["ok"] if value <= 0 else PLOT_COLORS["warning"] for value in deltas]
     fig, ax = plt.subplots(figsize=(7.0, 3.5))
-    ax.axhline(0, color="#444444", linewidth=0.8)
+    ax.axhline(0, color=PLOT_COLORS["zero_line"], linewidth=0.8)
     ax.bar(labels, deltas, color=colors)
     ax.set_ylabel("MAE delta (BPM)")
     ax.set_title("Current anti-regression samples show zero low-reacquire penalty")
@@ -243,7 +258,7 @@ def _plot_reason_counts(current_cohort: Path, output_dir: Path) -> Path:
     labels = [label for key, label in keep.items() if key in counts]
     values = [counts[key] for key in keep if key in counts]
     fig, ax = plt.subplots(figsize=(6.4, 3.2))
-    ax.bar(labels, values, color="#F28E2B")
+    ax.bar(labels, values, color=PLOT_COLORS["gate_reason"])
     ax.set_ylabel("Window count")
     ax.set_title("Most windows exit before confirmed reacquire")
     fig.tight_layout()
@@ -261,13 +276,13 @@ def _plot_reference_delta(rows: list[dict[str, Any]], output_dir: Path) -> Path:
     acc = [float(row["acc_delta_mean_mae"]) for row in rows]
     max_abs = max([abs(value) for value in hf + acc] + [0.05])
     fig, ax = plt.subplots(figsize=(6.4, 3.0))
-    ax.axhline(0, color="#444444", linewidth=0.8)
+    ax.axhline(0, color=PLOT_COLORS["zero_line"], linewidth=0.8)
     hf_x = [value - width / 2 for value in x]
     acc_x = [value + width / 2 for value in x]
-    ax.bar(hf_x, hf, width, label="HF", color="#4C78A8", alpha=0.55)
-    ax.bar(acc_x, acc, width, label="ACC", color="#5B8FC0", alpha=0.55)
-    ax.scatter(hf_x, hf, color="#4C78A8", s=24, zorder=3)
-    ax.scatter(acc_x, acc, color="#5B8FC0", s=24, zorder=3)
+    ax.bar(hf_x, hf, width, label="HF", color=PLOT_COLORS["hf"], alpha=0.55)
+    ax.bar(acc_x, acc, width, label="ACC", color=PLOT_COLORS["acc"], alpha=0.55)
+    ax.scatter(hf_x, hf, color=PLOT_COLORS["hf"], s=24, zorder=3)
+    ax.scatter(acc_x, acc, color=PLOT_COLORS["acc"], s=24, zorder=3)
     for xpos, value in zip(hf_x + acc_x, hf + acc):
         ax.text(xpos, 0.006, f"{value:.3f}", ha="center", va="bottom", fontsize=7)
     ax.set_ylabel("Low reacquire delta MAE (BPM)")
@@ -298,23 +313,35 @@ def _plot_representative_replay_window(old_replay_windows: Path, output_dir: Pat
     search_min = float(row["search_min_bpm"])
     search_max = float(row["search_max_bpm"])
     values = [
-        ("previous", float(row["previous_hr_bpm"]), "#4C78A8"),
-        ("ref", float(row["ref_bpm"]), "#59A14F"),
-        ("final", float(row["final_bpm"]), "#72B7B2"),
-        ("candidate", float(row["offline_upward_candidate_bpm"]), "#E15759"),
+        ("previous", float(row["previous_hr_bpm"]), PLOT_COLORS["hf"]),
+        ("ref", float(row["ref_bpm"]), PLOT_COLORS["ok"]),
+        ("final", float(row["final_bpm"]), PLOT_COLORS["low_reacquire"]),
+        ("candidate", float(row["offline_upward_candidate_bpm"]), PLOT_COLORS["warning"]),
     ]
     true_peak = row.get("true_peak_bpm")
     if pd.notna(true_peak):
-        values.append(("true peak", float(true_peak), "#B07AA1"))
+        values.append(("true peak", float(true_peak), PLOT_COLORS["true_peak"]))
 
     fig, ax = plt.subplots(figsize=(6.4, 2.6))
-    ax.axvspan(search_min, search_max, color="#D9EAF7", alpha=0.75, label="search range")
+    ax.axvspan(
+        search_min,
+        search_max,
+        color=PLOT_COLORS["search_span"],
+        alpha=0.24,
+        label="search range",
+    )
     for label, bpm, color in values:
         ax.axvline(bpm, color=color, linewidth=1.8)
         ax.text(bpm, 0.66, label, rotation=90, va="bottom", ha="center", color=color)
     penalties = _parse_bpm_list(str(row.get("penalty_centers_bpm", "")))
     for penalty in penalties:
-        ax.axvline(penalty, color="#777777", linestyle="--", linewidth=0.9, alpha=0.8)
+        ax.axvline(
+            penalty,
+            color=PLOT_COLORS["penalty"],
+            linestyle="--",
+            linewidth=0.9,
+            alpha=0.8,
+        )
     ax.set_yticks([])
     ax.set_xlabel("BPM")
     ax.set_title(
