@@ -1,6 +1,6 @@
 # ppg_hr — outline-PPGtoHR 的 Python 移植版
 
-Python 实现，包含 v1（MATLAB 等价移植）与 v2（统一参考路径）两套求解器：
+Python 实现，包含 v1（MATLAB 等价移植）与 v2（统一参考路径 + 运行策略束）两套求解器：
 
 **v1 求解器** — MATLAB `HeartRateSolver_cas_chengfa.m` 的 100% 功能等价移植：
 - 原始传感器 CSV → 100 Hz 多通道处理表的数据装载
@@ -9,18 +9,19 @@ Python 实现，包含 v1（MATLAB 等价移植）与 v2（统一参考路径）
 - **自适应时延搜索**：正式求解前先对当前数据预扫描若干代表窗口，分别收窄 PPG-vs-HF 与 PPG-vs-ACC 的 lag 搜索范围
 - 11 维参数空间的多重启贝叶斯优化（Optuna TPE，含随机森林参数重要性），每种自适应滤波算法自带独立搜索空间
 
-**v2 求解器** — 统一多参考信号路径，在 v1 核心算法基础上引入三项关键改进：
+**v2 求解器** — 统一多参考信号路径，并把不同实验阶段沉淀为可选择的运行策略：
 - **PPG 输入策略**：默认 `raw_bandpass` 保持旧流程；可选 `log_absorbance`，先计算相对吸收变化 `-log(I/I0)` 再进入同一带通和求解链路。
-- **参考信号组**：HF / CF（冷端比）/ ACC 三类参考信号可自由排序组合，统一级联 LMS 路径
-- **最长运动段检测**：以单一最长连续运动段替代逐窗口运动判定，避免运动段内部反复启停
-- **恢复段机制**：运动结束后自动检测 LMS 收敛状态，必要时延长自适应路径直至与 FFT 自然交叉，消除过早切换导致的末端心率跳变
-- **参数泛化评估**：按运动类型组织多次实验，支持 `all_train` 和 `leave_one_group_out`，评估同一组参数跨样本重放的效果。
-- **窗口诊断 GUI**：按静息段、运动段、运动恢复段显示真实算法路径，保存波形、频谱和谱峰追踪过程图，并在 `window_summary.csv` 中记录候选峰、追踪范围、惩罚状态和最终 HR。
+- **参考信号组**：HF / CF（冷端比）/ ACC 三类参考信号可自由排序组合，统一级联自适应滤波路径。
+- **算法预设**：`dynamic_rest_bo` 为默认主算法；`lite` 固定静息、运动和恢复追踪参数；`trace_rescue` 运行固定候选状态，并用无监督轨迹诊断选择最终状态。
+- **运动段追踪保护**：源速率 IMU 划分最长运动段；运动段谱峰追踪包含连续性保护、低锁上跳重捕获和高频锁定逃逸。
+- **运动后动态回切**：运动结束后并行保留 adaptive 链路和 reset FFT 链路，通过稳定交汇或持续高差救援切回 reset FFT。
+- **参数泛化评估**：按运动类型或个体组织实验，支持 `all_train`、`leave_one_group_out` 和跨个体复核。
+- **窗口诊断 GUI**：按静息、运动、运动后保护窗和运动后静息重捕获阶段显示真实算法路径，并在窗口 trace 中记录候选峰、追踪范围、惩罚、保护和切换原因。
 - **血氧计算页面**：使用 100 Hz 红光/红外光 PPG，分别以 Ut1、Ut2 独立恢复运动段波形并计算 SpO2，导出窗口结果、物理单位波形 CSV 和科研绘图 PNG
 
 **共享基础设施：**
 - 优化结果的双子图结果分析（HF / ACC 两路融合曲线 + 误差表 + 参数表 + 心率结果表）
-- **出版级绘图**：Nature 单栏风格、明亮低饱和度配色、HF 路径暖色突出、内嵌 MAE 误差表、600 dpi PNG，统一调用 `skills/publication-plotting/` 技能
+- **论文级绘图**：默认导出 Nature 单栏风格 600 dpi PNG；配色、层级和最终多格式导出规则由全局 `nature-figure` 工作流维护
 - **批量结果分析**：递归扫描目录中的优化报告 JSON，自动匹配数据/参考文件，逐项渲染并汇总状态
 - 统一命令行入口 `python -m ppg_hr {solve|optimise|view|inspect-defaults}`
 - **浅色桌面 GUI** (PySide6)：`ppg-hr-gui` 一键打开，支持 v1/v2 版本切换，覆盖求解 / 优化 / 批量全流程 / 结果分析 / MATLAB 对照五个页面
@@ -98,8 +99,8 @@ pip install -e .[dev]
 
 ```bash
 python -m ppg_hr solve \
-    20260418test_python/multi_tiaosheng1.csv \
-    --ref 20260418test_python/multi_tiaosheng1_ref.csv \
+    data/20260418/tiaosheng/multi_tiaosheng1.csv \
+    --ref data/20260418/tiaosheng/multi_tiaosheng1_ref.csv \
     --out result_default.csv
 ```
 
@@ -111,8 +112,8 @@ AAE / 静止 AAE / 运动 AAE。CSV 文件共 10 列，按时间窗排列：
 
 ```bash
 python -m ppg_hr optimise \
-    20260418test_python/multi_tiaosheng1.csv \
-    --ref 20260418test_python/multi_tiaosheng1_ref.csv \
+    data/20260418/tiaosheng/multi_tiaosheng1.csv \
+    --ref data/20260418/tiaosheng/multi_tiaosheng1_ref.csv \
     --max-iterations 75 --num-seed-points 10 --num-repeats 3 \
     --seed 42 \
     --out reports/multi_tiaosheng1_report.json
@@ -128,8 +129,8 @@ python -m ppg_hr optimise \
 
 ```bash
 python -m ppg_hr view \
-    20260418test_python/multi_tiaosheng1.csv \
-    --ref 20260418test_python/multi_tiaosheng1_ref.csv \
+    data/20260418/tiaosheng/multi_tiaosheng1.csv \
+    --ref data/20260418/tiaosheng/multi_tiaosheng1_ref.csv \
     --report reports/multi_tiaosheng1_report.json \
     --out-dir viewer_out/
 ```
@@ -171,7 +172,7 @@ python -m ppg_hr view \
 
 ```bash
 python scripts/compare_with_matlab.py \
-    20260418test_python/Best_Params_Result_multi_tiaosheng1_processed.mat
+    data/20260418/tiaosheng/Best_Params_Result_multi_tiaosheng1_processed.mat
 ```
 
 脚本会从 `.mat` 中读出 MATLAB 的 `Best_Para_HF` / `Best_Para_ACC` /
@@ -287,8 +288,8 @@ HF 与 ACC 两条级联流水线目前内置五种自适应滤波算法，全部
 
 ```bash
 python -m ppg_hr solve \
-    20260418test_python/multi_tiaosheng1.csv \
-    --ref 20260418test_python/multi_tiaosheng1_ref.csv \
+    data/20260418/tiaosheng/multi_tiaosheng1.csv \
+    --ref data/20260418/tiaosheng/multi_tiaosheng1_ref.csv \
     --adaptive-filter klms \
     --klms-step-size 0.1 --klms-sigma 1.0 --klms-epsilon 0.1
 ```
@@ -297,8 +298,8 @@ python -m ppg_hr solve \
 
 ```bash
 python -m ppg_hr optimise \
-    20260418test_python/multi_tiaosheng1.csv \
-    --ref 20260418test_python/multi_tiaosheng1_ref.csv \
+    data/20260418/tiaosheng/multi_tiaosheng1.csv \
+    --ref data/20260418/tiaosheng/multi_tiaosheng1_ref.csv \
     --adaptive-filter volterra \
     --out reports/volterra_tiaosheng1.json
 ```
@@ -350,7 +351,9 @@ Delay search: adaptive, scanned=8, default=[-20,+20]
 
 ## 4. v2 求解器架构
 
-v2 求解器（`v2/solver.py`）在 v1 核心算法（`_process_spectrum`、`choose_delay`、`apply_adaptive_cascade`）基础上重构了流程编排，核心差异如下：
+v2 求解器（`v2/solver.py`）在 v1 的频谱处理、时延估计和自适应级联滤波基础上重构了流程编排。它的核心目标不是把每个窗口独立调到最低误差，而是在静息、运动和运动后阶段保持可解释、可诊断、可泛化的心率轨迹。
+完整机制说明见 [v2 Python 心率解算技术路线](../docs/v2-python-algorithm-technical-roadmap.md)
+和 [v2 心率算法阶段性说明](../docs/v2-heart-rate-algorithm-stage-summary.md)。
 
 ### 4.1 参考信号组
 
@@ -362,25 +365,27 @@ v2 引入三类参考信号，可通过 `reference_groups_order` 参数自由排
 | `CF` | Uc/(Ut-Uc)（冷端比，v2 新增） | 0 | 因果 LMS，提供额外的温度梯度参考 |
 | `ACC` | AccX, AccY, AccZ | 1 | 含一个前馈抽头（非因果），捕获运动伪影的非因果依赖 |
 
-级联顺序由组顺序 + 组内相关系数排名共同决定，所有选中通道统一级联到同一 LMS 路径。
+级联顺序由组顺序和组内相关系数排名共同决定。所有选中通道进入同一条自适应滤波路径，而不是先分别产生 HF/ACC 结果再事后融合。
 
-### 4.2 运动检测与恢复段
+### 4.2 运行策略与阶段机制
 
-- **最长运动段**：取逐窗口运动标志的最长连续 `True` 运行作为运动段，避免零散检测导致 LMS 反复启停。
-- **无上限延续**：adaptive 路径从运动段起点开始持续计算，不设停止上限。
-- **恢复段触发**：运动段末尾比较 adaptive 与 FFT 心率均值，若差值超过阈值（默认 20 BPM），自动延长 adaptive 直至两者自然交叉，消除 LMS 收敛滞后导致的末端跳变。
-- **`analysis_scope`**：`"full"` 保留全信号；`"motion"` 裁剪至运动段前 30s 到运动段结束，误差统计同步过滤。
+- **算法预设**：`dynamic_rest_bo` 是默认主算法，保留静息段 BO；`lite` 固定静息、运动和恢复追踪参数，只搜索核心求解参数；`trace_rescue` 运行固定候选状态，并用无监督轨迹诊断选择最终状态。
+- **运动检测**：运动段由原始 100 Hz ACC + Gyro 联合判别，不受 `fs_target`、滤波器类型或 BO 参数影响。
+- **运动段追踪**：运动窗口使用方向性频谱追踪、连续性保护软惩罚、低锁上跳重捕获和高频锁定逃逸，避免真实峰被运动主频、谐波或错误历史轨迹长期遮蔽。
+- **运动后阶段**：运动结束后同时保留 adaptive 链路和 reset FFT 链路。Final 先沿用 adaptive，再通过稳定交汇或持续高差救援切回 reset FFT。
+- **`analysis_scope`**：`"full"` 保留全信号；`"motion"` 裁剪至运动段前 30 s 到运动段结束，误差统计同步过滤。
 
 ### 4.3 与 v1 的主要区别
 
 | 维度 | v1 | v2 |
 |---|---|---|
-| 运动检测 | 逐窗口独立判定 | 单一最长连续运动段 |
+| 运动检测 | 逐窗口独立判定 | 源速率 IMU 最长运动段 |
 | 参考信号 | HF + ACC 两条独立路径 | HF/CF/ACC 可排序统一路径 |
 | CF 通道 | 无 | Uc/(Ut-Uc) 冷端比 |
-| 恢复段 | 无，运动结束立即切回 FFT | 交叉点检测 + 自适应延长 |
-| 默认 LMS | `lms`（因果） | `noncausal_lms`（支持前馈抽头） |
-| 贝叶斯优化 | 双轮（HF + ACC 独立优化） | 单轮（直接优化最终融合 AAE） |
+| 算法预设 | 无 | `dynamic_rest_bo` / `lite` / `trace_rescue` |
+| 运动段保护 | 基础谱峰追踪 | 方向性追踪 + 低锁上跳 + 高频逃逸 |
+| 运动后阶段 | 无，运动结束直接回 FFT | adaptive 与 reset FFT 并行，动态回切 |
+| 贝叶斯优化 | 双轮（HF + ACC 独立优化） | 按算法预设收缩搜索空间 |
 | 延迟搜索 | 多层级自适应预扫描 | 固定 ±200ms |
 
 v2 求解器通过 `V2RunConfig` 配置，CLI 和 GUI 均支持 v1/v2 切换。
@@ -415,8 +420,8 @@ from ppg_hr.params import SolverParams
 from ppg_hr.core.heart_rate_solver import solve
 
 params = SolverParams(
-    file_name=Path("20260418test_python/multi_tiaosheng1.csv"),
-    ref_file=Path("20260418test_python/multi_tiaosheng1_ref.csv"),
+    file_name=Path("data/20260418/tiaosheng/multi_tiaosheng1.csv"),
+    ref_file=Path("data/20260418/tiaosheng/multi_tiaosheng1_ref.csv"),
     fs_target=25,
     max_order=16,
     smooth_win_len=9,
@@ -435,8 +440,8 @@ from ppg_hr.v2.solver import solve_v2
 from ppg_hr.v2.types import V2RunConfig
 
 cfg = V2RunConfig(
-    data_path="20260418test_python/multi_tiaosheng1.csv",
-    ref_path="20260418test_python/multi_tiaosheng1_ref.csv",
+    data_path="data/20260418/tiaosheng/multi_tiaosheng1.csv",
+    ref_path="data/20260418/tiaosheng/multi_tiaosheng1_ref.csv",
     reference_groups_order=("HF", "CF", "ACC"),
     adaptive_filter="noncausal_lms",
     analysis_scope="full",
@@ -468,8 +473,8 @@ from ppg_hr.optimization import BayesConfig, default_search_space, optimise
 from ppg_hr.params import SolverParams
 
 base = SolverParams(
-    file_name="20260418test_python/multi_tiaosheng1.csv",
-    ref_file="20260418test_python/multi_tiaosheng1_ref.csv",
+    file_name="data/20260418/tiaosheng/multi_tiaosheng1.csv",
+    ref_file="data/20260418/tiaosheng/multi_tiaosheng1_ref.csv",
 )
 cfg = BayesConfig(
     max_iterations=75,
@@ -626,17 +631,21 @@ python/
       find_near_biggest.py
       ppg_peace.py
       choose_delay.py      # 通道相关性 + 时延选择
-    v2/                    # v2 求解器（统一参考路径 + 恢复段）
+    v2/                    # v2 求解器（统一参考路径 + 运行策略束）
       solver.py            # v2 主求解器
       types.py             # V2RunConfig / V2Dataset / V2QcResult
+      algorithm_presets.py # dynamic_rest_bo / lite / trace_rescue 预设
+      runtime_policy.py    # 从运行配置派生追踪、逃逸和运动后策略
       reference_groups.py  # 参考信号组（HF/CF/ACC）排序与组合
-      preprocess.py        # v2 数据加载与 CF 比值派生
+      signal_preparation.py # v2 数据加载、PPG 输入表达、运动段检测
       optimizer.py         # v2 贝叶斯优化（单目标）
       generalization.py    # v2 同运动类型共享参数泛化评估
       search_space.py      # v2 搜索空间
       batch_pipeline.py    # v2 批量全流程
       plotting.py          # v2 出版级绘图
       report.py            # v2 报告读写
+      spectrum_tracking.py # 窗口级谱峰追踪与诊断 trace
+      post_motion_dynamic_guard_policy.py # 运动后动态保护窗与 gap rescue
       spo2.py              # v2 红光/红外光 SpO2 解算与报告输出
       spo2_plotting.py     # v2 SpO2 趋势图与静息/运动切片 PNG
       qc.py                # v2 质量检测
@@ -905,7 +914,7 @@ gen_golden_all
 
 **Q1：CSV 列顺序应该怎么排？**
 
-请参考 `20260418test_python/process_and_merge_sensor_data_new.m` 与
+请参考 `data/20260418/process_and_merge_sensor_data_new.m` 与
 `README.md`，原始数据 6 列时间戳 + PPG/HF/ACC 通道，
 `data_loader.py` 内部会按 MATLAB 的列约定取用。
 

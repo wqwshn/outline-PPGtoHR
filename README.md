@@ -1,16 +1,16 @@
 # outline-PPGtoHR — PPG 心率估计算法工程
 
-面向穿戴式 PPG 信号的心率估计算法工程，包含 v1/v2 两套求解器与一份数据说明：
+面向穿戴式 PPG 信号的心率估计算法工程，包含 v1/v2 两套心率求解器、运动后恢复机制、批量泛化评估和血氧实验工具。
 
 - **v1**：MATLAB `HeartRateSolver_cas_chengfa.m` 的 100% 功能等价移植，双路径 HF/ACC LMS + FFT 融合
-- **v2**：统一多参考信号（HF/CF/ACC）级联路径，引入最长运动段检测与恢复段机制，进一步提升运动场景心率精度
+- **v2**：统一多参考信号（HF/CF/ACC）级联路径，默认使用动态追踪运行策略，并提供 Lite 与 TraceRescue 两个泛化评估预设
 
 
 | 子目录                    | 内容                                                                                                    | 入口文档                                                           |
 | ---------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
 | `python/`              | **推荐使用**。Python 3.11 重构版：算法核心、贝叶斯优化（支持多进程并行）、可视化、CLI 与 PySide6 桌面 GUI，端到端 AAE 与 MATLAB 偏差 ≤ 0.07 BPM。 | [python/README.md](python/README.md)                           |
 | `MATLAB/`              | 原始 MATLAB 工程（12 个 `.m` 文件）；作为算法金标和 Python 单元测试的参考快照来源。                                                | [MATLAB/README.md](MATLAB/README.md)                           |
-| `20260418test_python/` | 6 种运动场景的原始 PPG 传感器 CSV、心率真值 CSV 与合并后的 `.mat`，以及数据合并脚本。                                                | [20260418test_python/README.md](20260418test_python/README.md) |
+| `data/`                | 运动、静息、泛化和回放实验数据；`data/20260418/` 保留 MATLAB 对照样本与数据合并脚本。                                                | [data/20260418/README.md](data/20260418/README.md) |
 
 
 ---
@@ -29,8 +29,8 @@ pip install -e .[gui]
 
 # 3a. 命令行方式
 python -m ppg_hr solve \
-    ../20260418test_python/multi_tiaosheng1.csv \
-    --ref ../20260418test_python/multi_tiaosheng1_ref.csv
+    ../data/20260418/tiaosheng/multi_tiaosheng1.csv \
+    --ref ../data/20260418/tiaosheng/multi_tiaosheng1_ref.csv
 
 # 3b. 或启动桌面 GUI（求解 / 优化 / 可视化 / MATLAB 对照一体化）
 ppg-hr-gui
@@ -38,32 +38,18 @@ ppg-hr-gui
 
 详细的环境准备、CLI 参数、Python API、GUI 使用说明、绘图参数调整指南、
 贝叶斯优化加速原理与 FAQ 全部集中在 [python/README.md](python/README.md)。
+v2 核心机制请优先阅读 [v2 Python 心率解算技术路线](docs/v2-python-algorithm-technical-roadmap.md)
+和 [v2 心率算法阶段性说明](docs/v2-heart-rate-algorithm-stage-summary.md)。
 
 ## 功能亮点
 
-- **双求解器架构**：v1 与 MATLAB 金标 100% 数值对齐（偏差 <= 0.07 BPM）；v2 引入统一多参考路径、最长运动段检测与恢复段机制，进一步提升运动场景精度。
-- **数值对齐**：8 个核心函数 + 数据装载对 MATLAB 金标 `.mat` 快照做
-`assert_allclose(atol=1e-6)` 级验证；`multi_tiaosheng1` 端到端 AAE 与
-MATLAB 偏差 ≤ 0.07 BPM。
-- **贝叶斯优化加速**：默认开启"数据缓存 + `num_repeats` 多进程并行"，与
-MATLAB `parpool` 等价，合计 ≈ 3× 加速，且数值与串行 bit-for-bit 一致。
-- **自适应滤波策略**：内置归一化 LMS、QKLMS（量化核 LMS）、
-二阶 Volterra LMS、非因果 LMS、RFF-LMS 五种算法，共用级联流水线，CLI/GUI 一键切换，
-贝叶斯优化会自动按所选算法切换搜索空间。
-- **分级时延搜索**：默认在主求解前对代表窗口做 PPG-HF/ACC 相关性预扫描，
-从 ±0.2s 逐级扩窗到 ±0.8s，自适应收窄搜索范围，降低错位风险。
-- **论文级可视化**：Nature 单栏 3.54" × 2.60" 高分辨率 600 dpi PNG，
-低饱和度配色、HF 路径视觉突出、单列图例、内嵌 MAE 表，不覆盖同名输出文件。
-- **批量可视化**：GUI 内置"批量渲染"Tab，递归扫描目录中的优化报告 JSON，
-自动匹配数据/参考文件，逐项渲染并汇总状态；CLI 同样支持 `view` 命令批处理。
-- **桌面 GUI**：PySide6 浅色主题，五个页面对应 `solve` / `optimise` /
-`batch` / `view` / `compare-with-matlab`，所有耗时任务后台线程，不卡界面；
-嵌入 matplotlib 图表已支持中文字体自动选择。
-- **完备测试**：覆盖逐函数单元、端到端、CLI、GUI smoke、批量可视化匹配与渲染；
-专门的"串行 vs 并行数值等价"回归用例。
-- **v2 恢复段机制**：运动结束后自动检测 LMS 收敛状态，必要时延长自适应路径直至与 FFT 自然交叉，消除末端心率跳变。
-- **v2 参考信号组**：HF / CF（冷端比）/ ACC 三类参考信号可自由排序组合，统一级联 LMS 路径。
-- **出版级绘图技能**：`skills/publication-plotting/` 封装了期刊论文图的全套样式预设与导出流程，可跨版本复用。
+- **双求解器架构**：v1 保持 MATLAB 等价移植；v2 把 HF、CF 和 ACC 参考信号纳入同一条可排序级联路径，并以 FFT 链路作为静息和重捕获基线。
+- **运行策略分层**：v2 提供 `dynamic_rest_bo`、`lite` 和 `trace_rescue` 三个算法预设，分别面向默认主算法、小搜索空间基线和无监督候选状态救援。
+- **运动段保护机制**：源速率 IMU 用于运动段划分；运动段谱峰追踪包含连续性保护、低锁上跳重捕获和高频锁定逃逸，减少运动伪峰对历史轨迹的长期吸附。
+- **运动后动态回切**：运动结束后并行保留 adaptive 链路和 reset FFT 链路，通过稳定交汇或持续高差救援切回 reset FFT，避免固定秒数回切带来的过早或过晚切换。
+- **贝叶斯优化与泛化评估**：Optuna TPE 支持多进程 restart；v2 支持 all-train、leave-one-group-out 和跨个体评估，并按算法预设自动收缩搜索空间。
+- **诊断与可视化**：窗口 trace 记录候选峰、追踪范围、惩罚、保护和切换原因；默认导出 600 dpi PNG，论文级图形规则由全局 `nature-figure` 工作流维护。
+- **桌面 GUI 与测试**：PySide6 GUI 覆盖求解、优化、批量、结果分析、窗口诊断、血氧计算和 MATLAB 对照；测试覆盖逐函数、端到端、CLI、GUI smoke 和批量流程。
 
 ## 许可证
 

@@ -1,23 +1,24 @@
 # v2 Python 心率解算技术路线
 
-> 版本: v2 | 更新日期: 2026-06-15 | 适用范围: `python/src/ppg_hr/v2/` 及关联核心模块
+> 版本: v2 | 更新日期: 2026-07-09 | 适用范围: `python/src/ppg_hr/v2/` 及关联核心模块
 
 ---
 
 ## 1. 概述
 
-v2 是 PPG 心率求解算法的一次架构升级。相比 v1 的多路径独立计算后融合的策略，v2 采用**单路径可配置参考信号级联**的设计：所有参考信号（HF 超声、CF 电容/电阻比值、ACC 加速度）按用户指定的顺序，依次通过自适应滤波器从 PPG 信号中消除运动伪影，最终与纯 FFT 路径做二选一融合输出。
+v2 是 PPG 心率求解算法的一次架构升级。相比 v1 的多路径独立计算后融合，v2 采用**单路径可配置参考信号级联 + 阶段化运行策略**的设计：HF、CF 和 ACC 参考信号按用户指定顺序进入同一条自适应滤波链路，FFT 链路则作为静息、运动后重捕获和回切判断的基线。当前主线强调可解释的轨迹恢复，而不是把所有阶段都交给黑盒参数搜索。
 
 ### 1.1 核心设计理念
 
-- **参考信号可排序级联**：HF（超声通道）、CF（电容/电阻比值）、ACC（加速度）三类参考信号可按任意排列组合，以级联方式依次滤波，每一步在前一步输出之上叠加消除。
+- **参考信号可排序级联**：HF（热膜桥顶电压）、CF（冷端比）和 ACC（加速度）三类参考信号可按任意排列组合，以级联方式依次滤波，每一步在前一步输出之上叠加消除。
 - **PPG 输入策略显式化**：`ppg_mode` 只表示 green/red/ir 通道，`ppg_input_transform` 表示输入表达。默认 `raw_bandpass` 保持旧流程；`log_absorbance` 先计算相对吸收变化 `-log(I/I0)`，再进入同一带通和心率求解链路。
 - **自适应滤波策略多样化**：支持标准 LMS、非因果 LMS（NC-LMS）、核 LMS（KLMS）、随机傅里叶特征 LMS（RFF-LMS）、二阶 Volterra LMS 共五种自适应滤波策略。
-- **贝叶斯超参数优化**：通过 Optuna + TPE Sampler 对窗长、搜索范围、限幅参数、滤波器参数等进行自动调优。
+- **算法预设分层**：`dynamic_rest_bo`、`lite` 和 `trace_rescue` 分别对应默认主算法、小搜索空间固定动态基线和无监督候选状态救援。
+- **贝叶斯超参数优化**：通过 Optuna + TPE Sampler 对采样率、滤波阶数、平滑、时间对齐和滤波器私有参数进行自动调优；搜索空间由算法预设收缩。
 - **参数泛化评估**：按运动类型组织多个样本，支持 `all_train` 与 `leave_one_group_out`，用于评估同一组参数在同场景不同实验数据上的稳定性。
 - **源速率 IMU 运动分割**：运动段由原始 100 Hz ACC + Gyro 联合判别，不依赖 `fs_target`、LMS/KLMS 类型或贝叶斯优化出的心率参数；最长连续运动段用于自适应调度、窗口分类和绘图阴影。
-- **运动感知自适应调度**：只在最长运动段及其延伸范围内启用自适应滤波，静息段直接使用 FFT 结果，避免自适应滤波在无运动时引入噪声。
-- **恢复检测机制**：运动结束后若自适应结果与 FFT 差异过大，自动寻找交叉点提前切回 FFT，防止自适应滤波器在静息段发散；恢复段仍可使用 LMS 结果，但不再使用运动主频频谱惩罚。
+- **运动段谱峰保护**：运动窗口使用方向性追踪、连续性保护软惩罚、低锁上跳重捕获和高频锁定逃逸，减少运动伪峰或错误历史轨迹对最终 HR 的长期吸附。
+- **运动后动态回切**：运动结束后 adaptive 链路和 reset FFT 链路并行运行；Final 通过稳定交汇或持续高差救援切回 reset FFT，而不是按固定秒数硬切。
 - **窗口级诊断追踪**：每个窗口记录 `window_kind` 与结构化 `spectrum_tracking`，GUI 可按静息段、运动段、运动恢复段显示真实算法路径和谱峰追踪过程。
 - **连续性保护软频谱惩罚**：运动窗口对运动主频及二倍频使用渐变惩罚，并在上一窗口预测 HR 附近保留窄保护走廊，避免真实心率峰与运动谐波重叠时被误杀；该机制不依赖参考 HR，可用于在线化研究。
 
@@ -29,9 +30,9 @@ v2 是 PPG 心率求解算法的一次架构升级。相比 v1 的多路径独�
 | 参考信号 | HF、ACC（顺序固定） | HF、CF、ACC（顺序可配置） |
 | CF 信号 | 不支持 | 支持（电容/电阻比值） |
 | 自适应策略 | LMS + NLMS | LMS / NC-LMS / KLMS / RFF-LMS / Volterra |
-| 运动段处理 | 全窗独立判定 | 源速率 ACC+Gyro 最长连续运动段 + 延伸缓冲 |
-| 恢复机制 | 无 | 基于 FFT 偏差触发，交叉点检测 |
-| 参数调优 | 手动 | 贝叶斯自动优化 |
+| 运动段处理 | 全窗独立判定 | 源速率 ACC+Gyro 最长连续运动段 + 谱峰保护 |
+| 运动后阶段 | 无 | adaptive 与 reset FFT 并行，动态保护窗回切 |
+| 参数调优 | 手动 | 按算法预设收缩的贝叶斯优化或无 BO 候选选择 |
 
 ---
 
@@ -44,7 +45,7 @@ python/src/ppg_hr/
 ├── params.py                      # SolverParams 全局参数定义
 ├── core/
 │   ├── heart_rate_solver.py       # 基础数据加载、频谱处理、运动检测、质量判定
-│   ├── adaptive_filter.py         # 自适应滤波分发（LMS/KLMS/Volterra/RFF-LMS）
+│   ├── adaptive_filter.py         # 自适应滤波分发（LMS/AS-LMS/KLMS/Volterra/RFF-LMS）
 │   ├── choose_delay.py            # 时延估计（互相关）
 │   └── fft_peaks.py               # FFT 频谱峰值检测
 ├── preprocess/
@@ -52,9 +53,12 @@ python/src/ppg_hr/
 └── v2/
     ├── __init__.py                # v2 包公开 API
     ├── types.py                   # V2RunConfig / V2Dataset / V2QcResult
-    ├── preprocess.py              # v2 专用数据加载与通道构造
-    ├── solver.py                  # 【核心】v2 单路径求解器 (~850行)
+    ├── signal_preparation.py      # 数据加载、PPG 输入表达、运动段检测
+    ├── solver.py                  # 【核心】v2 单路径求解器
+    ├── algorithm_presets.py       # dynamic_rest_bo / lite / trace_rescue 预设
+    ├── runtime_policy.py          # 从 V2RunConfig 派生运行策略
     ├── reference_groups.py        # 参考信号分组定义与配色
+    ├── spectrum_tracking.py       # 窗口级谱峰追踪与 trace
     ├── search_space.py            # 贝叶斯优化搜索空间
     ├── optimizer.py               # Optuna 贝叶斯优化器
     ├── generalization.py           # 同运动类型共享参数泛化评估
@@ -62,6 +66,9 @@ python/src/ppg_hr/
     ├── batch_pipeline.py          # 批量一体化流水线
     ├── report.py                  # JSON 报告读写
     ├── plotting.py                # 出版级心率曲线绘图
+    ├── post_motion_dynamic_guard_policy.py # 动态保护窗与 gap rescue
+    ├── post_motion_reset_fft_reacquire.py  # reset FFT 重捕获实验工具
+    ├── motion_low_lock_upward_reacquire.py # 低锁上跳重捕获评估
     ├── window_diagnostics.py      # 单窗口波形/频谱/谱峰追踪诊断
     ├── spo2.py                    # SpO2 血氧求解器
     └── spo2_plotting.py           # SpO2 结果绘图
@@ -76,7 +83,9 @@ V2RunConfig ──► solver.py ◄── core/heart_rate_solver.py
                    ├── core/choose_delay.py     (时延估计)
                    ├── core/fft_peaks.py        (FFT 峰检测)
                    ├── preprocess/utils.py      (插值/平滑)
-                   └── v2/preprocess.py         (safe_cf_ratio)
+                   ├── v2/signal_preparation.py (输入表达与运动段)
+                   ├── v2/runtime_policy.py     (运行策略束)
+                   └── v2/spectrum_tracking.py  (候选峰追踪 trace)
 
 solver.py ──► optimizer.py ──► report.py ──► plotting.py
                 (Optuna)        (JSON)       (PNG/CSV)
@@ -427,12 +436,13 @@ V2RunConfig ──(_solver_params_from_v2)──► SolverParams ──► 底�
 
 ### 5.3 动态追踪算法预设
 
-v2 心率算法新增 `algorithm_preset` 运行预设，用于把最近两轮泛化评估、静息段 BO 参数统计和 Polar H10 真值心率动态统计固化到频谱追踪阶段。当前提供两个方案：
+v2 心率算法通过 `algorithm_preset` 把不同实验阶段沉淀为可复用的运行策略。预设层只决定追踪参数、搜索空间和候选状态选择方式；PPG 通道、输入表达、参考信号顺序和自适应滤波器仍由 `V2RunConfig` 统一传入。
 
 | 方案 | 内部值 | BO 行为 | 适用场景 |
 |------|--------|---------|----------|
 | 动态追踪-静息BO | `dynamic_rest_bo` | 固定运动/恢复追踪参数，静息段继续 BO 且使用收敛候选 | 默认主算法，兼顾运动段稳定性和静息段个体适应 |
-| Lite | `lite` | 固定静息/运动/恢复全部追踪参数 | 批量实验、效率优先、固定参数基线 |
+| Lite | `lite` | 固定静息/运动/恢复全部追踪参数，但继续搜索采样率、滤波阶数、平滑、惩罚宽度和时间对齐 | 批量实验、效率优先、固定参数基线 |
+| TraceRescue | `trace_rescue` | 固定 Lite 候选状态不做主 BO；仅保留所选滤波器的私有参数搜索 | 无监督候选状态救援和跨样本稳定性复核 |
 
 方向性频谱追踪不再使用单一对称窗口 `previous_hr ± range`，而是使用：
 
@@ -451,7 +461,7 @@ previous_hr - down_range <= candidate_hr <= previous_hr + up_range
 | 恢复 | 上升 | 20 | 1.5 | 1.5 |
 | 恢复 | 下降 | 25 | 3.5 | 3.0 |
 
-`dynamic_rest_bo` 中，运动和恢复使用上表固定值；静息段仍由 BO 给出对称 `hr_range_rest`、`slew_limit_rest` 和 `slew_step_rest`，以保留对个体差异和静息噪声的适应能力。`Lite` 中，静息、运动和恢复全部使用上表固定值。
+`dynamic_rest_bo` 中，运动和恢复使用上表固定值；静息段仍由 BO 给出对称 `hr_range_rest`、`slew_limit_rest` 和 `slew_step_rest`，以保留对个体差异和静息噪声的适应能力。`lite` 中，静息、运动和恢复全部使用上表固定值。`trace_rescue` 进一步固定 `fs_target`、`max_order`、`lms_mu_base`、`smooth_win_len`、`spec_penalty_width` 和 `time_bias` 的候选状态，再按无监督轨迹风险选择最终状态。
 
 最终 HR 后处理阶段保留状态和方向感知的连续性保护，用于保护频谱追踪和 FFT/adaptive 融合后的最终曲线。该保护与同一组状态/方向参数保持一致，但主要机制已下沉到频谱追踪阶段。
 
@@ -497,8 +507,9 @@ previous_hr - down_range <= candidate_hr <= previous_hr + up_range
 |------|--------------|
 | `dynamic_rest_bo` | 移除 `hr_range_hz`、`slew_limit_bpm`、`slew_step_bpm`；静息段候选收敛为 `hr_range_rest=[20,30,60,80]/60`、`slew_limit_rest=[1,3,6,8]`、`slew_step_rest=[0.5,2,4]` |
 | `lite` | 移除 `hr_range_hz`、`slew_limit_bpm`、`slew_step_bpm`、`hr_range_rest`、`slew_limit_rest`、`slew_step_rest` |
+| `trace_rescue` | 移除 Lite 状态参数搜索；仅 `klms`、`as_lms`、`volterra`、`rff_lms` 等滤波器保留私有 BO 参数 |
 
-上一轮合并实验中，相对完整默认空间，Lite 类固定追踪参数空间的理论组合规模下降约 99.95%。实际耗时收益仍取决于样本数量、`max_iterations`、`num_repeats`、滤波器类型和单 trial 求解成本。
+相对完整默认空间，Lite 类固定追踪参数空间的理论组合规模下降约 99.95%。TraceRescue 在 `lms` 和 `noncausal_lms` 下可完全跳过 BO；在带私有参数的滤波器下，耗时主要由私有参数空间和候选状态数量决定。
 
 ### 6.2.1 kaihe2 谱峰追踪机制验证（2026-06-14）
 
@@ -753,14 +764,18 @@ v2 同时包含独立的 SpO2 解算模块, 基于红/红外双波长 PPG:
 - [x] 参考信号可排序级联（HF/CF/ACC 任意排列）
 - [x] PPG 输入表达策略（RAW / `-log(I/I0)`）
 - [x] 五种自适应滤波策略
-- [x] 贝叶斯超参数自动优化
+- [x] 三层算法预设（`dynamic_rest_bo` / `lite` / `trace_rescue`）
+- [x] 按预设收缩的贝叶斯超参数自动优化
 - [x] 同运动类型参数泛化评估（all-train / leave-one-group-out）
-- [x] 运动段自适应调度 + 恢复检测
+- [x] 运动段自适应调度、方向性谱峰追踪和连续性保护软惩罚
+- [x] 运动段低锁上跳重捕获与高频锁定逃逸
+- [x] 运动后动态保护窗、reset FFT 重捕获和持续高差回切
 - [x] 批量一体化流水线
-- [x] 出版级可视化
+- [x] 窗口级 trace 诊断和 600 dpi 论文级 PNG 可视化
 
 后续可能探索的方向:
 - 时域波峰检测与频域 FFT 的互补融合（目前纯频域）
 - 多 PPG 通道联合解算（目前单通道选择）
 - 基于深度学习的端到端心率估计
-- 在线/实时推理优化
+- 将 TraceRescue 从样本级候选选择推进到真正在线的级联状态机
+- 跨个体、跨佩戴方式和新运动类型的泛化边界复核
