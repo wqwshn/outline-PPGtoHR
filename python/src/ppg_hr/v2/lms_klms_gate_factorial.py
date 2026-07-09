@@ -16,7 +16,7 @@ from .optimizer import V2BayesConfig, optimise_v2
 from .output_paths import prepare_output_dir, safe_name, safe_output_path
 from .plotting import render_v2_report
 from .qc import quality_filter_sample_v2
-from .reference_groups import reference_order_key
+from .reference_groups import normalise_reference_order, reference_order_key
 from .types import V2RunConfig
 
 DEFAULT_DATA_ROOT = Path(
@@ -155,6 +155,7 @@ def run_gate_factorial_experiment(
     output_root: Path | str | None = None,
     sample_ids: Sequence[str] = (),
     condition_names: Sequence[str] = (),
+    reference_groups_order: Sequence[str] = ("HF",),
     dry_run: bool = False,
     bayes_cfg: V2BayesConfig | None = None,
     render: bool = True,
@@ -163,6 +164,7 @@ def run_gate_factorial_experiment(
 ) -> GateFactorialResult:
     data_root = Path(data_root)
     output_root_path = Path(output_root) if output_root is not None else _default_output_root(data_root)
+    reference_order = normalise_reference_order(tuple(reference_groups_order))
     samples = _select_samples(discover_samples(data_root), sample_ids)
     conditions = _select_conditions(condition_names)
     planned = [
@@ -181,7 +183,7 @@ def run_gate_factorial_experiment(
     completed: list[CompletedGateRun] = []
     cfg_bayes = bayes_cfg or V2BayesConfig()
     for run in planned:
-        existing = _existing_completed_run(run) if resume else None
+        existing = _existing_completed_run(run, reference_order) if resume else None
         if existing is not None:
             _log(on_log, f"跳过已存在结果 {run.condition.name}: {run.sample.sample_id}")
             completed.append(existing)
@@ -191,6 +193,7 @@ def run_gate_factorial_experiment(
                 run,
                 bayes_cfg=cfg_bayes,
                 render=render,
+                reference_groups_order=reference_order,
                 on_log=on_log,
             )
         )
@@ -208,6 +211,7 @@ def _run_one(
     *,
     bayes_cfg: V2BayesConfig,
     render: bool,
+    reference_groups_order: tuple[str, ...],
     on_log: Callable[[str], None] | None,
 ) -> CompletedGateRun:
     condition_dir = prepare_output_dir(run.output_dir)
@@ -215,7 +219,6 @@ def _run_one(
     png_dir = prepare_output_dir(condition_dir / "png")
     csv_dir = prepare_output_dir(condition_dir / "csv")
     overrides = condition_run_config_overrides(run.condition.name)
-    reference_groups_order = ("HF",)
     cfg = V2RunConfig(
         data_path=run.sample.data_path,
         ref_path=run.sample.ref_path,
@@ -271,8 +274,11 @@ def _run_one(
     )
 
 
-def _existing_completed_run(run: PlannedGateRun) -> CompletedGateRun | None:
-    report_path = _planned_report_path(run)
+def _existing_completed_run(
+    run: PlannedGateRun,
+    reference_groups_order: tuple[str, ...],
+) -> CompletedGateRun | None:
+    report_path = _planned_report_path(run, reference_groups_order)
     if not report_path.is_file():
         return None
     try:
@@ -295,8 +301,10 @@ def _existing_completed_run(run: PlannedGateRun) -> CompletedGateRun | None:
     )
 
 
-def _planned_report_path(run: PlannedGateRun) -> Path:
-    reference_groups_order = ("HF",)
+def _planned_report_path(
+    run: PlannedGateRun,
+    reference_groups_order: tuple[str, ...],
+) -> Path:
     prefix = safe_run_prefix(
         run.sample.sample_id,
         "green",
@@ -368,6 +376,7 @@ def _write_summary(output_root: Path, runs: list[CompletedGateRun]) -> Path:
                 "adaptive_filter",
                 "low_reacquire",
                 "high_escape",
+                "reference_order",
                 "best_error",
                 "report_path",
                 "figure_png",
@@ -384,6 +393,7 @@ def _write_summary(output_root: Path, runs: list[CompletedGateRun]) -> Path:
                     run.condition.adaptive_filter,
                     int(run.condition.low_reacquire),
                     int(run.condition.high_escape),
+                    _reference_order_from_report(run.report_path),
                     f"{run.best_error:.6g}",
                     str(run.report_path),
                     str(run.figure_png or ""),
@@ -399,6 +409,23 @@ def _log(callback: Callable[[str], None] | None, message: str) -> None:
         callback(message)
 
 
+def _reference_order_from_report(report_path: Path) -> str:
+    try:
+        payload = json.loads(report_path.read_text(encoding="utf-8"))
+    except Exception:
+        return ""
+    metadata = payload.get("metadata")
+    groups = ()
+    if isinstance(metadata, dict):
+        raw = metadata.get("reference_groups_order")
+        if isinstance(raw, (list, tuple)):
+            groups = tuple(str(item) for item in raw)
+    try:
+        return reference_order_key(normalise_reference_order(groups))
+    except ValueError:
+        return ""
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-root", type=Path, default=DEFAULT_DATA_ROOT)
@@ -406,6 +433,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sample", action="append", default=[])
     parser.add_argument("--all", action="store_true", help="Run all included motion samples.")
     parser.add_argument("--condition", action="append", default=[])
+    parser.add_argument(
+        "--reference-group",
+        action="append",
+        default=None,
+        help="Reference groups in cascade order; repeat, e.g. --reference-group HF --reference-group ACC.",
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--skip-render", action="store_true")
@@ -432,6 +465,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         output_root=args.output_root,
         sample_ids=() if args.all else samples,
         condition_names=tuple(args.condition),
+        reference_groups_order=tuple(args.reference_group or ("HF",)),
         dry_run=bool(args.dry_run),
         bayes_cfg=bayes_cfg,
         render=not bool(args.skip_render),
