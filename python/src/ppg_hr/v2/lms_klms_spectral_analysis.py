@@ -158,6 +158,12 @@ def window_metrics_from_row(
         "selected_true_peak": selected_true_peak,
         "reacquire_mode": trace.get("reacquire_mode"),
         "reacquire_triggered": bool(trace.get("reacquire_triggered")),
+        "reacquire_candidate_bpm": trace.get("reacquire_candidate_bpm"),
+        "reacquire_reason": trace.get("reacquire_reason"),
+        "reacquire_candidate_rejected_reason": trace.get(
+            "reacquire_candidate_rejected_reason"
+        ),
+        "reacquire_action": trace.get("reacquire_action"),
         "high_lock_mode": trace.get("high_lock_mode"),
         "high_lock_triggered": bool(trace.get("high_lock_triggered")),
         "high_lock_reason": trace.get("high_lock_reason"),

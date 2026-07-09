@@ -51,6 +51,9 @@ class SpectrumTrackingTrace:
     reacquire_candidate_bpm: float | None = None
     reacquire_count: int = 0
     reacquire_low_lock_count: int = 0
+    reacquire_reason: str = "none"
+    reacquire_candidate_rejected_reason: str = ""
+    reacquire_action: str = "none"
     reacquire_triggered: bool = False
     high_lock_mode: str = "disabled"
     high_lock_candidate_bpm: float | None = None
@@ -71,6 +74,7 @@ class SpectrumTrackingTrace:
 class SpectrumReacquireState:
     mode: str = "locked"
     candidate_hz: float | None = None
+    challenge_start_hz: float | None = None
     count: int = 0
     low_lock_count: int = 0
 

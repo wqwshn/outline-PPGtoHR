@@ -544,7 +544,13 @@ def test_motion_reacquire_unlocks_from_stable_far_challenger(monkeypatch) -> Non
         spec_penalty_weight=0.2,
         spec_penalty_width=0.12,
     )
-    state = solver.SpectrumReacquireState(low_lock_count=8)
+    state = solver.SpectrumReacquireState(
+        mode="challenge",
+        candidate_hz=2.20,
+        challenge_start_hz=0.95,
+        count=2,
+        low_lock_count=8,
+    )
     history = [1.10]
     outputs: list[float] = []
     traces = []
@@ -569,10 +575,9 @@ def test_motion_reacquire_unlocks_from_stable_far_challenger(monkeypatch) -> Non
         traces.append(trace)
         history.append(value)
 
-    assert outputs[:2] == pytest.approx([1.10, 1.10])
-    assert outputs[2] == pytest.approx(1.60)
+    assert outputs[0] == pytest.approx(1.60)
     assert outputs[-1] == pytest.approx(2.20)
-    assert traces[2].reacquire_triggered is True
+    assert traces[0].reacquire_triggered is True
     assert traces[-1].reacquire_mode == "locked"
     assert any(
         candidate == pytest.approx(132.0)

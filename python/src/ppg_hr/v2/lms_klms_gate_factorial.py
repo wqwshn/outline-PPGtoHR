@@ -28,6 +28,11 @@ SCENARIO_PREFIXES = {
     "jianpan": "敲键盘",
     "woli": "握力计",
     "quanji": "拳击",
+    "kaihe": "kaihe",
+    "bobi": "bobi",
+    "fuwo": "fuwo",
+    "tiaosheng": "tiaosheng",
+    "wanju": "wanju",
 }
 LMS_GATE_ALLOWLIST = ("lms", "noncausal_lms")
 KLMS_EXPERIMENT_GATE_ALLOWLIST = ("lms", "noncausal_lms", "klms")
@@ -116,7 +121,7 @@ def discover_samples(data_root: Path | str) -> list[GateFactorialSample]:
 def scenario_for_sample(sample_id: str) -> str | None:
     stem = str(sample_id).strip().lower()
     for prefix in SCENARIO_PREFIXES:
-        if stem.startswith(prefix):
+        if stem.startswith(prefix) or stem.startswith(f"multi_{prefix}"):
             return prefix
     return None
 
