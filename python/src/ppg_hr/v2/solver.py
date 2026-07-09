@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, Sequence
 
 import numpy as np
 import pandas as pd
@@ -75,6 +75,10 @@ _REACQUIRE_LOW_LOCK_MIN_HZ = 50.0 / 60.0
 _REACQUIRE_LOW_LOCK_MAX_HZ = 80.0 / 60.0
 _REACQUIRE_LOW_LOCK_MIN_WINDOWS = 4
 _REACQUIRE_TARGET_MIN_HZ = 90.0 / 60.0
+_REACQUIRE_SUSPICIOUS_HIGH_HZ = 180.0 / 60.0
+_REACQUIRE_MIN_RANGE_UP_MULTIPLIER = 1.5
+_REACQUIRE_MIN_DRIFT_TO_TARGET_RATIO = 0.12
+_REACQUIRE_CONFIRM_DRIFT_STEP_FRACTION = 0.75
 _HIGH_LOCK_CONFIRM_WINDOWS = 3
 _HIGH_LOCK_COOLDOWN_WINDOWS = 4
 _HIGH_LOCK_MIN_GAP_HZ = 20.0 / 60.0
@@ -93,7 +97,16 @@ class SpectrumReacquireDecision:
     candidate_hz: float | None
     count: int
     low_lock_count: int
+    reason: str
+    candidate_rejected_reason: str
+    action: str
     triggered: bool
+
+
+@dataclass(frozen=True)
+class SpectrumReacquireCandidateDecision:
+    candidate_hz: float | None
+    rejected_reason: str
 
 
 @dataclass
@@ -247,7 +260,7 @@ def _process_spectrum_with_trace_impl(
             protection_disabled = bool(
                 reacquire_enable
                 and reacquire_state is not None
-                and reacquire_state.mode in {"challenge", "reacquiring"}
+                and reacquire_state.mode == "reacquiring"
             )
             protection_half_width_hz = (
                 _continuity_protection_half_width_hz(
@@ -401,6 +414,17 @@ def _process_spectrum_with_trace_impl(
         state=reacquire_state,
         enabled=bool(reacquire_enable),
         window_kind=window_kind,
+        penalty_centers_hz=penalty_centers_hz,
+        min_jump_hz=max(
+            _REACQUIRE_MIN_JUMP_HZ,
+            float(tracking.range_up_hz) * _REACQUIRE_MIN_RANGE_UP_MULTIPLIER,
+        ),
+        min_confirm_drift_hz=max(
+            float(tracking.step_up_bpm)
+            * _REACQUIRE_CONFIRM_DRIFT_STEP_FRACTION
+            / 60.0,
+            0.0,
+        ),
     )
     limited_hz = reacquire_decision.hr_hz
     if reacquire_decision.triggered or reacquire_decision.mode == "reacquiring":
@@ -484,6 +508,9 @@ def _process_spectrum_with_trace_impl(
         ),
         reacquire_count=int(reacquire_decision.count),
         reacquire_low_lock_count=int(reacquire_decision.low_lock_count),
+        reacquire_reason=reacquire_decision.reason,
+        reacquire_candidate_rejected_reason=reacquire_decision.candidate_rejected_reason,
+        reacquire_action=reacquire_decision.action,
         reacquire_triggered=bool(reacquire_decision.triggered),
         high_lock_mode=high_lock_decision.mode,
         high_lock_candidate_bpm=(
@@ -617,13 +644,26 @@ def _apply_motion_reacquire(
     state: SpectrumReacquireState | None,
     enabled: bool,
     window_kind: WindowKind,
+    penalty_centers_hz: tuple[float, ...] = (),
+    min_jump_hz: float = _REACQUIRE_MIN_JUMP_HZ,
+    min_confirm_drift_hz: float = 0.0,
 ) -> SpectrumReacquireDecision:
     if state is None or not enabled:
-        return SpectrumReacquireDecision(legacy_hz, "disabled", None, 0, 0, False)
+        return SpectrumReacquireDecision(
+            legacy_hz, "disabled", None, 0, 0, "disabled", "", "none", False
+        )
     if window_kind != "motion" or previous_hz is None:
         _reset_reacquire_state(state)
         return SpectrumReacquireDecision(
-            legacy_hz, state.mode, state.candidate_hz, state.count, state.low_lock_count, False
+            legacy_hz,
+            state.mode,
+            state.candidate_hz,
+            state.count,
+            state.low_lock_count,
+            "outside_motion_or_no_previous",
+            "",
+            "reset",
+            False,
         )
 
     if _is_low_lock_hz(previous_hz):
@@ -631,23 +671,43 @@ def _apply_motion_reacquire(
     elif state.mode != "reacquiring":
         _reset_reacquire_state(state)
         return SpectrumReacquireDecision(
-            legacy_hz, state.mode, state.candidate_hz, state.count, state.low_lock_count, False
+            legacy_hz,
+            state.mode,
+            state.candidate_hz,
+            state.count,
+            state.low_lock_count,
+            "previous_not_low_lock",
+            "",
+            "reset",
+            False,
         )
 
     if state.mode != "reacquiring" and state.low_lock_count < _REACQUIRE_LOW_LOCK_MIN_WINDOWS:
         state.mode = "locked"
         state.candidate_hz = None
+        state.challenge_start_hz = None
         state.count = 0
         return SpectrumReacquireDecision(
-            legacy_hz, state.mode, state.candidate_hz, state.count, state.low_lock_count, False
+            legacy_hz,
+            state.mode,
+            state.candidate_hz,
+            state.count,
+            state.low_lock_count,
+            "low_lock_not_sustained",
+            "",
+            "wait",
+            False,
         )
 
-    challenger_hz = _strongest_reacquire_candidate_hz(
+    candidate_decision = _strongest_reacquire_candidate_hz(
         freqs=freqs,
         raw_amps=raw_amps,
         raw_order=raw_order,
         previous_hz=float(previous_hz),
+        penalty_centers_hz=penalty_centers_hz,
+        min_jump_hz=min_jump_hz,
     )
+    challenger_hz = candidate_decision.candidate_hz
 
     if state.mode == "reacquiring":
         if challenger_hz is not None:
@@ -656,6 +716,8 @@ def _apply_motion_reacquire(
                 or abs(challenger_hz - state.candidate_hz) <= _REACQUIRE_STABLE_HZ
             ):
                 state.candidate_hz = challenger_hz
+                if state.challenge_start_hz is None:
+                    state.challenge_start_hz = float(previous_hz)
         if state.candidate_hz is None:
             _reset_reacquire_state(state)
             return SpectrumReacquireDecision(
@@ -664,27 +726,52 @@ def _apply_motion_reacquire(
                 state.candidate_hz,
                 state.count,
                 state.low_lock_count,
+                "reacquire_lost_candidate",
+                candidate_decision.rejected_reason,
+                "reset",
                 False,
             )
         next_hz = _move_toward_hz(float(previous_hz), state.candidate_hz, _REACQUIRE_STEP_HZ)
         if abs(next_hz - state.candidate_hz) <= np.finfo(float).eps:
+            completed_candidate = state.candidate_hz
+            count = state.count
+            low_lock_count = state.low_lock_count
             _reset_reacquire_state(state)
             return SpectrumReacquireDecision(
                 next_hz,
                 state.mode,
-                state.candidate_hz,
-                state.count,
-                state.low_lock_count,
+                completed_candidate,
+                count,
+                low_lock_count,
+                "reacquire_reached_candidate",
+                candidate_decision.rejected_reason,
+                "complete",
                 False,
             )
         return SpectrumReacquireDecision(
-            next_hz, state.mode, state.candidate_hz, state.count, state.low_lock_count, False
+            next_hz,
+            state.mode,
+            state.candidate_hz,
+            state.count,
+            state.low_lock_count,
+            "reacquire_slew_toward_candidate",
+            candidate_decision.rejected_reason,
+            "slew_toward_candidate",
+            False,
         )
 
     if challenger_hz is None:
         _reset_reacquire_state(state, reset_low_lock=False)
         return SpectrumReacquireDecision(
-            legacy_hz, state.mode, state.candidate_hz, state.count, state.low_lock_count, False
+            legacy_hz,
+            state.mode,
+            state.candidate_hz,
+            state.count,
+            state.low_lock_count,
+            "no_qualified_upward_candidate",
+            candidate_decision.rejected_reason,
+            "reset_candidate",
+            False,
         )
 
     if state.mode == "challenge" and state.candidate_hz is not None:
@@ -693,31 +780,84 @@ def _apply_motion_reacquire(
             state.candidate_hz = challenger_hz
         else:
             state.candidate_hz = challenger_hz
+            state.challenge_start_hz = float(previous_hz)
             state.count = 1
     else:
         state.mode = "challenge"
         state.candidate_hz = challenger_hz
+        state.challenge_start_hz = float(previous_hz)
         state.count = 1
 
     if state.count >= _REACQUIRE_CONFIRM_WINDOWS:
+        start_hz = state.challenge_start_hz
+        target_gap_hz = (
+            0.0
+            if start_hz is None or state.candidate_hz is None
+            else max(0.0, float(state.candidate_hz) - float(start_hz))
+        )
+        required_drift_hz = max(
+            float(min_confirm_drift_hz),
+            target_gap_hz * _REACQUIRE_MIN_DRIFT_TO_TARGET_RATIO,
+        )
+        if (
+            start_hz is None
+            or float(previous_hz) - float(start_hz) < required_drift_hz
+        ):
+            rejected_candidate = state.candidate_hz
+            count = state.count
+            low_lock_count = state.low_lock_count
+            _reset_reacquire_state(state, reset_low_lock=False)
+            return SpectrumReacquireDecision(
+                legacy_hz,
+                state.mode,
+                rejected_candidate,
+                count,
+                low_lock_count,
+                "insufficient_low_track_upward_drift",
+                candidate_decision.rejected_reason,
+                "reset_candidate",
+                False,
+            )
         state.mode = "reacquiring"
         next_hz = _move_toward_hz(float(previous_hz), state.candidate_hz, _REACQUIRE_STEP_HZ)
         if abs(next_hz - state.candidate_hz) <= np.finfo(float).eps:
+            completed_candidate = state.candidate_hz
+            count = state.count
+            low_lock_count = state.low_lock_count
             _reset_reacquire_state(state)
             return SpectrumReacquireDecision(
                 next_hz,
                 state.mode,
-                state.candidate_hz,
-                state.count,
-                state.low_lock_count,
+                completed_candidate,
+                count,
+                low_lock_count,
+                "confirmed_upward_candidate",
+                candidate_decision.rejected_reason,
+                "complete",
                 True,
             )
         return SpectrumReacquireDecision(
-            next_hz, state.mode, state.candidate_hz, state.count, state.low_lock_count, True
+            next_hz,
+            state.mode,
+            state.candidate_hz,
+            state.count,
+            state.low_lock_count,
+            "confirmed_upward_candidate",
+            candidate_decision.rejected_reason,
+            "slew_toward_candidate",
+            True,
         )
 
     return SpectrumReacquireDecision(
-        legacy_hz, state.mode, state.candidate_hz, state.count, state.low_lock_count, False
+        legacy_hz,
+        state.mode,
+        state.candidate_hz,
+        state.count,
+        state.low_lock_count,
+        "candidate_challenge_pending",
+        candidate_decision.rejected_reason,
+        "wait",
+        False,
     )
 
 
@@ -727,28 +867,64 @@ def _strongest_reacquire_candidate_hz(
     raw_amps: np.ndarray,
     raw_order: np.ndarray,
     previous_hz: float,
-) -> float | None:
+    penalty_centers_hz: tuple[float, ...] = (),
+    min_jump_hz: float = _REACQUIRE_MIN_JUMP_HZ,
+) -> SpectrumReacquireCandidateDecision:
     if raw_order.size == 0 or not np.isfinite(previous_hz):
-        return None
+        return SpectrumReacquireCandidateDecision(None, "no_candidate_peaks")
     ordered_amps = np.asarray(raw_amps, dtype=float)[raw_order]
     finite = ordered_amps[np.isfinite(ordered_amps)]
     if finite.size == 0:
-        return None
+        return SpectrumReacquireCandidateDecision(None, "no_finite_candidate_amplitude")
     amp_floor = float(np.nanmax(finite)) * _REACQUIRE_MIN_AMP_RATIO
+    rejected_reasons: list[str] = []
     for peak_idx in raw_order:
         idx = int(peak_idx)
         candidate_hz = float(freqs[idx])
         candidate_amp = float(raw_amps[idx])
         if not np.isfinite(candidate_hz) or not np.isfinite(candidate_amp):
+            rejected_reasons.append("non_finite_candidate")
             continue
         if candidate_amp < amp_floor:
+            rejected_reasons.append("weak_candidate")
             continue
         if candidate_hz < _REACQUIRE_TARGET_MIN_HZ:
+            rejected_reasons.append("candidate_below_upward_target")
             continue
-        if candidate_hz - previous_hz < _REACQUIRE_MIN_JUMP_HZ:
+        if _is_near_penalty_core(candidate_hz, penalty_centers_hz[:1]):
+            rejected_reasons.append("near_primary_penalty_core")
             continue
-        return candidate_hz
-    return None
+        if candidate_hz - previous_hz < max(float(min_jump_hz), _REACQUIRE_MIN_JUMP_HZ):
+            rejected_reasons.append("candidate_jump_too_small")
+            continue
+        if (
+            candidate_hz >= _REACQUIRE_SUSPICIOUS_HIGH_HZ
+            and _is_near_penalty_core(candidate_hz, penalty_centers_hz)
+        ):
+            rejected_reasons.append("near_penalty_suspicious_high")
+            continue
+        return SpectrumReacquireCandidateDecision(candidate_hz, "")
+    return SpectrumReacquireCandidateDecision(
+        None,
+        _primary_reacquire_rejection_reason(rejected_reasons),
+    )
+
+
+def _primary_reacquire_rejection_reason(reasons: Sequence[str]) -> str:
+    if not reasons:
+        return "no_qualified_upward_candidate"
+    priority = (
+        "near_penalty_suspicious_high",
+        "near_primary_penalty_core",
+        "weak_candidate",
+        "candidate_jump_too_small",
+        "candidate_below_upward_target",
+        "non_finite_candidate",
+    )
+    for reason in priority:
+        if reason in reasons:
+            return reason
+    return str(reasons[-1])
 
 
 def _apply_motion_high_lock_escape(
@@ -1018,8 +1194,17 @@ def _is_low_lock_hz(value_hz: float) -> bool:
     return _REACQUIRE_LOW_LOCK_MIN_HZ <= float(value_hz) <= _REACQUIRE_LOW_LOCK_MAX_HZ
 
 
-def _reacquire_enabled_for_filter(adaptive_filter: str) -> bool:
-    return str(adaptive_filter).strip().lower() in {"lms", "noncausal_lms"}
+def _normalise_motion_gate_filter_allowlist(allowlist: tuple[str, ...] | list[str]) -> tuple[str, ...]:
+    return tuple(str(value).strip().lower() for value in allowlist if str(value).strip())
+
+
+def _reacquire_enabled_for_filter(
+    adaptive_filter: str,
+    allowlist: tuple[str, ...] | list[str] = ("lms", "noncausal_lms"),
+) -> bool:
+    return str(adaptive_filter).strip().lower() in _normalise_motion_gate_filter_allowlist(
+        allowlist
+    )
 
 
 def _move_toward_hz(current_hz: float, target_hz: float, max_step_hz: float) -> float:
@@ -1033,6 +1218,7 @@ def _move_toward_hz(current_hz: float, target_hz: float, max_step_hz: float) -> 
 def _reset_reacquire_state(state: SpectrumReacquireState, *, reset_low_lock: bool = True) -> None:
     state.mode = "locked"
     state.candidate_hz = None
+    state.challenge_start_hz = None
     state.count = 0
     if reset_low_lock:
         state.low_lock_count = 0
@@ -1570,6 +1756,13 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
     adaptive_tracking_rows: list[SpectrumTrackingTrace | None] = []
     adaptive_reacquire_state = SpectrumReacquireState()
     adaptive_high_lock_state = SpectrumHighLockEscapeState()
+    motion_gate_filter_allowlist = _normalise_motion_gate_filter_allowlist(
+        cfg.motion_gate_filter_allowlist
+    )
+    motion_gate_filter_supported = _reacquire_enabled_for_filter(
+        cfg.adaptive_filter,
+        motion_gate_filter_allowlist,
+    )
     reset_fft_history: list[float] = []
     reset_fft_started = False
     reset_fft_applied_windows = 0
@@ -1677,9 +1870,6 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 if provisional_kind == "motion"
                 else tracking_policy.recovery
             )
-            filter_reacquire_supported = _reacquire_enabled_for_filter(
-                cfg.adaptive_filter
-            )
             row[2], adaptive_trace = _process_spectrum_with_trace(
                 filtered,
                 penalty_ref,
@@ -1696,7 +1886,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 ),
                 reacquire_enable=bool(
                     cfg.reacquire_enable
-                    and filter_reacquire_supported
+                    and motion_gate_filter_supported
                     and provisional_kind == "motion"
                 ),
                 high_lock_state=(
@@ -1704,7 +1894,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 ),
                 high_lock_enable=bool(
                     runtime_policy.high_lock_escape.enabled
-                    and filter_reacquire_supported
+                    and motion_gate_filter_supported
                     and provisional_kind == "motion"
                 ),
                 high_lock_params=runtime_policy.high_lock_escape.as_solver_params(),
@@ -1908,6 +2098,14 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
         "solver_kernel": "v1_fusion_reference_path",
         "time_bias": float(cfg.time_bias),
         "pre_motion_context_seconds": float(cfg.pre_motion_context_seconds),
+        "motion_gate_filter_allowlist": list(motion_gate_filter_allowlist),
+        "motion_gate_filter_supported": bool(motion_gate_filter_supported),
+        "motion_low_reacquire_effective": bool(
+            cfg.reacquire_enable and motion_gate_filter_supported
+        ),
+        "motion_high_lock_escape_effective": bool(
+            runtime_policy.high_lock_escape.enabled and motion_gate_filter_supported
+        ),
         "reacquire_enable": bool(cfg.reacquire_enable),
         "high_lock_escape": runtime_policy.high_lock_escape.metadata(
             trigger_count=int(
