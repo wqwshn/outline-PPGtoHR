@@ -50,7 +50,9 @@ ACC 作为对比参考信号单独运行，不参与 HF 主链路决策。三组
 
 ## 历史收益与边界
 
-2026-06-21 旧结果说明，低锁上跳机制曾在开合跳、波比跳样本上提供明显收益。旧 trace replay 进一步显示，新门控不会把所有历史救援窗口关掉：`multi_kaihe1` window 68 在新规则下仍会被确认，且旧输出已经到达约 98 BPM 的真实上升心率。受限于旧 JSON 记录的 `20260622recal` 源数据目录当前不可用，本轮没有完成同源 CSV 级重放；因此当前版本应作为“安全门控版本 + 历史救援入口保留”的阶段性结论，而不应直接宣称收益已经完全恢复。
+2026-06-21 旧结果说明，低锁上跳机制曾在开合跳、波比跳样本上提供明显收益。旧 trace replay 进一步显示，新门控不会把所有历史救援窗口关掉：`multi_kaihe1` window 68 在新规则下仍会被确认，且旧输出已经到达约 98 BPM 的真实上升心率。
+
+但最终可用历史重跑使用的是当前可访问的同名样本，而不是旧 JSON 记录中的 `20260622recal` 同源 CSV；在这组重跑中，历史救援组低锁窗口占比为 0.141，合格上跳候选率为 0.015，多窗口确认数为 0。合格候选只出现在 `multi_bobi3` 的低心率窗口，并未构成开合跳高心率救援证据。因此当前版本应作为“安全门控版本 + 历史救援入口保留”的阶段性结论，而不应直接宣称收益已经完全恢复。
 
 ![Representative historical replay](D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/low_lock_upward_outputs/20260709_report/fig4_representative_historical_replay.png)
 

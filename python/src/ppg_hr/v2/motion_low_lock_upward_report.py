@@ -57,6 +57,11 @@ DEFAULT_CURRENT_COHORT = Path(
     r"\202607-multiperson\0708-LYX\low_lock_upward_outputs"
     r"\20260709_current_full_step_fraction_analysis\low_lock_cohort_summary.csv"
 )
+DEFAULT_HISTORICAL_COHORT = Path(
+    r"D:\data\PPG_HeartRate\Algorithm\Algorithm\outline-PPGtoHR\data"
+    r"\202607-multiperson\0708-LYX\low_lock_upward_outputs"
+    r"\20260709_historical_step_fraction_analysis\low_lock_cohort_summary.csv"
+)
 DEFAULT_OLD_REPLAY_COHORT = Path(
     r"D:\data\PPG_HeartRate\Algorithm\Algorithm\outline-PPGtoHR\data"
     r"\202607-multiperson\0708-LYX\low_lock_upward_outputs"
@@ -336,6 +341,7 @@ def render_report(
     historical_acc_summary: Path = DEFAULT_HISTORICAL_ACC_SUMMARY,
     highlock_acc_summary: Path = DEFAULT_HIGHLOCK_ACC_SUMMARY,
     current_cohort: Path = DEFAULT_CURRENT_COHORT,
+    historical_cohort: Path = DEFAULT_HISTORICAL_COHORT,
     old_replay_cohort: Path = DEFAULT_OLD_REPLAY_COHORT,
     old_replay_windows: Path = DEFAULT_OLD_REPLAY_WINDOWS,
 ) -> Path:
@@ -361,6 +367,10 @@ def render_report(
     fig5 = _plot_reference_delta(reference_rows, out)
     old = pd.read_csv(old_replay_cohort)
     old_rescue = old.loc[old["cohort"] == "historical_rescue"].iloc[0]
+    historical_low = pd.read_csv(historical_cohort)
+    historical_low_row = historical_low.loc[
+        historical_low["condition"] == "lms_low_reacquire_only"
+    ].iloc[0]
     current_low = pd.read_csv(current_cohort)
     current_low_row = current_low.loc[current_low["condition"] == "lms_low_reacquire_only"].iloc[0]
 
@@ -370,6 +380,7 @@ def render_report(
             cohort_rows=cohort_rows,
             reference_rows=reference_rows,
             current_low_row=current_low_row,
+            historical_low_row=historical_low_row,
             old_rescue=old_rescue,
             fig1=fig1,
             fig2=fig2,
@@ -388,6 +399,7 @@ def _markdown(
     cohort_rows: list[dict[str, Any]],
     reference_rows: list[dict[str, Any]],
     current_low_row: pd.Series,
+    historical_low_row: pd.Series,
     old_rescue: pd.Series,
     fig1: Path,
     fig2: Path,
@@ -459,7 +471,9 @@ ACC 作为对比参考信号单独运行，不参与 HF 主链路决策。三组
 
 ## 历史收益与边界
 
-2026-06-21 旧结果说明，低锁上跳机制曾在开合跳、波比跳样本上提供明显收益。旧 trace replay 进一步显示，新门控不会把所有历史救援窗口关掉：`multi_kaihe1` window 68 在新规则下仍会被确认，且旧输出已经到达约 98 BPM 的真实上升心率。受限于旧 JSON 记录的 `20260622recal` 源数据目录当前不可用，本轮没有完成同源 CSV 级重放；因此当前版本应作为“安全门控版本 + 历史救援入口保留”的阶段性结论，而不应直接宣称收益已经完全恢复。
+2026-06-21 旧结果说明，低锁上跳机制曾在开合跳、波比跳样本上提供明显收益。旧 trace replay 进一步显示，新门控不会把所有历史救援窗口关掉：`multi_kaihe1` window 68 在新规则下仍会被确认，且旧输出已经到达约 98 BPM 的真实上升心率。
+
+但最终可用历史重跑使用的是当前可访问的同名样本，而不是旧 JSON 记录中的 `20260622recal` 同源 CSV；在这组重跑中，历史救援组低锁窗口占比为 {float(historical_low_row["low_lock_previous_rate"]):.3f}，合格上跳候选率为 {float(historical_low_row["qualified_upward_candidate_rate"]):.3f}，多窗口确认数为 {int(historical_low_row["offline_confirmed_upward_count"])}。合格候选只出现在 `multi_bobi3` 的低心率窗口，并未构成开合跳高心率救援证据。因此当前版本应作为“安全门控版本 + 历史救援入口保留”的阶段性结论，而不应直接宣称收益已经完全恢复。
 
 ![Representative historical replay]({fig4_md})
 
