@@ -1,0 +1,43 @@
+{
+  "development_failures": ["bobi2", "kaihe2", "kaihe3", "tiaosheng3"],
+  "development_controls": ["bobi1", "bobi3", "kaihe1", "tiaosheng1", "tiaosheng2"],
+  "frozen_normal_gate": [
+    "jianpan1",
+    "jianpan2",
+    "jianpan3",
+    "quanji1",
+    "quanji2",
+    "quanji3",
+    "woli2",
+    "woli3",
+    "xiezi1"
+  ],
+  "hard_switch_sentinels": ["run2", "woli1", "xiezi2"],
+  "full_batch_only": ["run1", "run3", "xiezi3"],
+  "all_samples": [
+    "bobi1",
+    "bobi2",
+    "bobi3",
+    "jianpan1",
+    "jianpan2",
+    "jianpan3",
+    "kaihe1",
+    "kaihe2",
+    "kaihe3",
+    "quanji1",
+    "quanji2",
+    "quanji3",
+    "run1",
+    "run2",
+    "run3",
+    "tiaosheng1",
+    "tiaosheng2",
+    "tiaosheng3",
+    "woli1",
+    "woli2",
+    "woli3",
+    "xiezi1",
+    "xiezi2",
+    "xiezi3"
+  ]
+}
