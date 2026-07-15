@@ -334,8 +334,10 @@ def apply_ready_gated_switch(
     switch_index = None if event is None else int(event.window_idx)
     output = [float(row["archived_final_bpm"]) for row in rows]
     if switch_index is not None:
+        target_revoked = False
         for index in range(switch_index, len(rows)):
-            if not bool(raw_ready[index]):
+            if target_revoked or not bool(raw_ready[index]):
+                target_revoked = True
                 output[index] = float(rows[index]["archived_final_bpm"])
                 continue
             target = float(rows[index]["handoff_bpm"])

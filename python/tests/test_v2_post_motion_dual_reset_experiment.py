@@ -675,10 +675,10 @@ def test_switch_adapter_stops_consuming_target_after_ready_revocation() -> None:
             "archived_final_bpm": 140.0,
             "handoff_bpm": 100.0,
             "ref_bpm": 100.0,
-            "switch_target_ready": 2 <= index < 6,
+            "switch_target_ready": 2 <= index < 6 or index >= 8,
             "in_post60": True,
         }
-        for index in range(8)
+        for index in range(10)
     ]
 
     result = experiment.apply_ready_gated_switch(
@@ -688,6 +688,7 @@ def test_switch_adapter_stops_consuming_target_after_ready_revocation() -> None:
     assert result["switch_index"] is not None
     assert result["final_bpm"][5] == 100.0
     assert result["final_bpm"][6] == 140.0
+    assert result["final_bpm"][8] == 140.0
 
 
 def test_target_freeze_rejects_early_ready_but_inaccurate_d1() -> None:
