@@ -316,6 +316,60 @@ def test_e1_target_gate_does_not_depend_on_temporary_qualification_rule() -> Non
     assert ranking[0]["promoted"] is True
 
 
+@pytest.mark.parametrize(
+    ("missing_sample", "completeness_field"),
+    (
+        ("failure_b", "d1_sample_set_complete"),
+        ("control_b", "d2_sample_set_complete"),
+    ),
+)
+def test_candidate_ranking_rejects_missing_frozen_sample_rows(
+    missing_sample: str,
+    completeness_field: str,
+) -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    d1 = ("failure_a", "failure_b")
+    d2 = ("control_a", "control_b")
+    rows = []
+    for cohort, samples in (("d1", d1), ("d2", d2)):
+        for sample in samples:
+            cold_mae = 10.0 if cohort == "d1" else 1.0
+            rows.append(
+                {
+                    "candidate_name": "cold_reset",
+                    "sample": sample,
+                    "cohort": cohort,
+                    "post60_handoff_mae_bpm": cold_mae,
+                    "qualified_e20_count": 0,
+                    "qualification_delay_s": float("nan"),
+                }
+            )
+            if sample != missing_sample:
+                rows.append(
+                    {
+                        "candidate_name": "candidate",
+                        "sample": sample,
+                        "cohort": cohort,
+                        "post60_handoff_mae_bpm": (
+                            5.0 if cohort == "d1" else 1.0
+                        ),
+                        "qualified_e20_count": 0,
+                        "qualification_delay_s": 10.0,
+                    }
+                )
+
+    ranking = experiment.rank_candidate_metrics(
+        rows,
+        require_qualification=False,
+        expected_d1_samples=d1,
+        expected_d2_samples=d2,
+    )
+
+    assert ranking[0][completeness_field] is False
+    assert ranking[0]["target_promoted"] is False
+    assert ranking[0]["promoted"] is False
+
+
 def _candidate_frame(*peaks: tuple[float, float]) -> RawFftCandidateFrame:
     return RawFftCandidateFrame(
         frequencies_hz=np.asarray([bpm / 60.0 for bpm, _ in peaks]),
@@ -409,6 +463,8 @@ def test_run_experiment_executes_e0_e1_e2_and_returns_public_tables(
         offline = tuple(
             experiment.OfflineScoreWindow(
                 center_s=101.0 + index,
+                aligned_time_s=105.0 + index,
+                archived_time_s=105.0 + index,
                 ref_bpm=ref,
                 archived_final_bpm=history[-1],
             )
@@ -431,6 +487,12 @@ def test_run_experiment_executes_e0_e1_e2_and_returns_public_tables(
     )
 
     assert result.cold_reset_low_lock_samples == ("failure",)
+    e0 = result.candidate_ranking[0]
+    assert e0["e0_mean_signed_bias_threshold_bpm"] == -20.0
+    assert e0["e0_low_lock_fraction_threshold"] == 0.8
+    assert e0["e0_all_d1_mean_signed_bias_le_minus20"] is True
+    assert e0["e0_all_d1_low_lock_fraction_ge_0_8"] is True
+    assert e0["e0_all_d1_sustained_low_lock"] is True
     assert result.window_metrics
     assert result.sample_metrics
     assert result.qualification_metrics
@@ -441,6 +503,10 @@ def test_run_experiment_executes_e0_e1_e2_and_returns_public_tables(
         for name in result.promoted_candidates
     )
     assert (tmp_path / "out" / "candidate_ranking.csv").is_file()
+    assert all(
+        row["aligned_time_s"] == row["archived_time_s"]
+        for row in result.window_metrics
+    )
 
 
 def test_cli_accepts_powershell_expanded_stage_tokens(
@@ -482,22 +548,93 @@ def test_cli_accepts_powershell_expanded_stage_tokens(
     assert captured["stages"] == ("e0", "e1", "e2")
 
 
-def test_archived_csv_is_aligned_through_report_window_index() -> None:
+def test_archived_csv_alignment_uses_time_bias_and_only_past_history() -> None:
     experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
-    old_windows = {
-        5.0: {"window_idx": 0, "center_s": 5.0},
-        6.0: {"window_idx": 1, "center_s": 6.0},
-    }
     archived = [
-        {"center_s": 9.5, "ref_bpm": 80.0, "final_bpm": 90.0},
-        {"center_s": 10.5, "ref_bpm": 81.0, "final_bpm": 91.0},
+        {"time_s": 10.0, "ref_bpm": 80.0, "final_bpm": 90.0},
+        {"time_s": 11.0, "ref_bpm": 81.0, "final_bpm": 91.0},
     ]
+    by_time = {row["time_s"]: row for row in archived}
 
-    aligned = experiment._archived_row_for_source_center(
-        5.0, old_windows, archived
+    offline, history = experiment._align_archived_window(
+        center_s=6.0,
+        time_bias=5.0,
+        archived_by_time=by_time,
+        archived=archived,
     )
 
-    assert aligned == (0, archived[0])
-    assert experiment._archived_row_for_source_center(
-        7.0, old_windows, archived
-    ) is None
+    assert offline.center_s == 6.0
+    assert offline.aligned_time_s == 11.0
+    assert offline.archived_time_s == 11.0
+    assert history == (90.0,)
+
+
+def test_archived_csv_alignment_rejects_truncated_or_missing_time() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    archived = [
+        {"time_s": 10.0, "ref_bpm": 80.0, "final_bpm": 90.0},
+        {"time_s": 11.0, "ref_bpm": 81.0, "final_bpm": 91.0},
+    ]
+    by_time = {row["time_s"]: row for row in archived}
+
+    with pytest.raises(ValueError, match="aligned archived Lite time"):
+        experiment._align_archived_window(
+            center_s=4.0,
+            time_bias=5.0,
+            archived_by_time=by_time,
+            archived=archived,
+        )
+
+
+def test_archived_timeline_scope_excludes_recomputed_head_and_tail() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    archived = [
+        {"time_s": 10.0, "ref_bpm": 80.0, "final_bpm": 90.0},
+        {"time_s": 11.0, "ref_bpm": 81.0, "final_bpm": 91.0},
+    ]
+
+    assert experiment.is_in_archived_timeline(9.0, archived) is False
+    assert experiment.is_in_archived_timeline(10.0, archived) is True
+    assert experiment.is_in_archived_timeline(11.0, archived) is True
+    assert experiment.is_in_archived_timeline(12.0, archived) is False
+
+
+def test_independent_post60_metrics_are_separate_from_handoff_target() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    rows = [
+        {"independent_bpm": 70.0, "handoff_bpm": 100.0, "ref_bpm": 100.0},
+        {"independent_bpm": 75.0, "handoff_bpm": 100.0, "ref_bpm": 100.0},
+        {"independent_bpm": 100.0, "handoff_bpm": 100.0, "ref_bpm": 100.0},
+    ]
+
+    summary = experiment.summarise_independent_post60(rows)
+
+    assert summary["post60_independent_mae_bpm"] == pytest.approx(55.0 / 3.0)
+    assert summary["post60_independent_hit_5bpm"] == pytest.approx(1.0 / 3.0)
+    assert summary["post60_independent_low_lock_fraction"] == pytest.approx(2.0 / 3.0)
+    assert summary["post60_independent_mean_signed_bias_bpm"] == pytest.approx(
+        -55.0 / 3.0
+    )
+
+
+def test_e0_requires_sustained_independent_low_lock_not_one_bad_window() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+
+    assert experiment.is_sustained_cold_reset_low_lock(
+        {
+            "post60_independent_mean_signed_bias_bpm": -25.0,
+            "post60_independent_low_lock_fraction": 0.8,
+        }
+    ) is True
+    assert experiment.is_sustained_cold_reset_low_lock(
+        {
+            "post60_independent_mean_signed_bias_bpm": -5.0,
+            "post60_independent_low_lock_fraction": 0.2,
+        }
+    ) is False
+    assert experiment.is_sustained_cold_reset_low_lock(
+        {
+            "post60_independent_mean_signed_bias_bpm": -25.0,
+            "post60_independent_low_lock_fraction": 0.2,
+        }
+    ) is False

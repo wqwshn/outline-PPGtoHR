@@ -79,6 +79,8 @@ class DualResetExperimentResult:
 @dataclass(frozen=True)
 class OfflineScoreWindow:
     center_s: float
+    aligned_time_s: float
+    archived_time_s: float
     ref_bpm: float
     archived_final_bpm: float
 
@@ -252,11 +254,15 @@ def run_dual_reset_experiment(
         if any(
             row["sample"] == sample
             and row["candidate_name"] == "cold_reset"
-            and bool(row["in_post60"])
-            and float(row["ref_bpm"]) - float(row["independent_bpm"]) > 20.0
-            for row in window_rows
+            and is_sustained_cold_reset_low_lock(row)
+            for row in sample_rows
         )
     )
+    cold_d1_metrics = [
+        row
+        for row in sample_rows
+        if row["candidate_name"] == "cold_reset" and row["cohort"] == "d1"
+    ]
     baseline_ranking: list[dict[str, object]] = [
         {
             "stage": "e0",
@@ -265,6 +271,20 @@ def run_dual_reset_experiment(
             "d1_cold_low_lock_expected_count": len(manifest.development_failures),
             "e0_low_lock_reproduced": set(cold_low_locks)
             == set(manifest.development_failures),
+            "e0_mean_signed_bias_threshold_bpm": -20.0,
+            "e0_low_lock_fraction_threshold": 0.8,
+            "e0_all_d1_mean_signed_bias_le_minus20": all(
+                bool(row["e0_independent_mean_signed_bias_le_minus20"])
+                for row in cold_d1_metrics
+            ),
+            "e0_all_d1_low_lock_fraction_ge_0_8": all(
+                bool(row["e0_independent_low_lock_fraction_ge_0_8"])
+                for row in cold_d1_metrics
+            ),
+            "e0_all_d1_sustained_low_lock": all(
+                bool(row["e0_sustained_low_lock_reproduced"])
+                for row in cold_d1_metrics
+            ),
             "promoted": False,
         }
     ]
@@ -295,6 +315,8 @@ def run_dual_reset_experiment(
         e1_ranked = rank_candidate_metrics(
             [row for row in sample_rows if row["stage"] == "e1"],
             require_qualification=False,
+            expected_d1_samples=manifest.development_failures,
+            expected_d2_samples=manifest.development_controls,
         )
         e1_by_name = {candidate.name: candidate for candidate in e1_candidates}
         for row in e1_ranked:
@@ -337,7 +359,11 @@ def run_dual_reset_experiment(
             if row["candidate_name"] == "cold_reset"
             or row["candidate_name"] in e2_names
         ]
-        for row in rank_candidate_metrics(e2_input):
+        for row in rank_candidate_metrics(
+            e2_input,
+            expected_d1_samples=manifest.development_failures,
+            expected_d2_samples=manifest.development_controls,
+        ):
             row["stage"] = "e2"
             row["selected_e1_candidate"] = selected_name
             e2_ranking.append(row)
@@ -411,10 +437,52 @@ def summarise_candidate_windows(
     }
 
 
+def summarise_independent_post60(
+    rows: Sequence[dict[str, object]],
+) -> dict[str, float | bool]:
+    signed_errors = [
+        float(row["independent_bpm"]) - float(row["ref_bpm"])
+        for row in rows
+        if math.isfinite(float(row["independent_bpm"]))
+        and math.isfinite(float(row["ref_bpm"]))
+    ]
+    if not signed_errors:
+        raise ValueError("no finite independent post60 windows")
+    mean_signed_bias = fmean(signed_errors)
+    low_lock_fraction = sum(error <= -20.0 for error in signed_errors) / len(
+        signed_errors
+    )
+    result: dict[str, float | bool] = {
+        "post60_independent_mae_bpm": fmean(abs(error) for error in signed_errors),
+        "post60_independent_hit_5bpm": sum(
+            abs(error) <= 5.0 for error in signed_errors
+        )
+        / len(signed_errors),
+        "post60_independent_low_lock_fraction": low_lock_fraction,
+        "post60_independent_mean_signed_bias_bpm": mean_signed_bias,
+        "e0_independent_mean_signed_bias_le_minus20": mean_signed_bias <= -20.0,
+        "e0_independent_low_lock_fraction_ge_0_8": low_lock_fraction >= 0.8,
+    }
+    result["e0_sustained_low_lock_reproduced"] = (
+        bool(result["e0_independent_mean_signed_bias_le_minus20"])
+        and bool(result["e0_independent_low_lock_fraction_ge_0_8"])
+    )
+    return result
+
+
+def is_sustained_cold_reset_low_lock(row: dict[str, object]) -> bool:
+    return bool(
+        float(row["post60_independent_mean_signed_bias_bpm"]) <= -20.0
+        and float(row["post60_independent_low_lock_fraction"]) >= 0.8
+    )
+
+
 def rank_candidate_metrics(
     sample_rows: list[dict[str, object]],
     *,
     require_qualification: bool = True,
+    expected_d1_samples: Sequence[str] | None = None,
+    expected_d2_samples: Sequence[str] | None = None,
 ) -> list[dict[str, object]]:
     cold_by_sample = {
         str(row["sample"]): float(row["post60_handoff_mae_bpm"])
@@ -428,11 +496,31 @@ def rank_candidate_metrics(
             if row.get("candidate_name") != "cold_reset"
         }
     )
+    cold_d1_samples = {
+        str(row["sample"])
+        for row in sample_rows
+        if row.get("candidate_name") == "cold_reset" and row.get("cohort") == "d1"
+    }
+    cold_d2_samples = {
+        str(row["sample"])
+        for row in sample_rows
+        if row.get("candidate_name") == "cold_reset" and row.get("cohort") == "d2"
+    }
+    expected_d1 = set(expected_d1_samples or cold_d1_samples)
+    expected_d2 = set(expected_d2_samples or cold_d2_samples)
     ranking: list[dict[str, object]] = []
     for candidate_name in candidate_names:
         rows = [
             row for row in sample_rows if row.get("candidate_name") == candidate_name
         ]
+        observed_d1 = {
+            str(row["sample"]) for row in rows if row.get("cohort") == "d1"
+        }
+        observed_d2 = {
+            str(row["sample"]) for row in rows if row.get("cohort") == "d2"
+        }
+        d1_complete = observed_d1 == expected_d1 and cold_d1_samples == expected_d1
+        d2_complete = observed_d2 == expected_d2 and cold_d2_samples == expected_d2
         d1_improvements = [
             (
                 cold_by_sample[str(row["sample"])]
@@ -464,11 +552,11 @@ def rank_candidate_metrics(
             and float(row["qualification_delay_s"]) <= 20.0
             for row in d1_rows
         )
-        d1_required_within_20s = math.ceil(0.75 * len(d1_rows))
+        d1_required_within_20s = math.ceil(0.75 * len(expected_d1))
         delay_pass = bool(d1_rows) and (
             d1_qualified_within_20s_count >= d1_required_within_20s
         )
-        target_promoted = d1_pass and d2_pass
+        target_promoted = d1_complete and d2_complete and d1_pass and d2_pass
         qualification_promoted = target_promoted and e20_pass and delay_pass
         ranking.append(
             {
@@ -484,9 +572,15 @@ def rank_candidate_metrics(
                 "qualified_e20_count": e20_count,
                 "qualified_e20_zero": e20_pass,
                 "d1_qualified_within_20s_count": d1_qualified_within_20s_count,
-                "d1_qualification_sample_count": len(d1_rows),
+                "d1_qualification_sample_count": len(expected_d1),
                 "d1_qualification_required_within_20s_count": d1_required_within_20s,
                 "d1_at_least_3of4_qualified_within_20s": delay_pass,
+                "d1_expected_sample_count": len(expected_d1),
+                "d1_observed_sample_count": len(observed_d1),
+                "d1_sample_set_complete": d1_complete,
+                "d2_expected_sample_count": len(expected_d2),
+                "d2_observed_sample_count": len(observed_d2),
+                "d2_sample_set_complete": d2_complete,
                 "target_promoted": target_promoted,
                 "qualification_promoted": qualification_promoted,
                 "promoted": (
@@ -515,39 +609,38 @@ def _load_sample_replay(sample: str, lite_batch_dir: Path) -> SampleReplay:
     with hr_path.open("r", encoding="utf-8-sig", newline="") as handle:
         archived = [
             {
-                "center_s": float(row["time_s"]),
+                "time_s": float(row["time_s"]),
                 "ref_bpm": float(row["ref_bpm"]),
                 "final_bpm": float(row["final_bpm"]),
             }
             for row in csv.DictReader(handle)
         ]
-    old_windows_by_center = {
-        round(float(row["center_s"]), 6): row
-        for row in payload.get("window_table", [])
+    archived_by_time = {
+        round(float(row["time_s"]), 6): row for row in archived
     }
+    if not archived:
+        raise ValueError(f"archived Lite HR CSV is empty for {sample}")
     evidence: list[ReplayEvidenceWindow] = []
     offline: list[OfflineScoreWindow] = []
     for row in source.window_table:
         center_s = float(row["center_s"])
         if center_s <= motion_end_s:
             continue
-        aligned = _archived_row_for_source_center(
-            center_s, old_windows_by_center, archived
-        )
-        if aligned is None:
+        aligned_time_s = center_s + float(cfg.time_bias)
+        if not is_in_archived_timeline(aligned_time_s, archived):
             continue
-        archived_idx, archived_row = aligned
+        offline_window, archived_history = _align_archived_window(
+            center_s=center_s,
+            time_bias=float(cfg.time_bias),
+            archived_by_time=archived_by_time,
+            archived=archived,
+        )
         start_s = float(row["start_s"])
         idx_s = int(round(start_s * prepared.fs))
         idx_e = idx_s + int(round(float(cfg.window_seconds) * prepared.fs))
         if idx_s < 0 or idx_e > prepared.ppg.size:
             raise ValueError(f"raw PPG window is out of range at {sample} center={center_s}")
         frame = extract_raw_fft_candidates(prepared.ppg[idx_s:idx_e], prepared.fs)
-        archived_history = tuple(
-            float(previous["final_bpm"])
-            for previous in archived[:archived_idx]
-            if math.isfinite(float(previous["final_bpm"]))
-        )
         evidence.append(
             ReplayEvidenceWindow(
                 center_s=center_s,
@@ -556,13 +649,7 @@ def _load_sample_replay(sample: str, lite_batch_dir: Path) -> SampleReplay:
                 archived_final_history=archived_history,
             )
         )
-        offline.append(
-            OfflineScoreWindow(
-                center_s=center_s,
-                ref_bpm=float(archived_row["ref_bpm"]),
-                archived_final_bpm=float(archived_row["final_bpm"]),
-            )
-        )
+        offline.append(offline_window)
     if not evidence:
         raise ValueError(f"no post-motion windows for {sample}")
     return SampleReplay(
@@ -573,18 +660,52 @@ def _load_sample_replay(sample: str, lite_batch_dir: Path) -> SampleReplay:
     )
 
 
-def _archived_row_for_source_center(
+def is_in_archived_timeline(
+    aligned_time_s: float,
+    archived: Sequence[dict[str, float]],
+) -> bool:
+    if not archived:
+        return False
+    first_time = float(archived[0]["time_s"])
+    last_time = float(archived[-1]["time_s"])
+    return first_time <= float(aligned_time_s) <= last_time
+
+
+def _align_archived_window(
+    *,
     center_s: float,
-    old_windows_by_center: dict[float, dict[str, object]],
+    time_bias: float,
+    archived_by_time: dict[float, dict[str, float]],
     archived: list[dict[str, float]],
-) -> tuple[int, dict[str, float]] | None:
-    old_window = old_windows_by_center.get(round(float(center_s), 6))
-    if old_window is None:
-        return None
-    window_idx = int(old_window["window_idx"])
-    if window_idx < 0 or window_idx >= len(archived):
-        return None
-    return window_idx, archived[window_idx]
+) -> tuple[OfflineScoreWindow, tuple[float, ...]]:
+    aligned_time_s = float(center_s) + float(time_bias)
+    archived_row = archived_by_time.get(round(aligned_time_s, 6))
+    if archived_row is None:
+        raise ValueError(
+            "missing aligned archived Lite time "
+            f"for center={center_s}, time_bias={time_bias}, aligned={aligned_time_s}"
+        )
+    archived_time_s = float(archived_row["time_s"])
+    if abs(archived_time_s - aligned_time_s) > 1e-6:
+        raise ValueError(
+            f"archived time mismatch: aligned={aligned_time_s}, archived={archived_time_s}"
+        )
+    history = tuple(
+        float(previous["final_bpm"])
+        for previous in archived
+        if float(previous["time_s"]) < aligned_time_s
+        and math.isfinite(float(previous["final_bpm"]))
+    )
+    return (
+        OfflineScoreWindow(
+            center_s=float(center_s),
+            aligned_time_s=aligned_time_s,
+            archived_time_s=archived_time_s,
+            ref_bpm=float(archived_row["ref_bpm"]),
+            archived_final_bpm=float(archived_row["final_bpm"]),
+        ),
+        history,
+    )
 
 
 def _append_candidate_results(
@@ -617,6 +738,8 @@ def _append_candidate_results(
                     "stage": candidate.stage,
                     "candidate_name": candidate.name,
                     "ref_bpm": offline.ref_bpm,
+                    "aligned_time_s": offline.aligned_time_s,
+                    "archived_time_s": offline.archived_time_s,
                     "archived_final_bpm": offline.archived_final_bpm,
                     "in_post60": offline.center_s
                     <= replay.motion_end_s + 60.0,
@@ -639,6 +762,7 @@ def _append_candidate_results(
             abs(float(row["handoff_bpm"]) - float(row["ref_bpm"]))
             for row in post60
         )
+        independent_summary = summarise_independent_post60(post60)
         common = {
             "sample": sample,
             "cohort": cohort_by_sample[sample],
@@ -649,6 +773,7 @@ def _append_candidate_results(
             {
                 **common,
                 **summary,
+                **independent_summary,
                 "post60_handoff_mae_bpm": post60_mae,
                 "post60_window_count": len(post60),
             }
