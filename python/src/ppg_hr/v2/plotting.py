@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import dataclasses
+import json
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -35,6 +36,8 @@ class V2PlotArtefacts:
     figure_png: Path
     error_csv: Path
     hr_csv: Path
+    window_trace_csv: Path | None = None
+    history_csv: Path | None = None
     status: str = "ok"
     error: str = ""
 
@@ -256,6 +259,8 @@ def render_v2_report(
     fig_base = fig_path.with_suffix("")
     err_path = safe_output_path(csv_out, f"{prefix}-v2-error.csv")
     hr_path = safe_output_path(csv_out, f"{prefix}-v2-hr.csv")
+    trace_path = safe_output_path(csv_out, f"{prefix}-v2-window-trace.csv")
+    history_path = safe_output_path(csv_out, f"{prefix}-v2-history.csv")
     ref_data = _load_ref_data(str(_payload_value(payload, "ref_path", default="")))
 
     comparison_curves = _compute_comparison_curves(
@@ -278,6 +283,8 @@ def render_v2_report(
         fft_label=fft_label,
         ref_data=ref_data,
     )
+    _write_window_trace_csv(trace_path, payload.get("window_table", []))
+    _write_dict_rows(history_path, payload.get("history", []))
     _plot_hr(
         fig_base, hr, key, order, payload, adaptive_label,
         plot_curves=plot_curves, comparison_curves=comparison_curves,
@@ -289,6 +296,8 @@ def render_v2_report(
         figure_png=fig_path,
         error_csv=err_path,
         hr_csv=hr_path,
+        window_trace_csv=trace_path,
+        history_csv=history_path,
     )
 
 
@@ -428,7 +437,6 @@ def _plot_hr(
     if comp_curves:
         for comp in comp_curves:
             comp_order = comp["order"]
-            comp_hr = np.asarray(comp["hr"], dtype=float)
             comp_label = str(comp["label"])
             comp_final_full = _comparison_curve_final_bpm(hr, comp)
             if comp_final_full.size:
@@ -511,6 +519,42 @@ def _write_hr_csv(
                 else:
                     aligned_row.append(float("nan"))
             writer.writerow(aligned_row)
+
+
+def _write_window_trace_csv(path: Path, rows: object) -> None:
+    selected = [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+    preferred = [
+        "window_idx", "start_s", "center_s", "ref_hr_bpm", "fft_hr_bpm",
+        "archived_final_bpm", "independent_reset_bpm", "handoff_reset_bpm",
+        "switch_final_bpm", "candidate_qualified", "qualification_reason",
+        "switch_target_ready", "switch_target_readiness_reason",
+        "bootstrap_admissible", "bootstrap_reason", "switch_state",
+        "switch_guard_reason", "switch_reason_detail", "reliable",
+        "used_adaptive", "raw_top5", "independent_reset_trace",
+        "handoff_reset_trace",
+    ]
+    with path.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=preferred, extrasaction="ignore")
+        writer.writeheader()
+        for row in selected:
+            writer.writerow({key: _csv_cell(row.get(key, "")) for key in preferred})
+
+
+def _write_dict_rows(path: Path, rows: object) -> None:
+    selected = [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+    fields = sorted({str(key) for row in selected for key in row})
+    with path.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        if fields:
+            writer.writeheader()
+            for row in selected:
+                writer.writerow({key: _csv_cell(row.get(key, "")) for key in fields})
+
+
+def _csv_cell(value: object) -> object:
+    if isinstance(value, dict | list | tuple):
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    return value
 
 
 def _base_final_bpm_on_mask(hr: np.ndarray) -> np.ndarray:
@@ -837,7 +881,6 @@ def _figure_error_rows(
     fft_label: str = "FFT",
 ) -> list[tuple[str, float, float]]:
     curves = _normalise_plot_curves(plot_curves)
-    t_aligned = hr[:, 0] + time_bias
     ref = _aligned_reference_bpm(hr, time_bias)
 
     motion_flag = (

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, Sequence
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -28,6 +29,10 @@ from .algorithm_presets import (
     DirectionalTrackingParams,
     normalise_v2_algorithm_preset,
     v2_trace_rescue_candidates,
+)
+from .post_motion_dual_reset_runtime import (
+    DualResetRuntimeWindow,
+    apply_frozen_dual_reset,
 )
 from .post_motion_dynamic_guard_policy import (
     dynamic_guard_metadata_from_run_config,
@@ -2040,6 +2045,64 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
             }
         )
 
+    dual_reset_metadata = {
+        "enabled": bool(cfg.post_motion_dual_reset_enable),
+        "status": "disabled",
+    }
+    if bool(cfg.post_motion_dual_reset_enable) and motion_segment is not None and HR.size:
+        baseline_final = np.where(HR[:, 5] > 0.5, HR[:, 3], HR[:, 2])
+        runtime_windows: list[DualResetRuntimeWindow] = []
+        for idx, row in enumerate(window_table):
+            center_s = float(row["center_s"])
+            if center_s <= float(motion_segment["end_s"]):
+                continue
+            idx_s = int(round(float(row["start_s"]) * fs))
+            idx_e = idx_s + int(round(float(cfg.window_seconds) * fs))
+            if idx_s < 0 or idx_e > prepared.ppg.size:
+                raise ValueError(
+                    "dual-reset raw PPG window out of range "
+                    f"at index={idx}, center={center_s}"
+                )
+            history = tuple(
+                float(value)
+                for value in baseline_final[:idx]
+                if math.isfinite(float(value))
+            )
+            runtime_windows.append(
+                DualResetRuntimeWindow(
+                    window_idx=idx,
+                    center_s=center_s,
+                    reliable=bool(row.get("reliable", True)),
+                    archived_final_bpm=float(baseline_final[idx]),
+                    archived_final_history=history,
+                    candidates=extract_raw_fft_candidates(
+                        prepared.ppg[idx_s:idx_e], prepared.fs
+                    ),
+                )
+            )
+        dual_result = apply_frozen_dual_reset(
+            runtime_windows,
+            motion_end_s=float(motion_segment["end_s"]),
+            baseline_final_bpm=baseline_final,
+        )
+        HR[:, 3] = dual_result.final_bpm
+        trace_by_idx = {
+            int(row["window_idx"]): row for row in dual_result.window_rows
+        }
+        for idx, row in enumerate(window_table):
+            trace_row = trace_by_idx.get(idx)
+            if trace_row is None:
+                continue
+            row.update(trace_row)
+            row["final_hr_bpm"] = float(dual_result.final_bpm[idx])
+            # The adapter deliberately consumes an adaptive-informed handoff path.
+            # Mark it as the selected Final source so report rendering does not
+            # replace it with the independent FFT column.
+            if bool(trace_row.get("bootstrap_admissible")):
+                HR[idx, 5] = 1.0
+                row["used_adaptive"] = True
+        dual_reset_metadata = dual_result.metadata
+
     HR = _apply_v2_analysis_scope(HR, cfg, motion_segment)
 
     err_stats = _error_stats(HR, cfg, motion_segment, window_table, ref_data=ref_data)
@@ -2120,6 +2183,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
             reset_fft_applied_windows=reset_fft_applied_windows,
             switch_events=post_motion_dynamic_guard_events,
         ),
+        "post_motion_dual_reset": dual_reset_metadata,
     }
     return V2SolverResult(
         HR=HR,

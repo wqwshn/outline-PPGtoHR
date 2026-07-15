@@ -54,6 +54,7 @@ class V2RunConfig:
     post_motion_dynamic_guard_gap_rescue_min_hits: int = 3
     post_motion_dynamic_guard_gap_rescue_fft_stable_windows: int = 3
     post_motion_dynamic_guard_gap_rescue_fft_stable_bpm: float = 6.0
+    post_motion_dual_reset_enable: bool = False
     max_recovery_seconds: float = 30.0
     recovery_trigger_bpm: float = 20.0
     pre_motion_context_seconds: float = 30.0
