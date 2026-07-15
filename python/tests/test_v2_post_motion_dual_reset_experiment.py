@@ -151,16 +151,43 @@ def test_audit_legacy_batch_maps_source_motion_end_to_archived_time(
         writer.writeheader()
         writer.writerows(
             (
-                {"time_s": 10.0, "ref_bpm": 100.0, "final_bpm": 0.0, "fft_bpm": 0.0},
-                {"time_s": 15.0, "ref_bpm": 100.0, "final_bpm": 100.0, "fft_bpm": 100.0},
-                {"time_s": 74.0, "ref_bpm": 100.0, "final_bpm": 100.0, "fft_bpm": 100.0},
+                {
+                    "time_s": 13.0,
+                    "ref_bpm": 100.0,
+                    "final_bpm": 0.0,
+                    "fft_bpm": 0.0,
+                },
+                {
+                    "time_s": 14.0,
+                    "ref_bpm": 100.0,
+                    "final_bpm": 0.0,
+                    "fft_bpm": 0.0,
+                },
+                {
+                    "time_s": 15.0,
+                    "ref_bpm": 100.0,
+                    "final_bpm": 100.0,
+                    "fft_bpm": 100.0,
+                },
+                {
+                    "time_s": 74.0,
+                    "ref_bpm": 100.0,
+                    "final_bpm": 80.0,
+                    "fft_bpm": 80.0,
+                },
+                {
+                    "time_s": 75.0,
+                    "ref_bpm": 100.0,
+                    "final_bpm": 0.0,
+                    "fft_bpm": 0.0,
+                },
             )
         )
 
     baseline = experiment.audit_legacy_batch(manifest, tmp_path)[0]
 
-    assert baseline.post60_final_mae_bpm == 0.0
-    assert baseline.post60_fft_mae_bpm == 0.0
+    assert baseline.post60_final_mae_bpm == 10.0
+    assert baseline.post60_fft_mae_bpm == 10.0
 
 
 def test_e1_candidate_matrix_contains_only_declared_mechanism_ablations() -> None:
