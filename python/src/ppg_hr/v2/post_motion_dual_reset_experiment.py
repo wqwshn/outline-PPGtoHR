@@ -56,6 +56,7 @@ class DualResetCandidate:
     min_amp_ratio: float
     max_held_previous: int
     require_reliable: bool = True
+    controlled_reanchor: bool = False
 
 
 @dataclass(frozen=True)
@@ -151,6 +152,22 @@ def build_e2_candidates(
     return tuple(candidates)
 
 
+def build_n1_candidate() -> DualResetCandidate:
+    """Return the predeclared minimal controlled-reanchor target."""
+    return DualResetCandidate(
+        stage="n1",
+        name="controlled_reanchor_minimal",
+        mechanism="trend_persistence",
+        prior_half_life_s=10.0,
+        hits_required=3,
+        qualification_windows=4,
+        trajectory_tolerance_bpm=6.0,
+        min_amp_ratio=0.25,
+        max_held_previous=0,
+        controlled_reanchor=True,
+    )
+
+
 def replay_candidate_frames(
     candidate: DualResetCandidate,
     evidence: Sequence[ReplayEvidenceWindow],
@@ -163,6 +180,7 @@ def replay_candidate_frames(
         trajectory_tolerance_bpm=candidate.trajectory_tolerance_bpm,
         min_amp_ratio=candidate.min_amp_ratio,
         max_held_previous=candidate.max_held_previous,
+        controlled_reanchor=candidate.controlled_reanchor,
     )
     rows: list[dict[str, object]] = []
     for window in evidence:
@@ -207,6 +225,11 @@ def replay_candidate_frames(
                 "switch_target_revoked_reason": (
                     step.switch_target_readiness.revoked_reason
                 ),
+                "reanchor_event": bool(
+                    step.handoff_trace.get("reanchor_event", False)
+                ),
+                "reanchor_from_bpm": step.handoff_trace.get("reanchor_from_bpm"),
+                "reanchor_to_bpm": step.handoff_trace.get("reanchor_to_bpm"),
                 "archived_final_anchor_bpm": step.handoff_trace.get(
                     "final_anchor_bpm"
                 ),
@@ -241,7 +264,7 @@ def run_dual_reset_experiment(
     stages: Sequence[str] = ("e0", "e1", "e2"),
 ) -> DualResetExperimentResult:
     requested = tuple(str(stage).lower() for stage in stages)
-    unknown = set(requested) - {"e0", "e1", "e2"}
+    unknown = set(requested) - {"e0", "e1", "e2", "n1"}
     if unknown:
         raise ValueError(f"unknown experiment stages: {sorted(unknown)}")
     manifest = load_hb_manifest(Path(manifest_path))
@@ -391,11 +414,55 @@ def run_dual_reset_experiment(
             for row in e2_ranking
             if bool(row["promoted"])
         )
+    n1_ranking: list[dict[str, object]] = []
+    if "n1" in requested:
+        n1_candidate = build_n1_candidate()
+        _append_candidate_results(
+            n1_candidate,
+            replays,
+            cohort_by_sample,
+            window_rows,
+            sample_rows,
+            qualification_rows,
+        )
+        n1_rows = [row for row in sample_rows if row["stage"] == "n1"]
+        d1_rows = [row for row in n1_rows if row["cohort"] == "d1"]
+        d2_rows = [row for row in n1_rows if row["cohort"] == "d2"]
+        d1_pass_count = sum(
+            math.isfinite(float(row["switch_target_ready_delay_s"]))
+            and float(row["switch_target_ready_delay_s"]) <= 20.0
+            and float(row["ready_onward_handoff_mae_bpm"]) <= 3.0
+            and int(row["ready_onward_e20_count"]) == 0
+            for row in d1_rows
+        )
+        n1_ranking.append(
+            {
+                "stage": "n1",
+                "candidate_name": n1_candidate.name,
+                "d1_target_pass_count": d1_pass_count,
+                "d1_target_expected_count": len(d1_rows),
+                "d1_at_least_3of4_target_pass": d1_pass_count >= 3,
+                "d2_all_post60_regression_le_1bpm": all(
+                    float(row["post60_handoff_regression_bpm"]) <= 1.0
+                    for row in d2_rows
+                ),
+                "minimal_target_sufficient_for_freeze_review": (
+                    d1_pass_count >= 3
+                    and all(
+                        float(row["post60_handoff_regression_bpm"]) <= 1.0
+                        for row in d2_rows
+                    )
+                ),
+                "promoted": False,
+            }
+        )
     result = DualResetExperimentResult(
         window_metrics=tuple(window_rows),
         sample_metrics=tuple(sample_rows),
         qualification_metrics=tuple(qualification_rows),
-        candidate_ranking=tuple(baseline_ranking + e1_ranking + e2_ranking),
+        candidate_ranking=tuple(
+            baseline_ranking + e1_ranking + e2_ranking + n1_ranking
+        ),
         promoted_candidates=final_promoted,
         cold_reset_low_lock_samples=cold_low_locks,
     )
@@ -433,6 +500,20 @@ def summarise_candidate_windows(
         for row in rows
         if bool(row.get("qualified")) and math.isfinite(float(row["center_s"]))
     ]
+    first_ready_index = next(
+        (index for index, row in enumerate(rows) if bool(row.get("switch_target_ready"))),
+        None,
+    )
+    ready_onward = [] if first_ready_index is None else rows[first_ready_index:]
+    ready_onward_errors = [
+        abs(float(row["handoff_bpm"]) - float(row["ref_bpm"]))
+        for row in ready_onward
+        if math.isfinite(float(row["handoff_bpm"]))
+        and math.isfinite(float(row["ref_bpm"]))
+    ]
+    first_ready_time = (
+        None if first_ready_index is None else float(rows[first_ready_index]["center_s"])
+    )
     return {
         "reset_target_mae_bpm": (
             fmean(target_errors) if target_errors else float("nan")
@@ -453,6 +534,25 @@ def summarise_candidate_windows(
             else float("nan")
         ),
         "qualified_e20_count": sum(error > 20.0 for error in qualified_errors),
+        "switch_target_ready_delay_s": (
+            max(0.0, first_ready_time - float(motion_end_s))
+            if first_ready_time is not None
+            else float("nan")
+        ),
+        "ready_onward_handoff_mae_bpm": (
+            fmean(ready_onward_errors) if ready_onward_errors else float("nan")
+        ),
+        "ready_onward_e10_count": sum(
+            error > 10.0 for error in ready_onward_errors
+        ),
+        "ready_onward_e20_count": sum(
+            error > 20.0 for error in ready_onward_errors
+        ),
+        "ready_onward_window_count": len(ready_onward_errors),
+        "reanchor_count": sum(bool(row.get("reanchor_event")) for row in rows),
+        "switch_target_revocation_count": sum(
+            row.get("switch_target_revoked_reason") is not None for row in rows
+        ),
     }
 
 
@@ -784,6 +884,10 @@ def _append_candidate_results(
             abs(float(row["handoff_bpm"]) - float(row["ref_bpm"]))
             for row in post60
         )
+        archived_final_mae = fmean(
+            abs(float(row["archived_final_bpm"]) - float(row["ref_bpm"]))
+            for row in post60
+        )
         independent_summary = summarise_independent_post60(post60)
         common = {
             "sample": sample,
@@ -797,6 +901,8 @@ def _append_candidate_results(
                 **summary,
                 **independent_summary,
                 "post60_handoff_mae_bpm": post60_mae,
+                "post60_archived_final_mae_bpm": archived_final_mae,
+                "post60_handoff_regression_bpm": post60_mae - archived_final_mae,
                 "post60_window_count": len(post60),
             }
         )

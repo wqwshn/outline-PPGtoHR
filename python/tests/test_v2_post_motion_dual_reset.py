@@ -228,6 +228,69 @@ def test_remote_candidate_identity_change_revokes_old_readiness() -> None:
     assert changed.switch_target_readiness.stable_hits == 0
 
 
+def test_controlled_reanchor_moves_only_handoff_after_causal_evidence() -> None:
+    control = DualResetTracker(mechanism="trend_persistence")
+    reanchored = DualResetTracker(
+        mechanism="trend_persistence",
+        controlled_reanchor=True,
+    )
+    final_history = (168.0, 166.0, 164.0)
+    initial = DualResetInput(0.0, _frame((50.0, 1.0)), True, final_history)
+    control.step(initial)
+    reanchored.step(initial)
+
+    control_results = []
+    reanchored_results = []
+    for index, bpm in enumerate((145.0, 144.0, 143.0, 142.0, 141.0), start=1):
+        window = DualResetInput(
+            float(index),
+            _frame((bpm, 1.0), (55.0, 0.5)),
+            True,
+            final_history,
+        )
+        control_results.append(control.step(window))
+        reanchored_results.append(reanchored.step(window))
+
+    events = [
+        result
+        for result in reanchored_results
+        if result.handoff_trace["reanchor_event"]
+    ]
+    assert len(events) == 1
+    assert events[0].handoff_bpm == events[0].handoff_trace[
+        "selected_candidate_bpm"
+    ]
+    assert events[0].independent_bpm == control_results[2].independent_bpm
+    assert events[0].switch_target_readiness.ready is False
+    assert reanchored_results[-1].switch_target_readiness.ready is True
+    assert control_results[-1].handoff_bpm < 70.0
+
+
+def test_controlled_reanchor_rejects_candidate_conflicting_with_causal_prior() -> None:
+    tracker = DualResetTracker(
+        mechanism="trend_persistence",
+        controlled_reanchor=True,
+        reanchor_prior_guard_bpm=45.0,
+    )
+    final_history = (168.0, 166.0, 164.0)
+    tracker.step(DualResetInput(0.0, _frame((50.0, 1.0)), True, final_history))
+
+    results = [
+        tracker.step(
+            DualResetInput(
+                float(index),
+                _frame((95.0, 1.0), (55.0, 0.5)),
+                True,
+                final_history,
+            )
+        )
+        for index in range(1, 6)
+    ]
+
+    assert not any(result.handoff_trace["reanchor_event"] for result in results)
+    assert results[-1].candidate_qualification.reason == "causal_prior_conflict"
+
+
 def test_handoff_abandons_wrong_prior_for_persistent_remote_raw_top_peak() -> None:
     tracker = DualResetTracker()
     results = []

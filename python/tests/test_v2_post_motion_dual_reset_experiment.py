@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 from dataclasses import FrozenInstanceError, asdict
 from importlib import import_module
 from pathlib import Path
@@ -281,7 +282,12 @@ def test_window_summary_separates_target_selected_and_qualification_metrics() ->
     assert summary["qualification_precision"] == pytest.approx(0.5)
     assert summary["qualification_delay_s"] == pytest.approx(2.0)
     assert summary["qualified_e20_count"] == 1
-    assert summary == without_switch
+    for key, value in summary.items():
+        other = without_switch[key]
+        if isinstance(value, float) and math.isnan(value):
+            assert isinstance(other, float) and math.isnan(other)
+        else:
+            assert value == other
 
 
 def test_candidate_ranking_applies_named_per_sample_d1_d2_gates() -> None:
@@ -512,7 +518,7 @@ def test_candidate_replay_exports_readiness_trace() -> None:
             reliable=True,
             archived_final_history=final_history,
         )
-        for index, bpm in enumerate((145.0, 144.0, 143.0, 142.0), start=1)
+        for index, bpm in enumerate((145.0, 144.0, 143.0, 142.0, 141.0), start=1)
     )
 
     rows = experiment.replay_candidate_frames(candidate, evidence)
@@ -522,6 +528,93 @@ def test_candidate_replay_exports_readiness_trace() -> None:
     assert rows[-1]["switch_target_state_age_windows"] >= 1
     assert "switch_target_established_reason" in rows[-1]
     assert "switch_target_revoked_reason" in rows[-1]
+
+
+def test_candidate_replay_exports_controlled_reanchor_trace() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    candidate = experiment.DualResetCandidate(
+        stage="n1",
+        name="controlled_reanchor",
+        mechanism="trend_persistence",
+        prior_half_life_s=10.0,
+        hits_required=3,
+        qualification_windows=4,
+        trajectory_tolerance_bpm=6.0,
+        min_amp_ratio=0.25,
+        max_held_previous=0,
+        controlled_reanchor=True,
+    )
+    final_history = (168.0, 166.0, 164.0)
+    evidence = [
+        experiment.ReplayEvidenceWindow(
+            center_s=0.0,
+            candidates=_candidate_frame((50.0, 1.0)),
+            reliable=True,
+            archived_final_history=final_history,
+        )
+    ]
+    evidence.extend(
+        experiment.ReplayEvidenceWindow(
+            center_s=float(index),
+            candidates=_candidate_frame((bpm, 1.0), (55.0, 0.5)),
+            reliable=True,
+            archived_final_history=final_history,
+        )
+        for index, bpm in enumerate(
+            (145.0, 144.0, 143.0, 142.0, 141.0), start=1
+        )
+    )
+
+    rows = experiment.replay_candidate_frames(candidate, evidence)
+
+    assert rows[-3]["reanchor_event"] is True
+    assert rows[-3]["switch_target_ready"] is False
+    assert rows[-1]["switch_target_ready"] is True
+
+
+def test_target_metrics_start_at_first_switch_target_ready() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    rows = [
+        {
+            "center_s": 101.0,
+            "handoff_bpm": 50.0,
+            "ref_bpm": 100.0,
+            "selected_candidate_bpm": 100.0,
+            "qualified": True,
+            "switch_target_ready": False,
+            "reanchor_event": True,
+            "switch_target_revoked_reason": None,
+        },
+        {
+            "center_s": 102.0,
+            "handoff_bpm": 102.0,
+            "ref_bpm": 100.0,
+            "selected_candidate_bpm": 101.0,
+            "qualified": True,
+            "switch_target_ready": True,
+            "reanchor_event": False,
+            "switch_target_revoked_reason": None,
+        },
+        {
+            "center_s": 103.0,
+            "handoff_bpm": 104.0,
+            "ref_bpm": 100.0,
+            "selected_candidate_bpm": 103.0,
+            "qualified": True,
+            "switch_target_ready": True,
+            "reanchor_event": False,
+            "switch_target_revoked_reason": None,
+        },
+    ]
+
+    summary = experiment.summarise_candidate_windows(rows, motion_end_s=100.0)
+
+    assert summary["switch_target_ready_delay_s"] == 2.0
+    assert summary["ready_onward_handoff_mae_bpm"] == pytest.approx(3.0)
+    assert summary["ready_onward_e10_count"] == 0
+    assert summary["ready_onward_e20_count"] == 0
+    assert summary["ready_onward_window_count"] == 2
+    assert summary["reanchor_count"] == 1
 
 
 def test_candidate_replay_can_disable_reliability_gate(

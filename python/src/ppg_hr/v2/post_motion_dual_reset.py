@@ -80,6 +80,8 @@ class DualResetTracker:
         max_held_previous: int = 0,
         readiness_tolerance_bpm: float = 6.0,
         readiness_hits_required: int = 2,
+        controlled_reanchor: bool = False,
+        reanchor_prior_guard_bpm: float = 45.0,
     ) -> None:
         if prior_half_life_s not in (5.0, 10.0, 15.0):
             raise ValueError("prior_half_life_s must be one of 5, 10, or 15 seconds")
@@ -99,6 +101,8 @@ class DualResetTracker:
             raise ValueError("readiness_tolerance_bpm must be positive")
         if readiness_hits_required <= 0:
             raise ValueError("readiness_hits_required must be positive")
+        if reanchor_prior_guard_bpm <= 0.0:
+            raise ValueError("reanchor_prior_guard_bpm must be positive")
         self._tracking = tracking or DirectionalTrackingParams(
             range_up_bpm=20.0,
             range_down_bpm=25.0,
@@ -122,6 +126,8 @@ class DualResetTracker:
         self._max_held_previous = int(max_held_previous)
         self._readiness_tolerance_bpm = float(readiness_tolerance_bpm)
         self._readiness_hits_required = int(readiness_hits_required)
+        self._controlled_reanchor = bool(controlled_reanchor)
+        self._reanchor_prior_guard_bpm = float(reanchor_prior_guard_bpm)
         self._observed_windows = 0
         self._previous_independent_bpm: float | None = None
         self._previous_handoff_bpm: float | None = None
@@ -192,6 +198,7 @@ class DualResetTracker:
             initial_selection=handoff_selection,
         )
 
+        raw_top_persistent = False
         if not peaks:
             self._raw_top_track.clear()
         else:
@@ -255,12 +262,30 @@ class DualResetTracker:
         )
         stable_hits = sum(self._qualification_hits)
         enough_history = self._observed_windows >= self._qualification_windows
+        prior_conflict = bool(
+            self._controlled_reanchor
+            and predicted_prior is not None
+            and selected_candidate is not None
+            and abs(float(selected_candidate) - predicted_prior)
+            > self._reanchor_prior_guard_bpm
+        )
+        persistent_candidate_evidence = bool(
+            self._controlled_reanchor
+            and self._persistence_enabled
+            and raw_top_persistent
+            and peaks
+            and selected_candidate is not None
+            and abs(float(selected_candidate) - peaks[0][0])
+            <= self._trajectory_tolerance_bpm
+            and not prior_conflict
+        )
         qualified = bool(
             enough_history
-            and stable_hits >= self._hits_required
+            and (stable_hits >= self._hits_required or persistent_candidate_evidence)
             and input.reliable
             and amp_ratio >= self._min_amp_ratio
             and held_previous_count <= self._max_held_previous
+            and not prior_conflict
         )
         if not input.reliable:
             reason = "unreliable"
@@ -270,10 +295,30 @@ class DualResetTracker:
             reason = "held_previous"
         elif amp_ratio < self._min_amp_ratio:
             reason = "weak_peak"
+        elif prior_conflict:
+            reason = "causal_prior_conflict"
+        elif persistent_candidate_evidence:
+            reason = "qualified_persistent_raw_top"
         elif stable_hits < self._hits_required:
             reason = "trajectory_unstable"
         else:
             reason = "qualified"
+
+        reanchor_event = False
+        reanchor_from_bpm: float | None = None
+        if (
+            self._controlled_reanchor
+            and qualified
+            and persistent_candidate_evidence
+            and selected_candidate is not None
+            and abs(float(selected_candidate) - handoff_bpm)
+            > self._readiness_tolerance_bpm
+        ):
+            reanchor_event = True
+            reanchor_from_bpm = handoff_bpm
+            handoff_bpm = float(selected_candidate)
+            handoff_trace = {**handoff_trace, "limited_bpm": handoff_bpm}
+            self._readiness_hits.clear()
 
         candidate_handoff_gap = (
             None
@@ -282,6 +327,7 @@ class DualResetTracker:
         )
         readiness_evidence = bool(
             qualified
+            and not reanchor_event
             and candidate_handoff_gap is not None
             and candidate_handoff_gap <= self._readiness_tolerance_bpm
             and not held_previous
@@ -369,6 +415,9 @@ class DualResetTracker:
                 "prior_weight": prior_weight,
                 "prior_score_weight": 0.75 * prior_weight,
                 "mechanism": self._mechanism,
+                "reanchor_event": reanchor_event,
+                "reanchor_from_bpm": reanchor_from_bpm,
+                "reanchor_to_bpm": handoff_bpm if reanchor_event else None,
             },
         )
 
