@@ -38,8 +38,8 @@ from .post_motion_dynamic_guard_policy import (
 )
 from .raw_fft_candidates import (
     RawFftCandidateFrame,
-    _frame_from_spectrum,
     extract_raw_fft_candidates,
+    find_candidate_peak_indices,
 )
 from .reference_groups import (
     channel_names_for_group,
@@ -1281,13 +1281,28 @@ def _candidate_peak_spectrum(signal: np.ndarray, fs: float) -> tuple[np.ndarray,
     return frame.frequencies_hz, frame.amplitudes
 
 
+_DEFAULT_CANDIDATE_PEAK_SPECTRUM = _candidate_peak_spectrum
+
+
 def _raw_fft_candidate_frame(signal: np.ndarray, fs: float) -> RawFftCandidateFrame:
     """Build a frame through the legacy spectrum seam used by solver tests."""
+
+    if _candidate_peak_spectrum is _DEFAULT_CANDIDATE_PEAK_SPECTRUM:
+        return extract_raw_fft_candidates(signal, fs)
 
     freqs, amps = _candidate_peak_spectrum(signal, fs)
     frequencies_hz = np.asarray(freqs, dtype=float)
     amplitudes = np.asarray(amps, dtype=float).copy()
-    return _frame_from_spectrum(frequencies_hz, amplitudes)
+    peak_indices = find_candidate_peak_indices(frequencies_hz, amplitudes)
+    ordered_peak_indices = peak_indices[
+        np.argsort(-amplitudes[peak_indices], kind="stable")
+    ]
+    return RawFftCandidateFrame(
+        frequencies_hz=frequencies_hz,
+        amplitudes=amplitudes,
+        peak_indices=peak_indices,
+        ordered_peak_indices=ordered_peak_indices,
+    )
 
 
 def _preferred_candidate_indices(

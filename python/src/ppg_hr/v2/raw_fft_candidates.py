@@ -39,11 +39,7 @@ def _frame_from_spectrum(
     frequencies_hz: np.ndarray,
     amplitudes: np.ndarray,
 ) -> RawFftCandidateFrame:
-    peak_indices = _candidate_peak_indices(
-        frequencies_hz,
-        amplitudes,
-        threshold_ratio=_FULL_CANDIDATE_PEAK_THRESHOLD_RATIO,
-    )
+    peak_indices = find_candidate_peak_indices(frequencies_hz, amplitudes)
     ordered_peak_indices = peak_indices[
         np.argsort(-amplitudes[peak_indices], kind="stable")
     ]
@@ -70,12 +66,14 @@ def _candidate_peak_spectrum(signal: np.ndarray, fs: float) -> tuple[np.ndarray,
     return freq[band], amp[band]
 
 
-def _candidate_peak_indices(
+def find_candidate_peak_indices(
     freqs: np.ndarray,
     amps: np.ndarray,
     *,
-    threshold_ratio: float,
+    threshold_ratio: float = _FULL_CANDIDATE_PEAK_THRESHOLD_RATIO,
 ) -> np.ndarray:
+    """Return finite local peaks above the relative candidate threshold."""
+
     if freqs.size == 0 or amps.size == 0:
         return np.asarray([], dtype=int)
     peaks, _ = find_peaks(amps)
