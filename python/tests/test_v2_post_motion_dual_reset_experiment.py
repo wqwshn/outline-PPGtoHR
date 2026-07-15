@@ -5,6 +5,7 @@ import json
 from dataclasses import FrozenInstanceError, asdict
 from importlib import import_module
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -87,6 +88,10 @@ def test_load_hb_manifest_rejects_invalid_cohorts(
         experiment.load_hb_manifest(path)
 
 
+@pytest.mark.skipif(
+    not LEGACY_LITE_BATCH.exists(),
+    reason="frozen HB Lite batch is not available",
+)
 def test_audit_legacy_batch_freezes_real_hb_baselines() -> None:
     experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
     manifest = experiment.load_hb_manifest(MANIFEST_PATH)
@@ -108,6 +113,54 @@ def test_audit_legacy_batch_freezes_real_hb_baselines() -> None:
     assert by_sample["kaihe2"].switch_reason == "gap_rescue"
     assert by_sample["kaihe2"].switch_jump_bpm is not None
     assert by_sample["kaihe2"].switch_jump_bpm < -60.0
+
+
+def test_audit_legacy_batch_maps_source_motion_end_to_archived_time(
+    tmp_path: Path,
+) -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    manifest = experiment.HbExperimentManifest(
+        development_failures=("sample",),
+        development_controls=(),
+        frozen_normal_gate=(),
+        hard_switch_sentinels=(),
+        full_batch_only=(),
+        all_samples=("sample",),
+    )
+    json_dir = tmp_path / "json"
+    csv_dir = tmp_path / "csv"
+    json_dir.mkdir()
+    csv_dir.mkdir()
+    (json_dir / "sample_fixture-v2.json").write_text(
+        json.dumps(
+            {
+                "motion_segment": {"end_s": 10.0},
+                "time_bias": 4.0,
+                "post_motion_dynamic_guard": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    with (csv_dir / "sample_fixture-v2-hr.csv").open(
+        "w", encoding="utf-8-sig", newline=""
+    ) as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=("time_s", "ref_bpm", "final_bpm", "fft_bpm"),
+        )
+        writer.writeheader()
+        writer.writerows(
+            (
+                {"time_s": 10.0, "ref_bpm": 100.0, "final_bpm": 0.0, "fft_bpm": 0.0},
+                {"time_s": 15.0, "ref_bpm": 100.0, "final_bpm": 100.0, "fft_bpm": 100.0},
+                {"time_s": 74.0, "ref_bpm": 100.0, "final_bpm": 100.0, "fft_bpm": 100.0},
+            )
+        )
+
+    baseline = experiment.audit_legacy_batch(manifest, tmp_path)[0]
+
+    assert baseline.post60_final_mae_bpm == 0.0
+    assert baseline.post60_fft_mae_bpm == 0.0
 
 
 def test_e1_candidate_matrix_contains_only_declared_mechanism_ablations() -> None:
@@ -401,6 +454,61 @@ def test_candidate_replay_uses_archived_final_history_without_reference_hr() -> 
     assert rows[0]["archived_final_anchor_bpm"] == pytest.approx(136.0)
     assert rows[0]["raw_frame_identity"] == id(frame)
     assert "ref_bpm" not in rows[0]
+
+
+def test_candidate_replay_can_disable_reliability_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    captured = []
+
+    class FakeTracker:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        def step(self, tracker_input):
+            captured.append(tracker_input)
+            qualification = SimpleNamespace(
+                qualified=False,
+                reason="test",
+                stable_hits=0,
+                observed_windows=1,
+                selected_amp_ratio=1.0,
+                held_previous_count=0,
+            )
+            return SimpleNamespace(
+                independent_bpm=100.0,
+                handoff_bpm=100.0,
+                qualification=qualification,
+                independent_trace={},
+                handoff_trace={},
+            )
+
+    monkeypatch.setattr(experiment, "DualResetTracker", FakeTracker)
+    candidate = experiment.DualResetCandidate(
+        stage="e1",
+        name="no_reliability_gate",
+        mechanism="cold_reset",
+        prior_half_life_s=0.0,
+        hits_required=1,
+        qualification_windows=1,
+        trajectory_tolerance_bpm=5.0,
+        min_amp_ratio=0.0,
+        max_held_previous=1,
+        require_reliable=False,
+    )
+    evidence = (
+        experiment.ReplayEvidenceWindow(
+            center_s=1.0,
+            candidates=_candidate_frame((100.0, 1.0)),
+            reliable=False,
+            archived_final_history=(),
+        ),
+    )
+
+    experiment.replay_candidate_frames(candidate, evidence)
+
+    assert captured[0].reliable is True
 
 
 def test_experiment_result_writes_all_four_required_tables(tmp_path: Path) -> None:

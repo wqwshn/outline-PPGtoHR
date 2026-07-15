@@ -170,7 +170,7 @@ def replay_candidate_frames(
             DualResetInput(
                 center_s=window.center_s,
                 candidates=window.candidates,
-                reliable=bool(window.reliable and candidate.require_reliable),
+                reliable=(window.reliable if candidate.require_reliable else True),
                 previous_final_bpm=window.archived_final_history,
             )
         )
@@ -841,12 +841,15 @@ def audit_legacy_batch(
         )
         payload = json.loads(report_path.read_text(encoding="utf-8"))
         motion_end_s = float(payload["motion_segment"]["end_s"])
+        archived_motion_end_s = motion_end_s + float(payload.get("time_bias", 0.0))
         with hr_path.open("r", encoding="utf-8-sig", newline="") as handle:
             hr_rows = list(csv.DictReader(handle))
         post60 = [
             row
             for row in hr_rows
-            if motion_end_s <= float(row["time_s"]) <= motion_end_s + 60.0
+            if archived_motion_end_s
+            < float(row["time_s"])
+            <= archived_motion_end_s + 60.0
         ]
         final_errors = _absolute_errors(post60, "final_bpm")
         fft_errors = _absolute_errors(post60, "fft_bpm")
