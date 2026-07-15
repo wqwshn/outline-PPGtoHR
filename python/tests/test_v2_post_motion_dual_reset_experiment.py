@@ -749,6 +749,7 @@ def test_causal_bootstrap_uses_initial_prior_evidence_and_expires() -> None:
                     "selected_rank": 4,
                     "predicted_prior_bpm": 176.0,
                 },
+                "raw_top5": ((157.0 - 3.0 * index, 1.0),),
                 "in_post60": True,
             }
         )
@@ -792,9 +793,13 @@ def test_causal_bootstrap_rejects_remote_initial_handoff() -> None:
 
     assert result["target_eligible"] is False
     assert result["bootstrap_admissible"] is False
+    assert result["bootstrap_reason"] == "initial_prior_gap"
     assert result["switch_index"] is None
     assert result["final_bpm"] == (163.0,)
     assert result["switch_states"] == ("archived_final",)
+    assert result["switch_reasons"] == (
+        "bootstrap_rejected:initial_prior_gap",
+    )
 
 
 def test_causal_bootstrap_does_not_move_away_from_final_supported_raw_peak() -> None:
@@ -853,6 +858,117 @@ def test_causal_bootstrap_keeps_rescue_when_raw_peak_is_remote_from_final() -> N
 
     assert result["final_bpm"] == (139.0,)
     assert result["guard_reasons"] == (None,)
+
+
+def test_causal_bootstrap_falls_back_after_sustained_evidence_loss() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    rows = []
+    for index, source in enumerate(
+        ("raw_local_peaks", "held_previous", "held_previous")
+    ):
+        rows.append(
+            {
+                "center_s": 101.0 + index,
+                "archived_final_bpm": 120.0,
+                "handoff_bpm": 100.0,
+                "ref_bpm": 100.0,
+                "switch_target_ready": False,
+                "qualification_reason": "insufficient_history",
+                "handoff_trace": {
+                    "source": source,
+                    "selected_rank": 1 if index == 0 else 0,
+                    "predicted_prior_bpm": 110.0,
+                },
+                "raw_top5": ((100.0, 1.0),),
+                "in_post60": True,
+            }
+        )
+
+    result = experiment.apply_ready_gated_switch(
+        rows, motion_end_s=100.0, mode="bootstrap"
+    )
+
+    assert result["final_bpm"] == (80.0, 80.0, 120.0)
+    assert result["switch_states"] == (
+        "bootstrap_provisional",
+        "bootstrap_provisional",
+        "fallback_archived_final",
+    )
+    assert result["switch_reasons"][2] == (
+        "evidence_unavailable:held_previous"
+    )
+
+
+def test_conflicting_first_ready_proposal_is_deferred_by_bootstrap_guard() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    rows = [
+        {
+            "center_s": 101.0,
+            "archived_final_bpm": 89.5,
+            "handoff_bpm": 94.0,
+            "ref_bpm": 73.0,
+            "switch_target_ready": True,
+            "qualification_reason": "qualified",
+            "handoff_trace": {
+                "source": "raw_local_peaks",
+                "selected_rank": 4,
+                "predicted_prior_bpm": 90.0,
+            },
+            "raw_top5": ((72.5, 4.0), (94.0, 1.0)),
+            "in_post60": True,
+        }
+    ]
+
+    result = experiment.apply_ready_gated_switch(
+        rows, motion_end_s=100.0, mode="bootstrap"
+    )
+
+    assert result["final_bpm"] == (89.5,)
+    assert result["guard_reasons"] == ("raw_final_non_worsening",)
+    assert result["switch_states"] == ("bootstrap_confirmation_deferred",)
+    assert result["switch_reasons"] == (
+        "ready_confirmation_deferred:raw_final_non_worsening",
+    )
+
+
+def test_causal_bootstrap_exports_timeout_and_ready_revocation_reasons() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+
+    def row(index: int, *, ready: bool) -> dict[str, object]:
+        return {
+            "center_s": 101.0 + index,
+            "archived_final_bpm": 110.0,
+            "handoff_bpm": 100.0,
+            "ref_bpm": 100.0,
+            "switch_target_ready": ready,
+            "switch_target_readiness_reason": (
+                "ready" if ready else "candidate_evidence_interrupted"
+            ),
+            "qualification_reason": "qualified",
+            "handoff_trace": {
+                "source": "raw_local_peaks",
+                "selected_rank": 1,
+                "predicted_prior_bpm": 105.0,
+            },
+            "raw_top5": ((100.0, 1.0),),
+            "in_post60": True,
+        }
+
+    timed_out = experiment.apply_ready_gated_switch(
+        [row(index, ready=False) for index in range(21)],
+        motion_end_s=100.0,
+        mode="bootstrap",
+    )
+    revoked = experiment.apply_ready_gated_switch(
+        [row(0, ready=False), row(1, ready=True), row(2, ready=False)],
+        motion_end_s=100.0,
+        mode="bootstrap",
+    )
+
+    assert timed_out["switch_reasons"][-1] == "confirmation_timeout"
+    assert revoked["switch_reasons"][-1] == (
+        "ready_revoked:candidate_evidence_interrupted"
+    )
 
 
 def test_n4_confirmation_is_fail_closed_per_sample() -> None:

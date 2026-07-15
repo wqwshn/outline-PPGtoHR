@@ -102,6 +102,16 @@ class SampleReplay:
     offline: tuple[OfflineScoreWindow, ...]
 
 
+@dataclass(frozen=True)
+class BootstrapSwitchTimeline:
+    final_bpm: list[float]
+    admissible: bool
+    admissibility_reason: str
+    guard_reasons: list[str | None]
+    states: list[str]
+    reasons: list[str | None]
+
+
 def build_e1_candidates() -> tuple[DualResetCandidate, ...]:
     mechanisms = (
         ("cold_reset", "cold_reset", 10.0),
@@ -310,21 +320,27 @@ def apply_ready_gated_switch(
         and float(rows[first_ready]["center_s"]) - float(motion_end_s) <= 20.0
     )
     if mode == "bootstrap":
-        output, bootstrap_admissible, guard_reasons, switch_states = (
-            _causal_bootstrap_output(
+        bootstrap = _causal_bootstrap_output(
             rows,
             motion_end_s=motion_end_s,
             raw_ready=raw_ready,
-            )
         )
+        output = bootstrap.final_bpm
+        bootstrap_admissible = bootstrap.admissible
+        bootstrap_reason = bootstrap.admissibility_reason
+        guard_reasons = bootstrap.guard_reasons
+        switch_states = bootstrap.states
+        switch_reasons = bootstrap.reasons
         target_eligible = bootstrap_admissible
         switch_index = 0 if bootstrap_admissible else None
         switch_reason = "causal_bootstrap" if bootstrap_admissible else None
     else:
         output = [float(row["archived_final_bpm"]) for row in rows]
         bootstrap_admissible = False
+        bootstrap_reason = None
         guard_reasons = [None] * len(rows)
         switch_states = ["archived_final"] * len(rows)
+        switch_reasons = [None] * len(rows)
         switch_index = None
         switch_reason = None
     ready = raw_ready if target_eligible else np.zeros(len(rows), dtype=bool)
@@ -398,8 +414,10 @@ def apply_ready_gated_switch(
         "mode": mode,
         "final_bpm": tuple(output),
         "bootstrap_admissible": bootstrap_admissible,
+        "bootstrap_reason": bootstrap_reason,
         "guard_reasons": tuple(guard_reasons),
         "switch_states": tuple(switch_states),
+        "switch_reasons": tuple(switch_reasons),
         "switch_index": switch_index,
         "switch_reason": switch_reason,
         "switch_delay_s": (
@@ -426,26 +444,46 @@ def _causal_bootstrap_output(
     *,
     motion_end_s: float,
     raw_ready: np.ndarray,
-) -> tuple[list[float], bool, list[str | None], list[str]]:
+) -> BootstrapSwitchTimeline:
     output = [float(row["archived_final_bpm"]) for row in rows]
     guard_reasons: list[str | None] = [None] * len(rows)
     switch_states = ["archived_final"] * len(rows)
+    switch_reasons: list[str | None] = [None] * len(rows)
     if not rows:
-        return output, False, guard_reasons, switch_states
+        return BootstrapSwitchTimeline(
+            output,
+            False,
+            "empty_timeline",
+            guard_reasons,
+            switch_states,
+            switch_reasons,
+        )
     raw_trace = rows[0].get("handoff_trace", {})
     trace = json.loads(raw_trace) if isinstance(raw_trace, str) else raw_trace
     predicted_prior = trace.get("predicted_prior_bpm")
     selected_rank = int(trace.get("selected_rank") or 0)
-    eligible = bool(
-        trace.get("source") == "raw_local_peaks"
-        and 1 <= selected_rank <= 5
-        and predicted_prior is not None
-        and math.isfinite(float(predicted_prior))
-        and abs(float(rows[0]["handoff_bpm"]) - float(predicted_prior)) <= 25.0
-        and rows[0].get("qualification_reason") != "unreliable"
-    )
-    if not eligible:
-        return output, False, guard_reasons, switch_states
+    if trace.get("source") != "raw_local_peaks":
+        admissibility_reason = "source_not_raw_local_peaks"
+    elif not 1 <= selected_rank <= 5:
+        admissibility_reason = "selected_rank_outside_top5"
+    elif predicted_prior is None or not math.isfinite(float(predicted_prior)):
+        admissibility_reason = "missing_predicted_prior"
+    elif abs(float(rows[0]["handoff_bpm"]) - float(predicted_prior)) > 25.0:
+        admissibility_reason = "initial_prior_gap"
+    elif rows[0].get("qualification_reason") == "unreliable":
+        admissibility_reason = "unreliable"
+    else:
+        admissibility_reason = "admitted"
+    if admissibility_reason != "admitted":
+        switch_reasons[0] = f"bootstrap_rejected:{admissibility_reason}"
+        return BootstrapSwitchTimeline(
+            output,
+            False,
+            admissibility_reason,
+            guard_reasons,
+            switch_states,
+            switch_reasons,
+        )
 
     initial_gap = abs(
         float(rows[0]["handoff_bpm"])
@@ -454,18 +492,47 @@ def _causal_bootstrap_output(
     compensate = initial_gap >= 18.0
     confirmed = False
     revoked = False
+    unavailable_windows = 0
+    fallback_reason: str | None = None
     for index, row in enumerate(rows):
         elapsed = float(row["center_s"]) - float(motion_end_s)
         if revoked:
             switch_states[index] = "fallback_archived_final"
+            switch_reasons[index] = fallback_reason
             continue
         if confirmed and not bool(raw_ready[index]):
             revoked = True
+            fallback_reason = (
+                "ready_revoked:"
+                f"{row.get('switch_target_readiness_reason', 'not_ready')}"
+            )
             switch_states[index] = "fallback_archived_final"
+            switch_reasons[index] = fallback_reason
             continue
         if not confirmed and elapsed > 20.0:
             revoked = True
+            fallback_reason = "confirmation_timeout"
             switch_states[index] = "fallback_archived_final"
+            switch_reasons[index] = fallback_reason
+            continue
+        row_trace = row.get("handoff_trace", {})
+        row_trace = json.loads(row_trace) if isinstance(row_trace, str) else row_trace
+        if not confirmed and row.get("qualification_reason") == "unreliable":
+            revoked = True
+            fallback_reason = "evidence_unavailable:unreliable"
+            switch_states[index] = "fallback_archived_final"
+            switch_reasons[index] = fallback_reason
+            continue
+        unavailable_windows = (
+            unavailable_windows + 1
+            if not confirmed and row_trace.get("source") == "held_previous"
+            else 0
+        )
+        if unavailable_windows >= 2:
+            revoked = True
+            fallback_reason = "evidence_unavailable:held_previous"
+            switch_states[index] = "fallback_archived_final"
+            switch_reasons[index] = fallback_reason
             continue
         target = float(row["handoff_bpm"])
         if compensate and index < 3:
@@ -495,7 +562,14 @@ def _causal_bootstrap_output(
         if raw_final_non_worsening:
             output[index] = archived_final
             guard_reasons[index] = "raw_final_non_worsening"
-            switch_states[index] = "bootstrap_guarded_final"
+            if bool(raw_ready[index]):
+                switch_states[index] = "bootstrap_confirmation_deferred"
+                switch_reasons[index] = (
+                    "ready_confirmation_deferred:raw_final_non_worsening"
+                )
+            else:
+                switch_states[index] = "bootstrap_guarded_final"
+                switch_reasons[index] = "raw_final_non_worsening"
         else:
             output[index] = target
             switch_states[index] = (
@@ -503,8 +577,22 @@ def _causal_bootstrap_output(
                 if confirmed or bool(raw_ready[index])
                 else "bootstrap_provisional"
             )
-        confirmed = confirmed or bool(raw_ready[index])
-    return output, True, guard_reasons, switch_states
+            switch_reasons[index] = (
+                "normal_ready_confirmed"
+                if confirmed or bool(raw_ready[index])
+                else "bootstrap_admitted"
+            )
+        confirmed = confirmed or bool(
+            raw_ready[index] and not raw_final_non_worsening
+        )
+    return BootstrapSwitchTimeline(
+        output,
+        True,
+        admissibility_reason,
+        guard_reasons,
+        switch_states,
+        switch_reasons,
+    )
 
 
 def run_dual_reset_experiment(
@@ -762,6 +850,7 @@ def run_dual_reset_experiment(
                                     "final_bpm",
                                     "guard_reasons",
                                     "switch_states",
+                                    "switch_reasons",
                                 }
                             },
                         }
@@ -797,16 +886,18 @@ def run_dual_reset_experiment(
                 motion_end_s=replay.motion_end_s,
                 mode="bootstrap",
             )
-            for row, final_bpm, guard_reason, switch_state in zip(
+            for row, final_bpm, guard_reason, switch_state, reason in zip(
                 target_rows,
                 switched["final_bpm"],
                 switched["guard_reasons"],
                 switched["switch_states"],
+                switched["switch_reasons"],
                 strict=True,
             ):
                 row["switch_final_bpm"] = final_bpm
                 row["switch_guard_reason"] = guard_reason
                 row["switch_state"] = switch_state
+                row["switch_reason_detail"] = reason
             baseline = n4_by_sample[sample]
             old_e20 = int(baseline["post60_archived_final_e20_count"])
             new_e20 = int(switched["post60_final_e20_count"])
@@ -825,6 +916,7 @@ def run_dual_reset_experiment(
                             "final_bpm",
                             "guard_reasons",
                             "switch_states",
+                            "switch_reasons",
                         }
                     },
                     "old_post60_final_mae_bpm": baseline[

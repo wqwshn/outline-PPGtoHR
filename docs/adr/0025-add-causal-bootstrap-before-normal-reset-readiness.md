@@ -6,7 +6,7 @@ Status: accepted
 
 当正常 ready-gated hard、bounded 和 stable 均因建立过晚而无法满足固定 60 s Final 门槛时，允许 adaptive 使用的 Final 在 `bootstrap_admissible` 成立后暂时消费交接 handoff。该路径不是 `gap_rescue`，不取得正常 hard-switch 权限，也不改变独立 reset FFT。首窗必须来自 raw local peaks、selected rank 位于 top-5、handoff 与严格因果 predicted prior 相差不超过 25 BPM且窗口可靠；若 Final—handoff 初始差达到 18 BPM，前三窗只允许最多 25 BPM 的有界方向补偿。
 
-bootstrap 必须在运动结束后 20 s 内由正常 `switch_target_ready` 确认。逾期、确认后 ready 撤销或证据不可用时，永久回退归档 Final。首次 ready 前另有 raw—Final 非恶化保护：raw top-1 与归档 Final 相差不超过 30 BPM且 handoff 会离该 top-1 更远时，该窗保留归档 Final。所有准入、保护、确认和回退原因必须进入逐窗 trace。
+bootstrap 必须在运动结束后 20 s 内接受一次正常 `switch_target_ready` 确认。逾期、确认后 ready 撤销或证据不可用时，永久回退归档 Final。bootstrap 接受首次确认前另有 raw—Final 非恶化保护：raw top-1 与归档 Final 相差不超过 30 BPM且 handoff 会离该 top-1 更远时，该窗保留归档 Final；若 tracker 当窗提出 ready，该冲突提案被标记为 `bootstrap_confirmation_deferred`，不算已确认，后续无冲突 ready 才能接管。所有准入、保护、确认和回退原因必须进入逐窗 trace。
 
 本决定修订 ADR-0024 中“只有正常 switch target ready 才能被 Final 消费”的绝对表述，但不放宽 `gap_rescue`/`stable_crossover` 的 ready 前置条件，也不允许受控重锚直接写 Final。候选资格仍保持 raw-only；因果 Final 只参与 handoff 选择、受控重锚准入、bootstrap 准入和非恶化保护。
 

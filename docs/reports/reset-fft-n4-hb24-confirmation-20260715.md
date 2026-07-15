@@ -14,7 +14,7 @@ N4 在修订后的 spec/ADR-0025 下结论为 `GO_DEVELOPMENT_FEEDBACK_REGRESSIO
 
 该规则表达的是因果非恶化约束，不读取参考心率、未来窗口或离线峰身份：当 raw 最强证据与现有 Final 已相互支持时，不允许启动交接把输出推向相反方向。它分别消除了 `woli2` 首窗弱 rank-4 峰、`run1` ready 前错误峰和 `woli1` 高位交接拖尾造成的新增 E20；D1 的低频 raw top-1 伪峰与归档 Final 相距很远，因此不会阻断原有救援路径。
 
-保护规则命中的样本及窗口数为：`bobi3=8`、`jianpan2=2`、`run1=2`、`woli1=15`、`woli2=4`。逐窗产物新增 `switch_final_bpm`、`switch_guard_reason` 和 `switch_state`；全 HB24 共记录 provisional 131 窗、guarded 31 窗、ready confirmed 824 窗、fallback 382 窗和 archived-only 163 窗。
+保护规则命中的样本及窗口数为：`bobi3=8`、`jianpan2=2`、`run1=2`、`woli1=15`、`woli2=4`。其中 29 窗保持归档 Final，2 个与 raw—Final 证据冲突的首次 ready 提案被延迟确认；`run1` 因后续无冲突 ready 接管，固定 60 s MAE 从归档 Final 的 5.621 降至 3.376 BPM且无新增 E20。逐窗产物新增 `switch_final_bpm`、`switch_guard_reason`、`switch_state` 和 `switch_reason_detail`；全 HB24 共记录 provisional 133 窗、guarded 29 窗、confirmation deferred 2 窗、ready confirmed 861 窗、fallback 343 窗和 archived-only 163 窗。
 
 ## D1 固定 60 s Final
 
@@ -38,14 +38,14 @@ N4 在修订后的 spec/ADR-0025 下结论为 `GO_DEVELOPMENT_FEEDBACK_REGRESSIO
 
 ## 冻结产物
 
-运行目录：`C:/Users/26541/AppData/Local/Temp/dual_reset_n2_n4_bootstrap_state`
+运行目录：`C:/Users/26541/AppData/Local/Temp/dual_reset_n2_n4_bootstrap_state_v3`
 
 | 文件 | SHA-256 |
 |---|---|
-| `window_metrics.csv` | `7d0e13eda9522ec10c4a888018accd32424107b99d299b0aa83bcc35f388c38b` |
+| `window_metrics.csv` | `0c5d13ae84e32a8213db29d9461d39f61d9ce5a64c2270efac33c5968b22b1e8` |
 | `sample_metrics.csv` | `252adc3eb7aef6480fca15a35979bd657f56d287dd397a756fb9f4a65f483545` |
 | `qualification_metrics.csv` | `768efa2b34853049734668e37e91e597b72101b89c1689112bbcf15c0801d748` |
-| `switch_metrics.csv` | `5f21cd72133c090f32cb08c7aa03a9577ceb19ff3e8b1392f2f24c8af2ec1729` |
+| `switch_metrics.csv` | `a6ed5ec29a76d0053f6771ac1cd7c2ec2af55f98ba7082fad183b4faf5651ee4` |
 | `candidate_ranking.csv` | `ed1e735a70a965a1dd988f3a52c570a4032f1e89b7600932b9d725fba27de8bd` |
 
 下一步仅允许把当前冻结配置接入 N5 HB24、每样本 1 repeat × 40 iterations；N5 不得继续调整 reset、资格、ready、bootstrap 或保护参数。

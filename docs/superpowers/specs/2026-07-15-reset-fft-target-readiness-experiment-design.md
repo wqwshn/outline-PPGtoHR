@@ -93,7 +93,7 @@ HB 运动后失效样本暴露出一个不能由“raw 频谱没有真实峰”�
 - `gap_rescue` 继续保留 hard switch，但前置条件升级为 `switch_target_ready`；持续高差只表达救援需求，不承担目标可信度判断。
 - `stable_crossover` 只允许已就绪的 handoff 与实际 Final 连续可达地交汇，并始终采用非硬切过渡。
 - causal bootstrap 首窗要求 raw local peak、selected rank 位于 top-5、handoff—predicted prior gap 不超过 25 BPM且窗口可靠；初始 Final—handoff gap 达 18 BPM时仅前三窗执行最多 25 BPM 有界补偿。
-- bootstrap 必须在运动后 20 s 内由正常 ready 确认；首次 ready 前 raw top-1 与归档 Final 相差不超过 30 BPM且 handoff 会离 top-1 更远时，该窗保持归档 Final。逾期或确认后 ready 撤销永久回退。
+- bootstrap 必须在运动后 20 s 内接受正常 ready 确认；确认被接受前，若 raw top-1 与归档 Final 相差不超过 30 BPM且 handoff 会离 top-1 更远，该窗保持归档 Final并延迟任何冲突 ready 提案。逾期、持续证据中断或确认后 ready 撤销永久回退。
 - 既不满足 bootstrap 准入也未正常 ready 时进入安全弃权，保持旧 Final 路径；不得为了提高覆盖率降低候选资格、bootstrap 或 ready 门槛。
 - 交接 reset 目标质量从首次 `switch_target_ready` 开始计算，要求 MAE `<=3 BPM` 且 E20=0；首次 ready 延迟要求 `<=20 s`。
 - 最终 Final 继续使用固定运动后 60 s 口径，救援成功要求 MAE `<=3 BPM` 且 E20=0。

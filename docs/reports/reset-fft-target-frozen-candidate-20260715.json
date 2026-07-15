@@ -38,9 +38,10 @@
     "compensation_limit_bpm": 25.0,
     "confirmation_deadline_s": 20.0,
     "raw_final_non_worsening_guard": {
-      "enabled_before_first_ready": true,
+      "enabled_before_bootstrap_confirmation": true,
       "raw_top1_to_archived_final_max_gap_bpm": 30.0,
-      "policy": "keep_archived_final_when_handoff_moves_farther_from_raw_top1"
+      "policy": "keep_archived_final_when_handoff_moves_farther_from_raw_top1",
+      "conflicting_ready_policy": "defer_confirmation"
     },
     "bootstrap_state_exported": true,
     "ready_revocation_policy": "permanent_fallback_to_archived_final",
@@ -78,10 +79,11 @@
     "amended_spec": "docs/superpowers/specs/2026-07-15-reset-fft-target-readiness-experiment-design.md",
     "amending_adr": "docs/adr/0025-add-causal-bootstrap-before-normal-reset-readiness.md",
     "bootstrap_state_window_counts": {
-      "bootstrap_provisional": 131,
-      "bootstrap_guarded_final": 31,
-      "ready_confirmed": 824,
-      "fallback_archived_final": 382,
+      "bootstrap_provisional": 133,
+      "bootstrap_guarded_final": 29,
+      "bootstrap_confirmation_deferred": 2,
+      "ready_confirmed": 861,
+      "fallback_archived_final": 343,
       "archived_final": 163
     }
   },
@@ -89,7 +91,7 @@
     "manifest_sha256": "d42239a7ca5dd63cf32ae54b19620800679fb055859d79aa7267224344ef22a9",
     "frozen_authoritative_window_metrics_sha256": "657829feb57d67fc9ef6211e8c8a74454cfc6575e625c41453511993f16de2c7",
     "dataset_scope": "HB24 D1/D2/G1/S1/C1",
-    "n2_n4_window_metrics_sha256": "7d0e13eda9522ec10c4a888018accd32424107b99d299b0aa83bcc35f388c38b",
-    "n2_n4_switch_metrics_sha256": "5f21cd72133c090f32cb08c7aa03a9577ceb19ff3e8b1392f2f24c8af2ec1729"
+    "n2_n4_window_metrics_sha256": "0c5d13ae84e32a8213db29d9461d39f61d9ce5a64c2270efac33c5968b22b1e8",
+    "n2_n4_switch_metrics_sha256": "a6ed5ec29a76d0053f6771ac1cd7c2ec2af55f98ba7082fad183b4faf5651ee4"
   }
 }
