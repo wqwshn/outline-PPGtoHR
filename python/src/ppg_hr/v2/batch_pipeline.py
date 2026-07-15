@@ -10,7 +10,6 @@ from pathlib import Path
 
 from .algorithm_presets import (
     V2_ALGORITHM_PRESET_DEFAULT,
-    V2_ALGORITHM_PRESET_LITE,
     normalise_v2_algorithm_preset,
     v2_search_space_for_preset,
 )
@@ -140,7 +139,6 @@ def run_v2_batch_pipeline(
                 "adaptive_filter": adaptive_filter,
                 "algorithm_preset": preset,
                 "reference_groups_order": reference_groups_order,
-                "post_motion_dual_reset_enable": preset == V2_ALGORITHM_PRESET_LITE,
             }
             cfg_values.update(run_config_overrides or {})
             cfg = V2RunConfig(**cfg_values)

@@ -7,6 +7,7 @@ import hashlib
 import json
 import math
 import subprocess
+from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -34,6 +35,13 @@ def run_audited_hb_lite_batch(
 ) -> dict[str, Any]:
     if not sample_stems:
         raise ValueError("sample_stems must not be empty")
+    normalised = tuple(str(sample).strip().lower() for sample in sample_stems)
+    if len(set(normalised)) != len(normalised):
+        raise ValueError("sample_stems contains duplicate samples")
+    if bayes_cfg != HB_LITE_BAYES_CONFIG:
+        raise ValueError(
+            "HB Lite N5 requires exactly 1x40, 10 seed points, random_state=42"
+        )
     result = run_v2_batch_pipeline(
         input_dir=input_dir,
         output_dir=output_dir,
@@ -45,6 +53,7 @@ def run_audited_hb_lite_batch(
         bayes_cfg=bayes_cfg,
         algorithm_preset="lite",
         sample_stems=sample_stems,
+        run_config_overrides={"post_motion_dual_reset_enable": True},
     )
     audit = audit_hb_lite_batch(
         records=result["records"],
@@ -70,10 +79,15 @@ def audit_hb_lite_batch(
     output_dir: Path,
 ) -> dict[str, Any]:
     failures: list[str] = []
-    requested = {name.lower() for name in requested_samples}
-    actual = {record.sample.lower().split("_hb_")[0] for record in records}
-    if actual != requested:
-        failures.append(f"sample_set_mismatch: requested={sorted(requested)}, actual={sorted(actual)}")
+    requested_list = [name.lower() for name in requested_samples]
+    actual_list = [record.sample.lower().split("_hb_")[0] for record in records]
+    requested = set(requested_list)
+    actual = set(actual_list)
+    if Counter(actual_list) != Counter(requested_list):
+        failures.append(
+            "sample_multiset_mismatch: "
+            f"requested={sorted(requested_list)}, actual={sorted(actual_list)}"
+        )
     expected_trials = max(1, int(bayes_cfg.num_repeats)) * max(1, int(bayes_cfg.max_iterations))
     sample_audits: list[dict[str, Any]] = []
     for record in records:
@@ -83,6 +97,11 @@ def audit_hb_lite_batch(
     summary = Path(output_dir) / "csv" / "v2_batch_summary.csv"
     if not summary.is_file():
         failures.append("missing_batch_summary")
+    _audit_artifact_sets(
+        output_dir=Path(output_dir),
+        requested_samples=requested_list,
+        failures=failures,
+    )
     return {
         "status": "pass" if not failures else "fail",
         "failures": failures,
@@ -159,6 +178,15 @@ def _audit_record(
     }
     if post_rows and not trace_fields.issubset(post_rows[0]):
         failures.append(f"{prefix}:incomplete_dual_reset_window_trace")
+    if str((payload.get("qc") or {}).get("status", "")).lower() != "good":
+        failures.append(f"{prefix}:qc_not_good")
+    for key, value in (payload.get("err_stats") or {}).items():
+        if isinstance(value, int | float) and not math.isfinite(float(value)):
+            failures.append(f"{prefix}:nonfinite_err_stat:{key}")
+    for row_index, row in enumerate(payload.get("hr", [])):
+        if any(not math.isfinite(float(value)) for value in row):
+            failures.append(f"{prefix}:nonfinite_hr_row:{row_index}")
+            break
     inputs = {
         "data": _file_descriptor(Path(str(payload.get("data_path", "")))),
         "reference": _file_descriptor(Path(str(payload.get("ref_path", "")))),
@@ -192,6 +220,31 @@ def _file_descriptor(path: Path) -> dict[str, Any]:
     }
 
 
+def _audit_artifact_sets(
+    *,
+    output_dir: Path,
+    requested_samples: list[str],
+    failures: list[str],
+) -> None:
+    patterns = {
+        "json": (output_dir / "json", "*-v2.json"),
+        "figure": (output_dir / "png", "*-v2-hr.png"),
+        "hr_csv": (output_dir / "csv", "*-v2-hr.csv"),
+        "error_csv": (output_dir / "csv", "*-v2-error.csv"),
+        "window_trace_csv": (output_dir / "csv", "*-v2-window-trace.csv"),
+        "history_csv": (output_dir / "csv", "*-v2-history.csv"),
+    }
+    expected = Counter(requested_samples)
+    for label, (directory, pattern) in patterns.items():
+        paths = sorted(directory.glob(pattern))
+        samples = [path.name.lower().split("_hb_")[0] for path in paths]
+        if Counter(samples) != expected:
+            failures.append(
+                f"{label}_artifact_multiset_mismatch: "
+                f"expected={sorted(requested_samples)}, actual={sorted(samples)}"
+            )
+
+
 def _code_provenance() -> dict[str, Any]:
     def git(*args: str) -> str:
         completed = subprocess.run(
@@ -220,10 +273,6 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--input-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--samples", nargs="+", required=True)
-    parser.add_argument("--max-iterations", type=int, default=40)
-    parser.add_argument("--num-seed-points", type=int, default=10)
-    parser.add_argument("--num-repeats", type=int, default=1)
-    parser.add_argument("--random-state", type=int, default=42)
     return parser.parse_args()
 
 
@@ -233,12 +282,7 @@ def main() -> None:
         input_dir=args.input_dir,
         output_dir=args.output_dir,
         sample_stems=tuple(args.samples),
-        bayes_cfg=V2BayesConfig(
-            max_iterations=args.max_iterations,
-            num_seed_points=args.num_seed_points,
-            num_repeats=args.num_repeats,
-            random_state=args.random_state,
-        ),
+        bayes_cfg=HB_LITE_BAYES_CONFIG,
     )
     print(result["audit_path"])
 

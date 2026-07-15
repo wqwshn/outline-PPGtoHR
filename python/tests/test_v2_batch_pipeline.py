@@ -342,7 +342,7 @@ def test_run_v2_batch_pipeline_uses_default_dynamic_guard(
     )
 
     assert seen[0].post_motion_dynamic_guard_enable is True
-    assert seen[0].post_motion_dual_reset_enable is True
+    assert seen[0].post_motion_dual_reset_enable is False
     assert seen[0].post_motion_dynamic_guard_crossover_gap_bpm == 2.0
     assert seen[0].post_motion_dynamic_guard_rescue_gap_bpm == 20.0
 
