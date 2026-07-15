@@ -634,6 +634,39 @@ def test_frozen_target_file_matches_n2_candidate() -> None:
     assert frozen["controlled_reanchor"] is candidate.controlled_reanchor
 
 
+def test_switch_adapters_consume_same_ready_state_and_isolate_execution() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    rows = []
+    for index in range(8):
+        rows.append(
+            {
+                "center_s": 101.0 + index,
+                "archived_final_bpm": 140.0 - 2.0 * index,
+                "handoff_bpm": 100.0 - index,
+                "ref_bpm": 100.0 - index,
+                "switch_target_ready": index >= 3,
+                "in_post60": True,
+            }
+        )
+
+    hard = experiment.apply_ready_gated_switch(rows, motion_end_s=100.0, mode="hard")
+    bounded = experiment.apply_ready_gated_switch(
+        rows, motion_end_s=100.0, mode="bounded"
+    )
+    stable = experiment.apply_ready_gated_switch(
+        rows, motion_end_s=100.0, mode="stable"
+    )
+
+    assert hard["switch_index"] >= 3
+    assert bounded["switch_index"] == hard["switch_index"]
+    assert hard["final_bpm"][hard["switch_index"]] == pytest.approx(
+        rows[hard["switch_index"]]["handoff_bpm"]
+    )
+    assert bounded["switch_jump_bpm"] <= 3.0
+    assert stable["switch_reason"] in {None, "stable_crossover"}
+    assert hard["target_mae_bpm"] == bounded["target_mae_bpm"]
+
+
 def test_candidate_replay_can_disable_reliability_gate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

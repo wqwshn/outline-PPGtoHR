@@ -24,6 +24,13 @@
     "switch_adapter": "disabled",
     "behavior": "keep_archived_final"
   },
+  "switch_layer": {
+    "decision": "NO_GO",
+    "adapter": null,
+    "reason": "No ready-gated execution met Final fixed-60s MAE <= 3 BPM and E20 = 0 on D1",
+    "best_exploratory_mode": "hard",
+    "production_defaults_changed": false
+  },
   "development_gate": {
     "d1_target_pass_count": 3,
     "d1_target_expected_count": 4,

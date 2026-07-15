@@ -34,6 +34,7 @@ class DynamicGuardConfig:
     gap_rescue_min_hits: int = 3
     gap_rescue_fft_stable_windows: int = 3
     gap_rescue_fft_stable_bpm: float = 6.0
+    gap_rescue_symmetric: bool = False
     low_lock_windows: int = 3
     key_good_sample_ids: tuple[str, ...] = ("multi_bobi1_0613",)
 
@@ -242,11 +243,19 @@ def switch_mask_and_events(
     *,
     motion_segment: dict[str, float],
     config: DynamicGuardConfig,
+    switch_target_ready: np.ndarray | None = None,
 ) -> tuple[np.ndarray, list[DynamicGuardSwitchEvent]]:
     src = np.asarray(source, dtype=float)
     mask = np.zeros(src.shape[0], dtype=bool)
     if src.ndim != 2 or src.shape[0] == 0 or src.shape[1] <= 4:
         return mask, []
+    ready = (
+        None
+        if switch_target_ready is None
+        else np.asarray(switch_target_ready, dtype=bool)
+    )
+    if ready is not None and ready.shape != (src.shape[0],):
+        raise ValueError("switch_target_ready must match the source timeline")
 
     motion_start = float(motion_segment["start_s"])
     motion_end = float(motion_segment["end_s"])
@@ -265,6 +274,9 @@ def switch_mask_and_events(
         adaptive_bpm = float(src[idx, 2]) * 60.0
         fft_bpm = float(src[idx, 4]) * 60.0
         if center <= motion_end + float(config.min_elapsed_s) + 1e-9:
+            continue
+        if ready is not None and not bool(ready[idx]):
+            stable_count = 0
             continue
 
         rising_count = _rising_count(src, idx, post_motion_start_idx, config)
@@ -474,11 +486,17 @@ def _gap_rescue_metrics(
     adaptive = source[window_start : idx + 1, 2] * 60.0
     fft = source[window_start : idx + 1, 4] * 60.0
     finite = np.isfinite(adaptive) & np.isfinite(fft)
+    gap = adaptive - fft
+    gap_match = (
+        np.abs(gap) >= float(config.rescue_gap_bpm)
+        if bool(config.gap_rescue_symmetric)
+        else gap >= float(config.rescue_gap_bpm)
+    )
     gap_hits = int(
         np.sum(
             finite
             & (fft >= float(config.fft_floor_bpm))
-            & ((adaptive - fft) >= float(config.rescue_gap_bpm))
+            & gap_match
         )
     )
 

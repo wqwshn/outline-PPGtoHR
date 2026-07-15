@@ -10,9 +10,15 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from statistics import fmean
 
+import numpy as np
+
 from ppg_hr.v2.post_motion_dual_reset import (
     DualResetInput,
     DualResetTracker,
+)
+from ppg_hr.v2.post_motion_dynamic_guard_policy import (
+    DynamicGuardConfig,
+    switch_mask_and_events,
 )
 from ppg_hr.v2.post_motion_reset_fft_reacquire import load_lite_report_config
 from ppg_hr.v2.raw_fft_candidates import (
@@ -76,6 +82,7 @@ class DualResetExperimentResult:
     candidate_ranking: tuple[dict[str, object], ...]
     promoted_candidates: tuple[str, ...]
     cold_reset_low_lock_samples: tuple[str, ...]
+    switch_metrics: tuple[dict[str, object], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -264,8 +271,117 @@ def write_experiment_outputs(
         "qualification_metrics.csv": result.qualification_metrics,
         "candidate_ranking.csv": result.candidate_ranking,
     }
+    if result.switch_metrics:
+        tables["switch_metrics.csv"] = result.switch_metrics
     for name, rows in tables.items():
         _write_rows(output_dir / name, rows)
+
+
+def apply_ready_gated_switch(
+    rows: Sequence[dict[str, object]],
+    *,
+    motion_end_s: float,
+    mode: str,
+) -> dict[str, object]:
+    """Apply one switch execution to a frozen target/ready timeline."""
+    if mode not in {"hard", "bounded", "stable"}:
+        raise ValueError(f"unknown switch mode: {mode}")
+    source = np.zeros((len(rows), 9), dtype=float)
+    source[:, 0] = [float(row["center_s"]) for row in rows]
+    source[:, 2] = [float(row["archived_final_bpm"]) / 60.0 for row in rows]
+    source[:, 4] = [float(row["handoff_bpm"]) / 60.0 for row in rows]
+    raw_ready = np.asarray(
+        [bool(row["switch_target_ready"]) for row in rows], dtype=bool
+    )
+    first_ready = next(
+        (index for index, value in enumerate(raw_ready) if bool(value)), None
+    )
+    target_eligible = bool(
+        first_ready is not None
+        and float(rows[first_ready]["center_s"]) - float(motion_end_s) <= 20.0
+    )
+    ready = raw_ready if target_eligible else np.zeros(len(rows), dtype=bool)
+    config = DynamicGuardConfig(
+        name=f"ready_gated_{mode}",
+        min_elapsed_s=0.0,
+        stable_windows=3,
+        crossover_gap_bpm=2.0,
+        rescue_gap_bpm=20.0,
+        gap_rescue_enable=mode != "stable",
+        gap_rescue_windows=4,
+        gap_rescue_min_hits=3,
+        gap_rescue_fft_stable_windows=3,
+        gap_rescue_fft_stable_bpm=6.0,
+        gap_rescue_symmetric=True,
+        rising_windows=10_000,
+    )
+    _, events = switch_mask_and_events(
+        source,
+        motion_segment={"start_s": motion_end_s, "end_s": motion_end_s},
+        config=config,
+        switch_target_ready=ready,
+    )
+    event = events[0] if events else None
+    switch_index = None if event is None else int(event.window_idx)
+    output = [float(row["archived_final_bpm"]) for row in rows]
+    if switch_index is not None:
+        for index in range(switch_index, len(rows)):
+            target = float(rows[index]["handoff_bpm"])
+            direct_hard = mode == "hard" and bool(event.hard_switch)
+            if direct_hard:
+                output[index] = target
+            else:
+                previous = output[index - 1] if index > 0 else output[index]
+                output[index] = previous + float(
+                    np.clip(target - previous, -3.0, 1.5)
+                )
+    post60_indices = [
+        index for index, row in enumerate(rows) if bool(row.get("in_post60"))
+    ]
+    final_errors = [
+        abs(output[index] - float(rows[index]["ref_bpm"]))
+        for index in post60_indices
+    ]
+    target_errors = [
+        abs(float(rows[index]["handoff_bpm"]) - float(rows[index]["ref_bpm"]))
+        for index in post60_indices
+    ]
+    jump = (
+        0.0
+        if switch_index is None
+        else abs(output[switch_index] - float(rows[switch_index]["archived_final_bpm"]))
+    )
+    recovery_time = float("nan")
+    recovery_start = 0 if switch_index is None else switch_index
+    for offset in range(recovery_start, max(recovery_start, len(rows) - 2)):
+        if all(
+            abs(output[index] - float(rows[index]["ref_bpm"])) <= 5.0
+            for index in range(offset, offset + 3)
+        ):
+            recovery_time = float(rows[offset]["center_s"]) - float(motion_end_s)
+            break
+    return {
+        "mode": mode,
+        "final_bpm": tuple(output),
+        "switch_index": switch_index,
+        "switch_reason": None if event is None else event.switch_reason,
+        "switch_delay_s": (
+            float("nan")
+            if switch_index is None
+            else float(rows[switch_index]["center_s"]) - float(motion_end_s)
+        ),
+        "switch_jump_bpm": jump,
+        "target_eligible": target_eligible,
+        "recovery_time_s": recovery_time,
+        "post60_final_mae_bpm": (
+            fmean(final_errors) if final_errors else float("nan")
+        ),
+        "post60_final_e10_count": sum(error > 10.0 for error in final_errors),
+        "post60_final_e20_count": sum(error > 20.0 for error in final_errors),
+        "target_mae_bpm": (
+            fmean(target_errors) if target_errors else float("nan")
+        ),
+    }
 
 
 def run_dual_reset_experiment(
@@ -276,7 +392,7 @@ def run_dual_reset_experiment(
     stages: Sequence[str] = ("e0", "e1", "e2"),
 ) -> DualResetExperimentResult:
     requested = tuple(str(stage).lower() for stage in stages)
-    unknown = set(requested) - {"e0", "e1", "e2", "n1", "n2"}
+    unknown = set(requested) - {"e0", "e1", "e2", "n1", "n2", "n3"}
     if unknown:
         raise ValueError(f"unknown experiment stages: {sorted(unknown)}")
     manifest = load_hb_manifest(Path(manifest_path))
@@ -291,6 +407,7 @@ def run_dual_reset_experiment(
     window_rows: list[dict[str, object]] = []
     sample_rows: list[dict[str, object]] = []
     qualification_rows: list[dict[str, object]] = []
+    switch_rows: list[dict[str, object]] = []
 
     e1_candidates = build_e1_candidates()
     cold = e1_candidates[0]
@@ -468,7 +585,7 @@ def run_dual_reset_experiment(
                 "promoted": False,
             }
         )
-    if "n2" in requested:
+    if "n2" in requested or "n3" in requested:
         n2_candidate = build_n2_candidate()
         _append_candidate_results(
             n2_candidate,
@@ -482,6 +599,31 @@ def run_dual_reset_experiment(
         n1_ranking.append(evaluate_target_freeze(n2_candidate, n2_rows))
         if bool(n1_ranking[-1]["target_freeze_go"]):
             final_promoted = (n2_candidate.name,)
+        if "n3" in requested:
+            for sample, replay in replays.items():
+                target_rows = [
+                    row
+                    for row in window_rows
+                    if row["stage"] == "n2" and row["sample"] == sample
+                ]
+                for mode in ("hard", "bounded", "stable"):
+                    switched = apply_ready_gated_switch(
+                        target_rows,
+                        motion_end_s=replay.motion_end_s,
+                        mode=mode,
+                    )
+                    switch_rows.append(
+                        {
+                            "sample": sample,
+                            "cohort": cohort_by_sample[sample],
+                            "candidate_name": n2_candidate.name,
+                            **{
+                                key: value
+                                for key, value in switched.items()
+                                if key != "final_bpm"
+                            },
+                        }
+                    )
     result = DualResetExperimentResult(
         window_metrics=tuple(window_rows),
         sample_metrics=tuple(sample_rows),
@@ -491,6 +633,7 @@ def run_dual_reset_experiment(
         ),
         promoted_candidates=final_promoted,
         cold_reset_low_lock_samples=cold_low_locks,
+        switch_metrics=tuple(switch_rows),
     )
     write_experiment_outputs(result, Path(output_dir))
     return result
