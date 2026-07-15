@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, asdict
 from importlib import import_module
 from pathlib import Path
 
+import numpy as np
 import pytest
+
+from ppg_hr.v2.raw_fft_candidates import RawFftCandidateFrame
 
 
 MANIFEST_PATH = Path(__file__).parent / "fixtures" / "hb_dual_reset_manifest.json"
@@ -105,3 +108,396 @@ def test_audit_legacy_batch_freezes_real_hb_baselines() -> None:
     assert by_sample["kaihe2"].switch_reason == "gap_rescue"
     assert by_sample["kaihe2"].switch_jump_bpm is not None
     assert by_sample["kaihe2"].switch_jump_bpm < -60.0
+
+
+def test_e1_candidate_matrix_contains_only_declared_mechanism_ablations() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+
+    candidates = experiment.build_e1_candidates()
+
+    assert tuple(candidate.name for candidate in candidates) == (
+        "cold_reset",
+        "final_anchor",
+        "final_trend",
+        "trend_persistence",
+        "trend_persistence_decay_5s",
+        "trend_persistence_decay_10s",
+        "trend_persistence_decay_15s",
+    )
+    assert all(candidate.stage == "e1" for candidate in candidates)
+    assert not any(
+        "ref" in key.lower() or "bo" in key.lower()
+        for candidate in candidates
+        for key in asdict(candidate)
+    )
+
+
+def test_e2_candidate_matrix_is_exact_regular_qualification_grid() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+
+    candidates = experiment.build_e2_candidates(
+        mechanism="trend_persistence_decay",
+        prior_half_life_s=10.0,
+    )
+
+    assert len(candidates) == 16
+    assert len({candidate.name for candidate in candidates}) == 16
+    assert {
+        (candidate.hits_required, candidate.qualification_windows)
+        for candidate in candidates
+    } == {(3, 4), (4, 5)}
+    assert {candidate.trajectory_tolerance_bpm for candidate in candidates} == {
+        6.0,
+        8.0,
+    }
+    assert {candidate.min_amp_ratio for candidate in candidates} == {0.25, 0.40}
+    assert {candidate.max_held_previous for candidate in candidates} == {0, 1}
+    assert all(candidate.require_reliable is True for candidate in candidates)
+    assert all(candidate.stage == "e2" for candidate in candidates)
+    assert not any(
+        "ref" in key.lower() or "bo" in key.lower()
+        for candidate in candidates
+        for key in asdict(candidate)
+    )
+
+
+def test_window_summary_separates_target_selected_and_qualification_metrics() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    rows = [
+        {
+            "center_s": 101.0,
+            "ref_bpm": 100.0,
+            "handoff_bpm": 100.0,
+            "selected_candidate_bpm": 102.0,
+            "qualified": False,
+            "switch_output_bpm": -999.0,
+        },
+        {
+            "center_s": 102.0,
+            "ref_bpm": 100.0,
+            "handoff_bpm": 105.0,
+            "selected_candidate_bpm": 104.0,
+            "qualified": True,
+            "switch_output_bpm": 999.0,
+        },
+        {
+            "center_s": 103.0,
+            "ref_bpm": 100.0,
+            "handoff_bpm": 130.0,
+            "selected_candidate_bpm": 130.0,
+            "qualified": True,
+            "switch_output_bpm": 100.0,
+        },
+    ]
+
+    summary = experiment.summarise_candidate_windows(rows, motion_end_s=100.0)
+    without_switch = experiment.summarise_candidate_windows(
+        [{key: value for key, value in row.items() if key != "switch_output_bpm"} for row in rows],
+        motion_end_s=100.0,
+    )
+
+    assert summary["reset_target_mae_bpm"] == pytest.approx(35.0 / 3.0)
+    assert summary["selected_hit_5bpm"] == pytest.approx(2.0 / 3.0)
+    assert summary["qualification_precision"] == pytest.approx(0.5)
+    assert summary["qualification_delay_s"] == pytest.approx(2.0)
+    assert summary["qualified_e20_count"] == 1
+    assert summary == without_switch
+
+
+def test_candidate_ranking_applies_named_per_sample_d1_d2_gates() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    rows = []
+    for sample in ("failure_a", "failure_b"):
+        rows.extend(
+            [
+                {
+                    "candidate_name": "cold_reset",
+                    "sample": sample,
+                    "cohort": "d1",
+                    "post60_handoff_mae_bpm": 10.0,
+                    "qualified_e20_count": 0,
+                    "qualification_delay_s": float("nan"),
+                },
+                {
+                    "candidate_name": "passing",
+                    "sample": sample,
+                    "cohort": "d1",
+                    "post60_handoff_mae_bpm": 5.0,
+                    "qualified_e20_count": 0,
+                    "qualification_delay_s": 10.0,
+                },
+                {
+                    "candidate_name": "failing",
+                    "sample": sample,
+                    "cohort": "d1",
+                    "post60_handoff_mae_bpm": 5.1,
+                    "qualified_e20_count": 0,
+                    "qualification_delay_s": 10.0,
+                },
+            ]
+        )
+    rows.extend(
+        [
+            {
+                "candidate_name": "cold_reset",
+                "sample": "control",
+                "cohort": "d2",
+                "post60_handoff_mae_bpm": 1.0,
+                "qualified_e20_count": 0,
+                "qualification_delay_s": float("nan"),
+            },
+            {
+                "candidate_name": "passing",
+                "sample": "control",
+                "cohort": "d2",
+                "post60_handoff_mae_bpm": 2.0,
+                "qualified_e20_count": 0,
+                "qualification_delay_s": 10.0,
+            },
+            {
+                "candidate_name": "failing",
+                "sample": "control",
+                "cohort": "d2",
+                "post60_handoff_mae_bpm": 1.0,
+                "qualified_e20_count": 1,
+                "qualification_delay_s": 10.0,
+            },
+        ]
+    )
+
+    ranking = experiment.rank_candidate_metrics(rows)
+
+    assert {row["candidate_name"] for row in ranking} == {"passing", "failing"}
+    by_name = {row["candidate_name"]: row for row in ranking}
+    assert by_name["passing"]["d1_all_improved_at_least_50pct"] is True
+    assert by_name["passing"]["d2_all_regression_le_1bpm"] is True
+    assert by_name["passing"]["qualified_e20_zero"] is True
+    assert by_name["passing"]["d1_at_least_3of4_qualified_within_20s"] is True
+    assert by_name["passing"]["target_promoted"] is True
+    assert by_name["passing"]["qualification_promoted"] is True
+    assert by_name["passing"]["promoted"] is True
+    assert by_name["failing"]["d1_all_improved_at_least_50pct"] is False
+    assert by_name["failing"]["qualified_e20_zero"] is False
+    assert by_name["failing"]["promoted"] is False
+
+
+def test_e1_target_gate_does_not_depend_on_temporary_qualification_rule() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    rows = []
+    for cohort, sample, cold_mae, candidate_mae in (
+        ("d1", "failure", 10.0, 5.0),
+        ("d2", "control", 1.0, 2.0),
+    ):
+        rows.extend(
+            [
+                {
+                    "candidate_name": "cold_reset",
+                    "sample": sample,
+                    "cohort": cohort,
+                    "post60_handoff_mae_bpm": cold_mae,
+                    "qualified_e20_count": 0,
+                    "qualification_delay_s": float("nan"),
+                },
+                {
+                    "candidate_name": "mechanism",
+                    "sample": sample,
+                    "cohort": cohort,
+                    "post60_handoff_mae_bpm": candidate_mae,
+                    "qualified_e20_count": 1,
+                    "qualification_delay_s": float("nan"),
+                },
+            ]
+        )
+
+    ranking = experiment.rank_candidate_metrics(rows, require_qualification=False)
+
+    assert ranking[0]["target_promoted"] is True
+    assert ranking[0]["qualification_promoted"] is False
+    assert ranking[0]["promoted"] is True
+
+
+def _candidate_frame(*peaks: tuple[float, float]) -> RawFftCandidateFrame:
+    return RawFftCandidateFrame(
+        frequencies_hz=np.asarray([bpm / 60.0 for bpm, _ in peaks]),
+        amplitudes=np.asarray([amplitude for _, amplitude in peaks]),
+        peak_indices=np.arange(len(peaks), dtype=int),
+        ordered_peak_indices=np.arange(len(peaks), dtype=int),
+    )
+
+
+def test_candidate_replay_uses_archived_final_history_without_reference_hr() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    candidate = next(
+        item for item in experiment.build_e1_candidates() if item.name == "final_anchor"
+    )
+    frame = _candidate_frame((55.0, 1.0), (135.0, 0.5))
+    evidence = [
+        experiment.ReplayEvidenceWindow(
+            center_s=101.0,
+            candidates=frame,
+            reliable=True,
+            archived_final_history=(138.0, 136.0, 134.0),
+        )
+    ]
+
+    rows = experiment.replay_candidate_frames(candidate, evidence)
+
+    assert rows[0]["independent_bpm"] == pytest.approx(55.0)
+    assert rows[0]["handoff_bpm"] == pytest.approx(135.0)
+    assert rows[0]["archived_final_anchor_bpm"] == pytest.approx(136.0)
+    assert rows[0]["raw_frame_identity"] == id(frame)
+    assert "ref_bpm" not in rows[0]
+
+
+def test_experiment_result_writes_all_four_required_tables(tmp_path: Path) -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    result = experiment.DualResetExperimentResult(
+        window_metrics=({"sample": "a", "candidate_name": "cold_reset"},),
+        sample_metrics=({"sample": "a", "post60_handoff_mae_bpm": 10.0},),
+        qualification_metrics=({"sample": "a", "qualified_e20_count": 0},),
+        candidate_ranking=({"candidate_name": "x", "promoted": False},),
+        promoted_candidates=(),
+        cold_reset_low_lock_samples=("a",),
+    )
+
+    experiment.write_experiment_outputs(result, tmp_path)
+
+    assert {path.name for path in tmp_path.glob("*.csv")} == {
+        "window_metrics.csv",
+        "sample_metrics.csv",
+        "qualification_metrics.csv",
+        "candidate_ranking.csv",
+    }
+    assert "candidate_name" in (tmp_path / "candidate_ranking.csv").read_text(
+        encoding="utf-8-sig"
+    )
+
+
+def test_run_experiment_executes_e0_e1_e2_and_returns_public_tables(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    manifest = experiment.HbExperimentManifest(
+        development_failures=("failure",),
+        development_controls=("control",),
+        frozen_normal_gate=(),
+        hard_switch_sentinels=(),
+        full_batch_only=(),
+        all_samples=("failure", "control"),
+    )
+    monkeypatch.setattr(experiment, "load_hb_manifest", lambda _path: manifest)
+
+    def fake_sample(sample: str, _lite_batch_dir: Path):
+        if sample == "failure":
+            frame = _candidate_frame((55.0, 1.0), (135.0, 0.5))
+            ref = 135.0
+            history = (138.0, 136.0, 134.0)
+        else:
+            frame = _candidate_frame((100.0, 1.0))
+            ref = 100.0
+            history = (100.0, 100.0, 100.0)
+        evidence = tuple(
+            experiment.ReplayEvidenceWindow(
+                center_s=101.0 + index,
+                candidates=frame,
+                reliable=True,
+                archived_final_history=history,
+            )
+            for index in range(5)
+        )
+        offline = tuple(
+            experiment.OfflineScoreWindow(
+                center_s=101.0 + index,
+                ref_bpm=ref,
+                archived_final_bpm=history[-1],
+            )
+            for index in range(5)
+        )
+        return experiment.SampleReplay(
+            sample=sample,
+            motion_end_s=100.0,
+            evidence=evidence,
+            offline=offline,
+        )
+
+    monkeypatch.setattr(experiment, "_load_sample_replay", fake_sample)
+
+    result = experiment.run_dual_reset_experiment(
+        manifest_path=tmp_path / "manifest.json",
+        lite_batch_dir=tmp_path / "lite",
+        output_dir=tmp_path / "out",
+        stages=("e0", "e1", "e2"),
+    )
+
+    assert result.cold_reset_low_lock_samples == ("failure",)
+    assert result.window_metrics
+    assert result.sample_metrics
+    assert result.qualification_metrics
+    assert len(result.candidate_ranking) == 23
+    assert result.promoted_candidates
+    assert all(
+        name.startswith("final_") or name.startswith("trend_")
+        for name in result.promoted_candidates
+    )
+    assert (tmp_path / "out" / "candidate_ranking.csv").is_file()
+
+
+def test_cli_accepts_powershell_expanded_stage_tokens(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    captured = {}
+
+    def fake_run(**kwargs):
+        captured.update(kwargs)
+        return experiment.DualResetExperimentResult(
+            window_metrics=(),
+            sample_metrics=(),
+            qualification_metrics=(),
+            candidate_ranking=(),
+            promoted_candidates=("candidate",),
+            cold_reset_low_lock_samples=("failure",),
+        )
+
+    monkeypatch.setattr(experiment, "run_dual_reset_experiment", fake_run)
+
+    exit_code = experiment.main(
+        [
+            "--manifest",
+            str(tmp_path / "manifest.json"),
+            "--lite-batch-dir",
+            str(tmp_path / "lite"),
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--stages",
+            "e0",
+            "e1",
+            "e2",
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured["stages"] == ("e0", "e1", "e2")
+
+
+def test_archived_csv_is_aligned_through_report_window_index() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    old_windows = {
+        5.0: {"window_idx": 0, "center_s": 5.0},
+        6.0: {"window_idx": 1, "center_s": 6.0},
+    }
+    archived = [
+        {"center_s": 9.5, "ref_bpm": 80.0, "final_bpm": 90.0},
+        {"center_s": 10.5, "ref_bpm": 81.0, "final_bpm": 91.0},
+    ]
+
+    aligned = experiment._archived_row_for_source_center(
+        5.0, old_windows, archived
+    )
+
+    assert aligned == (0, archived[0])
+    assert experiment._archived_row_for_source_center(
+        7.0, old_windows, archived
+    ) is None
