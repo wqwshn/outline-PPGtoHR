@@ -274,15 +274,36 @@ def _evaluate_frozen_evidence(
             f"reproduced={e0_reproduced}"
         )
 
-    qualification_counts: dict[str, int] = {}
-    for row in tables["qualification_metrics.csv"]:
-        if row.get("stage") != "e1":
-            continue
-        candidate = row.get("candidate_name", "")
-        qualification_counts[candidate] = qualification_counts.get(candidate, 0) + int(
-            _number(row.get("qualified_e20_count"))
-        )
     sample_rows = tables["sample_metrics.csv"]
+    qualification_rows = tables["qualification_metrics.csv"]
+    sample_index = _index_e1_metric_rows(sample_rows, "sample_metrics.csv")
+    qualification_index = _index_e1_metric_rows(
+        qualification_rows, "qualification_metrics.csv"
+    )
+    cold_sets = {
+        cohort: {
+            sample
+            for candidate, sample in sample_index
+            if candidate == "cold_reset"
+            and sample_index[(candidate, sample)].get("cohort") == cohort
+        }
+        for cohort in ("d1", "d2")
+    }
+    cold_qualification_sets = {
+        cohort: {
+            sample
+            for candidate, sample in qualification_index
+            if candidate == "cold_reset"
+            and qualification_index[(candidate, sample)].get("cohort") == cohort
+        }
+        for cohort in ("d1", "d2")
+    }
+    if cold_sets != cold_qualification_sets or any(not values for values in cold_sets.values()):
+        raise ValueError(
+            "Cold-reset sample_metrics and qualification_metrics require identical, "
+            f"non-empty D1/D2 sample sets: sample={cold_sets}, "
+            f"qualification={cold_qualification_sets}"
+        )
     cold_by_sample = {
         row.get("sample", ""): _number(row.get("post60_handoff_mae_bpm"))
         for row in sample_rows
@@ -297,12 +318,68 @@ def _evaluate_frozen_evidence(
         d1_min = _number(row.get("d1_min_improvement_fraction"))
         d2_max = _number(row.get("d2_max_regression_bpm"))
         e20_count = int(_number(row.get("qualified_e20_count")))
+        candidate_sets = {
+            cohort: {
+                sample
+                for indexed_candidate, sample in sample_index
+                if indexed_candidate == candidate
+                and sample_index[(indexed_candidate, sample)].get("cohort") == cohort
+            }
+            for cohort in ("d1", "d2")
+        }
+        qualification_sets = {
+            cohort: {
+                sample
+                for indexed_candidate, sample in qualification_index
+                if indexed_candidate == candidate
+                and qualification_index[(indexed_candidate, sample)].get("cohort")
+                == cohort
+            }
+            for cohort in ("d1", "d2")
+        }
+        if candidate_sets != cold_sets or qualification_sets != cold_sets:
+            raise ValueError(
+                f"Candidate {candidate} requires the exact D1/D2 sample set in both "
+                "sample_metrics and qualification_metrics; "
+                f"expected={cold_sets}, sample={candidate_sets}, "
+                f"qualification={qualification_sets}"
+            )
+        for cohort in ("d1", "d2"):
+            expected_count = int(_number(row.get(f"{cohort}_expected_sample_count")))
+            observed_count = int(_number(row.get(f"{cohort}_observed_sample_count")))
+            complete = _truth(row.get(f"{cohort}_sample_set_complete"))
+            actual_count = len(candidate_sets[cohort])
+            frozen_count = len(cold_sets[cohort])
+            if (
+                expected_count != frozen_count
+                or observed_count != actual_count
+                or not complete
+                or actual_count != frozen_count
+            ):
+                raise ValueError(
+                    f"Ranking {cohort.upper()} completeness mismatch for {candidate}: "
+                    f"expected={expected_count}/{frozen_count}, "
+                    f"observed={observed_count}/{actual_count}, complete={complete}"
+                )
         candidate_samples = [
-            sample
-            for sample in sample_rows
-            if sample.get("stage") == "e1"
-            and sample.get("candidate_name") == candidate
+            indexed_row
+            for (indexed_candidate, _sample), indexed_row in sample_index.items()
+            if indexed_candidate == candidate
         ]
+        for sample in candidate_sets["d1"] | candidate_sets["d2"]:
+            sample_e20 = int(
+                _number(sample_index[(candidate, sample)].get("qualified_e20_count"))
+            )
+            qualification_e20 = int(
+                _number(
+                    qualification_index[(candidate, sample)].get("qualified_e20_count")
+                )
+            )
+            if sample_e20 != qualification_e20:
+                raise ValueError(
+                    f"Per-sample E20 mismatch for {candidate}/{sample}: "
+                    f"sample={sample_e20}, qualification={qualification_e20}"
+                )
         d1_improvements = [
             (
                 cold_by_sample[sample["sample"]]
@@ -344,10 +421,15 @@ def _evaluate_frozen_evidence(
                 f"Ranking/sample E20 mismatch for {candidate}: "
                 f"ranking={e20_count}, sample={sample_e20_count}"
             )
-        if qualification_counts.get(candidate) != e20_count:
+        qualification_e20_count = sum(
+            int(_number(indexed_row.get("qualified_e20_count")))
+            for (indexed_candidate, _sample), indexed_row in qualification_index.items()
+            if indexed_candidate == candidate
+        )
+        if qualification_e20_count != e20_count:
             raise ValueError(
                 f"Ranking/qualification E20 mismatch for {candidate}: "
-                f"ranking={e20_count}, qualification={qualification_counts.get(candidate)}"
+                f"ranking={e20_count}, qualification={qualification_e20_count}"
             )
         target_from_metrics = d1_min >= 0.50 and d2_max <= 1.0
         target_flag = _truth(row.get("target_promoted"))
@@ -408,6 +490,25 @@ def _evaluate_frozen_evidence(
         "target_promoted_candidates": target_candidates,
         "qualification_promoted_candidates": go_candidates,
     }
+
+
+def _index_e1_metric_rows(
+    rows: list[dict[str, str]], table_name: str
+) -> dict[tuple[str, str], dict[str, str]]:
+    index: dict[tuple[str, str], dict[str, str]] = {}
+    for row in rows:
+        if row.get("stage") != "e1":
+            continue
+        cohort = row.get("cohort")
+        if cohort not in {"d1", "d2"}:
+            raise ValueError(f"Unexpected E1 cohort in {table_name}: {cohort!r}")
+        key = (row.get("candidate_name", ""), row.get("sample", ""))
+        if not all(key):
+            raise ValueError(f"Empty candidate/sample key in {table_name}: {key}")
+        if key in index:
+            raise ValueError(f"Duplicate E1 candidate/sample row in {table_name}: {key}")
+        index[key] = row
+    return index
 
 
 def _render_summary_figure(rows: list[dict[str, Any]], stem: Path) -> None:
