@@ -1,5 +1,11 @@
 # 交接 reset 目标就绪、运动后回切与 HB24 全流程确认 Spec
 
+## 设计修订：因果 bootstrap 与证据等级
+
+原 N3 证明正常 ready-gated hard、bounded 和 stable 建立过晚，无法让 D1 Final 通过固定 60 s 绝对门槛。根据随后确认的“双 reset + 启动 Final 弱先验 + 快速救援”方向，新增独立的 `bootstrap_admissible` 启动状态：它允许 adaptive 使用的 Final 在正常 `switch_target_ready` 前有界试接管交接 handoff，但不把候选资格或 bootstrap 冒充为正常 ready，也不放宽 `gap_rescue`/`stable_crossover` 的 ready 前置条件。具体边界由 ADR-0025 定义。
+
+HB24 首轮 N4 已同时暴露 G1/S1/C1，30 BPM raw—Final 非恶化保护也来自这些已见失败的开发反馈。因此原先“G1 不参与调参、S1 修订事前预声明”的独立确认口径已不可恢复；修订后的 N4 必须降格为已见 HB24 的逐样本回归门槛，N5 仍只是已见样本的单样本 BO 能力确认。不得把两者表述为未见数据泛化或未受污染确认。
+
 ## Problem Statement
 
 HB 运动后失效样本暴露出一个不能由“raw 频谱没有真实峰”解释的问题：`bobi2`、`kaihe2`、`kaihe3` 和 `tiaosheng3` 的运动后静息段中，真实峰长期位于 raw top-k，且多数窗口成为最强峰，但旧 reset FFT 仍可能从首窗低频伪峰初始化并持续低锁。`gap_rescue` 或 `stable_crossover` 随后若消费这条错误轨迹，会把运动段高漂移快速切成低频“心率跳水”。
@@ -16,15 +22,15 @@ HB 运动后失效样本暴露出一个不能由“raw 频谱没有真实峰”�
 
 继续保留两条共享同一 raw FFT 候选帧、但追踪状态和信息边界独立的 reset 链路。独立 reset FFT 始终只读取 PPG，是纯 FFT 对照；交接 reset FFT 可以在启动阶段读取当前窗口之前的归档 Final 及其因果下降趋势，但候选仍必须来自当前或历史 raw PPG 证据。
 
-将旧的单一 `qualified` 拆成 `candidate_qualified` 与 `switch_target_ready`。前者只认证 selected raw 候选轨迹的身份、幅值竞争和跨窗证据；后者额外认证公开 handoff 输出已经追上该候选、资格身份仍新鲜且当前窗口不是 held。候选身份远端变化、证据中断或 candidate—handoff 明显分离时，旧就绪状态必须撤销。
+将旧的单一 `qualified` 拆成 `candidate_qualified`、`bootstrap_admissible` 与 `switch_target_ready`。候选资格只认证 selected raw 候选轨迹的身份、幅值竞争和跨窗证据，不读取 Final prior conflict；bootstrap 准入认证启动弱先验与 raw top-k handoff 足以支持有界试接管；正常 ready 额外认证公开 handoff 输出已经追上候选、资格身份仍新鲜且当前窗口不是 held。候选身份远端变化、证据中断或 candidate—handoff 明显分离时，旧就绪状态必须撤销。
 
 当远端候选取得充分、因果且无参考的 PPG 证据后，允许交接 tracker 执行内部受控重锚，以解除旧低锁状态和方向限速造成的长期不可达。重锚不直接改写 Final，也不自动建立 `switch_target_ready`；重锚后仍需连续窗口证明 handoff 与候选一致。
 
-`gap_rescue` 只在 `switch_target_ready` 成立且持续高差存在时执行当窗硬切，以保留运动段高漂移的快速救援。`stable_crossover` 只在 `switch_target_ready` 成立且 handoff 与实际 Final 连续可达时执行非硬切交汇。目标未达标或未就绪时执行运动后安全弃权：保持既有 Final，不允许 hard switch。
+`gap_rescue` 只在 `switch_target_ready` 成立且持续高差存在时执行当窗硬切，以保留运动段高漂移的快速救援。`stable_crossover` 只在 `switch_target_ready` 成立且 handoff 与实际 Final 连续可达时执行非硬切交汇。除此之外，只有 `bootstrap_admissible` 可以在启动期临时输出 handoff，并必须在 20 s 内等待正常 ready 确认；bootstrap 逾期、确认后 ready 撤销或非恶化保护命中时回退归档 Final。既不满足 bootstrap 准入也未正常 ready 时执行运动后安全弃权。
 
 失效样本的交接 reset 目标从首次 `switch_target_ready` 开始验收，要求 MAE 不高于 3 BPM且 E20 为 0；就绪必须发生在运动结束后 20 s 内。最终 Final 仍按运动后固定 60 s 验收，要求 MAE 不高于 3 BPM且 E20 为 0。D1 至少 3/4 样本必须救援成功；未救回样本允许安全弃权，但相对旧 Final 不得明显退化或新增尾部风险。正常样本采用逐样本防退化，不强制其既有 Final 统一达到 3 BPM。
 
-机制开发只使用冻结的 D1/D2。主候选与安全备选冻结后依次运行 G1 正常门槛、S1 错误硬切哨兵和 C1 全 HB 确认。全部机制门槛通过后，将冻结机制接入标准 Lite 批量全流程，对 HB24 每个样本重新执行 1 个 BO repeat、每个 repeat 40 iterations；该批量使用固定随机种子与完整产物校验，不能继续调整 reset、资格或切换参数。
+最初机制开发只使用 D1/D2；但 HB24 已在 N4 规则反馈中被查看，后续 G1/S1/C1 统一按已见数据逐样本回归处理。冻结修订后的候选与安全备选后，完整重跑 D1/D2/G1/S1/C1，任何单条越过硬门槛都阻止晋级。门槛通过后才能接入标准 Lite 批量全流程，对 HB24 每个样本重新执行 1 个 BO repeat、每个 repeat 40 iterations；该批量使用固定随机种子与完整产物校验，不能继续调整 reset、资格、bootstrap 或切换参数。
 
 ## User Stories
 
@@ -68,26 +74,33 @@ HB 运动后失效样本暴露出一个不能由“raw 频谱没有真实峰”�
 38. 作为算法研究者，我希望最终批量与旧 Lite BO 基线逐样本比较，以便量化主算法接入后的实际增益和退化。
 39. 作为算法研究者，我希望最终批量失败时明确区分 BO 失败、输入/QC 失败、目标不就绪和错误切换，以便后续工作有清晰归因。
 40. 作为算法研究者，我希望 HB24 结果被明确表述为已见数据的样本内 BO 确认，以便不误称为未见跨个体泛化。
+41. 作为算法研究者，我希望 raw 候选资格不读取 Final prior conflict，以便候选身份可信度与启动可消费性保持分层。
+42. 作为算法研究者，我希望 causal bootstrap 有独立于候选资格和正常 ready 的公开状态，以便未就绪试接管不会获得 gap rescue 权限。
+43. 作为算法研究者，我希望 bootstrap 在 20 s 内由正常 ready 确认，否则永久回退归档 Final，以便启动弱证据不能长期污染输出。
+44. 作为算法研究者，我希望已查看的 G1/S1/C1 只作为开发回归集，以便报告不会伪称独立确认。
 
 ## Implementation Decisions
 
 - 保留双 reset 架构：独立 reset FFT 与交接 reset FFT 状态独立，共享同一 raw PPG 频谱和候选证据。
 - 独立 reset FFT 不读取 adaptive、Final、参考心率或离线峰身份；旧 FFT 兼容输出继续映射到该链路。
 - 交接 reset 启动先验只使用严格早于当前对齐窗口的归档 Final；参考心率和未来窗口不得进入运行时路径。
-- 交接 reset 的公开状态拆分为候选资格与切换目标就绪。兼容字段如需保留，只能明确映射到候选资格，不能继续承载“可切换”的含义。
+- 交接 reset 的公开状态拆分为候选资格、因果 bootstrap 启动准入与切换目标就绪。兼容字段如需保留，只能明确映射到候选资格，不能继续承载“可切换”的含义。
 - 候选资格认证 selected raw 候选轨迹；切换目标就绪额外要求 handoff 与候选的无参考一致性、连续 ready 窗口、非 held、可靠性和资格新鲜度。
+- Final prior conflict 不得阻止 raw 候选取得资格；它只允许约束 handoff 选择、受控重锚、bootstrap 准入或正常 ready。
 - 候选轨迹发生超过身份容差的远端变化时，清空旧候选资格累计和目标就绪累计。
 - 受控重锚是交接 tracker 的内部状态迁移；它不得修改独立 reset，不得直接写 Final，不得自动建立目标就绪。
 - 第一候选为最小受控重锚原型。只有其 ready 后目标门槛失败时，才按单变量累积研究 prior-ranked 首窗 fallback、独立先验距离尺度和 raw top-k 候选轨迹银行。
 - `gap_rescue` 继续保留 hard switch，但前置条件升级为 `switch_target_ready`；持续高差只表达救援需求，不承担目标可信度判断。
 - `stable_crossover` 只允许已就绪的 handoff 与实际 Final 连续可达地交汇，并始终采用非硬切过渡。
-- 目标未就绪或未达标时进入安全弃权，保持旧 Final 路径；不得为了提高覆盖率降低资格或就绪门槛。
+- causal bootstrap 首窗要求 raw local peak、selected rank 位于 top-5、handoff—predicted prior gap 不超过 25 BPM且窗口可靠；初始 Final—handoff gap 达 18 BPM时仅前三窗执行最多 25 BPM 有界补偿。
+- bootstrap 必须在运动后 20 s 内由正常 ready 确认；首次 ready 前 raw top-1 与归档 Final 相差不超过 30 BPM且 handoff 会离 top-1 更远时，该窗保持归档 Final。逾期或确认后 ready 撤销永久回退。
+- 既不满足 bootstrap 准入也未正常 ready 时进入安全弃权，保持旧 Final 路径；不得为了提高覆盖率降低候选资格、bootstrap 或 ready 门槛。
 - 交接 reset 目标质量从首次 `switch_target_ready` 开始计算，要求 MAE `<=3 BPM` 且 E20=0；首次 ready 延迟要求 `<=20 s`。
 - 最终 Final 继续使用固定运动后 60 s 口径，救援成功要求 MAE `<=3 BPM` 且 E20=0。
 - D1 总体晋级要求至少 3/4 样本救援成功。未救回 D1 必须安全弃权，旧 Final MAE 退化不超过 1 BPM且不新增 E10/E20。
 - D2、G1、S1、C1 逐样本要求固定 60 s MAE 退化不超过 1 BPM、不新增 E20、不新增错误 hard switch。集合均值只用于通过硬门槛后的候选排序。
 - 开发顺序为 N0 确定性复现、N1 目标重获消融、N2 目标/就绪冻结、N3 切换隔离、N4 G1/S1/C1 防退化确认、N5 HB24 Lite BO 批量全流程。
-- N1/N2 只使用 D1/D2 选机制和参数。查看 G1 前冻结主候选和一个安全备选；G1 不参与调参。S1 只允许一次预声明的规则化修订，修订后必须从 D1/D2 重新执行。
+- 原 N1/N2 只使用 D1/D2 选机制和参数；N4 首轮查看 HB24 后发生一次非预声明规则反馈，故原独立确认声明作废。修订候选必须完整重跑 D1/D2/G1/S1/C1，此后不得再根据 HB24 调整参数。
 - N5 只有在前述机制门槛全部通过并接入标准 Lite 运行配置后执行。N5 不再改变 reset、资格、重锚、gap rescue 或 stable crossover 参数。
 - N5 使用 Lite 算法预设、green PPG、raw-bandpass 输入、LMS、full analysis scope 和 HF 参考组；如生产批量接口的命名不同，应映射到同一冻结语义。
 - N5 每个 HB 样本重新执行完整 BO：`num_repeats=1`、`max_iterations=40`、`num_seed_points=10`、`random_state=42`。不得复用旧报告的 `best_params` 代替本次优化。
@@ -103,6 +116,8 @@ HB 运动后失效样本暴露出一个不能由“raw 频谱没有真实峰”�
 - 算法状态 seam 为交接 reset tracker 的逐窗 step 接口。测试从共享 raw 候选、可靠性和因果 Final 历史输入，观察两条 reset 输出、候选资格、切换目标就绪和 trace。
 - 主验收 seam 为完整 HB 批量 runner。真实数据测试从冻结 manifest 和批量配置输入，观察逐窗、逐样本、批量汇总和完整产物契约。
 - 状态 seam 必须覆盖 kaihe3 型“candidate 正确但 handoff 相差 60–80 BPM”的回归，断言候选可取得资格但目标不得就绪。
+- 状态 seam 必须覆盖 Final prior conflict 与稳定 raw 候选并存，断言 raw 候选仍可取得资格，但重锚/bootstrap/ready 可分别拒绝消费。
+- 切换 seam 必须显式导出 `bootstrap_admissible`、provisional/confirmed/fallback 状态和逐窗保护原因，不能仅用 `target_eligible` 混合表示。
 - 状态 seam 必须覆盖候选身份远端变化，断言旧候选资格和 ready 累计被撤销。
 - 状态 seam 必须覆盖受控重锚，断言只有因果无参考证据充分时发生、独立 reset 完全不变、重锚当窗不自动 ready、连续就绪后才 ready。
 - 状态 seam 必须覆盖低频轨迹与因果 Final 先验严重冲突，断言它不能在启动阶段取得可切换资格。

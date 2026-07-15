@@ -2,11 +2,11 @@
 
 ## 结论与证据等级
 
-N4 数值门槛结论为 `CONDITIONAL GO`。候选 `controlled_reanchor_remote25_causal_bootstrap` 在固定的 HB24 上完成 D1/D2/G1/S1/C1 全量回归；24 条样本集合完整，G1、S1 和 C1 均无逐样本数值门槛失败。
+N4 在修订后的 spec/ADR-0025 下结论为 `GO_DEVELOPMENT_FEEDBACK_REGRESSION`。候选 `controlled_reanchor_remote25_causal_bootstrap` 从 N2 到 N4 完整重跑 D1/D2/G1/S1/C1；24 条样本集合完整且每样本严格一行，G1、S1 和 C1 均无逐样本数值门槛失败，可以冻结进入 N5 标准 Lite BO 1×40 批量路径。
 
 但本轮不满足原 spec 的确认隔离要求，不能直接表述为原规范下的无条件 `GO`：第一次 N4 同时查看了 G1/S1/C1，随后根据 `woli2`、`woli1` 和 `run1` 的共同失败设计了 30 BPM 非恶化保护，因此这次修订不是事前已有记录的 S1 预声明规则。修订后虽完整重跑了全部 24 条，证据等级仍应标为“已见 HB24 的开发反馈回归”。
 
-另一个待决边界是 causal bootstrap 在正常 `switch_target_ready` 建立前暂时消费 handoff；它与原 spec/ADR-0024 的“未就绪保持既有 Final”文字冲突。只有明确修订 spec/ADR、把 bootstrap 定义为独立的因果启动状态后，当前候选才能按新规范冻结并进入 N5；若保留原 ready 边界，则应回到 N3 `NO-GO`，#46 不能晋级。
+该冲突已通过 ADR-0025 和 spec 修订解决：`candidate_qualified` 保持 raw-only；`bootstrap_admissible` 是独立的限时试接管状态；`switch_target_ready` 继续作为 `gap_rescue`/`stable_crossover` 的正常消费前置。HB24 已被用于开发反馈的事实不会被改写，后续 N4/N5 仍只能表述为已见数据回归和样本内 BO 能力确认。
 
 ## 唯一规则修订
 
@@ -14,7 +14,7 @@ N4 数值门槛结论为 `CONDITIONAL GO`。候选 `controlled_reanchor_remote25
 
 该规则表达的是因果非恶化约束，不读取参考心率、未来窗口或离线峰身份：当 raw 最强证据与现有 Final 已相互支持时，不允许启动交接把输出推向相反方向。它分别消除了 `woli2` 首窗弱 rank-4 峰、`run1` ready 前错误峰和 `woli1` 高位交接拖尾造成的新增 E20；D1 的低频 raw top-1 伪峰与归档 Final 相距很远，因此不会阻断原有救援路径。
 
-保护规则命中的样本及窗口数为：`bobi3=8`、`jianpan2=2`、`run1=2`、`woli1=15`、`woli2=4`。逐窗产物新增 `switch_final_bpm` 和 `switch_guard_reason`，可直接复核切换后 Final 及保护原因。
+保护规则命中的样本及窗口数为：`bobi3=8`、`jianpan2=2`、`run1=2`、`woli1=15`、`woli2=4`。逐窗产物新增 `switch_final_bpm`、`switch_guard_reason` 和 `switch_state`；全 HB24 共记录 provisional 131 窗、guarded 31 窗、ready confirmed 824 窗、fallback 382 窗和 archived-only 163 窗。
 
 ## D1 固定 60 s Final
 
@@ -38,14 +38,14 @@ N4 数值门槛结论为 `CONDITIONAL GO`。候选 `controlled_reanchor_remote25
 
 ## 冻结产物
 
-运行目录：`C:/Users/26541/AppData/Local/Temp/dual_reset_n4_hb24_raw_guard`
+运行目录：`C:/Users/26541/AppData/Local/Temp/dual_reset_n2_n4_bootstrap_state`
 
 | 文件 | SHA-256 |
 |---|---|
-| `window_metrics.csv` | `6390e0e680fc491299b0b7da7a7cd1a2558ea9cac44b807610a77cfad07ec9e1` |
-| `sample_metrics.csv` | `8f7094ade4a3acabdd2c29effbb3b14e0af4abdd0fc154e1530ae8d32a23074c1` |
-| `qualification_metrics.csv` | `6a984b0189e3fc333fcdc252bd1ae414ca37a270b54a73985b6b0cde8435b4ea` |
-| `switch_metrics.csv` | `a5e1350477bb5fcb605cada8c6083d1c8642f9474cd494339b386c273cb83731` |
-| `candidate_ranking.csv` | `cb69bb1659dfd5edbd7114b950b9dd97ba4ab75a5522c6c68aec81515b5c5a6d` |
+| `window_metrics.csv` | `7d0e13eda9522ec10c4a888018accd32424107b99d299b0aa83bcc35f388c38b` |
+| `sample_metrics.csv` | `252adc3eb7aef6480fca15a35979bd657f56d287dd397a756fb9f4a65f483545` |
+| `qualification_metrics.csv` | `768efa2b34853049734668e37e91e597b72101b89c1689112bbcf15c0801d748` |
+| `switch_metrics.csv` | `5f21cd72133c090f32cb08c7aa03a9577ceb19ff3e8b1392f2f24c8af2ec1729` |
+| `candidate_ranking.csv` | `ed1e735a70a965a1dd988f3a52c570a4032f1e89b7600932b9d725fba27de8bd` |
 
-下一步先决定是否正式修订 spec/ADR 接受“因果 bootstrap 启动状态 + 已见 HB24 开发反馈回归”的证据口径。接受后才可把当前配置冻结接入 N5 HB24、每样本 1 repeat × 40 iterations，且 N5 不得继续调整 reset、资格、ready、bootstrap 或保护参数；不接受则恢复原 ready 前不得消费 handoff 的边界，并记录 N3/#46 为 `NO-GO`。
+下一步仅允许把当前冻结配置接入 N5 HB24、每样本 1 repeat × 40 iterations；N5 不得继续调整 reset、资格、ready、bootstrap 或保护参数。

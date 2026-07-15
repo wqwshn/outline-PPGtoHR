@@ -758,8 +758,11 @@ def test_causal_bootstrap_uses_initial_prior_evidence_and_expires() -> None:
     )
 
     assert result["target_eligible"] is True
+    assert result["bootstrap_admissible"] is True
     assert result["switch_reason"] == "causal_bootstrap"
     assert result["switch_index"] == 0
+    assert result["switch_states"][0] == "bootstrap_provisional"
+    assert result["switch_states"][4] == "ready_confirmed"
     assert result["final_bpm"][0] == pytest.approx(139.0)
     assert result["final_bpm"][3] == pytest.approx(rows[3]["handoff_bpm"])
 
@@ -788,8 +791,10 @@ def test_causal_bootstrap_rejects_remote_initial_handoff() -> None:
     )
 
     assert result["target_eligible"] is False
+    assert result["bootstrap_admissible"] is False
     assert result["switch_index"] is None
     assert result["final_bpm"] == (163.0,)
+    assert result["switch_states"] == ("archived_final",)
 
 
 def test_causal_bootstrap_does_not_move_away_from_final_supported_raw_peak() -> None:
@@ -819,6 +824,7 @@ def test_causal_bootstrap_does_not_move_away_from_final_supported_raw_peak() -> 
     assert result["target_eligible"] is True
     assert result["final_bpm"] == (89.5,)
     assert result["guard_reasons"] == ("raw_final_non_worsening",)
+    assert result["switch_states"] == ("bootstrap_guarded_final",)
 
 
 def test_causal_bootstrap_keeps_rescue_when_raw_peak_is_remote_from_final() -> None:
@@ -874,6 +880,10 @@ def test_n4_confirmation_is_fail_closed_per_sample() -> None:
         rows.append(
             {
                 "sample": sample,
+                "candidate_name": (
+                    "controlled_reanchor_remote25_causal_bootstrap"
+                ),
+                "mode": "bootstrap",
                 "post60_final_mae_bpm": 2.0 if rescue else 1.0,
                 "post60_final_e20_count": 0,
                 "target_eligible": sample != "kaihe3",
@@ -883,7 +893,17 @@ def test_n4_confirmation_is_fail_closed_per_sample() -> None:
             }
         )
 
-    passing = experiment.evaluate_n4_confirmation(rows, manifest=manifest)
+    passing = experiment.evaluate_n4_confirmation(
+        [
+            *rows,
+            {
+                **rows[0],
+                "candidate_name": "controlled_reanchor_remote25",
+                "mode": "hard",
+            },
+        ],
+        manifest=manifest,
+    )
     rows[-1]["delta_vs_old_final_mae_bpm"] = 1.1
     failing = experiment.evaluate_n4_confirmation(rows, manifest=manifest)
     duplicate = experiment.evaluate_n4_confirmation(

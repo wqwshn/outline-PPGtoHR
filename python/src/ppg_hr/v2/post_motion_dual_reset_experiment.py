@@ -310,17 +310,21 @@ def apply_ready_gated_switch(
         and float(rows[first_ready]["center_s"]) - float(motion_end_s) <= 20.0
     )
     if mode == "bootstrap":
-        output, bootstrap_eligible, guard_reasons = _causal_bootstrap_output(
+        output, bootstrap_admissible, guard_reasons, switch_states = (
+            _causal_bootstrap_output(
             rows,
             motion_end_s=motion_end_s,
             raw_ready=raw_ready,
+            )
         )
-        target_eligible = bootstrap_eligible
-        switch_index = 0 if bootstrap_eligible else None
-        switch_reason = "causal_bootstrap" if bootstrap_eligible else None
+        target_eligible = bootstrap_admissible
+        switch_index = 0 if bootstrap_admissible else None
+        switch_reason = "causal_bootstrap" if bootstrap_admissible else None
     else:
         output = [float(row["archived_final_bpm"]) for row in rows]
+        bootstrap_admissible = False
         guard_reasons = [None] * len(rows)
+        switch_states = ["archived_final"] * len(rows)
         switch_index = None
         switch_reason = None
     ready = raw_ready if target_eligible else np.zeros(len(rows), dtype=bool)
@@ -393,7 +397,9 @@ def apply_ready_gated_switch(
     return {
         "mode": mode,
         "final_bpm": tuple(output),
+        "bootstrap_admissible": bootstrap_admissible,
         "guard_reasons": tuple(guard_reasons),
+        "switch_states": tuple(switch_states),
         "switch_index": switch_index,
         "switch_reason": switch_reason,
         "switch_delay_s": (
@@ -420,11 +426,12 @@ def _causal_bootstrap_output(
     *,
     motion_end_s: float,
     raw_ready: np.ndarray,
-) -> tuple[list[float], bool, list[str | None]]:
+) -> tuple[list[float], bool, list[str | None], list[str]]:
     output = [float(row["archived_final_bpm"]) for row in rows]
     guard_reasons: list[str | None] = [None] * len(rows)
+    switch_states = ["archived_final"] * len(rows)
     if not rows:
-        return output, False, guard_reasons
+        return output, False, guard_reasons, switch_states
     raw_trace = rows[0].get("handoff_trace", {})
     trace = json.loads(raw_trace) if isinstance(raw_trace, str) else raw_trace
     predicted_prior = trace.get("predicted_prior_bpm")
@@ -438,7 +445,7 @@ def _causal_bootstrap_output(
         and rows[0].get("qualification_reason") != "unreliable"
     )
     if not eligible:
-        return output, False, guard_reasons
+        return output, False, guard_reasons, switch_states
 
     initial_gap = abs(
         float(rows[0]["handoff_bpm"])
@@ -450,12 +457,15 @@ def _causal_bootstrap_output(
     for index, row in enumerate(rows):
         elapsed = float(row["center_s"]) - float(motion_end_s)
         if revoked:
+            switch_states[index] = "fallback_archived_final"
             continue
         if confirmed and not bool(raw_ready[index]):
             revoked = True
+            switch_states[index] = "fallback_archived_final"
             continue
         if not confirmed and elapsed > 20.0:
             revoked = True
+            switch_states[index] = "fallback_archived_final"
             continue
         target = float(row["handoff_bpm"])
         if compensate and index < 3:
@@ -485,10 +495,16 @@ def _causal_bootstrap_output(
         if raw_final_non_worsening:
             output[index] = archived_final
             guard_reasons[index] = "raw_final_non_worsening"
+            switch_states[index] = "bootstrap_guarded_final"
         else:
             output[index] = target
+            switch_states[index] = (
+                "ready_confirmed"
+                if confirmed or bool(raw_ready[index])
+                else "bootstrap_provisional"
+            )
         confirmed = confirmed or bool(raw_ready[index])
-    return output, True, guard_reasons
+    return output, True, guard_reasons, switch_states
 
 
 def run_dual_reset_experiment(
@@ -742,7 +758,11 @@ def run_dual_reset_experiment(
                             **{
                                 key: value
                                 for key, value in switched.items()
-                                if key not in {"final_bpm", "guard_reasons"}
+                                if key not in {
+                                    "final_bpm",
+                                    "guard_reasons",
+                                    "switch_states",
+                                }
                             },
                         }
                     )
@@ -777,14 +797,16 @@ def run_dual_reset_experiment(
                 motion_end_s=replay.motion_end_s,
                 mode="bootstrap",
             )
-            for row, final_bpm, guard_reason in zip(
+            for row, final_bpm, guard_reason, switch_state in zip(
                 target_rows,
                 switched["final_bpm"],
                 switched["guard_reasons"],
+                switched["switch_states"],
                 strict=True,
             ):
                 row["switch_final_bpm"] = final_bpm
                 row["switch_guard_reason"] = guard_reason
+                row["switch_state"] = switch_state
             baseline = n4_by_sample[sample]
             old_e20 = int(baseline["post60_archived_final_e20_count"])
             new_e20 = int(switched["post60_final_e20_count"])
@@ -799,7 +821,11 @@ def run_dual_reset_experiment(
                     **{
                         key: value
                         for key, value in switched.items()
-                        if key not in {"final_bpm", "guard_reasons"}
+                        if key not in {
+                            "final_bpm",
+                            "guard_reasons",
+                            "switch_states",
+                        }
                     },
                     "old_post60_final_mae_bpm": baseline[
                         "post60_archived_final_mae_bpm"
@@ -1021,11 +1047,18 @@ def evaluate_n4_confirmation(
     *,
     manifest: HbExperimentManifest,
 ) -> dict[str, object]:
-    by_sample = {str(row["sample"]): row for row in rows}
+    candidate_name = "controlled_reanchor_remote25_causal_bootstrap"
+    scoped_rows = [
+        row
+        for row in rows
+        if row.get("candidate_name") == candidate_name
+        and row.get("mode") == "bootstrap"
+    ]
+    by_sample = {str(row["sample"]): row for row in scoped_rows}
     observed = set(by_sample)
     expected = set(manifest.all_samples)
     one_row_per_sample = bool(
-        len(rows) == len(by_sample) == len(expected)
+        len(scoped_rows) == len(by_sample) == len(expected)
     )
 
     def safe(sample: str) -> bool:
@@ -1080,7 +1113,7 @@ def evaluate_n4_confirmation(
     )
     return {
         "stage": "n4",
-        "candidate_name": "controlled_reanchor_remote25_causal_bootstrap",
+        "candidate_name": candidate_name,
         "sample_set_complete": sample_set_complete,
         "one_row_per_sample": one_row_per_sample,
         "observed_sample_count": len(observed),

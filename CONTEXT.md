@@ -228,6 +228,10 @@ _Avoid_: 交接 reset 资格泛称, gap 即可信, 输出已就绪, 参考心率
 已取得交接 reset 候选资格后，交接 reset FFT 的公开输出与该候选轨迹连续一致、没有沿用陈旧资格且可被 Final 安全消费的在线状态。候选与公开输出明显分离、候选身份跳变、held 或证据中断时不得就绪。
 _Avoid_: 候选资格, qualified 布尔量泛称, selected 峰已正确, gap rescue 触发
 
+**交接 reset 因果 bootstrap 启动状态**:
+正常切换目标就绪建立前，仅依据严格早于当前窗口的 Final 弱先验与当前 raw PPG top-k 证据，允许 adaptive Final 临时试接管交接 reset 的独立启动状态。它不是候选资格、正常 ready 或 gap rescue；必须限时等待正常 ready 确认，并在证据撤销、逾期或 raw—Final 非恶化保护命中时回退归档 Final。
+_Avoid_: 未就绪 hard switch, bootstrap 即 ready, Final 直接填充, gap rescue 启动
+
 **交接 reset 受控重锚**:
 交接 reset 候选取得充分且连续的无参考 PPG 证据后，将 handoff tracker 的内部追踪状态迁移到该候选轨迹附近，以解除旧低锁状态和方向限速造成的长期不可达。重锚不直接改写 Final，也不等同于取得切换目标就绪。
 _Avoid_: Final 硬切, 参考心率校正, 单窗 top-1 强制采用, 输出补丁

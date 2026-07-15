@@ -1,5 +1,7 @@
 # N3 因果 bootstrap 切换实验
 
+> 后续语义修订：本报告中的 bootstrap 已由 ADR-0025 正式定义为独立的 `bootstrap_admissible` 启动状态。它不等同于 `candidate_qualified` 或正常 `switch_target_ready`，也不放宽 `gap_rescue`/`stable_crossover` 的 ready 前置条件。HB24 已用于开发反馈，N4/N5 仅按已见数据回归口径报告。
+
 ## 结论
 
 切换层 `GO`。原 ready-gated hard、bounded 和 stable 均因正式 ready 建立过晚而无法满足 Final 固定 60 s 绝对门槛。新增的因果 bootstrap 使用交接 reset 已有的切换前 Final 弱先验与首窗 prior-ranked raw 候选，在严格因果条件满足时从运动后第 1 s 进入交接链路，并在 20 s 内等待正常 `switch_target_ready` 确认。

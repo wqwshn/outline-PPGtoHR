@@ -270,7 +270,7 @@ def test_controlled_reanchor_moves_only_handoff_after_causal_evidence() -> None:
     assert control_results[-1].handoff_bpm < 70.0
 
 
-def test_controlled_reanchor_rejects_candidate_conflicting_with_causal_prior() -> None:
+def test_causal_prior_conflict_blocks_consumption_not_raw_candidate_qualification() -> None:
     tracker = DualResetTracker(
         mechanism="trend_persistence",
         controlled_reanchor=True,
@@ -292,7 +292,14 @@ def test_controlled_reanchor_rejects_candidate_conflicting_with_causal_prior() -
     ]
 
     assert not any(result.handoff_trace["reanchor_event"] for result in results)
-    assert results[-1].candidate_qualification.reason == "causal_prior_conflict"
+    assert results[-1].candidate_qualification.qualified is True
+    assert (
+        results[-1].candidate_qualification.reason
+        == "qualified_persistent_raw_top"
+    )
+    assert results[-1].switch_target_readiness.ready is False
+    assert results[-1].switch_target_readiness.reason == "causal_prior_conflict"
+    assert results[-1].handoff_trace["startup_prior_compatible"] is False
 
 
 def test_controlled_reanchor_does_not_jump_across_reachable_gap() -> None:

@@ -1,5 +1,5 @@
 {
-  "decision": "CONDITIONAL_GO_PENDING_SPEC_AMENDMENT",
+  "decision": "GO_N4_AMENDED_SPEC",
   "frozen_at": "2026-07-15",
   "primary": {
     "name": "controlled_reanchor_remote25",
@@ -16,6 +16,7 @@
     "reanchor_prior_guard_bpm": 45.0,
     "reanchor_min_gap_bpm": 25.0,
     "startup_prior_expires_after_ready": true,
+    "candidate_qualification_uses_final_prior": false,
     "switch_adapter": "causal_bootstrap"
   },
   "safety_backup": {
@@ -26,7 +27,7 @@
     "behavior": "keep_archived_final"
   },
   "switch_layer": {
-    "decision": "CONDITIONAL_GO_DEVELOPMENT_FEEDBACK",
+    "decision": "GO_DEVELOPMENT_FEEDBACK_REGRESSION",
     "original_spec_gate_passed": false,
     "validation_role": "seen_HB24_development_feedback_regression",
     "adapter": "causal_bootstrap",
@@ -41,6 +42,7 @@
       "raw_top1_to_archived_final_max_gap_bpm": 30.0,
       "policy": "keep_archived_final_when_handoff_moves_farther_from_raw_top1"
     },
+    "bootstrap_state_exported": true,
     "ready_revocation_policy": "permanent_fallback_to_archived_final",
     "production_defaults_changed": false
   },
@@ -54,7 +56,7 @@
     "d2_reanchor_count": 0
   },
   "n4_confirmation": {
-    "decision": "GO",
+    "decision": "GO_DEVELOPMENT_FEEDBACK_REGRESSION",
     "observed_sample_count": 24,
     "expected_sample_count": 24,
     "d1_rescued_samples": ["bobi2", "kaihe2", "tiaosheng3"],
@@ -72,13 +74,22 @@
     "spec_deviation_reasons": [
       "causal_bootstrap_consumes_handoff_before_normal_switch_target_ready",
       "raw_final_non_worsening_guard_was_designed_after_viewing_G1_S1_C1_failures"
-    ]
+    ],
+    "amended_spec": "docs/superpowers/specs/2026-07-15-reset-fft-target-readiness-experiment-design.md",
+    "amending_adr": "docs/adr/0025-add-causal-bootstrap-before-normal-reset-readiness.md",
+    "bootstrap_state_window_counts": {
+      "bootstrap_provisional": 131,
+      "bootstrap_guarded_final": 31,
+      "ready_confirmed": 824,
+      "fallback_archived_final": 382,
+      "archived_final": 163
+    }
   },
   "inputs": {
     "manifest_sha256": "d42239a7ca5dd63cf32ae54b19620800679fb055859d79aa7267224344ef22a9",
     "frozen_authoritative_window_metrics_sha256": "657829feb57d67fc9ef6211e8c8a74454cfc6575e625c41453511993f16de2c7",
     "dataset_scope": "HB24 D1/D2/G1/S1/C1",
-    "n4_window_metrics_sha256": "6390e0e680fc491299b0b7da7a7cd1a2558ea9cac44b807610a77cfad07ec9e1",
-    "n4_switch_metrics_sha256": "a5e1350477bb5fcb605cada8c6083d1c8642f9474cd494339b386c273cb83731"
+    "n2_n4_window_metrics_sha256": "7d0e13eda9522ec10c4a888018accd32424107b99d299b0aa83bcc35f388c38b",
+    "n2_n4_switch_metrics_sha256": "5f21cd72133c090f32cb08c7aa03a9577ceb19ff3e8b1392f2f24c8af2ec1729"
   }
 }

@@ -296,7 +296,6 @@ class DualResetTracker:
             and selected_candidate is not None
             and abs(float(selected_candidate) - peaks[0][0])
             <= self._trajectory_tolerance_bpm
-            and not prior_conflict
         )
         qualified = bool(
             enough_history
@@ -304,7 +303,6 @@ class DualResetTracker:
             and input.reliable
             and amp_ratio >= self._min_amp_ratio
             and held_previous_count <= self._max_held_previous
-            and not prior_conflict
         )
         if not input.reliable:
             reason = "unreliable"
@@ -314,8 +312,6 @@ class DualResetTracker:
             reason = "held_previous"
         elif amp_ratio < self._min_amp_ratio:
             reason = "weak_peak"
-        elif prior_conflict:
-            reason = "causal_prior_conflict"
         elif persistent_candidate_evidence:
             reason = "qualified_persistent_raw_top"
         elif stable_hits < self._hits_required:
@@ -348,6 +344,7 @@ class DualResetTracker:
             self._controlled_reanchor
             and qualified
             and persistent_candidate_evidence
+            and not prior_conflict
             and selected_candidate is not None
             and abs(float(selected_candidate) - handoff_bpm)
             > self._reanchor_min_gap_bpm
@@ -366,6 +363,7 @@ class DualResetTracker:
         readiness_evidence = bool(
             qualified
             and not reanchor_event
+            and not prior_conflict
             and candidate_handoff_gap is not None
             and candidate_handoff_gap <= self._readiness_tolerance_bpm
             and not held_previous
@@ -405,6 +403,8 @@ class DualResetTracker:
         )
         if not qualified:
             readiness_reason = "candidate_not_qualified"
+        elif prior_conflict:
+            readiness_reason = "causal_prior_conflict"
         elif held_previous or selected_candidate is None:
             readiness_reason = "held_previous"
         elif candidate_handoff_gap > self._readiness_tolerance_bpm:
@@ -457,6 +457,7 @@ class DualResetTracker:
                 "predicted_prior_bpm": predicted_prior,
                 "prior_weight": prior_weight,
                 "prior_score_weight": 0.75 * prior_weight,
+                "startup_prior_compatible": not prior_conflict,
                 "mechanism": self._mechanism,
                 "reanchor_event": reanchor_event,
                 "reanchor_from_bpm": reanchor_from_bpm,
