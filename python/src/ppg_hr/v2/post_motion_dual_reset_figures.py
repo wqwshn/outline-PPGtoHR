@@ -55,13 +55,13 @@ def generate_report_artifacts(input_dir: Path | str) -> tuple[Path, ...]:
     _validate_input_directory(root)
     tables = {name: _read_csv(root / name) for name in REQUIRED_INPUT_FILES}
     hashes = {name: _sha256(root / name) for name in REQUIRED_INPUT_FILES}
-    output_dir = root / "report_artifacts"
-    output_dir.mkdir(parents=True, exist_ok=True)
-
+    evaluation = _evaluate_frozen_evidence(tables)
     summary_rows = _summary_source_rows(
         tables["sample_metrics.csv"], tables["candidate_ranking.csv"]
     )
     timeseries_rows = _timeseries_source_rows(tables["window_metrics.csv"])
+    output_dir = root / "report_artifacts"
+    output_dir.mkdir(parents=True, exist_ok=True)
     summary_source = output_dir / "figure_summary_source.csv"
     timeseries_source = output_dir / "figure_timeseries_source.csv"
     _write_csv(summary_source, summary_rows)
@@ -75,10 +75,12 @@ def generate_report_artifacts(input_dir: Path | str) -> tuple[Path, ...]:
     )
 
     frozen_path = output_dir / "frozen_candidate.json"
-    frozen = _frozen_decision(tables, hashes)
+    frozen = _frozen_decision(tables, hashes, evaluation)
     _write_json(frozen_path, frozen)
     report_path = output_dir / "experiment_summary.md"
-    report_path.write_text(_experiment_summary(tables, hashes), encoding="utf-8")
+    report_path.write_text(
+        _experiment_summary(tables, hashes, evaluation), encoding="utf-8"
+    )
     metadata_path = output_dir / "figure_metadata.json"
     _write_json(metadata_path, _metadata(root, hashes))
 
@@ -180,11 +182,13 @@ def _summary_source_rows(
 def _timeseries_source_rows(
     window_rows: list[dict[str, str]],
 ) -> list[dict[str, Any]]:
-    cold_lookup = {
-        (row.get("sample", ""), row.get("aligned_time_s", "")): row
+    cold_rows = [
+        row
         for row in window_rows
-        if row.get("cohort") == "d1" and row.get("candidate_name") == "cold_reset"
-    }
+        if row.get("cohort") == "d1"
+        and row.get("candidate_name") == "cold_reset"
+        and row.get("sample") in SAMPLES
+    ]
     mechanism_rows = [
         row
         for row in window_rows
@@ -194,6 +198,15 @@ def _timeseries_source_rows(
     ]
     if not mechanism_rows:
         raise ValueError(f"No window rows for {BEST_MECHANISM}")
+    cold_lookup = _unique_window_lookup(cold_rows, "cold_reset")
+    mechanism_lookup = _unique_window_lookup(mechanism_rows, BEST_MECHANISM)
+    if set(cold_lookup) != set(mechanism_lookup):
+        missing = sorted(set(mechanism_lookup) - set(cold_lookup))
+        extra = sorted(set(cold_lookup) - set(mechanism_lookup))
+        raise ValueError(
+            "Every trend_persistence window requires an exact cold-reset window pair; "
+            f"missing={missing[:3]}, extra={extra[:3]}"
+        )
     starts = {
         sample: min(
             _number(row.get("aligned_time_s"))
@@ -206,7 +219,7 @@ def _timeseries_source_rows(
     for row in mechanism_rows:
         sample = row["sample"]
         time_text = row.get("aligned_time_s", "")
-        cold = cold_lookup.get((sample, time_text), row)
+        cold = cold_lookup[(sample, _number(time_text))]
         reference = _number(row.get("ref_bpm"))
         handoff = _number(row.get("handoff_bpm"))
         false_qualification = _truth(row.get("qualified")) and abs(handoff - reference) > 20
@@ -225,6 +238,176 @@ def _timeseries_source_rows(
         ):
             rows.append({**common, "series": series, "bpm": value})
     return rows
+
+
+def _unique_window_lookup(
+    rows: list[dict[str, str]], candidate: str
+) -> dict[tuple[str, float], dict[str, str]]:
+    lookup: dict[tuple[str, float], dict[str, str]] = {}
+    for row in rows:
+        key = (row.get("sample", ""), _number(row.get("aligned_time_s")))
+        if key in lookup:
+            raise ValueError(f"Duplicate {candidate} window key: {key}")
+        lookup[key] = row
+    return lookup
+
+
+def _evaluate_frozen_evidence(
+    tables: dict[str, list[dict[str, str]]],
+) -> dict[str, Any]:
+    ranking_rows = tables["candidate_ranking.csv"]
+    e0_rows = [
+        row
+        for row in ranking_rows
+        if row.get("stage") == "e0" and row.get("candidate_name") == "cold_reset"
+    ]
+    if len(e0_rows) != 1:
+        raise ValueError("Expected exactly one E0 cold-reset ranking row")
+    e0 = e0_rows[0]
+    e0_observed = int(_number(e0.get("d1_cold_low_lock_reproduced_count")))
+    e0_expected = int(_number(e0.get("d1_cold_low_lock_expected_count")))
+    e0_reproduced = _truth(e0.get("e0_low_lock_reproduced"))
+    if not e0_reproduced or e0_observed != e0_expected or e0_expected <= 0:
+        raise ValueError(
+            "Frozen Task 6 evidence requires E0 low-lock reproduction before E1; "
+            f"observed={e0_observed}, expected={e0_expected}, "
+            f"reproduced={e0_reproduced}"
+        )
+
+    qualification_counts: dict[str, int] = {}
+    for row in tables["qualification_metrics.csv"]:
+        if row.get("stage") != "e1":
+            continue
+        candidate = row.get("candidate_name", "")
+        qualification_counts[candidate] = qualification_counts.get(candidate, 0) + int(
+            _number(row.get("qualified_e20_count"))
+        )
+    sample_rows = tables["sample_metrics.csv"]
+    cold_by_sample = {
+        row.get("sample", ""): _number(row.get("post60_handoff_mae_bpm"))
+        for row in sample_rows
+        if row.get("stage") == "e1" and row.get("candidate_name") == "cold_reset"
+    }
+
+    evidence_rows: list[dict[str, Any]] = []
+    for row in ranking_rows:
+        if row.get("stage") != "e1":
+            continue
+        candidate = row.get("candidate_name", "")
+        d1_min = _number(row.get("d1_min_improvement_fraction"))
+        d2_max = _number(row.get("d2_max_regression_bpm"))
+        e20_count = int(_number(row.get("qualified_e20_count")))
+        candidate_samples = [
+            sample
+            for sample in sample_rows
+            if sample.get("stage") == "e1"
+            and sample.get("candidate_name") == candidate
+        ]
+        d1_improvements = [
+            (
+                cold_by_sample[sample["sample"]]
+                - _number(sample.get("post60_handoff_mae_bpm"))
+            )
+            / cold_by_sample[sample["sample"]]
+            for sample in candidate_samples
+            if sample.get("cohort") == "d1"
+            and sample.get("sample") in cold_by_sample
+            and cold_by_sample[sample["sample"]] > 0
+        ]
+        d2_regressions = [
+            _number(sample.get("post60_handoff_mae_bpm"))
+            - cold_by_sample[sample["sample"]]
+            for sample in candidate_samples
+            if sample.get("cohort") == "d2"
+            and sample.get("sample") in cold_by_sample
+        ]
+        if not d1_improvements or not d2_regressions:
+            raise ValueError(f"Incomplete D1/D2 sample evidence for {candidate}")
+        sample_d1_min = min(d1_improvements)
+        sample_d2_max = max(d2_regressions)
+        if not math.isclose(d1_min, sample_d1_min, rel_tol=1e-9, abs_tol=1e-9):
+            raise ValueError(
+                f"Ranking/sample D1 improvement mismatch for {candidate}: "
+                f"ranking={d1_min}, sample={sample_d1_min}"
+            )
+        if not math.isclose(d2_max, sample_d2_max, rel_tol=1e-9, abs_tol=1e-9):
+            raise ValueError(
+                f"Ranking/sample D2 regression mismatch for {candidate}: "
+                f"ranking={d2_max}, sample={sample_d2_max}"
+            )
+        sample_e20_count = sum(
+            int(_number(sample.get("qualified_e20_count")))
+            for sample in candidate_samples
+        )
+        if sample_e20_count != e20_count:
+            raise ValueError(
+                f"Ranking/sample E20 mismatch for {candidate}: "
+                f"ranking={e20_count}, sample={sample_e20_count}"
+            )
+        if qualification_counts.get(candidate) != e20_count:
+            raise ValueError(
+                f"Ranking/qualification E20 mismatch for {candidate}: "
+                f"ranking={e20_count}, qualification={qualification_counts.get(candidate)}"
+            )
+        target_from_metrics = d1_min >= 0.50 and d2_max <= 1.0
+        target_flag = _truth(row.get("target_promoted"))
+        qualification_flag = _truth(row.get("qualification_promoted"))
+        if target_flag != target_from_metrics:
+            raise ValueError(
+                f"Inconsistent target promotion evidence for {candidate}: "
+                f"metrics={target_from_metrics}, flag={target_flag}"
+            )
+        if qualification_flag and (not target_flag or e20_count != 0):
+            raise ValueError(
+                f"Inconsistent qualification promotion evidence for {candidate}"
+            )
+        evidence_rows.append(
+            {
+                "candidate_name": candidate,
+                "d1_min_improvement_fraction": d1_min,
+                "d2_max_regression_bpm": d2_max,
+                "qualified_e20_count": e20_count,
+                "target_promoted": target_flag,
+                "qualification_promoted": qualification_flag,
+            }
+        )
+    if not evidence_rows:
+        raise ValueError("No E1 candidate evidence found")
+    go_candidates = [
+        row["candidate_name"] for row in evidence_rows if row["qualification_promoted"]
+    ]
+    decision = "GO" if go_candidates else "NO_GO"
+    if decision != "NO_GO":
+        raise ValueError(
+            "Input evidence supports GO but this generator freezes a NO-GO result; "
+            f"promoted={go_candidates}"
+        )
+    target_candidates = [
+        row["candidate_name"] for row in evidence_rows if row["target_promoted"]
+    ]
+    failed_stage = "E1_TARGET_GATE" if not target_candidates else "E1_QUALIFICATION_GATE"
+    failed_gates: list[str] = []
+    if max(row["d1_min_improvement_fraction"] for row in evidence_rows) < 0.50:
+        failed_gates.append("D1_MIN_IMPROVEMENT_FRACTION")
+    if min(row["qualified_e20_count"] for row in evidence_rows) > 0:
+        failed_gates.append("QUALIFIED_E20_COUNT")
+    if not failed_gates:
+        raise ValueError("NO-GO decision has no failed gate in the frozen evidence")
+    return {
+        "decision": decision,
+        "failed_stage": failed_stage,
+        "failed_gates": failed_gates,
+        "e0_low_lock_reproduced_count": e0_observed,
+        "e0_low_lock_expected_count": e0_expected,
+        "best_d1_min_improvement_fraction": max(
+            row["d1_min_improvement_fraction"] for row in evidence_rows
+        ),
+        "minimum_qualified_e20_count": min(
+            row["qualified_e20_count"] for row in evidence_rows
+        ),
+        "target_promoted_candidates": target_candidates,
+        "qualification_promoted_candidates": go_candidates,
+    }
 
 
 def _render_summary_figure(rows: list[dict[str, Any]], stem: Path) -> None:
@@ -431,7 +614,9 @@ def _contiguous_spans(times: list[float]) -> list[tuple[float, float]]:
 
 
 def _frozen_decision(
-    tables: dict[str, list[dict[str, str]]], hashes: dict[str, str]
+    tables: dict[str, list[dict[str, str]]],
+    hashes: dict[str, str],
+    evaluation: dict[str, Any],
 ) -> dict[str, Any]:
     sample_rows = tables["sample_metrics.csv"]
     cohorts = {
@@ -439,8 +624,9 @@ def _frozen_decision(
         for name in ("d1", "d2")
     }
     return {
-        "decision": "NO_GO",
-        "failed_stage": "E1_TARGET_GATE",
+        "decision": evaluation["decision"],
+        "failed_stage": evaluation["failed_stage"],
+        "failed_gates": evaluation["failed_gates"],
         "failure_thresholds": {
             "d1_min_improvement_fraction": 0.50,
             "d2_max_regression_bpm": 1.0,
@@ -448,13 +634,26 @@ def _frozen_decision(
         },
         "data_cohort": cohorts,
         "input_sha256": hashes,
+        "observed_evidence": {
+            key: evaluation[key]
+            for key in (
+                "e0_low_lock_reproduced_count",
+                "e0_low_lock_expected_count",
+                "best_d1_min_improvement_fraction",
+                "minimum_qualified_e20_count",
+                "target_promoted_candidates",
+                "qualification_promoted_candidates",
+            )
+        },
         "selected_candidate": None,
         "switch_adapter": None,
     }
 
 
 def _experiment_summary(
-    tables: dict[str, list[dict[str, str]]], hashes: dict[str, str]
+    tables: dict[str, list[dict[str, str]]],
+    hashes: dict[str, str],
+    evaluation: dict[str, Any],
 ) -> str:
     sample_rows = tables["sample_metrics.csv"]
     cold = {
@@ -478,6 +677,9 @@ def _experiment_summary(
     )
     hash_lines = "\n".join(f"- `{name}`: `{value}`" for name, value in hashes.items())
     stop = "因 E1 NO-GO 按预注册停止规则未运行。"
+    e0_observed = evaluation["e0_low_lock_reproduced_count"]
+    e0_expected = evaluation["e0_low_lock_expected_count"]
+    decision_text = str(evaluation["decision"]).replace("_", "-")
     return f"""# 双 reset 因果实验冻结摘要
 
 ## 数据冻结
@@ -488,7 +690,7 @@ def _experiment_summary(
 
 ## 旧失败复现
 
-E0 在 D1 的 4/4 记录复现独立 reset FFT 持续低锁，允许进入 E1 机制检验。
+E0 在 D1 的 {e0_observed}/{e0_expected} 记录复现独立 reset FFT 持续低锁，允许进入 E1 机制检验。
 
 ## 交接 reset 目标层
 
@@ -516,7 +718,7 @@ D2 防退化只用于 E1 目标候选验收；即使部分候选满足 1 BPM 门
 
 ## 停止/晋级结论
 
-**NO-GO**。不得进入 E2/E3，不得生成或启用 hard switch，`switch_adapter=null`；本轮不冻结任何获胜参数。
+**{decision_text}**（失败阶段：`{evaluation['failed_stage']}`）。不得进入 E2/E3，不得生成或启用 hard switch，`switch_adapter=null`；本轮不冻结任何获胜参数。
 """
 
 

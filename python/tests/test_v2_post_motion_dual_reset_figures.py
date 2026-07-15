@@ -40,12 +40,14 @@ def _input_dir(tmp_path: Path) -> Path:
     window_rows: list[dict[str, object]] = []
     for candidate in CANDIDATES:
         for sample in SAMPLES:
-            candidate_mae = (
-                cold[sample]
-                if candidate == "cold_reset"
-                else handoff[sample] + CANDIDATES.index(candidate) * 0.1
-            )
-            bad_count = 26 if "trend_persistence" in candidate and sample == "kaihe3" else 0
+            candidate_mae = cold[sample] if candidate == "cold_reset" else handoff[sample]
+            if sample == "kaihe3" and candidate in {"final_anchor", "final_trend"}:
+                candidate_mae = cold[sample]
+            elif sample == "kaihe3" and candidate.startswith("trend_persistence"):
+                candidate_mae = cold[sample] * (1.0 - 0.329)
+            bad_count = 0
+            if sample == "kaihe3" and candidate != "cold_reset":
+                bad_count = 26 if candidate.startswith("trend_persistence") else 3
             sample_rows.append(
                 {
                     "sample": sample,
@@ -88,10 +90,46 @@ def _input_dir(tmp_path: Path) -> Path:
                         "in_post60": "True",
                     }
                 )
+        d2_regression = {
+            "cold_reset": 0.0,
+            "final_anchor": 0.17,
+            "final_trend": 1.39,
+            "trend_persistence": 0.881,
+            "trend_persistence_decay_5s": 0.881,
+            "trend_persistence_decay_10s": 0.881,
+            "trend_persistence_decay_15s": 0.881,
+        }[candidate]
+        sample_rows.append(
+            {
+                "sample": "normal1",
+                "cohort": "d2",
+                "stage": "e1",
+                "candidate_name": candidate,
+                "post60_independent_mae_bpm": 10.0,
+                "post60_handoff_mae_bpm": 10.0 + d2_regression,
+                "post60_window_count": 3,
+                "qualified_e20_count": 0,
+            }
+        )
+        qualification_rows.append(
+            {
+                "sample": "normal1",
+                "cohort": "d2",
+                "stage": "e1",
+                "candidate_name": candidate,
+                "qualification_precision": 1.0,
+                "qualification_delay_s": 4.0,
+                "qualified_e20_count": 0,
+                "qualified_window_count": 0,
+            }
+        )
     ranking_rows = [
         {
             "stage": "e0",
             "candidate_name": "cold_reset",
+            "d1_cold_low_lock_reproduced_count": 4,
+            "d1_cold_low_lock_expected_count": 4,
+            "e0_low_lock_reproduced": "True",
             "d1_min_improvement_fraction": "",
             "d2_max_regression_bpm": "",
             "qualified_e20_count": "",
@@ -105,8 +143,17 @@ def _input_dir(tmp_path: Path) -> Path:
             {
                 "stage": "e1",
                 "candidate_name": candidate,
+                "d1_cold_low_lock_reproduced_count": "",
+                "d1_cold_low_lock_expected_count": "",
+                "e0_low_lock_reproduced": "",
                 "d1_min_improvement_fraction": 0.329 if persistence else 0.0,
-                "d2_max_regression_bpm": 0.881 if persistence else 0.17,
+                "d2_max_regression_bpm": (
+                    0.881
+                    if persistence
+                    else 1.39
+                    if candidate == "final_trend"
+                    else 0.17
+                ),
                 "qualified_e20_count": 26 if persistence else 3,
                 "target_promoted": "False",
                 "qualification_promoted": "False",
@@ -125,6 +172,70 @@ def test_rejects_superseded_noncausal_input_directory(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="causal_final"):
         figures.generate_report_artifacts(old)
+
+
+def test_rejects_input_whose_e1_evidence_would_promote_a_candidate(
+    tmp_path: Path,
+) -> None:
+    input_dir = _input_dir(tmp_path)
+    ranking_path = input_dir / "candidate_ranking.csv"
+    rows = list(csv.DictReader(ranking_path.open(encoding="utf-8-sig")))
+    promoted = next(row for row in rows if row["candidate_name"] == "trend_persistence")
+    promoted["d1_min_improvement_fraction"] = "0.60"
+    promoted["d2_max_regression_bpm"] = "0.50"
+    promoted["qualified_e20_count"] = "0"
+    promoted["target_promoted"] = "True"
+    promoted["qualification_promoted"] = "True"
+    _write_csv(ranking_path, rows)
+    qualification_path = input_dir / "qualification_metrics.csv"
+    qualification_rows = list(
+        csv.DictReader(qualification_path.open(encoding="utf-8-sig"))
+    )
+    for row in qualification_rows:
+        if row["candidate_name"] == "trend_persistence":
+            row["qualified_e20_count"] = "0"
+    _write_csv(qualification_path, qualification_rows)
+    sample_path = input_dir / "sample_metrics.csv"
+    sample_rows = list(csv.DictReader(sample_path.open(encoding="utf-8-sig")))
+    kaihe3 = next(
+        row
+        for row in sample_rows
+        if row["sample"] == "kaihe3"
+        and row["candidate_name"] == "trend_persistence"
+    )
+    kaihe3["post60_handoff_mae_bpm"] = str(
+        float(kaihe3["post60_independent_mae_bpm"]) * 0.40
+    )
+    kaihe3["qualified_e20_count"] = "0"
+    normal = next(
+        row
+        for row in sample_rows
+        if row["sample"] == "normal1"
+        and row["candidate_name"] == "trend_persistence"
+    )
+    normal["post60_handoff_mae_bpm"] = "10.5"
+    _write_csv(sample_path, sample_rows)
+
+    with pytest.raises(ValueError, match="GO.*NO-GO|NO-GO.*GO"):
+        figures.generate_report_artifacts(input_dir)
+
+
+def test_rejects_trend_window_without_exact_cold_reset_pair(tmp_path: Path) -> None:
+    input_dir = _input_dir(tmp_path)
+    window_path = input_dir / "window_metrics.csv"
+    rows = list(csv.DictReader(window_path.open(encoding="utf-8-sig")))
+    removed = next(
+        row
+        for row in rows
+        if row["sample"] == "bobi2"
+        and row["candidate_name"] == "cold_reset"
+        and row["aligned_time_s"] == "104"
+    )
+    rows.remove(removed)
+    _write_csv(window_path, rows)
+
+    with pytest.raises(ValueError, match="exact cold-reset window pair"):
+        figures.generate_report_artifacts(input_dir)
 
 
 def test_generates_no_go_evidence_bundle_with_machine_checked_contract(
@@ -219,6 +330,14 @@ def test_generates_no_go_evidence_bundle_with_machine_checked_contract(
     assert frozen["selected_candidate"] is None
     assert frozen["failure_thresholds"]["d1_min_improvement_fraction"] == 0.50
     assert frozen["data_cohort"]["d1"] == list(SAMPLES)
+    assert frozen["observed_evidence"]["e0_low_lock_reproduced_count"] == 4
+    assert frozen["observed_evidence"]["e0_low_lock_expected_count"] == 4
+    assert frozen["observed_evidence"]["best_d1_min_improvement_fraction"] == 0.329
+    assert frozen["observed_evidence"]["minimum_qualified_e20_count"] == 3
+    assert frozen["failed_gates"] == [
+        "D1_MIN_IMPROVEMENT_FRACTION",
+        "QUALIFIED_E20_COUNT",
+    ]
     expected_hashes = {
         name: hashlib.sha256((input_dir / name).read_bytes()).hexdigest()
         for name in figures.REQUIRED_INPUT_FILES
