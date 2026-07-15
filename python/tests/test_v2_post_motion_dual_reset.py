@@ -146,6 +146,88 @@ def test_limiter_smoothing_cannot_create_raw_trajectory_hits() -> None:
     assert results[-1].qualification.reason == "trajectory_unstable"
 
 
+def test_candidate_can_qualify_while_switch_target_is_not_ready() -> None:
+    tracker = DualResetTracker(
+        tracking=DirectionalTrackingParams(
+            range_up_bpm=20.0,
+            range_down_bpm=25.0,
+            limit_up_bpm=1.5,
+            step_up_bpm=1.5,
+            limit_down_bpm=3.5,
+            step_down_bpm=3.0,
+        ),
+        mechanism="trend_persistence",
+        trajectory_tolerance_bpm=6.0,
+    )
+    final_history = (168.0, 166.0, 164.0)
+    tracker.step(
+        DualResetInput(0.0, _frame((50.0, 1.0)), True, final_history)
+    )
+
+    results = [
+        tracker.step(
+            DualResetInput(
+                float(index),
+                _frame((145.0 - index, 1.0), (55.0, 0.5)),
+                True,
+                final_history,
+            )
+        )
+        for index in range(1, 7)
+    ]
+    result = results[-1]
+
+    assert result.handoff_trace["selected_candidate_bpm"] == 139.0
+    assert result.handoff_bpm < 70.0
+    assert result.candidate_qualification.qualified is True
+    assert result.switch_target_readiness.ready is False
+    assert result.switch_target_readiness.reason == "candidate_handoff_gap"
+    assert result.switch_target_readiness.candidate_handoff_gap_bpm > 60.0
+
+
+def test_unreliable_window_revokes_ready_and_requires_fresh_evidence() -> None:
+    tracker = DualResetTracker(mechanism="cold_reset")
+    ready = None
+    for index in range(6):
+        ready = tracker.step(
+            DualResetInput(float(index), _frame((100.0, 1.0)), True, ())
+        )
+
+    assert ready is not None
+    assert ready.switch_target_readiness.ready is True
+
+    revoked = tracker.step(
+        DualResetInput(6.0, _frame((100.0, 1.0)), False, ())
+    )
+    first_recovery = tracker.step(
+        DualResetInput(7.0, _frame((100.0, 1.0)), True, ())
+    )
+
+    assert revoked.switch_target_readiness.ready is False
+    assert revoked.switch_target_readiness.revoked_reason == "unreliable"
+    assert revoked.switch_target_readiness.state_age_windows == 1
+    assert first_recovery.switch_target_readiness.ready is False
+
+
+def test_remote_candidate_identity_change_revokes_old_readiness() -> None:
+    tracker = DualResetTracker(mechanism="cold_reset")
+    for index in range(6):
+        result = tracker.step(
+            DualResetInput(float(index), _frame((100.0, 1.0)), True, ())
+        )
+    assert result.switch_target_readiness.ready is True
+
+    changed = tracker.step(
+        DualResetInput(6.0, _frame((110.0, 1.0)), True, ())
+    )
+
+    assert changed.switch_target_readiness.ready is False
+    assert changed.switch_target_readiness.revoked_reason == (
+        "candidate_identity_changed"
+    )
+    assert changed.switch_target_readiness.stable_hits == 0
+
+
 def test_handoff_abandons_wrong_prior_for_persistent_remote_raw_top_peak() -> None:
     tracker = DualResetTracker()
     results = []

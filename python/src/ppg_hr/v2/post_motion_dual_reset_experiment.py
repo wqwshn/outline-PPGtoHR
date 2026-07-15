@@ -188,6 +188,25 @@ def replay_candidate_frames(
                 "observed_windows": step.qualification.observed_windows,
                 "selected_amp_ratio": step.qualification.selected_amp_ratio,
                 "held_previous_count": step.qualification.held_previous_count,
+                "switch_target_ready": step.switch_target_readiness.ready,
+                "switch_target_readiness_reason": (
+                    step.switch_target_readiness.reason
+                ),
+                "switch_target_ready_hits": (
+                    step.switch_target_readiness.stable_hits
+                ),
+                "candidate_handoff_gap_bpm": (
+                    step.switch_target_readiness.candidate_handoff_gap_bpm
+                ),
+                "switch_target_state_age_windows": (
+                    step.switch_target_readiness.state_age_windows
+                ),
+                "switch_target_established_reason": (
+                    step.switch_target_readiness.established_reason
+                ),
+                "switch_target_revoked_reason": (
+                    step.switch_target_readiness.revoked_reason
+                ),
                 "archived_final_anchor_bpm": step.handoff_trace.get(
                     "final_anchor_bpm"
                 ),

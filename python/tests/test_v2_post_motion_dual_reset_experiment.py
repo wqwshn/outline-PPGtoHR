@@ -483,6 +483,47 @@ def test_candidate_replay_uses_archived_final_history_without_reference_hr() -> 
     assert "ref_bpm" not in rows[0]
 
 
+def test_candidate_replay_exports_readiness_trace() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    candidate = experiment.DualResetCandidate(
+        stage="n1",
+        name="controlled_reanchor",
+        mechanism="trend_persistence",
+        prior_half_life_s=10.0,
+        hits_required=3,
+        qualification_windows=4,
+        trajectory_tolerance_bpm=6.0,
+        min_amp_ratio=0.25,
+        max_held_previous=0,
+    )
+    final_history = (168.0, 166.0, 164.0)
+    evidence = [
+        experiment.ReplayEvidenceWindow(
+            center_s=0.0,
+            candidates=_candidate_frame((50.0, 1.0)),
+            reliable=True,
+            archived_final_history=final_history,
+        )
+    ]
+    evidence.extend(
+        experiment.ReplayEvidenceWindow(
+            center_s=float(index),
+            candidates=_candidate_frame((bpm, 1.0), (55.0, 0.5)),
+            reliable=True,
+            archived_final_history=final_history,
+        )
+        for index, bpm in enumerate((145.0, 144.0, 143.0, 142.0), start=1)
+    )
+
+    rows = experiment.replay_candidate_frames(candidate, evidence)
+
+    assert rows[-1]["switch_target_ready"] is False
+    assert rows[-1]["candidate_handoff_gap_bpm"] > 60.0
+    assert rows[-1]["switch_target_state_age_windows"] >= 1
+    assert "switch_target_established_reason" in rows[-1]
+    assert "switch_target_revoked_reason" in rows[-1]
+
+
 def test_candidate_replay_can_disable_reliability_gate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -503,10 +544,20 @@ def test_candidate_replay_can_disable_reliability_gate(
                 selected_amp_ratio=1.0,
                 held_previous_count=0,
             )
+            readiness = SimpleNamespace(
+                ready=False,
+                reason="candidate_not_qualified",
+                stable_hits=0,
+                candidate_handoff_gap_bpm=0.0,
+                state_age_windows=1,
+                established_reason=None,
+                revoked_reason=None,
+            )
             return SimpleNamespace(
                 independent_bpm=100.0,
                 handoff_bpm=100.0,
                 qualification=qualification,
+                switch_target_readiness=readiness,
                 independent_trace={},
                 handoff_trace={},
             )

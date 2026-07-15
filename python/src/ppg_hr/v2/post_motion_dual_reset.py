@@ -30,12 +30,30 @@ class ResetQualification:
 
 
 @dataclass(frozen=True)
+class SwitchTargetReadiness:
+    ready: bool
+    reason: str
+    stable_hits: int
+    observed_windows: int
+    candidate_handoff_gap_bpm: float | None
+    state_age_windows: int
+    established_reason: str | None
+    revoked_reason: str | None
+
+
+@dataclass(frozen=True)
 class DualResetStep:
     independent_bpm: float
     handoff_bpm: float
-    qualification: ResetQualification
+    candidate_qualification: ResetQualification
+    switch_target_readiness: SwitchTargetReadiness
     independent_trace: dict[str, object]
     handoff_trace: dict[str, object]
+
+    @property
+    def qualification(self) -> ResetQualification:
+        """Compatibility alias for the candidate-only qualification."""
+        return self.candidate_qualification
 
 
 class DualResetTracker:
@@ -60,6 +78,8 @@ class DualResetTracker:
         trajectory_tolerance_bpm: float = 4.0,
         min_amp_ratio: float = 0.3,
         max_held_previous: int = 0,
+        readiness_tolerance_bpm: float = 6.0,
+        readiness_hits_required: int = 2,
     ) -> None:
         if prior_half_life_s not in (5.0, 10.0, 15.0):
             raise ValueError("prior_half_life_s must be one of 5, 10, or 15 seconds")
@@ -75,6 +95,10 @@ class DualResetTracker:
             raise ValueError("min_amp_ratio must be in [0, 1]")
         if max_held_previous < 0:
             raise ValueError("max_held_previous must be non-negative")
+        if readiness_tolerance_bpm <= 0.0:
+            raise ValueError("readiness_tolerance_bpm must be positive")
+        if readiness_hits_required <= 0:
+            raise ValueError("readiness_hits_required must be positive")
         self._tracking = tracking or DirectionalTrackingParams(
             range_up_bpm=20.0,
             range_down_bpm=25.0,
@@ -96,6 +120,8 @@ class DualResetTracker:
         self._trajectory_tolerance_bpm = float(trajectory_tolerance_bpm)
         self._min_amp_ratio = float(min_amp_ratio)
         self._max_held_previous = int(max_held_previous)
+        self._readiness_tolerance_bpm = float(readiness_tolerance_bpm)
+        self._readiness_hits_required = int(readiness_hits_required)
         self._observed_windows = 0
         self._previous_independent_bpm: float | None = None
         self._previous_handoff_bpm: float | None = None
@@ -103,6 +129,9 @@ class DualResetTracker:
         self._previous_amp_ratio = 0.0
         self._held_history: deque[bool] = deque(maxlen=3)
         self._qualification_hits: deque[bool] = deque(maxlen=self._qualification_windows)
+        self._readiness_hits: deque[bool] = deque(maxlen=self._readiness_hits_required)
+        self._readiness_state_age = 0
+        self._previous_ready = False
         self._raw_top_track: deque[float] = deque(maxlen=3)
         self._prior_started_s: float | None = None
         self._frozen_anchor_bpm: float | None = None
@@ -202,6 +231,18 @@ class DualResetTracker:
             )
             <= self._trajectory_tolerance_bpm
         )
+        candidate_identity_changed = bool(
+            not held_previous
+            and selected_candidate is not None
+            and self._previous_selected_candidate_bpm is not None
+            and abs(
+                float(selected_candidate) - self._previous_selected_candidate_bpm
+            )
+            > self._trajectory_tolerance_bpm
+        )
+        if candidate_identity_changed:
+            self._qualification_hits.clear()
+            self._readiness_hits.clear()
         self._held_history.append(held_previous)
         held_previous_count = sum(self._held_history)
         self._qualification_hits.append(
@@ -212,13 +253,6 @@ class DualResetTracker:
                 and held_previous_count <= self._max_held_previous
             )
         )
-        self._previous_independent_bpm = independent_bpm
-        self._previous_handoff_bpm = handoff_bpm
-        self._previous_selected_candidate_bpm = (
-            None if held_previous else float(selected_candidate)
-        )
-        self._previous_amp_ratio = amp_ratio
-        self._window_index += 1
         stable_hits = sum(self._qualification_hits)
         enough_history = self._observed_windows >= self._qualification_windows
         qualified = bool(
@@ -241,16 +275,90 @@ class DualResetTracker:
         else:
             reason = "qualified"
 
+        candidate_handoff_gap = (
+            None
+            if held_previous or selected_candidate is None
+            else abs(float(selected_candidate) - handoff_bpm)
+        )
+        readiness_evidence = bool(
+            qualified
+            and candidate_handoff_gap is not None
+            and candidate_handoff_gap <= self._readiness_tolerance_bpm
+            and not held_previous
+        )
+        self._readiness_hits.append(readiness_evidence)
+        readiness_stable_hits = sum(self._readiness_hits)
+        readiness_observed = len(self._readiness_hits)
+        switch_target_ready = bool(
+            readiness_observed >= self._readiness_hits_required
+            and readiness_stable_hits >= self._readiness_hits_required
+        )
+        if switch_target_ready == self._previous_ready:
+            self._readiness_state_age += 1
+        else:
+            self._readiness_state_age = 1
+        established_reason = (
+            "consecutive_candidate_handoff_agreement"
+            if switch_target_ready and not self._previous_ready
+            else None
+        )
+        revoked_reason = (
+            (
+                "candidate_identity_changed"
+                if candidate_identity_changed
+                else (
+                    "unreliable"
+                    if not input.reliable
+                    else (
+                        "held_previous"
+                        if held_previous
+                        else "candidate_evidence_interrupted"
+                    )
+                )
+            )
+            if self._previous_ready and not switch_target_ready
+            else None
+        )
+        if not qualified:
+            readiness_reason = "candidate_not_qualified"
+        elif held_previous or selected_candidate is None:
+            readiness_reason = "held_previous"
+        elif candidate_handoff_gap > self._readiness_tolerance_bpm:
+            readiness_reason = "candidate_handoff_gap"
+        elif not switch_target_ready:
+            readiness_reason = "insufficient_ready_history"
+        else:
+            readiness_reason = "ready"
+
+        self._previous_independent_bpm = independent_bpm
+        self._previous_handoff_bpm = handoff_bpm
+        self._previous_selected_candidate_bpm = (
+            None if held_previous else float(selected_candidate)
+        )
+        self._previous_amp_ratio = amp_ratio
+        self._window_index += 1
+        self._previous_ready = switch_target_ready
+
         return DualResetStep(
             independent_bpm=independent_bpm,
             handoff_bpm=handoff_bpm,
-            qualification=ResetQualification(
+            candidate_qualification=ResetQualification(
                 qualified=qualified,
                 reason=reason,
                 stable_hits=stable_hits,
                 observed_windows=self._observed_windows,
                 selected_amp_ratio=float(amp_ratio),
                 held_previous_count=held_previous_count,
+            ),
+            switch_target_readiness=SwitchTargetReadiness(
+                ready=switch_target_ready,
+                reason=readiness_reason,
+                stable_hits=readiness_stable_hits,
+                observed_windows=readiness_observed,
+                candidate_handoff_gap_bpm=candidate_handoff_gap,
+                state_age_windows=self._readiness_state_age,
+                established_reason=established_reason,
+                revoked_reason=revoked_reason,
             ),
             independent_trace=independent_trace,
             handoff_trace={
