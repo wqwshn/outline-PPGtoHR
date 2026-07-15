@@ -69,8 +69,8 @@ class DualResetTracker:
             raise ValueError("qualification_windows must be positive")
         if hits_required <= 0 or hits_required > qualification_windows:
             raise ValueError("hits_required must be in [1, qualification_windows]")
-        if trajectory_tolerance_bpm < 0.0:
-            raise ValueError("trajectory_tolerance_bpm must be non-negative")
+        if trajectory_tolerance_bpm <= 0.0:
+            raise ValueError("trajectory_tolerance_bpm must be positive")
         if not 0.0 <= min_amp_ratio <= 1.0:
             raise ValueError("min_amp_ratio must be in [0, 1]")
         if max_held_previous < 0:
@@ -99,6 +99,7 @@ class DualResetTracker:
         self._observed_windows = 0
         self._previous_independent_bpm: float | None = None
         self._previous_handoff_bpm: float | None = None
+        self._previous_selected_candidate_bpm: float | None = None
         self._previous_amp_ratio = 0.0
         self._held_history: deque[bool] = deque(maxlen=3)
         self._qualification_hits: deque[bool] = deque(maxlen=self._qualification_windows)
@@ -146,6 +147,11 @@ class DualResetTracker:
         )
 
         ranked_handoff = self._rank_with_prior(peaks, predicted_prior, prior_weight)
+        handoff_selection = (
+            self._mechanism
+            if predicted_prior is not None
+            else "raw_evidence/no_prior"
+        )
         initial_handoff_previous = (
             predicted_prior if self._previous_handoff_bpm is None else None
         )
@@ -154,11 +160,7 @@ class DualResetTracker:
             previous_bpm=self._previous_handoff_bpm,
             ranked_peaks=ranked_handoff,
             initial_previous_bpm=initial_handoff_previous,
-            initial_selection=(
-                "decayed_final_prior"
-                if predicted_prior is not None
-                else "raw_evidence/no_prior"
-            ),
+            initial_selection=handoff_selection,
         )
 
         if not peaks:
@@ -182,17 +184,22 @@ class DualResetTracker:
                     previous_bpm=self._previous_handoff_bpm,
                     ranked_peaks=(peaks[0],),
                     initial_previous_bpm=None,
-                    initial_selection="persistent_raw_top_1",
+                    initial_selection=handoff_selection,
                     force_first=True,
                 )
 
         self._observed_windows += 1
-        trajectory_stable = (
-            self._previous_handoff_bpm is not None
-            and abs(handoff_bpm - self._previous_handoff_bpm)
+        held_previous = handoff_trace["source"] == "held_previous"
+        selected_candidate = handoff_trace["selected_candidate_bpm"]
+        trajectory_stable = bool(
+            not held_previous
+            and selected_candidate is not None
+            and self._previous_selected_candidate_bpm is not None
+            and abs(
+                float(selected_candidate) - self._previous_selected_candidate_bpm
+            )
             <= self._trajectory_tolerance_bpm
         )
-        held_previous = handoff_trace["source"] == "held_previous"
         self._held_history.append(held_previous)
         held_previous_count = sum(self._held_history)
         self._qualification_hits.append(
@@ -205,6 +212,9 @@ class DualResetTracker:
         )
         self._previous_independent_bpm = independent_bpm
         self._previous_handoff_bpm = handoff_bpm
+        self._previous_selected_candidate_bpm = (
+            None if held_previous else float(selected_candidate)
+        )
         self._previous_amp_ratio = amp_ratio
         self._window_index += 1
         stable_hits = sum(self._qualification_hits)
@@ -331,6 +341,7 @@ class DualResetTracker:
                     "search_max_bpm": search_max,
                     "selected_rank": selected_rank,
                     "source": source,
+                    "selected_candidate_bpm": None,
                     "tracked_bpm": tracked_bpm,
                     "limited_bpm": limited_bpm,
                 }
@@ -362,6 +373,7 @@ class DualResetTracker:
             "search_max_bpm": search_max,
             "selected_rank": selected_rank,
             "source": source,
+            "selected_candidate_bpm": tracked_bpm,
             "tracked_bpm": tracked_bpm,
             "limited_bpm": limited_bpm,
         }
