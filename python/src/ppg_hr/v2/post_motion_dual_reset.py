@@ -82,6 +82,7 @@ class DualResetTracker:
         readiness_hits_required: int = 2,
         controlled_reanchor: bool = False,
         reanchor_prior_guard_bpm: float = 45.0,
+        reanchor_min_gap_bpm: float | None = None,
     ) -> None:
         if prior_half_life_s not in (5.0, 10.0, 15.0):
             raise ValueError("prior_half_life_s must be one of 5, 10, or 15 seconds")
@@ -103,6 +104,8 @@ class DualResetTracker:
             raise ValueError("readiness_hits_required must be positive")
         if reanchor_prior_guard_bpm <= 0.0:
             raise ValueError("reanchor_prior_guard_bpm must be positive")
+        if reanchor_min_gap_bpm is not None and reanchor_min_gap_bpm <= 0.0:
+            raise ValueError("reanchor_min_gap_bpm must be positive")
         self._tracking = tracking or DirectionalTrackingParams(
             range_up_bpm=20.0,
             range_down_bpm=25.0,
@@ -128,6 +131,11 @@ class DualResetTracker:
         self._readiness_hits_required = int(readiness_hits_required)
         self._controlled_reanchor = bool(controlled_reanchor)
         self._reanchor_prior_guard_bpm = float(reanchor_prior_guard_bpm)
+        self._reanchor_min_gap_bpm = (
+            self._readiness_tolerance_bpm
+            if reanchor_min_gap_bpm is None
+            else float(reanchor_min_gap_bpm)
+        )
         self._observed_windows = 0
         self._previous_independent_bpm: float | None = None
         self._previous_handoff_bpm: float | None = None
@@ -312,7 +320,7 @@ class DualResetTracker:
             and persistent_candidate_evidence
             and selected_candidate is not None
             and abs(float(selected_candidate) - handoff_bpm)
-            > self._readiness_tolerance_bpm
+            > self._reanchor_min_gap_bpm
         ):
             reanchor_event = True
             reanchor_from_bpm = handoff_bpm

@@ -1,0 +1,41 @@
+{
+  "decision": "GO_TARGET_LAYER",
+  "frozen_at": "2026-07-15",
+  "primary": {
+    "name": "controlled_reanchor_remote25",
+    "mechanism": "trend_persistence",
+    "prior_half_life_s": 10.0,
+    "hits_required": 3,
+    "qualification_windows": 4,
+    "trajectory_tolerance_bpm": 6.0,
+    "min_amp_ratio": 0.25,
+    "max_held_previous": 0,
+    "readiness_tolerance_bpm": 6.0,
+    "readiness_hits_required": 2,
+    "controlled_reanchor": true,
+    "reanchor_prior_guard_bpm": 45.0,
+    "reanchor_min_gap_bpm": 25.0,
+    "switch_adapter": "pending_issue_45"
+  },
+  "safety_backup": {
+    "name": "safe_abstain_no_switch",
+    "mechanism": "trend_persistence",
+    "controlled_reanchor": false,
+    "switch_adapter": "disabled",
+    "behavior": "keep_archived_final"
+  },
+  "development_gate": {
+    "d1_target_pass_count": 3,
+    "d1_target_expected_count": 4,
+    "d1_target_pass_samples": ["bobi2", "kaihe2", "tiaosheng3"],
+    "d1_safe_abstention_samples": ["kaihe3"],
+    "d2_all_post60_regression_le_1bpm": true,
+    "d2_new_e20_count": 0,
+    "d2_reanchor_count": 0
+  },
+  "inputs": {
+    "manifest_sha256": "d42239a7ca5dd63cf32ae54b19620800679fb055859d79aa7267224344ef22a9",
+    "frozen_authoritative_window_metrics_sha256": "657829feb57d67fc9ef6211e8c8a74454cfc6575e625c41453511993f16de2c7",
+    "dataset_scope": "HB D1/D2 only"
+  }
+}

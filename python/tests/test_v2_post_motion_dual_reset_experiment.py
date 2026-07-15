@@ -617,6 +617,23 @@ def test_target_metrics_start_at_first_switch_target_ready() -> None:
     assert summary["reanchor_count"] == 1
 
 
+def test_frozen_target_file_matches_n2_candidate() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    frozen_path = (
+        Path(__file__).parents[2]
+        / "docs"
+        / "reports"
+        / "reset-fft-target-frozen-candidate-20260715.json"
+    )
+    frozen = json.loads(frozen_path.read_text(encoding="utf-8"))["primary"]
+    candidate = experiment.build_n2_candidate()
+
+    assert frozen["name"] == candidate.name
+    assert frozen["mechanism"] == candidate.mechanism
+    assert frozen["reanchor_min_gap_bpm"] == candidate.reanchor_min_gap_bpm
+    assert frozen["controlled_reanchor"] is candidate.controlled_reanchor
+
+
 def test_candidate_replay_can_disable_reliability_gate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

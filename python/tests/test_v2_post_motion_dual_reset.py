@@ -291,6 +291,32 @@ def test_controlled_reanchor_rejects_candidate_conflicting_with_causal_prior() -
     assert results[-1].candidate_qualification.reason == "causal_prior_conflict"
 
 
+def test_controlled_reanchor_does_not_jump_across_reachable_gap() -> None:
+    tracker = DualResetTracker(
+        mechanism="trend_persistence",
+        controlled_reanchor=True,
+        reanchor_min_gap_bpm=25.0,
+    )
+    final_history = (125.0, 123.0, 121.0)
+    tracker.step(
+        DualResetInput(0.0, _frame((110.0, 1.0)), True, final_history)
+    )
+    results = [
+        tracker.step(
+            DualResetInput(
+                float(index),
+                _frame((90.0, 1.0), (110.0, 0.5)),
+                True,
+                final_history,
+            )
+        )
+        for index in range(1, 6)
+    ]
+
+    assert not any(result.handoff_trace["reanchor_event"] for result in results)
+    assert results[-1].handoff_bpm > 90.0
+
+
 def test_handoff_abandons_wrong_prior_for_persistent_remote_raw_top_peak() -> None:
     tracker = DualResetTracker()
     results = []

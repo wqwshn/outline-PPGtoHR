@@ -57,6 +57,7 @@ class DualResetCandidate:
     max_held_previous: int
     require_reliable: bool = True
     controlled_reanchor: bool = False
+    reanchor_min_gap_bpm: float | None = None
 
 
 @dataclass(frozen=True)
@@ -168,6 +169,16 @@ def build_n1_candidate() -> DualResetCandidate:
     )
 
 
+def build_n2_candidate() -> DualResetCandidate:
+    """Apply the predeclared independent remote-distance scale."""
+    return replace(
+        build_n1_candidate(),
+        stage="n2",
+        name="controlled_reanchor_remote25",
+        reanchor_min_gap_bpm=25.0,
+    )
+
+
 def replay_candidate_frames(
     candidate: DualResetCandidate,
     evidence: Sequence[ReplayEvidenceWindow],
@@ -181,6 +192,7 @@ def replay_candidate_frames(
         min_amp_ratio=candidate.min_amp_ratio,
         max_held_previous=candidate.max_held_previous,
         controlled_reanchor=candidate.controlled_reanchor,
+        reanchor_min_gap_bpm=candidate.reanchor_min_gap_bpm,
     )
     rows: list[dict[str, object]] = []
     for window in evidence:
@@ -264,7 +276,7 @@ def run_dual_reset_experiment(
     stages: Sequence[str] = ("e0", "e1", "e2"),
 ) -> DualResetExperimentResult:
     requested = tuple(str(stage).lower() for stage in stages)
-    unknown = set(requested) - {"e0", "e1", "e2", "n1"}
+    unknown = set(requested) - {"e0", "e1", "e2", "n1", "n2"}
     if unknown:
         raise ValueError(f"unknown experiment stages: {sorted(unknown)}")
     manifest = load_hb_manifest(Path(manifest_path))
@@ -456,6 +468,20 @@ def run_dual_reset_experiment(
                 "promoted": False,
             }
         )
+    if "n2" in requested:
+        n2_candidate = build_n2_candidate()
+        _append_candidate_results(
+            n2_candidate,
+            replays,
+            cohort_by_sample,
+            window_rows,
+            sample_rows,
+            qualification_rows,
+        )
+        n2_rows = [row for row in sample_rows if row["stage"] == "n2"]
+        n1_ranking.append(evaluate_target_freeze(n2_candidate, n2_rows))
+        if bool(n1_ranking[-1]["target_freeze_go"]):
+            final_promoted = (n2_candidate.name,)
     result = DualResetExperimentResult(
         window_metrics=tuple(window_rows),
         sample_metrics=tuple(sample_rows),
@@ -594,6 +620,45 @@ def is_sustained_cold_reset_low_lock(row: dict[str, object]) -> bool:
         float(row["post60_independent_mean_signed_bias_bpm"]) <= -20.0
         and float(row["post60_independent_low_lock_fraction"]) >= 0.8
     )
+
+
+def evaluate_target_freeze(
+    candidate: DualResetCandidate,
+    rows: Sequence[dict[str, object]],
+) -> dict[str, object]:
+    d1 = [row for row in rows if row["cohort"] == "d1"]
+    d2 = [row for row in rows if row["cohort"] == "d2"]
+
+    def target_pass(row: dict[str, object]) -> bool:
+        return bool(
+            math.isfinite(float(row["switch_target_ready_delay_s"]))
+            and float(row["switch_target_ready_delay_s"]) <= 20.0
+            and float(row["ready_onward_handoff_mae_bpm"]) <= 3.0
+            and int(row["ready_onward_e20_count"]) == 0
+        )
+
+    d1_pass = [str(row["sample"]) for row in d1 if target_pass(row)]
+    abstain = [str(row["sample"]) for row in d1 if not target_pass(row)]
+    d2_safe = all(
+        float(row["post60_handoff_regression_bpm"]) <= 1.0
+        and int(row["post60_handoff_e20_count"])
+        <= int(row["post60_archived_final_e20_count"])
+        and int(row["reanchor_count"]) == 0
+        for row in d2
+    )
+    go = len(d1_pass) >= 3 and d2_safe
+    return {
+        "stage": candidate.stage,
+        "candidate_name": candidate.name,
+        "d1_target_pass_count": len(d1_pass),
+        "d1_target_expected_count": len(d1),
+        "d1_target_pass_samples": ",".join(d1_pass),
+        "d1_safe_abstention_samples": ",".join(abstain),
+        "d1_at_least_3of4_target_pass": len(d1_pass) >= 3,
+        "d2_all_post60_regression_le_1bpm_no_new_e20_no_reanchor": d2_safe,
+        "target_freeze_go": go,
+        "promoted": go,
+    }
 
 
 def rank_candidate_metrics(
@@ -888,6 +953,14 @@ def _append_candidate_results(
             abs(float(row["archived_final_bpm"]) - float(row["ref_bpm"]))
             for row in post60
         )
+        post60_handoff_errors = [
+            abs(float(row["handoff_bpm"]) - float(row["ref_bpm"]))
+            for row in post60
+        ]
+        post60_archived_errors = [
+            abs(float(row["archived_final_bpm"]) - float(row["ref_bpm"]))
+            for row in post60
+        ]
         independent_summary = summarise_independent_post60(post60)
         common = {
             "sample": sample,
@@ -903,6 +976,18 @@ def _append_candidate_results(
                 "post60_handoff_mae_bpm": post60_mae,
                 "post60_archived_final_mae_bpm": archived_final_mae,
                 "post60_handoff_regression_bpm": post60_mae - archived_final_mae,
+                "post60_handoff_e10_count": sum(
+                    error > 10.0 for error in post60_handoff_errors
+                ),
+                "post60_handoff_e20_count": sum(
+                    error > 20.0 for error in post60_handoff_errors
+                ),
+                "post60_archived_final_e10_count": sum(
+                    error > 10.0 for error in post60_archived_errors
+                ),
+                "post60_archived_final_e20_count": sum(
+                    error > 20.0 for error in post60_archived_errors
+                ),
                 "post60_window_count": len(post60),
             }
         )
