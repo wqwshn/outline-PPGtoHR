@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from ppg_hr.v2.algorithm_presets import DirectionalTrackingParams
 from ppg_hr.v2.raw_fft_candidates import RawFftCandidateFrame
 
 
@@ -40,9 +41,19 @@ class DualResetStep:
 class DualResetTracker:
     """Track pure-PPG and weak-prior reset paths with isolated state."""
 
+    _MECHANISMS = {
+        "cold_reset": (False, False, False, False),
+        "final_anchor": (True, False, False, False),
+        "final_trend": (True, True, False, False),
+        "trend_persistence": (True, True, True, False),
+        "trend_persistence_decay": (True, True, True, True),
+    }
+
     def __init__(
         self,
         *,
+        tracking: DirectionalTrackingParams | None = None,
+        mechanism: str = "trend_persistence_decay",
         prior_half_life_s: float = 10.0,
         hits_required: int = 3,
         qualification_windows: int = 4,
@@ -52,6 +63,33 @@ class DualResetTracker:
     ) -> None:
         if prior_half_life_s not in (5.0, 10.0, 15.0):
             raise ValueError("prior_half_life_s must be one of 5, 10, or 15 seconds")
+        if mechanism not in self._MECHANISMS:
+            raise ValueError(f"unknown dual reset mechanism: {mechanism}")
+        if qualification_windows <= 0:
+            raise ValueError("qualification_windows must be positive")
+        if hits_required <= 0 or hits_required > qualification_windows:
+            raise ValueError("hits_required must be in [1, qualification_windows]")
+        if trajectory_tolerance_bpm < 0.0:
+            raise ValueError("trajectory_tolerance_bpm must be non-negative")
+        if not 0.0 <= min_amp_ratio <= 1.0:
+            raise ValueError("min_amp_ratio must be in [0, 1]")
+        if max_held_previous < 0:
+            raise ValueError("max_held_previous must be non-negative")
+        self._tracking = tracking or DirectionalTrackingParams(
+            range_up_bpm=20.0,
+            range_down_bpm=25.0,
+            limit_up_bpm=1.5,
+            step_up_bpm=1.5,
+            limit_down_bpm=3.5,
+            step_down_bpm=3.0,
+        )
+        self._mechanism = mechanism
+        (
+            self._anchor_enabled,
+            self._trend_enabled,
+            self._persistence_enabled,
+            self._decay_enabled,
+        ) = self._MECHANISMS[mechanism]
         self._prior_half_life_s = float(prior_half_life_s)
         self._hits_required = int(hits_required)
         self._qualification_windows = int(qualification_windows)
@@ -62,34 +100,70 @@ class DualResetTracker:
         self._previous_independent_bpm: float | None = None
         self._previous_handoff_bpm: float | None = None
         self._previous_amp_ratio = 0.0
-        self._held_previous_count = 0
+        self._held_history: deque[bool] = deque(maxlen=3)
         self._qualification_hits: deque[bool] = deque(maxlen=self._qualification_windows)
         self._raw_top_track: deque[float] = deque(maxlen=3)
         self._prior_started_s: float | None = None
+        self._frozen_anchor_bpm: float | None = None
+        self._frozen_trend_bpm_per_window = 0.0
+        self._window_index = 0
 
     def step(self, input: DualResetInput) -> DualResetStep:
         peaks = input.candidates.top()
-        anchor, trend, predicted_prior = self._final_prior(input.previous_final_bpm)
         if self._prior_started_s is None:
             self._prior_started_s = float(input.center_s)
-        prior_weight = 2.0 ** (
-            -max(0.0, float(input.center_s) - self._prior_started_s)
-            / self._prior_half_life_s
+            anchor, trend, _ = self._final_prior(input.previous_final_bpm)
+            self._frozen_anchor_bpm = anchor if self._anchor_enabled else None
+            self._frozen_trend_bpm_per_window = trend if self._trend_enabled else 0.0
+        anchor = self._frozen_anchor_bpm
+        trend = self._frozen_trend_bpm_per_window
+        predicted_prior = (
+            None
+            if anchor is None
+            else anchor + trend * float(self._window_index + 1)
+        )
+        prior_weight = (
+            2.0
+            ** (
+                -max(0.0, float(input.center_s) - self._prior_started_s)
+                / self._prior_half_life_s
+            )
+            if predicted_prior is not None and self._decay_enabled
+            else (1.0 if predicted_prior is not None else 0.0)
+        )
+
+        if not peaks and (
+            self._previous_independent_bpm is None or self._previous_handoff_bpm is None
+        ):
+            raise ValueError("cannot hold before observing a raw FFT candidate")
+
+        independent_bpm, _, independent_trace = self._track_path(
+            peaks,
+            previous_bpm=self._previous_independent_bpm,
+            ranked_peaks=peaks,
+            initial_previous_bpm=None,
+            initial_selection="raw_evidence/no_prior",
+        )
+
+        ranked_handoff = self._rank_with_prior(peaks, predicted_prior, prior_weight)
+        initial_handoff_previous = (
+            predicted_prior if self._previous_handoff_bpm is None else None
+        )
+        handoff_bpm, amp_ratio, handoff_trace = self._track_path(
+            peaks,
+            previous_bpm=self._previous_handoff_bpm,
+            ranked_peaks=ranked_handoff,
+            initial_previous_bpm=initial_handoff_previous,
+            initial_selection=(
+                "decayed_final_prior"
+                if predicted_prior is not None
+                else "raw_evidence/no_prior"
+            ),
         )
 
         if not peaks:
-            if self._previous_independent_bpm is None or self._previous_handoff_bpm is None:
-                raise ValueError("cannot hold before observing a raw FFT candidate")
             self._raw_top_track.clear()
-            independent_bpm = self._previous_independent_bpm
-            handoff_bpm = self._previous_handoff_bpm
-            amp_ratio = self._previous_amp_ratio
-            self._held_previous_count += 1
-            independent_selection = "held_previous"
-            handoff_selection = "held_previous"
         else:
-            independent_bpm, _ = peaks[0]
-            prior_choice = self._select_handoff(peaks, predicted_prior, prior_weight)
             self._raw_top_track.append(peaks[0][0])
             raw_top_persistent = len(self._raw_top_track) == 3 and all(
                 abs(current - previous) <= self._trajectory_tolerance_bpm
@@ -98,23 +172,19 @@ class DualResetTracker:
                 )
             )
             if (
-                raw_top_persistent
-                and abs(peaks[0][0] - prior_choice[0])
+                self._persistence_enabled
+                and raw_top_persistent
+                and abs(peaks[0][0] - handoff_trace["tracked_bpm"])
                 > self._trajectory_tolerance_bpm
             ):
-                handoff_bpm, handoff_amp = peaks[0]
-                handoff_selection = "persistent_raw_top_1"
-            else:
-                handoff_bpm, handoff_amp = prior_choice
-                handoff_selection = (
-                    "decayed_final_prior"
-                    if predicted_prior is not None and prior_choice != peaks[0]
-                    else "raw_evidence_after_prior_decay"
+                handoff_bpm, amp_ratio, handoff_trace = self._track_path(
+                    peaks,
+                    previous_bpm=self._previous_handoff_bpm,
+                    ranked_peaks=(peaks[0],),
+                    initial_previous_bpm=None,
+                    initial_selection="persistent_raw_top_1",
+                    force_first=True,
                 )
-            top_amp = peaks[0][1]
-            amp_ratio = handoff_amp / top_amp if top_amp > 0.0 else 0.0
-            self._held_previous_count = 0
-            independent_selection = "raw_top_1"
 
         self._observed_windows += 1
         trajectory_stable = (
@@ -122,7 +192,9 @@ class DualResetTracker:
             and abs(handoff_bpm - self._previous_handoff_bpm)
             <= self._trajectory_tolerance_bpm
         )
-        held_previous_count = self._held_previous_count
+        held_previous = handoff_trace["source"] == "held_previous"
+        self._held_history.append(held_previous)
+        held_previous_count = sum(self._held_history)
         self._qualification_hits.append(
             bool(
                 input.reliable
@@ -134,6 +206,7 @@ class DualResetTracker:
         self._previous_independent_bpm = independent_bpm
         self._previous_handoff_bpm = handoff_bpm
         self._previous_amp_ratio = amp_ratio
+        self._window_index += 1
         stable_hits = sum(self._qualification_hits)
         enough_history = self._observed_windows >= self._qualification_windows
         qualified = bool(
@@ -167,24 +240,28 @@ class DualResetTracker:
                 selected_amp_ratio=float(amp_ratio),
                 held_previous_count=held_previous_count,
             ),
-            independent_trace={"selection": independent_selection},
+            independent_trace=independent_trace,
             handoff_trace={
-                "selection": handoff_selection,
+                **handoff_trace,
                 "final_anchor_bpm": anchor,
                 "final_trend_bpm_per_window": trend,
                 "predicted_prior_bpm": predicted_prior,
                 "prior_weight": prior_weight,
+                "prior_score_weight": 0.75 * prior_weight,
+                "mechanism": self._mechanism,
             },
         )
 
-    def _select_handoff(
+    def _rank_with_prior(
         self,
         peaks: tuple[tuple[float, float], ...],
         predicted_prior_bpm: float | None,
         prior_weight: float,
-    ) -> tuple[float, float]:
+    ) -> tuple[tuple[float, float], ...]:
         if predicted_prior_bpm is None:
-            return peaks[0]
+            return peaks
+        if not peaks:
+            return ()
         top_amp = peaks[0][1]
 
         def score(peak: tuple[float, float]) -> float:
@@ -195,9 +272,99 @@ class DualResetTracker:
                 - abs(peak[0] - predicted_prior_bpm)
                 / self._trajectory_tolerance_bpm,
             )
-            return (1.0 - prior_weight) * amp_ratio + prior_weight * proximity
+            score_weight = 0.75 * prior_weight
+            return (1.0 - score_weight) * amp_ratio + score_weight * proximity
 
-        return max(peaks, key=score)
+        return tuple(sorted(peaks, key=score, reverse=True))
+
+    def _track_path(
+        self,
+        peaks: tuple[tuple[float, float], ...],
+        *,
+        previous_bpm: float | None,
+        ranked_peaks: tuple[tuple[float, float], ...],
+        initial_previous_bpm: float | None,
+        initial_selection: str,
+        force_first: bool = False,
+    ) -> tuple[float, float, dict[str, object]]:
+        corridor_previous = previous_bpm
+        search_previous = previous_bpm if previous_bpm is not None else initial_previous_bpm
+        search_min = (
+            None
+            if search_previous is None
+            else search_previous - self._tracking.range_down_bpm
+        )
+        search_max = (
+            None
+            if search_previous is None
+            else search_previous + self._tracking.range_up_bpm
+        )
+        selected: tuple[float, float] | None = None
+        if force_first and ranked_peaks:
+            selected = ranked_peaks[0]
+        else:
+            for candidate in ranked_peaks:
+                if search_previous is None or (
+                    search_min is not None
+                    and search_max is not None
+                    and search_min < candidate[0] < search_max
+                ):
+                    selected = candidate
+                    break
+
+        if selected is None:
+            if previous_bpm is None:
+                if not peaks:
+                    raise ValueError("cannot initialise without a raw FFT candidate")
+                selected = peaks[0]
+                source = "raw_initial_fallback"
+            else:
+                tracked_bpm = previous_bpm
+                limited_bpm = previous_bpm
+                selected_rank = 0
+                source = "held_previous"
+                amp_ratio = self._previous_amp_ratio
+                return limited_bpm, amp_ratio, {
+                    "selection": "held_previous",
+                    "previous_bpm": previous_bpm,
+                    "search_min_bpm": search_min,
+                    "search_max_bpm": search_max,
+                    "selected_rank": selected_rank,
+                    "source": source,
+                    "tracked_bpm": tracked_bpm,
+                    "limited_bpm": limited_bpm,
+                }
+        else:
+            source = "persistent_raw_top_1" if force_first else "raw_local_peaks"
+
+        tracked_bpm = selected[0]
+        limited_bpm = tracked_bpm
+        if corridor_previous is not None:
+            difference = tracked_bpm - corridor_previous
+            if difference >= 0.0:
+                limit = self._tracking.limit_up_bpm
+                step = self._tracking.step_up_bpm
+            else:
+                limit = self._tracking.limit_down_bpm
+                step = self._tracking.step_down_bpm
+            if difference > limit:
+                limited_bpm = corridor_previous + step
+            elif difference < -limit:
+                limited_bpm = corridor_previous - step
+
+        top_amp = peaks[0][1] if peaks else 0.0
+        amp_ratio = selected[1] / top_amp if top_amp > 0.0 else 0.0
+        selected_rank = peaks.index(selected) + 1
+        return limited_bpm, amp_ratio, {
+            "selection": initial_selection,
+            "previous_bpm": search_previous,
+            "search_min_bpm": search_min,
+            "search_max_bpm": search_max,
+            "selected_rank": selected_rank,
+            "source": source,
+            "tracked_bpm": tracked_bpm,
+            "limited_bpm": limited_bpm,
+        }
 
     @staticmethod
     def _final_prior(

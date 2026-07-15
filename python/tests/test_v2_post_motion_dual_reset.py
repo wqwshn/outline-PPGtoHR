@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
+from ppg_hr.v2.algorithm_presets import DirectionalTrackingParams
 from ppg_hr.v2.post_motion_dual_reset import DualResetInput, DualResetTracker
 from ppg_hr.v2.raw_fft_candidates import RawFftCandidateFrame
 
@@ -19,8 +21,19 @@ def _frame(*candidates: tuple[float, float]) -> RawFftCandidateFrame:
     )
 
 
+def _tracking() -> DirectionalTrackingParams:
+    return DirectionalTrackingParams(
+        range_up_bpm=20.0,
+        range_down_bpm=25.0,
+        limit_up_bpm=10.0,
+        step_up_bpm=5.0,
+        limit_down_bpm=10.0,
+        step_down_bpm=5.0,
+    )
+
+
 def test_handoff_uses_final_prior_without_contaminating_independent_reset() -> None:
-    tracker = DualResetTracker()
+    tracker = DualResetTracker(tracking=_tracking())
 
     result = tracker.step(
         DualResetInput(
@@ -35,8 +48,48 @@ def test_handoff_uses_final_prior_without_contaminating_independent_reset() -> N
     assert result.handoff_bpm == 135.0
     assert result.qualification.qualified is False
     assert result.qualification.reason == "insufficient_history"
-    assert result.independent_trace["selection"] == "raw_top_1"
+    assert result.independent_trace["selection"] == "raw_evidence/no_prior"
     assert result.handoff_trace["selection"] == "decayed_final_prior"
+
+
+def test_both_paths_track_directionally_from_their_distinct_initial_lock() -> None:
+    tracker = DualResetTracker(tracking=_tracking())
+    first = tracker.step(
+        DualResetInput(
+            0.0,
+            _frame((55.0, 1.0), (135.0, 0.5)),
+            True,
+            (138.0, 136.0, 134.0),
+        )
+    )
+    second = tracker.step(
+        DualResetInput(
+            2.0,
+            _frame((135.0, 1.0), (55.0, 0.5)),
+            True,
+            (138.0, 136.0, 134.0),
+        )
+    )
+
+    assert (first.independent_bpm, first.handoff_bpm) == (55.0, 135.0)
+    assert (second.independent_bpm, second.handoff_bpm) == (55.0, 135.0)
+    assert second.independent_trace == {
+        "selection": "raw_evidence/no_prior",
+        "previous_bpm": 55.0,
+        "search_min_bpm": 30.0,
+        "search_max_bpm": 75.0,
+        "selected_rank": 2,
+        "source": "raw_local_peaks",
+        "tracked_bpm": 55.0,
+        "limited_bpm": 55.0,
+    }
+    assert second.handoff_trace["previous_bpm"] == 135.0
+    assert second.handoff_trace["search_min_bpm"] == 110.0
+    assert second.handoff_trace["search_max_bpm"] == 155.0
+    assert second.handoff_trace["selected_rank"] == 1
+    assert second.handoff_trace["source"] == "raw_local_peaks"
+    assert second.handoff_trace["tracked_bpm"] == 135.0
+    assert second.handoff_trace["limited_bpm"] == 135.0
 
 
 def test_handoff_qualifies_after_three_stable_hits_in_four_windows() -> None:
@@ -77,8 +130,10 @@ def test_handoff_abandons_wrong_prior_for_persistent_remote_raw_top_peak() -> No
             )
         )
 
-    assert [result.handoff_bpm for result in results] == [135.0, 135.0, 57.0]
+    assert [result.handoff_bpm for result in results] == [135.0, 135.0, 132.0]
     assert results[-1].handoff_trace["selection"] == "persistent_raw_top_1"
+    assert results[-1].handoff_trace["tracked_bpm"] == 57.0
+    assert results[-1].handoff_trace["limited_bpm"] == 132.0
 
 
 def test_final_prior_uses_causal_medians_clipped_trend_and_configured_decay() -> None:
@@ -96,10 +151,31 @@ def test_final_prior_uses_causal_medians_clipped_trend_and_configured_decay() ->
     assert fast_initial.handoff_trace["final_anchor_bpm"] == 70.0
     assert fast_initial.handoff_trace["final_trend_bpm_per_window"] == -3.0
     assert fast_initial.handoff_trace["predicted_prior_bpm"] == 67.0
-    assert fast_later.handoff_bpm == 55.0
-    assert slow_later.handoff_bpm == 67.0
-    assert fast_later.handoff_bpm in {bpm for bpm, _ in frame.top()}
-    assert slow_later.handoff_bpm in {bpm for bpm, _ in frame.top()}
+    assert fast_later.handoff_bpm == 64.0
+    assert slow_later.handoff_bpm == 64.0
+    assert fast_later.handoff_trace["tracked_bpm"] == 55.0
+    assert slow_later.handoff_trace["tracked_bpm"] == 55.0
+    assert fast_later.handoff_trace["prior_weight"] == 0.25
+    assert slow_later.handoff_trace["prior_weight"] == pytest.approx(2.0 ** (-2.0 / 3.0))
+
+
+def test_final_prior_is_frozen_against_later_final_feedback() -> None:
+    original_history = (138.0, 136.0, 134.0)
+    changed_history = (50.0, 60.0, 70.0)
+    frame = _frame((132.0, 0.5), (135.0, 1.0))
+    changed = DualResetTracker(tracking=_tracking())
+    control = DualResetTracker(tracking=_tracking())
+
+    changed.step(DualResetInput(10.0, frame, True, original_history))
+    control.step(DualResetInput(10.0, frame, True, original_history))
+    changed_result = changed.step(DualResetInput(15.0, frame, True, changed_history))
+    control_result = control.step(DualResetInput(15.0, frame, True, original_history))
+
+    assert changed_result.handoff_bpm == control_result.handoff_bpm
+    assert changed_result.handoff_trace["final_anchor_bpm"] == 136.0
+    assert changed_result.handoff_trace["final_trend_bpm_per_window"] == -2.0
+    assert changed_result.handoff_trace["predicted_prior_bpm"] == 132.0
+    assert changed_result.handoff_trace["prior_weight"] == pytest.approx(2.0**-0.5)
 
 
 def test_missing_raw_candidate_explicitly_holds_and_disqualifies_after_limit() -> None:
@@ -117,6 +193,20 @@ def test_missing_raw_candidate_explicitly_holds_and_disqualifies_after_limit() -
     assert second_hold.qualification.qualified is False
     assert second_hold.qualification.reason == "held_previous"
     assert second_hold.qualification.held_previous_count == 2
+
+
+def test_held_count_is_number_of_held_windows_in_recent_three() -> None:
+    tracker = DualResetTracker(tracking=_tracking(), max_held_previous=1)
+    tracker.step(DualResetInput(0.0, _frame((129.0, 1.0)), True, ()))
+
+    first_hold = tracker.step(DualResetInput(1.0, _frame(), True, ()))
+    raw = tracker.step(DualResetInput(2.0, _frame((128.0, 1.0)), True, ()))
+    second_hold = tracker.step(DualResetInput(3.0, _frame(), True, ()))
+
+    assert first_hold.qualification.held_previous_count == 1
+    assert raw.qualification.held_previous_count == 1
+    assert second_hold.qualification.held_previous_count == 2
+    assert second_hold.qualification.reason == "held_previous"
 
 
 def test_missing_candidate_breaks_remote_raw_top_persistence() -> None:
@@ -138,4 +228,83 @@ def test_missing_candidate_breaks_remote_raw_top_persistence() -> None:
     )
 
     assert [first.handoff_bpm, second.handoff_bpm, third.handoff_bpm] == [135.0] * 3
-    assert fourth.handoff_bpm == 58.0
+    assert fourth.handoff_bpm == 132.0
+    assert fourth.handoff_trace["tracked_bpm"] == 58.0
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    (
+        {"hits_required": 0},
+        {"qualification_windows": 0},
+        {"hits_required": 5, "qualification_windows": 4},
+        {"trajectory_tolerance_bpm": -0.1},
+        {"min_amp_ratio": -0.1},
+        {"min_amp_ratio": 1.1},
+        {"max_held_previous": -1},
+    ),
+)
+def test_qualification_configuration_rejects_invalid_values(
+    kwargs: dict[str, float | int],
+) -> None:
+    with pytest.raises(ValueError):
+        DualResetTracker(**kwargs)
+
+
+def test_no_final_prior_trace_is_explicitly_raw_evidence() -> None:
+    result = DualResetTracker(tracking=_tracking()).step(
+        DualResetInput(0.0, _frame((80.0, 1.0)), True, ())
+    )
+
+    assert result.handoff_trace["selection"] == "raw_evidence/no_prior"
+    assert result.handoff_trace["predicted_prior_bpm"] is None
+
+
+def test_mechanism_configs_are_public_cumulative_ablations() -> None:
+    history = (140.0, 136.0, 132.0)
+    first_frame = _frame((55.0, 1.0), (133.0, 0.5), (136.0, 0.4))
+    names = (
+        "cold_reset",
+        "final_anchor",
+        "final_trend",
+        "trend_persistence",
+        "trend_persistence_decay",
+    )
+    trackers = {
+        name: DualResetTracker(
+            tracking=_tracking(), mechanism=name, prior_half_life_s=10.0
+        )
+        for name in names
+    }
+
+    initial = {
+        name: tracker.step(DualResetInput(0.0, first_frame, True, history))
+        for name, tracker in trackers.items()
+    }
+
+    assert [initial[name].handoff_bpm for name in names] == [
+        55.0,
+        136.0,
+        133.0,
+        133.0,
+        133.0,
+    ]
+    assert [initial[name].handoff_trace["mechanism"] for name in names] == list(names)
+
+    second_frame = _frame((139.0, 1.0), (130.0, 0.4))
+    no_decay = trackers["final_trend"].step(
+        DualResetInput(10.0, second_frame, True, (50.0, 60.0, 70.0))
+    )
+    decayed = trackers["trend_persistence_decay"].step(
+        DualResetInput(10.0, second_frame, True, (50.0, 60.0, 70.0))
+    )
+
+    assert no_decay.handoff_bpm == 130.0
+    assert decayed.handoff_bpm == 139.0
+    assert no_decay.handoff_trace["prior_weight"] == 1.0
+    assert decayed.handoff_trace["prior_weight"] == 0.5
+
+
+def test_unknown_mechanism_config_is_rejected() -> None:
+    with pytest.raises(ValueError, match="mechanism"):
+        DualResetTracker(mechanism="unknown")
