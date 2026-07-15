@@ -6,6 +6,7 @@ import json
 import warnings
 from pathlib import Path
 
+import matplotlib
 import pytest
 from PIL import Image
 
@@ -21,7 +22,7 @@ CANDIDATES = (
     "trend_persistence_decay_15s",
 )
 SAMPLES = ("bobi2", "kaihe2", "kaihe3", "tiaosheng3")
-D2_SAMPLES = ("bobi1", "bobi3")
+D2_SAMPLES = ("bobi1", "bobi3", "kaihe1", "tiaosheng1", "tiaosheng2")
 
 
 def _write_csv(path: Path, rows: list[dict[str, object]]) -> None:
@@ -267,6 +268,84 @@ def test_rejects_missing_nonextreme_zero_e20_d2_sample_row(tmp_path: Path) -> No
 
     with pytest.raises(ValueError, match="exact D1/D2 sample set|sample set"):
         figures.generate_report_artifacts(input_dir)
+
+
+def test_rejects_synchronously_trimmed_hb_d2_cohort(tmp_path: Path) -> None:
+    input_dir = _input_dir(tmp_path)
+    retained = {"bobi1", "bobi3"}
+    for name in ("sample_metrics.csv", "qualification_metrics.csv"):
+        path = input_dir / name
+        rows = list(csv.DictReader(path.open(encoding="utf-8-sig")))
+        rows = [
+            row
+            for row in rows
+            if row["cohort"] != "d2" or row["sample"] in retained
+        ]
+        _write_csv(path, rows)
+    ranking_path = input_dir / "candidate_ranking.csv"
+    ranking = list(csv.DictReader(ranking_path.open(encoding="utf-8-sig")))
+    for row in ranking:
+        if row["stage"] == "e1":
+            row["d2_expected_sample_count"] = "2"
+            row["d2_observed_sample_count"] = "2"
+            row["d2_sample_set_complete"] = "True"
+    _write_csv(ranking_path, ranking)
+
+    with pytest.raises(ValueError, match="Frozen HB.*D1/D2|D1/D2.*Frozen HB"):
+        figures.generate_report_artifacts(input_dir)
+
+
+def test_rejects_duplicate_e1_candidate_ranking(tmp_path: Path) -> None:
+    input_dir = _input_dir(tmp_path)
+    ranking_path = input_dir / "candidate_ranking.csv"
+    rows = list(csv.DictReader(ranking_path.open(encoding="utf-8-sig")))
+    rows.append(
+        next(row.copy() for row in rows if row["candidate_name"] == "final_anchor")
+    )
+    _write_csv(ranking_path, rows)
+
+    with pytest.raises(ValueError, match="Duplicate E1 candidate ranking"):
+        figures.generate_report_artifacts(input_dir)
+
+
+@pytest.mark.parametrize("mutation", ("delete", "duplicate", "e20_mismatch"))
+def test_rejects_invalid_per_sample_qualification_rows(
+    tmp_path: Path, mutation: str
+) -> None:
+    input_dir = _input_dir(tmp_path)
+    path = input_dir / "qualification_metrics.csv"
+    rows = list(csv.DictReader(path.open(encoding="utf-8-sig")))
+    target = next(
+        row
+        for row in rows
+        if row["candidate_name"] == "trend_persistence" and row["sample"] == "bobi1"
+    )
+    if mutation == "delete":
+        rows.remove(target)
+    elif mutation == "duplicate":
+        rows.append(target.copy())
+    else:
+        target["qualified_e20_count"] = "1"
+    _write_csv(path, rows)
+
+    with pytest.raises(ValueError, match="sample set|Duplicate|Per-sample E20"):
+        figures.generate_report_artifacts(input_dir)
+
+
+def test_png_size_is_isolated_from_global_savefig_bbox(tmp_path: Path) -> None:
+    input_dir = _input_dir(tmp_path)
+
+    with matplotlib.rc_context({"savefig.bbox": "tight", "savefig.pad_inches": 0.75}):
+        figures.generate_report_artifacts(input_dir)
+
+    artifact_dir = input_dir / "report_artifacts"
+    for stem, height_mm in (
+        ("dual_reset_no_go_summary", 115),
+        ("dual_reset_no_go_timeseries", 125),
+    ):
+        with Image.open(artifact_dir / f"{stem}.png") as image:
+            assert image.width == pytest.approx(round(183 / 25.4 * 600), abs=2)
+            assert image.height == pytest.approx(round(height_mm / 25.4 * 600), abs=2)
 
 
 def test_generates_no_go_evidence_bundle_with_machine_checked_contract(

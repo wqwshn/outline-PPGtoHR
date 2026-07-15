@@ -38,6 +38,7 @@ REQUIRED_INPUT_FILES = (
 EXPECTED_INPUT_DIRECTORY = "dual_reset_stage_e0_e2_causal_final"
 BEST_MECHANISM = "trend_persistence"
 SAMPLES = ("bobi2", "kaihe2", "kaihe3", "tiaosheng3")
+D2_SAMPLES = ("bobi1", "bobi3", "kaihe1", "tiaosheng1", "tiaosheng2")
 CANDIDATES = (
     "cold_reset",
     "final_anchor",
@@ -69,13 +70,15 @@ def generate_report_artifacts(input_dir: Path | str) -> tuple[Path, ...]:
 
     summary_stem = output_dir / "dual_reset_no_go_summary"
     timeseries_stem = output_dir / "dual_reset_no_go_timeseries"
-    _render_summary_figure(summary_rows, summary_stem)
-    _render_timeseries_figure(
-        timeseries_rows, tables["sample_metrics.csv"], timeseries_stem
-    )
+    with matplotlib.rc_context():
+        _configure_matplotlib()
+        _render_summary_figure(summary_rows, summary_stem)
+        _render_timeseries_figure(
+            timeseries_rows, tables["sample_metrics.csv"], timeseries_stem
+        )
 
     frozen_path = output_dir / "frozen_candidate.json"
-    frozen = _frozen_decision(tables, hashes, evaluation)
+    frozen = _frozen_decision(hashes, evaluation)
     _write_json(frozen_path, frozen)
     report_path = output_dir / "experiment_summary.md"
     report_path.write_text(
@@ -256,6 +259,19 @@ def _evaluate_frozen_evidence(
     tables: dict[str, list[dict[str, str]]],
 ) -> dict[str, Any]:
     ranking_rows = tables["candidate_ranking.csv"]
+    e1_ranking_rows = [row for row in ranking_rows if row.get("stage") == "e1"]
+    e1_names = [row.get("candidate_name", "") for row in e1_ranking_rows]
+    duplicate_e1_names = sorted(
+        {name for name in e1_names if e1_names.count(name) > 1}
+    )
+    if duplicate_e1_names:
+        raise ValueError(f"Duplicate E1 candidate ranking: {duplicate_e1_names}")
+    expected_e1_names = set(CANDIDATES[1:])
+    if set(e1_names) != expected_e1_names:
+        raise ValueError(
+            "E1 candidate ranking set does not match the frozen candidate matrix: "
+            f"expected={sorted(expected_e1_names)}, observed={sorted(e1_names)}"
+        )
     e0_rows = [
         row
         for row in ranking_rows
@@ -289,6 +305,12 @@ def _evaluate_frozen_evidence(
         }
         for cohort in ("d1", "d2")
     }
+    frozen_hb_sets = {"d1": set(SAMPLES), "d2": set(D2_SAMPLES)}
+    if cold_sets != frozen_hb_sets:
+        raise ValueError(
+            "Frozen HB D1/D2 cohort mismatch: "
+            f"expected={frozen_hb_sets}, observed={cold_sets}"
+        )
     cold_qualification_sets = {
         cohort: {
             sample
@@ -311,9 +333,7 @@ def _evaluate_frozen_evidence(
     }
 
     evidence_rows: list[dict[str, Any]] = []
-    for row in ranking_rows:
-        if row.get("stage") != "e1":
-            continue
+    for row in e1_ranking_rows:
         candidate = row.get("candidate_name", "")
         d1_min = _number(row.get("d1_min_improvement_fraction"))
         d2_max = _number(row.get("d2_max_regression_bpm"))
@@ -715,15 +735,9 @@ def _contiguous_spans(times: list[float]) -> list[tuple[float, float]]:
 
 
 def _frozen_decision(
-    tables: dict[str, list[dict[str, str]]],
     hashes: dict[str, str],
     evaluation: dict[str, Any],
 ) -> dict[str, Any]:
-    sample_rows = tables["sample_metrics.csv"]
-    cohorts = {
-        name: sorted({row["sample"] for row in sample_rows if row.get("cohort") == name})
-        for name in ("d1", "d2")
-    }
     return {
         "decision": evaluation["decision"],
         "failed_stage": evaluation["failed_stage"],
@@ -733,7 +747,7 @@ def _frozen_decision(
             "d2_max_regression_bpm": 1.0,
             "qualified_e20_count": 0,
         },
-        "data_cohort": cohorts,
+        "data_cohort": {"d1": list(SAMPLES), "d2": list(D2_SAMPLES)},
         "input_sha256": hashes,
         "observed_evidence": {
             key: evaluation[key]
@@ -860,6 +874,8 @@ def _configure_matplotlib() -> None:
             "axes.spines.right": False,
             "axes.linewidth": 0.7,
             "legend.frameon": False,
+            "savefig.bbox": None,
+            "savefig.pad_inches": 0.1,
         }
     )
 
