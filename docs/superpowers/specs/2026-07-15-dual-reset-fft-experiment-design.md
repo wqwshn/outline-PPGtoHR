@@ -132,3 +132,13 @@
 - 若 E2 无法阻止误差大于 20 BPM 的错误资格，禁止任何 hard switch 候选进入 E3。
 - 若 qualified hard switch 不能稳定优于 bounded switch，回退到 bounded 作为安全备选，不为保留硬切放宽资格。
 - 若 G1 任一正常样本越过硬门槛，候选不得凭均值晋级。
+
+## 实际执行结果与停止结论（2026-07-15）
+
+权威结果目录为 `data/202607-multiperson/0711-HB/v2_experiments/dual_reset_stage_e0_e2_causal_final`。E0 在 D1 的 `bobi2`、`kaihe2`、`kaihe3`、`tiaosheng3` 上 4/4 复现独立 reset 持续低锁；四条记录运动后固定 60 s 的独立 reset MAE 分别为 63.49、73.48、82.08 和 54.52 BPM，低锁比例均为 1.0。
+
+E1 中，Final-informed 交接 reset 对 `bobi2`、`kaihe2` 和 `tiaosheng3` 有显著定向收益，但没有候选满足逐样本晋级门槛。表现最好的 `trend_persistence`（及 5/10/15 s decay 变体）对应四条 D1 的 60 s MAE 为 2.95、1.96、55.05 和 0.99 BPM；`kaihe3` 相对 cold reset 仅改善 32.92%，低于每条至少 50% 的硬门槛。该候选在 D2 的最大退化为 0.881 BPM，虽通过 1 BPM 防退化门槛，仍不能抵消 D1 失败。
+
+资格层进一步在 `kaihe3` 观察到 26 个 `qualified_e20` 窗口。逐窗 trace 表明 raw selected 候选已跟随真实下降峰时，受旧低锁状态和方向限速影响的 handoff 输出仍可能相差数十 BPM；当前资格认证候选轨迹稳定性，却没有证明实际切换目标已经追上该候选。因此 H1 仅获部分支持，H2 的必要性得到支持但现有资格并不充分，H3/H4 因停止规则未检验，H5 得到支持。
+
+最终决策为 **`NO-GO`，失败阶段 `E1_TARGET_GATE`**。按照预注册停止规则，E2、E3、G1、S1 和 C1 均未运行；`selected_candidate=null`、`switch_adapter=null`。本轮没有修改 `gap_rescue`、`stable_crossover` 或生产 solver 默认行为，独立 reset FFT 继续保持不读取 adaptive/Final 的纯 PPG 信息边界。完整数据、逐候选结果、机制解释和下一轮实验建议见 `docs/reports/dual-reset-fft-hb-experiment-20260715.md`。
