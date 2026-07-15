@@ -194,6 +194,7 @@ E1 目标门槛已经失败，因此本轮有意不继续执行：
 在工作树根目录执行：
 
 ```powershell
+$env:PYTHONPATH=(Resolve-Path "python/src")
 conda run -n ppg-hr python -m ppg_hr.v2.post_motion_dual_reset_experiment `
   --manifest python/tests/fixtures/hb_dual_reset_manifest.json `
   --lite-batch-dir "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0711-HB/v2_batch_outputs/20260711_195903_lite_raw_bandpass_full_LMS+H" `
@@ -204,6 +205,7 @@ conda run -n ppg-hr python -m ppg_hr.v2.post_motion_dual_reset_experiment `
 命令退出码为 2 是预期行为：它表示没有候选晋级；runner 在 E1 失败后自动不生成 E2 行。
 
 ```powershell
+$env:PYTHONPATH=(Resolve-Path "python/src")
 conda run -n ppg-hr python -m ppg_hr.v2.post_motion_dual_reset_figures `
   "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0711-HB/v2_experiments/dual_reset_stage_e0_e2_causal_final"
 ```
@@ -215,6 +217,8 @@ conda run -n ppg-hr python -m ppg_hr.v2.post_motion_dual_reset_figures `
 - 共享 raw FFT 候选接口及修复：`6c9f1e2`、`efc8a53`。
 - 双 reset tracker 及资格修复：`8d66bc5`、`f3ac722`、`136b6aa`。
 - 因果 runner、归档时标对齐与停止规则：`fc17828`、`db7f843`、`6f090d6`。
-- NO-GO 图件与冻结结论：`5924836`。
+- NO-GO 图件与冻结结论：`5924836`；冻结证据 fail-closed 校验与图形状态隔离：`7cfa0d7`、`c5dbce2`、`3b38f2e`。
+- 终审静态检查清理：`120097a`。
+- 旧基线审计时标与可靠性消融语义修复：`1238621`（不改变权威 E0/E1 四表及其哈希）。
 
 本轮未创建生产 switch adapter，未冻结任何获胜参数，也未修改 `gap_rescue`、`stable_crossover` 或默认 Final 计算路径。
