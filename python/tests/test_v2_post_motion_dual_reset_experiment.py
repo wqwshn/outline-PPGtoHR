@@ -11,7 +11,6 @@ import pytest
 
 from ppg_hr.v2.raw_fft_candidates import RawFftCandidateFrame
 
-
 MANIFEST_PATH = Path(__file__).parent / "fixtures" / "hb_dual_reset_manifest.json"
 LEGACY_LITE_BATCH = Path(
     "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/"

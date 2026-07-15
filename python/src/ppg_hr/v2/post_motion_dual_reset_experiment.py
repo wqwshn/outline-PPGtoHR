@@ -5,10 +5,10 @@ import csv
 import itertools
 import json
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from statistics import fmean
-from typing import Sequence
 
 from ppg_hr.v2.post_motion_dual_reset import (
     DualResetInput,
@@ -722,7 +722,10 @@ def _append_candidate_results(
             raise ValueError(f"tracker/offline timeline length mismatch for {sample}")
         scored: list[dict[str, object]] = []
         for tracker_row, offline, evidence in zip(
-            tracked, replay.offline, replay.evidence
+            tracked,
+            replay.offline,
+            replay.evidence,
+            strict=True,
         ):
             if abs(float(tracker_row["center_s"]) - offline.center_s) > 1e-6:
                 raise ValueError(f"tracker/offline center mismatch for {sample}")

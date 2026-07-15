@@ -170,7 +170,9 @@ class DualResetTracker:
             raw_top_persistent = len(self._raw_top_track) == 3 and all(
                 abs(current - previous) <= self._trajectory_tolerance_bpm
                 for previous, current in zip(
-                    self._raw_top_track, tuple(self._raw_top_track)[1:]
+                    self._raw_top_track,
+                    tuple(self._raw_top_track)[1:],
+                    strict=False,
                 )
             )
             if (
