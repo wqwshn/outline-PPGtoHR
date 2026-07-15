@@ -15,7 +15,8 @@
     "controlled_reanchor": true,
     "reanchor_prior_guard_bpm": 45.0,
     "reanchor_min_gap_bpm": 25.0,
-    "switch_adapter": "pending_issue_45"
+    "startup_prior_expires_after_ready": true,
+    "switch_adapter": "causal_bootstrap"
   },
   "safety_backup": {
     "name": "safe_abstain_no_switch",
@@ -25,10 +26,15 @@
     "behavior": "keep_archived_final"
   },
   "switch_layer": {
-    "decision": "NO_GO",
-    "adapter": null,
-    "reason": "No ready-gated execution met Final fixed-60s MAE <= 3 BPM and E20 = 0 on D1",
-    "best_exploratory_mode": "hard",
+    "decision": "GO",
+    "adapter": "causal_bootstrap",
+    "initial_prior_gap_bpm": 25.0,
+    "selected_rank_max": 5,
+    "compensation_trigger_bpm": 18.0,
+    "compensation_windows": 3,
+    "compensation_limit_bpm": 25.0,
+    "confirmation_deadline_s": 20.0,
+    "ready_revocation_policy": "permanent_fallback_to_archived_final",
     "production_defaults_changed": false
   },
   "development_gate": {

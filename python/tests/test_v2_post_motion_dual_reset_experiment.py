@@ -732,6 +732,66 @@ def test_target_freeze_rejects_early_ready_but_inaccurate_d1() -> None:
     assert gate["d1_unsafe_target_failure_samples"] == "unsafe"
 
 
+def test_causal_bootstrap_uses_initial_prior_evidence_and_expires() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    rows = []
+    for index in range(8):
+        rows.append(
+            {
+                "center_s": 101.0 + index,
+                "archived_final_bpm": 175.0 - index,
+                "handoff_bpm": 157.0 - 3.0 * index,
+                "ref_bpm": 137.0 - index,
+                "switch_target_ready": index >= 4,
+                "qualification_reason": "insufficient_history",
+                "handoff_trace": {
+                    "source": "raw_local_peaks",
+                    "selected_rank": 4,
+                    "predicted_prior_bpm": 176.0,
+                },
+                "in_post60": True,
+            }
+        )
+
+    result = experiment.apply_ready_gated_switch(
+        rows, motion_end_s=100.0, mode="bootstrap"
+    )
+
+    assert result["target_eligible"] is True
+    assert result["switch_reason"] == "causal_bootstrap"
+    assert result["switch_index"] == 0
+    assert result["final_bpm"][0] == pytest.approx(139.0)
+    assert result["final_bpm"][3] == pytest.approx(rows[3]["handoff_bpm"])
+
+
+def test_causal_bootstrap_rejects_remote_initial_handoff() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    rows = [
+        {
+            "center_s": 101.0,
+            "archived_final_bpm": 163.0,
+            "handoff_bpm": 46.0,
+            "ref_bpm": 160.0,
+            "switch_target_ready": False,
+            "qualification_reason": "insufficient_history",
+            "handoff_trace": {
+                "source": "raw_local_peaks",
+                "selected_rank": 1,
+                "predicted_prior_bpm": 164.0,
+            },
+            "in_post60": True,
+        }
+    ]
+
+    result = experiment.apply_ready_gated_switch(
+        rows, motion_end_s=100.0, mode="bootstrap"
+    )
+
+    assert result["target_eligible"] is False
+    assert result["switch_index"] is None
+    assert result["final_bpm"] == (163.0,)
+
+
 def test_candidate_replay_can_disable_reliability_gate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

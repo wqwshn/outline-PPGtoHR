@@ -149,6 +149,7 @@ class DualResetTracker:
         self._readiness_hits: deque[bool] = deque(maxlen=self._readiness_hits_required)
         self._readiness_state_age = 0
         self._previous_ready = False
+        self._target_ever_ready = False
         self._qualification_state_age = 0
         self._previous_qualified = False
         self._raw_top_track: deque[float] = deque(maxlen=3)
@@ -172,6 +173,9 @@ class DualResetTracker:
             else anchor + trend * float(self._window_index + 1)
         )
         prior_weight = (
+            0.0
+            if self._target_ever_ready
+            else (
             2.0
             ** (
                 -max(0.0, float(input.center_s) - self._prior_started_s)
@@ -179,6 +183,7 @@ class DualResetTracker:
             )
             if predicted_prior is not None and self._decay_enabled
             else (1.0 if predicted_prior is not None else 0.0)
+            )
         )
 
         if not peaks and (
@@ -277,6 +282,7 @@ class DualResetTracker:
         enough_history = self._observed_windows >= self._qualification_windows
         prior_conflict = bool(
             self._controlled_reanchor
+            and not self._target_ever_ready
             and predicted_prior is not None
             and selected_candidate is not None
             and abs(float(selected_candidate) - predicted_prior)
@@ -416,6 +422,7 @@ class DualResetTracker:
         self._previous_amp_ratio = amp_ratio
         self._window_index += 1
         self._previous_ready = switch_target_ready
+        self._target_ever_ready = self._target_ever_ready or switch_target_ready
         self._previous_qualified = qualified
 
         return DualResetStep(

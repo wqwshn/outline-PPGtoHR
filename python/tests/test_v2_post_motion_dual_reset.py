@@ -321,6 +321,34 @@ def test_controlled_reanchor_does_not_jump_across_reachable_gap() -> None:
     assert results[-1].handoff_bpm > 90.0
 
 
+def test_startup_prior_expires_after_target_becomes_ready() -> None:
+    tracker = DualResetTracker(
+        mechanism="trend_persistence",
+        controlled_reanchor=True,
+    )
+    history = (200.0, 180.0, 160.0)
+    results = [
+        tracker.step(
+            DualResetInput(
+                float(index),
+                _frame((160.0, 1.0)),
+                True,
+                history,
+            )
+        )
+        for index in range(30)
+    ]
+
+    first_ready = next(
+        index
+        for index, result in enumerate(results)
+        if result.switch_target_readiness.ready
+    )
+    assert results[first_ready + 1].handoff_trace["prior_weight"] == 0.0
+    assert results[-1].candidate_qualification.reason != "causal_prior_conflict"
+    assert results[-1].switch_target_readiness.ready is True
+
+
 def test_handoff_abandons_wrong_prior_for_persistent_remote_raw_top_peak() -> None:
     tracker = DualResetTracker()
     results = []

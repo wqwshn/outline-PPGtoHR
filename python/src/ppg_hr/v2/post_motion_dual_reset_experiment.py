@@ -293,7 +293,7 @@ def apply_ready_gated_switch(
     mode: str,
 ) -> dict[str, object]:
     """Apply one switch execution to a frozen target/ready timeline."""
-    if mode not in {"hard", "bounded", "stable"}:
+    if mode not in {"hard", "bounded", "stable", "bootstrap"}:
         raise ValueError(f"unknown switch mode: {mode}")
     source = np.zeros((len(rows), 9), dtype=float)
     source[:, 0] = [float(row["center_s"]) for row in rows]
@@ -309,31 +309,46 @@ def apply_ready_gated_switch(
         first_ready is not None
         and float(rows[first_ready]["center_s"]) - float(motion_end_s) <= 20.0
     )
+    if mode == "bootstrap":
+        output, bootstrap_eligible = _causal_bootstrap_output(
+            rows,
+            motion_end_s=motion_end_s,
+            raw_ready=raw_ready,
+        )
+        target_eligible = bootstrap_eligible
+        switch_index = 0 if bootstrap_eligible else None
+        switch_reason = "causal_bootstrap" if bootstrap_eligible else None
+    else:
+        output = [float(row["archived_final_bpm"]) for row in rows]
+        switch_index = None
+        switch_reason = None
     ready = raw_ready if target_eligible else np.zeros(len(rows), dtype=bool)
-    config = DynamicGuardConfig(
-        name=f"ready_gated_{mode}",
-        min_elapsed_s=0.0,
-        stable_windows=3,
-        crossover_gap_bpm=2.0,
-        rescue_gap_bpm=20.0,
-        gap_rescue_enable=mode != "stable",
-        gap_rescue_windows=4,
-        gap_rescue_min_hits=3,
-        gap_rescue_fft_stable_windows=3,
-        gap_rescue_fft_stable_bpm=6.0,
-        rising_windows=10_000,
-    )
-    _, events = switch_mask_and_events(
-        source,
-        motion_segment={"start_s": motion_end_s, "end_s": motion_end_s},
-        config=config,
-        switch_target_ready=ready,
-        symmetric_gap_rescue=True,
-    )
-    event = events[0] if events else None
-    switch_index = None if event is None else int(event.window_idx)
-    output = [float(row["archived_final_bpm"]) for row in rows]
-    if switch_index is not None:
+    event = None
+    if mode != "bootstrap":
+        config = DynamicGuardConfig(
+            name=f"ready_gated_{mode}",
+            min_elapsed_s=0.0,
+            stable_windows=3,
+            crossover_gap_bpm=2.0,
+            rescue_gap_bpm=20.0,
+            gap_rescue_enable=mode != "stable",
+            gap_rescue_windows=4,
+            gap_rescue_min_hits=3,
+            gap_rescue_fft_stable_windows=3,
+            gap_rescue_fft_stable_bpm=6.0,
+            rising_windows=10_000,
+        )
+        _, events = switch_mask_and_events(
+            source,
+            motion_segment={"start_s": motion_end_s, "end_s": motion_end_s},
+            config=config,
+            switch_target_ready=ready,
+            symmetric_gap_rescue=True,
+        )
+        event = events[0] if events else None
+        switch_index = None if event is None else int(event.window_idx)
+        switch_reason = None if event is None else event.switch_reason
+    if switch_index is not None and mode != "bootstrap":
         target_revoked = False
         for index in range(switch_index, len(rows)):
             if target_revoked or not bool(raw_ready[index]):
@@ -378,7 +393,7 @@ def apply_ready_gated_switch(
         "mode": mode,
         "final_bpm": tuple(output),
         "switch_index": switch_index,
-        "switch_reason": None if event is None else event.switch_reason,
+        "switch_reason": switch_reason,
         "switch_delay_s": (
             float("nan")
             if switch_index is None
@@ -398,6 +413,61 @@ def apply_ready_gated_switch(
     }
 
 
+def _causal_bootstrap_output(
+    rows: Sequence[dict[str, object]],
+    *,
+    motion_end_s: float,
+    raw_ready: np.ndarray,
+) -> tuple[list[float], bool]:
+    output = [float(row["archived_final_bpm"]) for row in rows]
+    if not rows:
+        return output, False
+    raw_trace = rows[0].get("handoff_trace", {})
+    trace = json.loads(raw_trace) if isinstance(raw_trace, str) else raw_trace
+    predicted_prior = trace.get("predicted_prior_bpm")
+    selected_rank = int(trace.get("selected_rank") or 0)
+    eligible = bool(
+        trace.get("source") == "raw_local_peaks"
+        and 1 <= selected_rank <= 5
+        and predicted_prior is not None
+        and math.isfinite(float(predicted_prior))
+        and abs(float(rows[0]["handoff_bpm"]) - float(predicted_prior)) <= 25.0
+        and rows[0].get("qualification_reason") != "unreliable"
+    )
+    if not eligible:
+        return output, False
+
+    initial_gap = abs(
+        float(rows[0]["handoff_bpm"])
+        - float(rows[0]["archived_final_bpm"])
+    )
+    compensate = initial_gap >= 18.0
+    confirmed = False
+    revoked = False
+    for index, row in enumerate(rows):
+        elapsed = float(row["center_s"]) - float(motion_end_s)
+        if revoked:
+            continue
+        if confirmed and not bool(raw_ready[index]):
+            revoked = True
+            continue
+        if not confirmed and elapsed > 20.0:
+            revoked = True
+            continue
+        target = float(row["handoff_bpm"])
+        if compensate and index < 3:
+            target += float(
+                np.clip(
+                    target - float(row["archived_final_bpm"]),
+                    -25.0,
+                    25.0,
+                )
+            )
+        output[index] = target
+        confirmed = confirmed or bool(raw_ready[index])
+    return output, True
+
+
 def run_dual_reset_experiment(
     *,
     manifest_path: Path,
@@ -406,7 +476,14 @@ def run_dual_reset_experiment(
     stages: Sequence[str] = ("e0", "e1", "e2"),
 ) -> DualResetExperimentResult:
     requested = tuple(str(stage).lower() for stage in stages)
-    unknown = set(requested) - {"e0", "e1", "e2", "n1", "n2", "n3"}
+    unknown = set(requested) - {
+        "e0",
+        "e1",
+        "e2",
+        "n1",
+        "n2",
+        "n3",
+    }
     if unknown:
         raise ValueError(f"unknown experiment stages: {sorted(unknown)}")
     manifest = load_hb_manifest(Path(manifest_path))
@@ -620,7 +697,7 @@ def run_dual_reset_experiment(
                     for row in window_rows
                     if row["stage"] == "n2" and row["sample"] == sample
                 ]
-                for mode in ("hard", "bounded", "stable"):
+                for mode in ("hard", "bounded", "stable", "bootstrap"):
                     switched = apply_ready_gated_switch(
                         target_rows,
                         motion_end_s=replay.motion_end_s,
