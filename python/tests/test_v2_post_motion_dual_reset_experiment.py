@@ -886,10 +886,16 @@ def test_n4_confirmation_is_fail_closed_per_sample() -> None:
     passing = experiment.evaluate_n4_confirmation(rows, manifest=manifest)
     rows[-1]["delta_vs_old_final_mae_bpm"] = 1.1
     failing = experiment.evaluate_n4_confirmation(rows, manifest=manifest)
+    duplicate = experiment.evaluate_n4_confirmation(
+        [*rows[:-1], rows[0], {**rows[-1], "delta_vs_old_final_mae_bpm": 0.0}],
+        manifest=manifest,
+    )
 
     assert passing["n4_go"] is True
     assert failing["n4_go"] is False
     assert failing["c1_normal_failure_samples"] == "batch"
+    assert duplicate["n4_go"] is False
+    assert duplicate["one_row_per_sample"] is False
 
 
 def test_candidate_replay_can_disable_reliability_gate(

@@ -1,5 +1,5 @@
 {
-  "decision": "GO_N4_CONFIRMATION",
+  "decision": "CONDITIONAL_GO_PENDING_SPEC_AMENDMENT",
   "frozen_at": "2026-07-15",
   "primary": {
     "name": "controlled_reanchor_remote25",
@@ -26,7 +26,9 @@
     "behavior": "keep_archived_final"
   },
   "switch_layer": {
-    "decision": "GO",
+    "decision": "CONDITIONAL_GO_DEVELOPMENT_FEEDBACK",
+    "original_spec_gate_passed": false,
+    "validation_role": "seen_HB24_development_feedback_regression",
     "adapter": "causal_bootstrap",
     "initial_prior_gap_bpm": 25.0,
     "selected_rank_max": 5,
@@ -65,7 +67,12 @@
     "new_e20_count": 0,
     "independent_reset_d1d2_window_count": 804,
     "independent_reset_max_abs_diff_bpm": 0.0,
-    "predeclared_s1_rule_revision_count": 1
+    "rule_revision_count": 1,
+    "s1_rule_was_predeclared": false,
+    "spec_deviation_reasons": [
+      "causal_bootstrap_consumes_handoff_before_normal_switch_target_ready",
+      "raw_final_non_worsening_guard_was_designed_after_viewing_G1_S1_C1_failures"
+    ]
   },
   "inputs": {
     "manifest_sha256": "d42239a7ca5dd63cf32ae54b19620800679fb055859d79aa7267224344ef22a9",

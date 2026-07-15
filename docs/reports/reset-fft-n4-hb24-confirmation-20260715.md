@@ -1,10 +1,12 @@
 # N4 HB24 冻结防退化确认
 
-## 结论
+## 结论与证据等级
 
-N4 结论为 `GO`。冻结候选 `controlled_reanchor_remote25_causal_bootstrap` 在固定的 HB24 上完成 D1/D2/G1/S1/C1 全量确认；24 条样本集合完整，G1、S1 和 C1 均无逐样本门槛失败，可以进入 N5 标准 Lite BO 1×40 批量全流程。
+N4 数值门槛结论为 `CONDITIONAL GO`。候选 `controlled_reanchor_remote25_causal_bootstrap` 在固定的 HB24 上完成 D1/D2/G1/S1/C1 全量回归；24 条样本集合完整，G1、S1 和 C1 均无逐样本数值门槛失败。
 
-本轮只使用了一次预声明的 S1 规则修订。修订后完整重跑全部 24 条样本，没有在确认结果上继续选参。
+但本轮不满足原 spec 的确认隔离要求，不能直接表述为原规范下的无条件 `GO`：第一次 N4 同时查看了 G1/S1/C1，随后根据 `woli2`、`woli1` 和 `run1` 的共同失败设计了 30 BPM 非恶化保护，因此这次修订不是事前已有记录的 S1 预声明规则。修订后虽完整重跑了全部 24 条，证据等级仍应标为“已见 HB24 的开发反馈回归”。
+
+另一个待决边界是 causal bootstrap 在正常 `switch_target_ready` 建立前暂时消费 handoff；它与原 spec/ADR-0024 的“未就绪保持既有 Final”文字冲突。只有明确修订 spec/ADR、把 bootstrap 定义为独立的因果启动状态后，当前候选才能按新规范冻结并进入 N5；若保留原 ready 边界，则应回到 N3 `NO-GO`，#46 不能晋级。
 
 ## 唯一规则修订
 
@@ -46,4 +48,4 @@ N4 结论为 `GO`。冻结候选 `controlled_reanchor_remote25_causal_bootstrap`
 | `switch_metrics.csv` | `a5e1350477bb5fcb605cada8c6083d1c8642f9474cd494339b386c273cb83731` |
 | `candidate_ranking.csv` | `cb69bb1659dfd5edbd7114b950b9dd97ba4ab75a5522c6c68aec81515b5c5a6d` |
 
-下一步仅允许把此冻结配置接入标准 Lite 批量路径并执行 N5 HB24、每样本 1 repeat × 40 iterations；N5 不得继续调整 reset、资格、ready、bootstrap 或保护参数。
+下一步先决定是否正式修订 spec/ADR 接受“因果 bootstrap 启动状态 + 已见 HB24 开发反馈回归”的证据口径。接受后才可把当前配置冻结接入 N5 HB24、每样本 1 repeat × 40 iterations，且 N5 不得继续调整 reset、资格、ready、bootstrap 或保护参数；不接受则恢复原 ready 前不得消费 handoff 的边界，并记录 N3/#46 为 `NO-GO`。

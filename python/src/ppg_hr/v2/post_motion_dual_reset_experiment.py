@@ -1024,6 +1024,9 @@ def evaluate_n4_confirmation(
     by_sample = {str(row["sample"]): row for row in rows}
     observed = set(by_sample)
     expected = set(manifest.all_samples)
+    one_row_per_sample = bool(
+        len(rows) == len(by_sample) == len(expected)
+    )
 
     def safe(sample: str) -> bool:
         row = by_sample[sample]
@@ -1066,7 +1069,7 @@ def evaluate_n4_confirmation(
         for sample in manifest.hard_switch_sentinels
         if sample not in by_sample or not safe(sample)
     )
-    sample_set_complete = observed == expected
+    sample_set_complete = observed == expected and one_row_per_sample
     go = bool(
         sample_set_complete
         and rescued == rescue_samples
@@ -1079,6 +1082,7 @@ def evaluate_n4_confirmation(
         "stage": "n4",
         "candidate_name": "controlled_reanchor_remote25_causal_bootstrap",
         "sample_set_complete": sample_set_complete,
+        "one_row_per_sample": one_row_per_sample,
         "observed_sample_count": len(observed),
         "expected_sample_count": len(expected),
         "d1_rescued_samples": ",".join(sorted(rescued)),
