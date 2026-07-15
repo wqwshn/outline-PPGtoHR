@@ -34,7 +34,6 @@ class DynamicGuardConfig:
     gap_rescue_min_hits: int = 3
     gap_rescue_fft_stable_windows: int = 3
     gap_rescue_fft_stable_bpm: float = 6.0
-    gap_rescue_symmetric: bool = False
     low_lock_windows: int = 3
     key_good_sample_ids: tuple[str, ...] = ("multi_bobi1_0613",)
 
@@ -244,6 +243,7 @@ def switch_mask_and_events(
     motion_segment: dict[str, float],
     config: DynamicGuardConfig,
     switch_target_ready: np.ndarray | None = None,
+    symmetric_gap_rescue: bool = False,
 ) -> tuple[np.ndarray, list[DynamicGuardSwitchEvent]]:
     src = np.asarray(source, dtype=float)
     mask = np.zeros(src.shape[0], dtype=bool)
@@ -269,6 +269,7 @@ def switch_mask_and_events(
 
     stable_count = 0
     rising_count = 0
+    ready_evidence_start_idx = post_motion_start_idx
     for idx in range(adaptive_start_idx, src.shape[0]):
         center = float(src[idx, 0])
         adaptive_bpm = float(src[idx, 2]) * 60.0
@@ -277,6 +278,7 @@ def switch_mask_and_events(
             continue
         if ready is not None and not bool(ready[idx]):
             stable_count = 0
+            ready_evidence_start_idx = idx + 1
             continue
 
         rising_count = _rising_count(src, idx, post_motion_start_idx, config)
@@ -307,7 +309,13 @@ def switch_mask_and_events(
             return mask, [event]
 
         gap_rescue_ok, gap_rescue_count, fft_stable_count, fft_stable_delta = (
-            _gap_rescue_metrics(src, idx, post_motion_start_idx, config)
+            _gap_rescue_metrics(
+                src,
+                idx,
+                max(post_motion_start_idx, ready_evidence_start_idx),
+                config,
+                symmetric=symmetric_gap_rescue,
+            )
         )
         if gap_rescue_ok:
             event = DynamicGuardSwitchEvent(
@@ -475,6 +483,8 @@ def _gap_rescue_metrics(
     idx: int,
     start_idx: int,
     config: DynamicGuardConfig,
+    *,
+    symmetric: bool = False,
 ) -> tuple[bool, int, int, float]:
     if not bool(config.gap_rescue_enable):
         return False, 0, 0, float("nan")
@@ -489,7 +499,7 @@ def _gap_rescue_metrics(
     gap = adaptive - fft
     gap_match = (
         np.abs(gap) >= float(config.rescue_gap_bpm)
-        if bool(config.gap_rescue_symmetric)
+        if symmetric
         else gap >= float(config.rescue_gap_bpm)
     )
     gap_hits = int(

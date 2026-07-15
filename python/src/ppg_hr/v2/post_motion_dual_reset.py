@@ -27,6 +27,9 @@ class ResetQualification:
     observed_windows: int
     selected_amp_ratio: float
     held_previous_count: int
+    state_age_windows: int
+    established_reason: str | None
+    revoked_reason: str | None
 
 
 @dataclass(frozen=True)
@@ -146,6 +149,8 @@ class DualResetTracker:
         self._readiness_hits: deque[bool] = deque(maxlen=self._readiness_hits_required)
         self._readiness_state_age = 0
         self._previous_ready = False
+        self._qualification_state_age = 0
+        self._previous_qualified = False
         self._raw_top_track: deque[float] = deque(maxlen=3)
         self._prior_started_s: float | None = None
         self._frozen_anchor_bpm: float | None = None
@@ -312,6 +317,25 @@ class DualResetTracker:
         else:
             reason = "qualified"
 
+        if qualified == self._previous_qualified:
+            self._qualification_state_age += 1
+        else:
+            self._qualification_state_age = 1
+        qualification_established_reason = (
+            "candidate_evidence_sufficient"
+            if qualified and not self._previous_qualified
+            else None
+        )
+        qualification_revoked_reason = (
+            (
+                "candidate_identity_changed"
+                if candidate_identity_changed
+                else reason
+            )
+            if self._previous_qualified and not qualified
+            else None
+        )
+
         reanchor_event = False
         reanchor_from_bpm: float | None = None
         if (
@@ -392,6 +416,7 @@ class DualResetTracker:
         self._previous_amp_ratio = amp_ratio
         self._window_index += 1
         self._previous_ready = switch_target_ready
+        self._previous_qualified = qualified
 
         return DualResetStep(
             independent_bpm=independent_bpm,
@@ -403,6 +428,9 @@ class DualResetTracker:
                 observed_windows=self._observed_windows,
                 selected_amp_ratio=float(amp_ratio),
                 held_previous_count=held_previous_count,
+                state_age_windows=self._qualification_state_age,
+                established_reason=qualification_established_reason,
+                revoked_reason=qualification_revoked_reason,
             ),
             switch_target_readiness=SwitchTargetReadiness(
                 ready=switch_target_ready,

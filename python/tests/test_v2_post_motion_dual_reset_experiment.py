@@ -667,6 +667,70 @@ def test_switch_adapters_consume_same_ready_state_and_isolate_execution() -> Non
     assert hard["target_mae_bpm"] == bounded["target_mae_bpm"]
 
 
+def test_switch_adapter_stops_consuming_target_after_ready_revocation() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    rows = [
+        {
+            "center_s": 101.0 + index,
+            "archived_final_bpm": 140.0,
+            "handoff_bpm": 100.0,
+            "ref_bpm": 100.0,
+            "switch_target_ready": 2 <= index < 6,
+            "in_post60": True,
+        }
+        for index in range(8)
+    ]
+
+    result = experiment.apply_ready_gated_switch(
+        rows, motion_end_s=100.0, mode="hard"
+    )
+
+    assert result["switch_index"] is not None
+    assert result["final_bpm"][5] == 100.0
+    assert result["final_bpm"][6] == 140.0
+
+
+def test_target_freeze_rejects_early_ready_but_inaccurate_d1() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    candidate = experiment.build_n2_candidate()
+    rows = []
+    for sample in ("good1", "good2", "good3"):
+        rows.append(
+            {
+                "sample": sample,
+                "cohort": "d1",
+                "switch_target_ready_delay_s": 10.0,
+                "ready_onward_handoff_mae_bpm": 1.0,
+                "ready_onward_e20_count": 0,
+            }
+        )
+    rows.append(
+        {
+            "sample": "unsafe",
+            "cohort": "d1",
+            "switch_target_ready_delay_s": 10.0,
+            "ready_onward_handoff_mae_bpm": 20.0,
+            "ready_onward_e20_count": 2,
+        }
+    )
+    rows.append(
+        {
+            "sample": "control",
+            "cohort": "d2",
+            "post60_handoff_regression_bpm": 0.0,
+            "post60_handoff_e20_count": 0,
+            "post60_archived_final_e20_count": 0,
+            "reanchor_count": 0,
+        }
+    )
+
+    gate = experiment.evaluate_target_freeze(candidate, rows)
+
+    assert gate["target_freeze_go"] is False
+    assert gate["d1_safe_abstention_samples"] == ""
+    assert gate["d1_unsafe_target_failure_samples"] == "unsafe"
+
+
 def test_candidate_replay_can_disable_reliability_gate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -686,6 +750,9 @@ def test_candidate_replay_can_disable_reliability_gate(
                 observed_windows=1,
                 selected_amp_ratio=1.0,
                 held_previous_count=0,
+                state_age_windows=1,
+                established_reason=None,
+                revoked_reason=None,
             )
             readiness = SimpleNamespace(
                 ready=False,

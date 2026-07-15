@@ -228,7 +228,7 @@ def test_ready_gate_blocks_gap_rescue_until_target_is_consumable() -> None:
     assert blocked_mask.all()
     assert blocked_events == []
     assert gated_events
-    assert gated_events[0].window_idx >= 4
+    assert gated_events[0].window_idx == 6
     assert gated_mask[gated_events[0].window_idx] is np.False_
 
 
@@ -269,7 +269,6 @@ def test_ready_gated_symmetric_gap_rescues_low_locked_final() -> None:
         gap_rescue_min_hits=3,
         gap_rescue_fft_stable_windows=3,
         gap_rescue_fft_stable_bpm=6.0,
-        gap_rescue_symmetric=True,
     )
 
     _, events = switch_mask_and_events(
@@ -277,6 +276,7 @@ def test_ready_gated_symmetric_gap_rescues_low_locked_final() -> None:
         motion_segment={"start_s": 80.0, "end_s": 100.0},
         config=cfg,
         switch_target_ready=np.ones(source.shape[0], dtype=bool),
+        symmetric_gap_rescue=True,
     )
 
     assert events[0].switch_reason == "gap_rescue"

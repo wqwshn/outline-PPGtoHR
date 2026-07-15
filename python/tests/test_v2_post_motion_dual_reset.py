@@ -226,6 +226,10 @@ def test_remote_candidate_identity_change_revokes_old_readiness() -> None:
         "candidate_identity_changed"
     )
     assert changed.switch_target_readiness.stable_hits == 0
+    assert changed.candidate_qualification.revoked_reason == (
+        "candidate_identity_changed"
+    )
+    assert changed.candidate_qualification.state_age_windows == 1
 
 
 def test_controlled_reanchor_moves_only_handoff_after_causal_evidence() -> None:

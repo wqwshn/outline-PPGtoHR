@@ -225,6 +225,15 @@ def replay_candidate_frames(
                 "observed_windows": step.qualification.observed_windows,
                 "selected_amp_ratio": step.qualification.selected_amp_ratio,
                 "held_previous_count": step.qualification.held_previous_count,
+                "candidate_qualification_state_age_windows": (
+                    step.qualification.state_age_windows
+                ),
+                "candidate_qualification_established_reason": (
+                    step.qualification.established_reason
+                ),
+                "candidate_qualification_revoked_reason": (
+                    step.qualification.revoked_reason
+                ),
                 "switch_target_ready": step.switch_target_readiness.ready,
                 "switch_target_readiness_reason": (
                     step.switch_target_readiness.reason
@@ -312,7 +321,6 @@ def apply_ready_gated_switch(
         gap_rescue_min_hits=3,
         gap_rescue_fft_stable_windows=3,
         gap_rescue_fft_stable_bpm=6.0,
-        gap_rescue_symmetric=True,
         rising_windows=10_000,
     )
     _, events = switch_mask_and_events(
@@ -320,12 +328,16 @@ def apply_ready_gated_switch(
         motion_segment={"start_s": motion_end_s, "end_s": motion_end_s},
         config=config,
         switch_target_ready=ready,
+        symmetric_gap_rescue=True,
     )
     event = events[0] if events else None
     switch_index = None if event is None else int(event.window_idx)
     output = [float(row["archived_final_bpm"]) for row in rows]
     if switch_index is not None:
         for index in range(switch_index, len(rows)):
+            if not bool(raw_ready[index]):
+                output[index] = float(rows[index]["archived_final_bpm"])
+                continue
             target = float(rows[index]["handoff_bpm"])
             direct_hard = mode == "hard" and bool(event.hard_switch)
             if direct_hard:
@@ -781,7 +793,20 @@ def evaluate_target_freeze(
         )
 
     d1_pass = [str(row["sample"]) for row in d1 if target_pass(row)]
-    abstain = [str(row["sample"]) for row in d1 if not target_pass(row)]
+    abstain = [
+        str(row["sample"])
+        for row in d1
+        if not target_pass(row)
+        and (
+            not math.isfinite(float(row["switch_target_ready_delay_s"]))
+            or float(row["switch_target_ready_delay_s"]) > 20.0
+        )
+    ]
+    unsafe_failures = [
+        str(row["sample"])
+        for row in d1
+        if not target_pass(row) and str(row["sample"]) not in abstain
+    ]
     d2_safe = all(
         float(row["post60_handoff_regression_bpm"]) <= 1.0
         and int(row["post60_handoff_e20_count"])
@@ -789,7 +814,7 @@ def evaluate_target_freeze(
         and int(row["reanchor_count"]) == 0
         for row in d2
     )
-    go = len(d1_pass) >= 3 and d2_safe
+    go = len(d1_pass) >= 3 and not unsafe_failures and d2_safe
     return {
         "stage": candidate.stage,
         "candidate_name": candidate.name,
@@ -797,6 +822,7 @@ def evaluate_target_freeze(
         "d1_target_expected_count": len(d1),
         "d1_target_pass_samples": ",".join(d1_pass),
         "d1_safe_abstention_samples": ",".join(abstain),
+        "d1_unsafe_target_failure_samples": ",".join(unsafe_failures),
         "d1_at_least_3of4_target_pass": len(d1_pass) >= 3,
         "d2_all_post60_regression_le_1bpm_no_new_e20_no_reanchor": d2_safe,
         "target_freeze_go": go,
