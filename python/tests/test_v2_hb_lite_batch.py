@@ -6,6 +6,8 @@ import pytest
 
 from ppg_hr.v2.hb_lite_batch import (
     _audit_artifact_sets,
+    _audit_summary_samples,
+    audit_hb_lite_batch,
     run_audited_hb_lite_batch,
 )
 from ppg_hr.v2.optimizer import V2BayesConfig
@@ -61,3 +63,38 @@ def test_artifact_audit_rejects_extra_sample_in_every_output_set(tmp_path: Path)
 
     assert len(failures) == 6
     assert all("artifact_multiset_mismatch" in failure for failure in failures)
+
+
+def test_direct_audit_rejects_non_frozen_bo_budget(tmp_path: Path) -> None:
+    audit = audit_hb_lite_batch(
+        records=[],
+        requested_samples=(),
+        bayes_cfg=V2BayesConfig(max_iterations=20, num_repeats=2),
+        output_dir=tmp_path,
+    )
+
+    assert audit["status"] == "fail"
+    assert "non_frozen_bayes_config" in audit["failures"]
+
+
+def test_summary_audit_rejects_duplicate_or_extra_rows(tmp_path: Path) -> None:
+    summary = tmp_path / "v2_batch_summary.csv"
+    summary.write_text(
+        "sample,status\n"
+        "bobi1_HB_0711.csv,ok\n"
+        "bobi1_HB_0711.csv,ok\n"
+        "extra_HB_0711.csv,ok\n",
+        encoding="utf-8-sig",
+    )
+    failures: list[str] = []
+
+    _audit_summary_samples(
+        summary_path=summary,
+        requested_samples=["bobi1"],
+        failures=failures,
+    )
+
+    assert failures == [
+        "summary_sample_multiset_mismatch: "
+        "expected=['bobi1'], actual=['bobi1', 'bobi1', 'extra']"
+    ]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 import math
@@ -79,6 +80,8 @@ def audit_hb_lite_batch(
     output_dir: Path,
 ) -> dict[str, Any]:
     failures: list[str] = []
+    if bayes_cfg != HB_LITE_BAYES_CONFIG:
+        failures.append("non_frozen_bayes_config")
     requested_list = [name.lower() for name in requested_samples]
     actual_list = [record.sample.lower().split("_hb_")[0] for record in records]
     requested = set(requested_list)
@@ -97,6 +100,12 @@ def audit_hb_lite_batch(
     summary = Path(output_dir) / "csv" / "v2_batch_summary.csv"
     if not summary.is_file():
         failures.append("missing_batch_summary")
+    else:
+        _audit_summary_samples(
+            summary_path=summary,
+            requested_samples=requested_list,
+            failures=failures,
+        )
     _audit_artifact_sets(
         output_dir=Path(output_dir),
         requested_samples=requested_list,
@@ -243,6 +252,22 @@ def _audit_artifact_sets(
                 f"{label}_artifact_multiset_mismatch: "
                 f"expected={sorted(requested_samples)}, actual={sorted(samples)}"
             )
+
+
+def _audit_summary_samples(
+    *,
+    summary_path: Path,
+    requested_samples: list[str],
+    failures: list[str],
+) -> None:
+    with summary_path.open("r", encoding="utf-8-sig", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    samples = [str(row.get("sample", "")).lower().split("_hb_")[0] for row in rows]
+    if Counter(samples) != Counter(requested_samples):
+        failures.append(
+            "summary_sample_multiset_mismatch: "
+            f"expected={sorted(requested_samples)}, actual={sorted(samples)}"
+        )
 
 
 def _code_provenance() -> dict[str, Any]:
