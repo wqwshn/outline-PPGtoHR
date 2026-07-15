@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 from dataclasses import FrozenInstanceError, asdict
 from importlib import import_module
@@ -546,6 +547,84 @@ def test_cli_accepts_powershell_expanded_stage_tokens(
 
     assert exit_code == 0
     assert captured["stages"] == ("e0", "e1", "e2")
+
+
+def test_cli_requested_e2_skips_all_e2_rows_when_e1_has_no_promotion(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    manifest = experiment.HbExperimentManifest(
+        development_failures=("failure",),
+        development_controls=("control",),
+        frozen_normal_gate=(),
+        hard_switch_sentinels=(),
+        full_batch_only=(),
+        all_samples=("failure", "control"),
+    )
+    monkeypatch.setattr(experiment, "load_hb_manifest", lambda _path: manifest)
+
+    def fake_sample(sample: str, _lite_batch_dir: Path):
+        bpm = 55.0 if sample == "failure" else 100.0
+        ref = 135.0 if sample == "failure" else 100.0
+        frame = _candidate_frame((bpm, 1.0))
+        evidence = tuple(
+            experiment.ReplayEvidenceWindow(
+                center_s=101.0 + index,
+                candidates=frame,
+                reliable=True,
+                archived_final_history=(bpm, bpm, bpm),
+            )
+            for index in range(5)
+        )
+        offline = tuple(
+            experiment.OfflineScoreWindow(
+                center_s=101.0 + index,
+                aligned_time_s=105.0 + index,
+                archived_time_s=105.0 + index,
+                ref_bpm=ref,
+                archived_final_bpm=bpm,
+            )
+            for index in range(5)
+        )
+        return experiment.SampleReplay(
+            sample=sample,
+            motion_end_s=100.0,
+            evidence=evidence,
+            offline=offline,
+        )
+
+    monkeypatch.setattr(experiment, "_load_sample_replay", fake_sample)
+    output_dir = tmp_path / "out"
+
+    exit_code = experiment.main(
+        [
+            "--manifest",
+            str(tmp_path / "manifest.json"),
+            "--lite-batch-dir",
+            str(tmp_path / "lite"),
+            "--output-dir",
+            str(output_dir),
+            "--stages",
+            "e0",
+            "e1",
+            "e2",
+        ]
+    )
+
+    assert exit_code == 2
+    for name in (
+        "window_metrics.csv",
+        "sample_metrics.csv",
+        "qualification_metrics.csv",
+        "candidate_ranking.csv",
+    ):
+        with (output_dir / name).open(
+            "r", encoding="utf-8-sig", newline=""
+        ) as handle:
+            rows = list(csv.DictReader(handle))
+        assert rows
+        assert not any(row.get("stage") == "e2" for row in rows)
 
 
 def test_archived_csv_alignment_uses_time_bias_and_only_past_history() -> None:
