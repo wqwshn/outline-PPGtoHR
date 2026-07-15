@@ -792,6 +792,106 @@ def test_causal_bootstrap_rejects_remote_initial_handoff() -> None:
     assert result["final_bpm"] == (163.0,)
 
 
+def test_causal_bootstrap_does_not_move_away_from_final_supported_raw_peak() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    rows = [
+        {
+            "center_s": 101.0,
+            "archived_final_bpm": 89.5,
+            "handoff_bpm": 94.0,
+            "ref_bpm": 73.0,
+            "switch_target_ready": False,
+            "qualification_reason": "insufficient_history",
+            "handoff_trace": {
+                "source": "raw_local_peaks",
+                "selected_rank": 4,
+                "predicted_prior_bpm": 90.0,
+            },
+            "raw_top5": ((72.5, 4.0), (94.0, 1.0)),
+            "in_post60": True,
+        }
+    ]
+
+    result = experiment.apply_ready_gated_switch(
+        rows, motion_end_s=100.0, mode="bootstrap"
+    )
+
+    assert result["target_eligible"] is True
+    assert result["final_bpm"] == (89.5,)
+    assert result["guard_reasons"] == ("raw_final_non_worsening",)
+
+
+def test_causal_bootstrap_keeps_rescue_when_raw_peak_is_remote_from_final() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    rows = [
+        {
+            "center_s": 101.0,
+            "archived_final_bpm": 175.0,
+            "handoff_bpm": 157.0,
+            "ref_bpm": 137.0,
+            "switch_target_ready": False,
+            "qualification_reason": "insufficient_history",
+            "handoff_trace": {
+                "source": "raw_local_peaks",
+                "selected_rank": 4,
+                "predicted_prior_bpm": 176.0,
+            },
+            "raw_top5": ((49.0, 4.0), (157.0, 1.0)),
+            "in_post60": True,
+        }
+    ]
+
+    result = experiment.apply_ready_gated_switch(
+        rows, motion_end_s=100.0, mode="bootstrap"
+    )
+
+    assert result["final_bpm"] == (139.0,)
+    assert result["guard_reasons"] == (None,)
+
+
+def test_n4_confirmation_is_fail_closed_per_sample() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    manifest = experiment.HbExperimentManifest(
+        development_failures=("bobi2", "kaihe2", "kaihe3", "tiaosheng3"),
+        development_controls=("control",),
+        frozen_normal_gate=("normal",),
+        hard_switch_sentinels=("sentinel",),
+        full_batch_only=("batch",),
+        all_samples=(
+            "bobi2",
+            "kaihe2",
+            "kaihe3",
+            "tiaosheng3",
+            "control",
+            "normal",
+            "sentinel",
+            "batch",
+        ),
+    )
+    rows = []
+    for sample in manifest.all_samples:
+        rescue = sample in {"bobi2", "kaihe2", "tiaosheng3"}
+        rows.append(
+            {
+                "sample": sample,
+                "post60_final_mae_bpm": 2.0 if rescue else 1.0,
+                "post60_final_e20_count": 0,
+                "target_eligible": sample != "kaihe3",
+                "delta_vs_old_final_mae_bpm": 0.0,
+                "new_e20_count": 0,
+                "wrong_switch": False,
+            }
+        )
+
+    passing = experiment.evaluate_n4_confirmation(rows, manifest=manifest)
+    rows[-1]["delta_vs_old_final_mae_bpm"] = 1.1
+    failing = experiment.evaluate_n4_confirmation(rows, manifest=manifest)
+
+    assert passing["n4_go"] is True
+    assert failing["n4_go"] is False
+    assert failing["c1_normal_failure_samples"] == "batch"
+
+
 def test_candidate_replay_can_disable_reliability_gate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

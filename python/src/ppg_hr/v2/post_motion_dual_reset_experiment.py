@@ -310,7 +310,7 @@ def apply_ready_gated_switch(
         and float(rows[first_ready]["center_s"]) - float(motion_end_s) <= 20.0
     )
     if mode == "bootstrap":
-        output, bootstrap_eligible = _causal_bootstrap_output(
+        output, bootstrap_eligible, guard_reasons = _causal_bootstrap_output(
             rows,
             motion_end_s=motion_end_s,
             raw_ready=raw_ready,
@@ -320,6 +320,7 @@ def apply_ready_gated_switch(
         switch_reason = "causal_bootstrap" if bootstrap_eligible else None
     else:
         output = [float(row["archived_final_bpm"]) for row in rows]
+        guard_reasons = [None] * len(rows)
         switch_index = None
         switch_reason = None
     ready = raw_ready if target_eligible else np.zeros(len(rows), dtype=bool)
@@ -392,6 +393,7 @@ def apply_ready_gated_switch(
     return {
         "mode": mode,
         "final_bpm": tuple(output),
+        "guard_reasons": tuple(guard_reasons),
         "switch_index": switch_index,
         "switch_reason": switch_reason,
         "switch_delay_s": (
@@ -418,10 +420,11 @@ def _causal_bootstrap_output(
     *,
     motion_end_s: float,
     raw_ready: np.ndarray,
-) -> tuple[list[float], bool]:
+) -> tuple[list[float], bool, list[str | None]]:
     output = [float(row["archived_final_bpm"]) for row in rows]
+    guard_reasons: list[str | None] = [None] * len(rows)
     if not rows:
-        return output, False
+        return output, False, guard_reasons
     raw_trace = rows[0].get("handoff_trace", {})
     trace = json.loads(raw_trace) if isinstance(raw_trace, str) else raw_trace
     predicted_prior = trace.get("predicted_prior_bpm")
@@ -435,7 +438,7 @@ def _causal_bootstrap_output(
         and rows[0].get("qualification_reason") != "unreliable"
     )
     if not eligible:
-        return output, False
+        return output, False, guard_reasons
 
     initial_gap = abs(
         float(rows[0]["handoff_bpm"])
@@ -463,9 +466,29 @@ def _causal_bootstrap_output(
                     25.0,
                 )
             )
-        output[index] = target
+        archived_final = float(row["archived_final_bpm"])
+        raw_top5 = row.get("raw_top5")
+        if isinstance(raw_top5, str):
+            raw_top5 = json.loads(raw_top5)
+        raw_top1 = (
+            float(raw_top5[0][0])
+            if raw_top5 and len(raw_top5[0]) >= 1
+            else None
+        )
+        raw_final_non_worsening = bool(
+            not confirmed
+            and raw_top1 is not None
+            and math.isfinite(raw_top1)
+            and abs(raw_top1 - archived_final) <= 30.0
+            and abs(target - raw_top1) > abs(archived_final - raw_top1)
+        )
+        if raw_final_non_worsening:
+            output[index] = archived_final
+            guard_reasons[index] = "raw_final_non_worsening"
+        else:
+            output[index] = target
         confirmed = confirmed or bool(raw_ready[index])
-    return output, True
+    return output, True, guard_reasons
 
 
 def run_dual_reset_experiment(
@@ -483,6 +506,7 @@ def run_dual_reset_experiment(
         "n1",
         "n2",
         "n3",
+        "n4",
     }
     if unknown:
         raise ValueError(f"unknown experiment stages: {sorted(unknown)}")
@@ -490,8 +514,15 @@ def run_dual_reset_experiment(
     cohort_by_sample = {
         **{sample: "d1" for sample in manifest.development_failures},
         **{sample: "d2" for sample in manifest.development_controls},
+        **{sample: "g1" for sample in manifest.frozen_normal_gate},
+        **{sample: "s1" for sample in manifest.hard_switch_sentinels},
+        **{sample: "c1_only" for sample in manifest.full_batch_only},
     }
-    samples = manifest.development_failures + manifest.development_controls
+    samples = (
+        manifest.all_samples
+        if "n4" in requested
+        else manifest.development_failures + manifest.development_controls
+    )
     replays = {
         sample: _load_sample_replay(sample, Path(lite_batch_dir)) for sample in samples
     }
@@ -711,10 +742,86 @@ def run_dual_reset_experiment(
                             **{
                                 key: value
                                 for key, value in switched.items()
-                                if key != "final_bpm"
+                                if key not in {"final_bpm", "guard_reasons"}
                             },
                         }
                     )
+    if "n4" in requested:
+        n4_candidate = replace(
+            build_n2_candidate(),
+            stage="n4",
+            name="controlled_reanchor_remote25_causal_bootstrap",
+        )
+        _append_candidate_results(
+            n4_candidate,
+            replays,
+            cohort_by_sample,
+            window_rows,
+            sample_rows,
+            qualification_rows,
+        )
+        n4_sample_rows = [row for row in sample_rows if row["stage"] == "n4"]
+        n4_by_sample = {str(row["sample"]): row for row in n4_sample_rows}
+        legacy_by_sample = {
+            baseline.sample: baseline
+            for baseline in audit_legacy_batch(manifest, Path(lite_batch_dir))
+        }
+        for sample, replay in replays.items():
+            target_rows = [
+                row
+                for row in window_rows
+                if row["stage"] == "n4" and row["sample"] == sample
+            ]
+            switched = apply_ready_gated_switch(
+                target_rows,
+                motion_end_s=replay.motion_end_s,
+                mode="bootstrap",
+            )
+            for row, final_bpm, guard_reason in zip(
+                target_rows,
+                switched["final_bpm"],
+                switched["guard_reasons"],
+                strict=True,
+            ):
+                row["switch_final_bpm"] = final_bpm
+                row["switch_guard_reason"] = guard_reason
+            baseline = n4_by_sample[sample]
+            old_e20 = int(baseline["post60_archived_final_e20_count"])
+            new_e20 = int(switched["post60_final_e20_count"])
+            regression = float(switched["post60_final_mae_bpm"]) - float(
+                baseline["post60_archived_final_mae_bpm"]
+            )
+            switch_rows.append(
+                {
+                    "sample": sample,
+                    "cohort": cohort_by_sample[sample],
+                    "candidate_name": n4_candidate.name,
+                    **{
+                        key: value
+                        for key, value in switched.items()
+                        if key not in {"final_bpm", "guard_reasons"}
+                    },
+                    "old_post60_final_mae_bpm": baseline[
+                        "post60_archived_final_mae_bpm"
+                    ],
+                    "delta_vs_old_final_mae_bpm": regression,
+                    "old_post60_final_e20_count": old_e20,
+                    "new_e20_count": max(0, new_e20 - old_e20),
+                    "wrong_switch": bool(regression > 1.0 or new_e20 > old_e20),
+                    "old_switch_reason": legacy_by_sample[sample].switch_reason,
+                    "old_switch_jump_bpm": legacy_by_sample[
+                        sample
+                    ].switch_jump_bpm,
+                }
+            )
+        n4_gate = evaluate_n4_confirmation(
+            switch_rows,
+            manifest=manifest,
+        )
+        n1_ranking.append(n4_gate)
+        final_promoted = (
+            (n4_candidate.name,) if bool(n4_gate["n4_go"]) else ()
+        )
     result = DualResetExperimentResult(
         window_metrics=tuple(window_rows),
         sample_metrics=tuple(sample_rows),
@@ -905,6 +1012,85 @@ def evaluate_target_freeze(
         "d1_at_least_3of4_target_pass": len(d1_pass) >= 3,
         "d2_all_post60_regression_le_1bpm_no_new_e20_no_reanchor": d2_safe,
         "target_freeze_go": go,
+        "promoted": go,
+    }
+
+
+def evaluate_n4_confirmation(
+    rows: Sequence[dict[str, object]],
+    *,
+    manifest: HbExperimentManifest,
+) -> dict[str, object]:
+    by_sample = {str(row["sample"]): row for row in rows}
+    observed = set(by_sample)
+    expected = set(manifest.all_samples)
+
+    def safe(sample: str) -> bool:
+        row = by_sample[sample]
+        return bool(
+            float(row["delta_vs_old_final_mae_bpm"]) <= 1.0
+            and int(row["new_e20_count"]) == 0
+            and not bool(row["wrong_switch"])
+        )
+
+    rescue_samples = (
+        set(manifest.development_failures) - {"kaihe3"}
+    )
+    rescued = {
+        sample
+        for sample in rescue_samples
+        if sample in by_sample
+        and float(by_sample[sample]["post60_final_mae_bpm"]) <= 3.0
+        and int(by_sample[sample]["post60_final_e20_count"]) == 0
+    }
+    kaihe3 = by_sample.get("kaihe3")
+    kaihe3_abstained = bool(
+        kaihe3 is not None
+        and not bool(kaihe3["target_eligible"])
+        and float(kaihe3["delta_vs_old_final_mae_bpm"]) <= 1e-9
+        and int(kaihe3["new_e20_count"]) == 0
+    )
+    normal_samples = expected - set(manifest.development_failures)
+    normal_failures = sorted(
+        sample
+        for sample in normal_samples
+        if sample not in by_sample or not safe(sample)
+    )
+    g1_failures = sorted(
+        sample
+        for sample in manifest.frozen_normal_gate
+        if sample not in by_sample or not safe(sample)
+    )
+    s1_failures = sorted(
+        sample
+        for sample in manifest.hard_switch_sentinels
+        if sample not in by_sample or not safe(sample)
+    )
+    sample_set_complete = observed == expected
+    go = bool(
+        sample_set_complete
+        and rescued == rescue_samples
+        and kaihe3_abstained
+        and not normal_failures
+        and not g1_failures
+        and not s1_failures
+    )
+    return {
+        "stage": "n4",
+        "candidate_name": "controlled_reanchor_remote25_causal_bootstrap",
+        "sample_set_complete": sample_set_complete,
+        "observed_sample_count": len(observed),
+        "expected_sample_count": len(expected),
+        "d1_rescued_samples": ",".join(sorted(rescued)),
+        "d1_rescue_3of3": rescued == rescue_samples,
+        "kaihe3_safe_abstention": kaihe3_abstained,
+        "g1_failure_samples": ",".join(g1_failures),
+        "s1_failure_samples": ",".join(s1_failures),
+        "c1_normal_failure_samples": ",".join(normal_failures),
+        "g1_pass": not g1_failures,
+        "s1_pass": not s1_failures,
+        "c1_pass": sample_set_complete and not normal_failures,
+        "n4_go": go,
         "promoted": go,
     }
 

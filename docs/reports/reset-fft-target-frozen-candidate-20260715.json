@@ -1,5 +1,5 @@
 {
-  "decision": "GO_TARGET_LAYER",
+  "decision": "GO_N4_CONFIRMATION",
   "frozen_at": "2026-07-15",
   "primary": {
     "name": "controlled_reanchor_remote25",
@@ -34,6 +34,11 @@
     "compensation_windows": 3,
     "compensation_limit_bpm": 25.0,
     "confirmation_deadline_s": 20.0,
+    "raw_final_non_worsening_guard": {
+      "enabled_before_first_ready": true,
+      "raw_top1_to_archived_final_max_gap_bpm": 30.0,
+      "policy": "keep_archived_final_when_handoff_moves_farther_from_raw_top1"
+    },
     "ready_revocation_policy": "permanent_fallback_to_archived_final",
     "production_defaults_changed": false
   },
@@ -46,9 +51,27 @@
     "d2_new_e20_count": 0,
     "d2_reanchor_count": 0
   },
+  "n4_confirmation": {
+    "decision": "GO",
+    "observed_sample_count": 24,
+    "expected_sample_count": 24,
+    "d1_rescued_samples": ["bobi2", "kaihe2", "tiaosheng3"],
+    "d1_safe_abstention_samples": ["kaihe3"],
+    "g1_failure_samples": [],
+    "s1_failure_samples": [],
+    "c1_normal_failure_samples": [],
+    "worst_normal_regression_bpm": 0.7570276515907197,
+    "worst_normal_regression_sample": "jianpan3",
+    "new_e20_count": 0,
+    "independent_reset_d1d2_window_count": 804,
+    "independent_reset_max_abs_diff_bpm": 0.0,
+    "predeclared_s1_rule_revision_count": 1
+  },
   "inputs": {
     "manifest_sha256": "d42239a7ca5dd63cf32ae54b19620800679fb055859d79aa7267224344ef22a9",
     "frozen_authoritative_window_metrics_sha256": "657829feb57d67fc9ef6211e8c8a74454cfc6575e625c41453511993f16de2c7",
-    "dataset_scope": "HB D1/D2 only"
+    "dataset_scope": "HB24 D1/D2/G1/S1/C1",
+    "n4_window_metrics_sha256": "6390e0e680fc491299b0b7da7a7cd1a2558ea9cac44b807610a77cfad07ec9e1",
+    "n4_switch_metrics_sha256": "a5e1350477bb5fcb605cada8c6083d1c8642f9474cd494339b386c273cb83731"
   }
 }
