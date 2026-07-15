@@ -9,7 +9,6 @@ from typing import Any, Literal, Sequence
 import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
-from scipy.signal import find_peaks
 from scipy.signal.windows import hamming
 
 from ppg_hr.core.adaptive_filter import apply_adaptive_cascade
@@ -37,6 +36,11 @@ from .post_motion_dynamic_guard_policy import (
     event_dicts,
     switch_mask_and_events,
 )
+from .raw_fft_candidates import (
+    RawFftCandidateFrame,
+    _frame_from_spectrum,
+    extract_raw_fft_candidates,
+)
 from .reference_groups import (
     channel_names_for_group,
     normalise_reference_order,
@@ -63,8 +67,6 @@ from .types import V2RunConfig
 
 WindowKind = Literal["rest", "motion", "recovery"]
 
-_CANDIDATE_PEAK_THRESHOLD_RATIO = 0.3
-_FULL_CANDIDATE_PEAK_THRESHOLD_RATIO = 0.15
 _MOTION_PENALTY_EDGE_GUARD_HZ = 1.0 / 60.0
 _REACQUIRE_MIN_JUMP_HZ = 20.0 / 60.0
 _REACQUIRE_MIN_AMP_RATIO = 0.45
@@ -198,16 +200,11 @@ def _process_spectrum_with_trace_impl(
     high_lock_params: dict[str, float | int] | None = None,
     penalty_confidence_enable: bool = False,
 ) -> tuple[float, SpectrumTrackingTrace]:
-    freqs, amps_in = _candidate_peak_spectrum(sig_in, fs)
-    freqs = np.asarray(freqs, dtype=float)
-    raw_amps = np.asarray(amps_in, dtype=float).copy()
-
-    raw_peak_indices = _candidate_peak_indices(
-        freqs,
-        raw_amps,
-        threshold_ratio=_FULL_CANDIDATE_PEAK_THRESHOLD_RATIO,
-    )
-    raw_order = raw_peak_indices[np.argsort(-raw_amps[raw_peak_indices], kind="stable")]
+    raw_frame = _raw_fft_candidate_frame(sig_in, fs)
+    freqs = raw_frame.frequencies_hz
+    raw_amps = raw_frame.amplitudes
+    raw_peak_indices = raw_frame.peak_indices
+    raw_order = raw_frame.ordered_peak_indices
     raw_top_n = min(5, raw_order.size)
     raw_candidate_freqs = freqs[raw_order[:raw_top_n]] if raw_top_n else np.asarray([], dtype=float)
     raw_candidate_amps = (
@@ -1280,40 +1277,17 @@ def _spectrum_penalty_state(
 
 
 def _candidate_peak_spectrum(signal: np.ndarray, fs: float) -> tuple[np.ndarray, np.ndarray]:
-    sig = np.asarray(signal, dtype=float).ravel()
-    sig = sig[np.isfinite(sig)]
-    if sig.size == 0:
-        return np.asarray([], dtype=float), np.asarray([], dtype=float)
-
-    work = (sig - float(np.nanmean(sig))) * hamming(sig.size)
-    fft_len = 1 << 13
-    spectrum = np.fft.fft(work, fft_len)
-    amp = np.abs(spectrum[: fft_len // 2]) / max(1, work.size)
-    amp[1:] *= 2.0
-    freq = float(fs) * np.arange(fft_len // 2, dtype=float) / float(fft_len)
-    band = (freq > 0.7) & (freq < 4.0)
-    return freq[band], amp[band]
+    frame = extract_raw_fft_candidates(signal, fs)
+    return frame.frequencies_hz, frame.amplitudes
 
 
-def _candidate_peak_indices(
-    freqs: np.ndarray,
-    amps: np.ndarray,
-    *,
-    threshold_ratio: float = _CANDIDATE_PEAK_THRESHOLD_RATIO,
-) -> np.ndarray:
-    if freqs.size == 0 or amps.size == 0:
-        return np.asarray([], dtype=int)
-    peaks, _ = find_peaks(amps)
-    if peaks.size == 0:
-        return np.asarray([], dtype=int)
-    peak_amps = amps[peaks]
-    finite = np.isfinite(peak_amps)
-    if not finite.any():
-        return np.asarray([], dtype=int)
-    peaks = peaks[finite]
-    peak_amps = peak_amps[finite]
-    threshold = float(np.nanmax(peak_amps)) * float(threshold_ratio)
-    return peaks[peak_amps > threshold]
+def _raw_fft_candidate_frame(signal: np.ndarray, fs: float) -> RawFftCandidateFrame:
+    """Build a frame through the legacy spectrum seam used by solver tests."""
+
+    freqs, amps = _candidate_peak_spectrum(signal, fs)
+    frequencies_hz = np.asarray(freqs, dtype=float)
+    amplitudes = np.asarray(amps, dtype=float).copy()
+    return _frame_from_spectrum(frequencies_hz, amplitudes)
 
 
 def _preferred_candidate_indices(
