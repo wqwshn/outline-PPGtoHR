@@ -17,6 +17,7 @@ from .algorithm_presets import v2_search_space_for_preset
 from .batch_pipeline import V2BatchRecord, run_v2_batch_pipeline
 from .optimizer import V2BayesConfig
 from .post_motion_dual_reset_runtime import FrozenDualResetConfig
+from .post_motion_minimal_pipeline_gate import require_fixed_validation_go
 from .report import load_v2_report
 
 HB_LITE_BAYES_CONFIG = V2BayesConfig(
@@ -298,11 +299,18 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--input-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--samples", nargs="+", required=True)
+    parser.add_argument(
+        "--fixed-validation-decision",
+        type=Path,
+        required=True,
+        help="Machine decision that must explicitly allow this BO batch.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
+    require_fixed_validation_go(args.fixed_validation_decision)
     result = run_audited_hb_lite_batch(
         input_dir=args.input_dir,
         output_dir=args.output_dir,

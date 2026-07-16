@@ -8,6 +8,7 @@ import pytest
 from ppg_hr.v2.post_motion_minimal_pipeline_gate import (
     build_bo_decision,
     build_fixed_validation_decision,
+    require_fixed_validation_go,
     write_stopped_pipeline_decisions,
 )
 
@@ -74,3 +75,47 @@ def test_gate_writer_persists_both_machine_decisions(tmp_path: Path) -> None:
     assert result["bo"]["bo_batch_started"] is False
     assert (output / "fixed_validation_decision.json").exists()
     assert (output / "bo_decision.json").exists()
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"verdict": "PENDING"},
+        {"verdict": "NO_GO", "selected_candidate": "minimal_reanchor"},
+    ],
+)
+def test_ablation_gate_rejects_ambiguous_or_contradictory_input(
+    payload: dict[str, object],
+) -> None:
+    with pytest.raises(ValueError):
+        build_fixed_validation_decision(payload)
+
+
+def test_hb_lite_entry_rejects_fixed_validation_no_go(tmp_path: Path) -> None:
+    decision = tmp_path / "fixed.json"
+    decision.write_text(
+        json.dumps({"verdict": "NO_GO", "bo_allowed": False}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RuntimeError, match="explicit fixed-validation GO"):
+        require_fixed_validation_go(decision)
+
+
+def test_hb_lite_entry_accepts_only_explicit_go_contract(tmp_path: Path) -> None:
+    decision = tmp_path / "fixed.json"
+    decision.write_text(
+        json.dumps(
+            {
+                "verdict": "GO",
+                "bo_allowed": True,
+                "selected_candidate": "minimal_reanchor",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    loaded = require_fixed_validation_go(decision)
+
+    assert loaded["selected_candidate"] == "minimal_reanchor"

@@ -6,8 +6,21 @@ import argparse
 import hashlib
 import json
 from collections.abc import Mapping
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
+
+
+class Verdict(StrEnum):
+    GO = "GO"
+    NO_GO = "NO_GO"
+
+
+def _verdict(decision: Mapping[str, Any], *, stage: str) -> Verdict:
+    try:
+        return Verdict(decision["verdict"])
+    except (KeyError, ValueError) as exc:
+        raise ValueError(f"{stage} decision has no valid verdict") from exc
 
 
 def build_fixed_validation_decision(
@@ -15,13 +28,20 @@ def build_fixed_validation_decision(
 ) -> dict[str, Any]:
     """Block fixed HB24 execution when no representative candidate passed."""
 
-    if str(ablation_decision.get("verdict")) == "GO":
+    verdict = _verdict(ablation_decision, stage="ablation")
+    selected = ablation_decision.get("selected_candidate")
+    if verdict is Verdict.GO:
+        if not isinstance(selected, str) or not selected.strip():
+            raise ValueError("GO ablation decision requires selected_candidate")
         return {
             "verdict": "PENDING",
             "hb24_run_started": False,
             "bo_allowed": False,
+            "selected_candidate": selected,
             "reason": "upstream_go_requires_explicit_hb24_execution",
         }
+    if selected is not None:
+        raise ValueError("NO_GO ablation decision must not select a candidate")
     return {
         "verdict": "NO_GO",
         "hb24_run_started": False,
@@ -43,13 +63,16 @@ def build_bo_decision(
     """Prove the named BO batch is absent when the fixed gate is NO-GO."""
 
     expected = Path(expected_bo_dir)
-    if str(fixed_validation_decision.get("verdict")) == "GO":
+    verdict = _verdict(fixed_validation_decision, stage="fixed validation")
+    if verdict is Verdict.GO:
         return {
             "verdict": "PENDING",
             "bo_batch_started": False,
             "expected_output_dir": str(expected.resolve()),
             "reason": "fixed_validation_go_requires_explicit_bo_execution",
         }
+    if fixed_validation_decision.get("bo_allowed") is not False:
+        raise ValueError("NO_GO fixed validation decision must forbid BO")
     if expected.exists():
         raise RuntimeError(
             f"stopped BO output directory must not exist: {expected.resolve()}"
@@ -93,6 +116,21 @@ def write_stopped_pipeline_decisions(
         encoding="utf-8",
     )
     return {"fixed_validation": fixed, "bo": bo}
+
+
+def require_fixed_validation_go(decision_path: str | Path) -> dict[str, Any]:
+    """Fail before batch execution unless the fixed HB24 gate explicitly passed."""
+
+    path = Path(decision_path)
+    decision = json.loads(path.read_text(encoding="utf-8"))
+    if _verdict(decision, stage="fixed validation") is not Verdict.GO:
+        raise RuntimeError("HB Lite BO requires an explicit fixed-validation GO")
+    if decision.get("bo_allowed") is not True:
+        raise ValueError("fixed-validation GO must explicitly allow BO")
+    selected = decision.get("selected_candidate")
+    if not isinstance(selected, str) or not selected.strip():
+        raise ValueError("fixed-validation GO requires selected_candidate")
+    return decision
 
 
 def main() -> None:
