@@ -302,6 +302,76 @@ def test_causal_prior_conflict_blocks_consumption_not_raw_candidate_qualificatio
     assert results[-1].handoff_trace["startup_prior_compatible"] is False
 
 
+def test_directional_prior_invalidation_reanchors_declining_remote_evidence_once() -> None:
+    tracker = DualResetTracker(
+        mechanism="trend_persistence",
+        controlled_reanchor=True,
+        qualification_windows=3,
+        prior_invalidation_enabled=True,
+        prior_invalidation_hits_required=3,
+        prior_invalidation_min_gap_bpm=40.0,
+        prior_invalidation_min_decline_bpm=0.5,
+    )
+    final_history = (140.0, 138.0, 136.0)
+    results = [
+        tracker.step(
+            DualResetInput(
+                float(index),
+                _frame((raw_bpm, 1.0), (prior_peak_bpm, 0.7)),
+                True,
+                final_history,
+            )
+        )
+        for index, (raw_bpm, prior_peak_bpm) in enumerate(
+            (
+                (94.0, 134.0),
+                (90.0, 132.0),
+                (88.0, 130.0),
+                (87.0, 128.0),
+                (86.0, 126.0),
+            )
+        )
+    ]
+
+    events = [result for result in results if result.handoff_trace["prior_invalidation_event"]]
+    assert len(events) == 1
+    assert events[0].handoff_bpm == 88.0
+    assert events[0].switch_target_readiness.ready is False
+    assert events[0].handoff_trace["prior_invalidated"] is True
+    assert results[-1].switch_target_readiness.ready is True
+    assert [result.independent_bpm for result in results] == [94.0, 91.0, 88.0, 87.0, 86.0]
+
+
+def test_directional_prior_invalidation_rejects_rising_remote_evidence() -> None:
+    tracker = DualResetTracker(
+        mechanism="trend_persistence",
+        controlled_reanchor=True,
+        prior_invalidation_enabled=True,
+        prior_invalidation_hits_required=2,
+        prior_invalidation_min_gap_bpm=30.0,
+        prior_invalidation_min_decline_bpm=0.5,
+    )
+    final_history = (116.0, 114.0, 112.0)
+    results = [
+        tracker.step(
+            DualResetInput(
+                float(index),
+                _frame((raw_bpm, 1.0), (prior_peak_bpm, 0.7)),
+                True,
+                final_history,
+            )
+        )
+        for index, (raw_bpm, prior_peak_bpm) in enumerate(
+            ((70.0, 110.0), (72.0, 108.0), (74.0, 106.0), (75.0, 104.0))
+        )
+    ]
+
+    assert not any(
+        result.handoff_trace["prior_invalidation_event"] for result in results
+    )
+    assert not any(result.handoff_trace["prior_invalidated"] for result in results)
+
+
 def test_controlled_reanchor_does_not_jump_across_reachable_gap() -> None:
     tracker = DualResetTracker(
         mechanism="trend_persistence",

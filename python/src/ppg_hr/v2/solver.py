@@ -2415,6 +2415,18 @@ def _dual_reset_runtime_config(cfg: V2RunConfig) -> FrozenDualResetConfig:
         observability_recovery_hits=int(
             cfg.post_motion_dual_reset_observability_recovery_hits
         ),
+        prior_invalidation_enabled=bool(
+            cfg.post_motion_dual_reset_prior_invalidation_enable
+        ),
+        prior_invalidation_hits_required=int(
+            cfg.post_motion_dual_reset_prior_invalidation_hits
+        ),
+        prior_invalidation_min_gap_bpm=float(
+            cfg.post_motion_dual_reset_prior_invalidation_gap_bpm
+        ),
+        prior_invalidation_min_decline_bpm=float(
+            cfg.post_motion_dual_reset_prior_invalidation_decline_bpm
+        ),
     )
 
 

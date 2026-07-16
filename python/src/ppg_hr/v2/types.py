@@ -62,6 +62,10 @@ class V2RunConfig:
     post_motion_dual_reset_observability_periodicity_min: float = 0.5
     post_motion_dual_reset_observability_peak_competition_min: float = 1.3
     post_motion_dual_reset_observability_recovery_hits: int = 2
+    post_motion_dual_reset_prior_invalidation_enable: bool = False
+    post_motion_dual_reset_prior_invalidation_hits: int = 3
+    post_motion_dual_reset_prior_invalidation_gap_bpm: float = 40.0
+    post_motion_dual_reset_prior_invalidation_decline_bpm: float = 0.5
     max_recovery_seconds: float = 30.0
     recovery_trigger_bpm: float = 20.0
     pre_motion_context_seconds: float = 30.0

@@ -86,6 +86,10 @@ class DualResetTracker:
         controlled_reanchor: bool = False,
         reanchor_prior_guard_bpm: float = 45.0,
         reanchor_min_gap_bpm: float | None = None,
+        prior_invalidation_enabled: bool = False,
+        prior_invalidation_hits_required: int = 3,
+        prior_invalidation_min_gap_bpm: float = 40.0,
+        prior_invalidation_min_decline_bpm: float = 0.5,
     ) -> None:
         if prior_half_life_s not in (5.0, 10.0, 15.0):
             raise ValueError("prior_half_life_s must be one of 5, 10, or 15 seconds")
@@ -109,6 +113,12 @@ class DualResetTracker:
             raise ValueError("reanchor_prior_guard_bpm must be positive")
         if reanchor_min_gap_bpm is not None and reanchor_min_gap_bpm <= 0.0:
             raise ValueError("reanchor_min_gap_bpm must be positive")
+        if prior_invalidation_hits_required < 2:
+            raise ValueError("prior_invalidation_hits_required must be at least 2")
+        if prior_invalidation_min_gap_bpm <= 0.0:
+            raise ValueError("prior_invalidation_min_gap_bpm must be positive")
+        if prior_invalidation_min_decline_bpm <= 0.0:
+            raise ValueError("prior_invalidation_min_decline_bpm must be positive")
         self._tracking = tracking or DirectionalTrackingParams(
             range_up_bpm=20.0,
             range_down_bpm=25.0,
@@ -139,6 +149,17 @@ class DualResetTracker:
             if reanchor_min_gap_bpm is None
             else float(reanchor_min_gap_bpm)
         )
+        self._prior_invalidation_enabled = bool(prior_invalidation_enabled)
+        self._prior_invalidation_hits_required = int(
+            prior_invalidation_hits_required
+        )
+        self._prior_invalidation_min_gap_bpm = float(
+            prior_invalidation_min_gap_bpm
+        )
+        self._prior_invalidation_min_decline_bpm = float(
+            prior_invalidation_min_decline_bpm
+        )
+        self._prior_invalidated = False
         self._observed_windows = 0
         self._previous_independent_bpm: float | None = None
         self._previous_handoff_bpm: float | None = None
@@ -152,7 +173,9 @@ class DualResetTracker:
         self._target_ever_ready = False
         self._qualification_state_age = 0
         self._previous_qualified = False
-        self._raw_top_track: deque[float] = deque(maxlen=3)
+        self._raw_top_track: deque[float] = deque(
+            maxlen=max(3, self._prior_invalidation_hits_required)
+        )
         self._prior_started_s: float | None = None
         self._frozen_anchor_bpm: float | None = None
         self._frozen_trend_bpm_per_window = 0.0
@@ -187,7 +210,7 @@ class DualResetTracker:
         )
         prior_weight = (
             0.0
-            if self._target_ever_ready
+            if self._target_ever_ready or self._prior_invalidated
             else (
             2.0
             ** (
@@ -260,6 +283,52 @@ class DualResetTracker:
         self._observed_windows += 1
         held_previous = handoff_trace["source"] == "held_previous"
         selected_candidate = handoff_trace["selected_candidate_bpm"]
+        prior_invalidation_event = False
+        prior_invalidation_from_bpm: float | None = None
+        raw_track = tuple(self._raw_top_track)
+        invalidation_track = raw_track[-self._prior_invalidation_hits_required :]
+        invalidation_track_continuous = bool(
+            len(invalidation_track) == self._prior_invalidation_hits_required
+            and all(
+                abs(current - previous) <= self._trajectory_tolerance_bpm
+                for previous, current in zip(
+                    invalidation_track,
+                    invalidation_track[1:],
+                    strict=False,
+                )
+            )
+        )
+        invalidation_track_declining = bool(
+            invalidation_track_continuous
+            and invalidation_track[-1] - invalidation_track[0]
+            <= -self._prior_invalidation_min_decline_bpm
+        )
+        if (
+            self._prior_invalidation_enabled
+            and self._controlled_reanchor
+            and not self._prior_invalidated
+            and not self._target_ever_ready
+            and predicted_prior is not None
+            and trend <= -self._prior_invalidation_min_decline_bpm
+            and peaks
+            and abs(float(peaks[0][0]) - predicted_prior)
+            >= self._prior_invalidation_min_gap_bpm
+            and invalidation_track_declining
+        ):
+            prior_invalidation_event = True
+            prior_invalidation_from_bpm = handoff_bpm
+            handoff_bpm, amp_ratio, handoff_trace = self._track_path(
+                peaks,
+                previous_bpm=None,
+                ranked_peaks=(peaks[0],),
+                initial_previous_bpm=None,
+                initial_selection="directional_prior_invalidation",
+                force_first=True,
+            )
+            held_previous = False
+            selected_candidate = handoff_trace["selected_candidate_bpm"]
+            self._prior_invalidated = True
+            self._readiness_hits.clear()
         trajectory_stable = bool(
             not held_previous
             and selected_candidate is not None
@@ -295,6 +364,7 @@ class DualResetTracker:
         enough_history = self._observed_windows >= self._qualification_windows
         prior_conflict = bool(
             self._controlled_reanchor
+            and not self._prior_invalidated
             and not self._target_ever_ready
             and predicted_prior is not None
             and selected_candidate is not None
@@ -351,10 +421,11 @@ class DualResetTracker:
             else None
         )
 
-        reanchor_event = False
-        reanchor_from_bpm: float | None = None
+        reanchor_event = prior_invalidation_event
+        reanchor_from_bpm = prior_invalidation_from_bpm
         if (
             self._controlled_reanchor
+            and not reanchor_event
             and qualified
             and persistent_candidate_evidence
             and not prior_conflict
@@ -475,6 +546,9 @@ class DualResetTracker:
                 "reanchor_event": reanchor_event,
                 "reanchor_from_bpm": reanchor_from_bpm,
                 "reanchor_to_bpm": handoff_bpm if reanchor_event else None,
+                "prior_invalidation_event": prior_invalidation_event,
+                "prior_invalidated": self._prior_invalidated,
+                "prior_invalidation_track": invalidation_track,
             },
         )
 
