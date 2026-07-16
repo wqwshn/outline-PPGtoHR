@@ -34,11 +34,11 @@ def test_independent_reset_invariance_checks_candidates_and_trace() -> None:
     assert _independent_reset_invariance(baseline, changed)["trace_mismatch_count"] == 1
 
 
-def _kaihe2_report() -> Path | None:
+def _hb_report(sample: str) -> Path | None:
     relative = Path(
         "data/202607-multiperson/0711-HB/v2_batch_outputs/"
         "20260715_dual_reset_n5_hb24_lite_1x40/json/"
-        "kaihe2_HB_0711-green-raw_bandpass-lms-full-HF-v2.json"
+        f"{sample}_HB_0711-green-raw_bandpass-lms-full-HF-v2.json"
     )
     cwd = Path.cwd()
     for root in (cwd, cwd.parent.parent):
@@ -49,7 +49,7 @@ def _kaihe2_report() -> Path | None:
 
 
 def test_kaihe2_real_replay_removes_bounce_and_meets_tail_gate() -> None:
-    report = _kaihe2_report()
+    report = _hb_report("kaihe2")
     if report is None:
         pytest.skip("HB kaihe2 N5 report is not available")
 
@@ -63,3 +63,30 @@ def test_kaihe2_real_replay_removes_bounce_and_meets_tail_gate() -> None:
     assert row["independent_reset_value_mismatch_count"] == 0
     assert row["independent_reset_raw_top5_mismatch_count"] == 0
     assert row["independent_reset_trace_mismatch_count"] == 0
+
+
+def test_xiezi2_post_switch_freeze_no_longer_regresses() -> None:
+    report = _hb_report("xiezi2")
+    if report is None:
+        pytest.skip("HB xiezi2 N5 report is not available")
+
+    row = evaluate_report(report)
+
+    assert row["new_post60_e20_count"] <= row["old_post60_e20_count"]
+    assert row["delta_post60_mae_bpm"] <= 1.0
+    assert row["new_down_up_bounce_count"] == 0
+
+
+def test_run2_post_switch_freeze_removes_most_broken_e20_but_exposes_ready_latency() -> None:
+    report = _hb_report("run2")
+    if report is None:
+        pytest.skip("HB run2 N5 report is not available")
+
+    row = evaluate_report(report)
+
+    # Before the post-switch latch, the same experiment produced 23 E20 windows.
+    assert row["new_post60_e20_count"] < 23
+    assert row["new_down_up_bounce_count"] == 0
+    # The remaining regression is pre-switch A2 readiness latency, not a
+    # post-gap-rescue fallback. Keep it visible until that separate mechanism moves.
+    assert row["new_post60_e20_count"] > row["old_post60_e20_count"]

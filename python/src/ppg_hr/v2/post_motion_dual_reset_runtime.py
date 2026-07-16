@@ -544,15 +544,31 @@ def ready_gated_handoff_timeline(
             continue
         if row.get("observability_state") != "recovered":
             stable_hits = 0
-            states[index] = "observability_frozen"
-            reasons[index] = str(row.get("observability_reason") or "not_recovered")
+            if switched:
+                output[index] = output[index - 1]
+                states[index] = "handoff_frozen"
+                reasons[index] = str(
+                    row.get("observability_reason") or "not_recovered"
+                )
+            else:
+                states[index] = "observability_frozen"
+                reasons[index] = str(
+                    row.get("observability_reason") or "not_recovered"
+                )
             continue
         if not bool(row.get("switch_target_ready")):
             stable_hits = 0
-            states[index] = "target_not_ready"
-            reasons[index] = str(
-                row.get("switch_target_readiness_reason") or "not_ready"
-            )
+            if switched:
+                output[index] = output[index - 1]
+                states[index] = "handoff_frozen"
+                reasons[index] = str(
+                    row.get("switch_target_readiness_reason") or "not_ready"
+                )
+            else:
+                states[index] = "target_not_ready"
+                reasons[index] = str(
+                    row.get("switch_target_readiness_reason") or "not_ready"
+                )
             continue
         ever_ready = True
         target = float(row["handoff_bpm"])

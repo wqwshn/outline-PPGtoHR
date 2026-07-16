@@ -27,6 +27,7 @@ DEFAULT_SAMPLES = (
     "xiezi2",
     "jianpan3",
 )
+FAILURE_SAMPLES = frozenset({"bobi2", "kaihe2", "kaihe3", "tiaosheng3"})
 
 
 def count_down_up_bounces(
@@ -142,8 +143,9 @@ def evaluate_report(report_path: str | Path) -> dict[str, Any]:
         None,
     )
     sample = Path(str(payload["data_path"])).stem.replace("_HB_0711", "")
-    return {
+    row = {
         "sample": sample,
+        "cohort": "failure" if sample in FAILURE_SAMPLES else "normal",
         "old_full_aae_bpm": float(baseline_result.err_stats["final_aae_bpm"]),
         "new_full_aae_bpm": float(result.err_stats["final_aae_bpm"]),
         "old_post60_mae_bpm": float(baseline_result.err_stats["post_motion_60s_mae_bpm"]),
@@ -177,6 +179,18 @@ def evaluate_report(report_path: str | Path) -> dict[str, Any]:
             "" if first_consumed is None else str(first_consumed.get("switch_state", ""))
         ),
     }
+    row["non_regression_pass"] = bool(
+        row["new_post60_e20_count"] <= row["old_post60_e20_count"]
+        and row["delta_post60_mae_bpm"] <= 1.0
+        and row["new_down_up_bounce_count"] <= row["old_down_up_bounce_count"]
+    )
+    row["acceptance_pass"] = bool(
+        row["new_post60_mae_bpm"] < 3.0
+        and row["new_post60_e20_count"] == 0
+        if sample in FAILURE_SAMPLES
+        else row["non_regression_pass"]
+    )
+    return row
 
 
 def run_experiment(
@@ -207,6 +221,26 @@ def run_experiment(
         json.dumps(rows, ensure_ascii=False, indent=2, allow_nan=True),
         encoding="utf-8",
     )
+    summary = {
+        "sample_count": len(rows),
+        "failure_count": sum(row["cohort"] == "failure" for row in rows),
+        "normal_count": sum(row["cohort"] == "normal" for row in rows),
+        "normal_regressions": [
+            row["sample"]
+            for row in rows
+            if row["cohort"] == "normal" and not row["non_regression_pass"]
+        ],
+        "failed_acceptance": [
+            row["sample"] for row in rows if not row["acceptance_pass"]
+        ],
+    }
+    summary["decision"] = (
+        "GO" if not summary["failed_acceptance"] else "NO-GO"
+    )
+    (output / "summary.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     return rows
 
 
@@ -215,8 +249,14 @@ def main() -> None:
     parser.add_argument("report_dir", type=Path)
     parser.add_argument("output_dir", type=Path)
     parser.add_argument("--samples", nargs="*", default=list(DEFAULT_SAMPLES))
+    parser.add_argument("--all-reports", action="store_true")
     args = parser.parse_args()
-    rows = run_experiment(args.report_dir, args.output_dir, args.samples)
+    samples = (
+        [path.name.split("_", 1)[0] for path in sorted(args.report_dir.glob("*-v2.json"))]
+        if args.all_reports
+        else args.samples
+    )
+    rows = run_experiment(args.report_dir, args.output_dir, samples)
     print(json.dumps(rows, ensure_ascii=False, indent=2, allow_nan=True))
 
 

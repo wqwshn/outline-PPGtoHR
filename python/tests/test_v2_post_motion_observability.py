@@ -305,6 +305,46 @@ def test_stable_crossover_requires_consecutive_reachable_ready_windows() -> None
     assert timeline["final_bpm"] == (130.0, 127.5)
 
 
+def test_gap_rescue_holds_actual_final_when_observability_drops_after_switch() -> None:
+    rows = [
+        {
+            "center_s": 11.0 + index,
+            "archived_final_bpm": 140.0 - 2.0 * index,
+            "handoff_bpm": handoff,
+            "observability_state": observability,
+            "observability_reason": reason,
+            "switch_target_ready": ready,
+            "switch_target_readiness_reason": ready_reason,
+        }
+        for index, (handoff, observability, reason, ready, ready_reason) in enumerate(
+            [
+                (80.0, "recovered", "observable", True, "ready"),
+                (138.0, "lost_after_recovery", "low_periodicity", False, "observability_lost"),
+                (136.0, "recovering", "awaiting_continuity", False, "observability_recovering"),
+                (134.0, "recovered", "observable", False, "insufficient_ready_history"),
+                (79.0, "recovered", "observable", True, "ready"),
+            ]
+        )
+    ]
+
+    from ppg_hr.v2.post_motion_dual_reset_runtime import (
+        ready_gated_handoff_timeline,
+    )
+
+    timeline = ready_gated_handoff_timeline(
+        rows,
+        motion_end_s=10.0,
+        config=FrozenDualResetConfig(experiment_mode="a2"),
+    )
+
+    assert timeline["final_bpm"] == (80.0, 80.0, 80.0, 80.0, 79.0)
+    assert timeline["switch_states"][1:4] == (
+        "handoff_frozen",
+        "handoff_frozen",
+        "handoff_frozen",
+    )
+
+
 def test_confirmation_deadline_permanently_safe_abstains() -> None:
     rows = [
         {
