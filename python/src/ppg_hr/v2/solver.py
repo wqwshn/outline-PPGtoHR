@@ -2110,7 +2110,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
             # The adapter deliberately consumes an adaptive-informed handoff path.
             # Mark it as the selected Final source so report rendering does not
             # replace it with the independent FFT column.
-            if bool(trace_row.get("bootstrap_admissible")):
+            if bool(trace_row.get("handoff_consumed")):
                 HR[idx, 5] = 1.0
                 row["used_adaptive"] = True
         dual_reset_metadata = dual_result.metadata
@@ -2747,10 +2747,25 @@ def _error_stats(
         assume_sorted=False,
     )
     ref = ref_interp(t_aligned)
-    return {
+    stats = {
         "fft_aae_bpm": _mean_abs(HR[:, 2][mask] - ref[mask]),
         "final_aae_bpm": _mean_abs(HR[:, 3][mask] - ref[mask]),
     }
+    tail_mask = np.zeros(HR.shape[0], dtype=bool)
+    if motion_segment is not None:
+        motion_end_s = float(motion_segment["end_s"])
+        tail_mask = (HR[:, 0] > motion_end_s) & (HR[:, 0] <= motion_end_s + 60.0)
+        tail_mask &= reference_overlap_mask(t_aligned, ref_data)
+    tail_error = np.abs(HR[:, 3][tail_mask] - ref[tail_mask])
+    stats.update(
+        {
+            "post_motion_60s_mae_bpm": _mean_abs(tail_error),
+            "post_motion_60s_e10_count": float(np.count_nonzero(tail_error > 10.0)),
+            "post_motion_60s_e20_count": float(np.count_nonzero(tail_error > 20.0)),
+            "post_motion_60s_window_count": float(tail_error.size),
+        }
+    )
+    return stats
 
 
 def _apply_v2_analysis_scope(

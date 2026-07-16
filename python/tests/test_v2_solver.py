@@ -2048,6 +2048,32 @@ def test_error_stats_limits_metrics_to_reference_time_range() -> None:
     assert stats["final_aae_bpm"] == 0.0
 
 
+def test_error_stats_records_fixed_post_motion_60s_tail_metrics() -> None:
+    from ppg_hr.v2 import solver
+
+    hr = np.asarray(
+        [
+            [10.0, 100.0, 100.0, 100.0, 0.0, 1.0],
+            [20.0, 100.0, 100.0, 110.0, 0.0, 1.0],
+            [30.0, 100.0, 100.0, 121.0, 0.0, 1.0],
+            [81.0, 100.0, 100.0, 160.0, 0.0, 1.0],
+        ],
+        dtype=float,
+    )
+    cfg = V2RunConfig(
+        data_path=Path("sample.csv"),
+        ref_path=Path("sample_ref.csv"),
+        time_bias=0.0,
+    )
+
+    stats = solver._error_stats(hr, cfg, {"start_s": 0.0, "end_s": 19.0})
+
+    assert stats["post_motion_60s_mae_bpm"] == 31.0 / 2.0
+    assert stats["post_motion_60s_e10_count"] == 1.0
+    assert stats["post_motion_60s_e20_count"] == 1.0
+    assert stats["post_motion_60s_window_count"] == 2.0
+
+
 def test_find_crossover_detects_fft_rise() -> None:
     from ppg_hr.v2.solver import _find_crossover_idx
 

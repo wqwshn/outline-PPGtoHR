@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
+import subprocess
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from statistics import fmean
 from typing import Any
@@ -42,6 +44,7 @@ class ObservabilityReplayResult:
     window_rows: tuple[dict[str, Any], ...]
     sample_metrics: dict[str, Any]
     independent_reset_bpm: tuple[float, ...]
+    independent_reset_trace: tuple[str, ...]
 
 
 def build_predeclared_candidates() -> tuple[ObservabilityCandidate, ...]:
@@ -77,10 +80,11 @@ def evaluate_candidate_matrix(
         candidate.name: evaluate_observability_candidate(replay, candidate)
         for candidate in candidates
     }
-    independent = {
-        result.independent_reset_bpm for result in results.values()
+    independent_bpm = {result.independent_reset_bpm for result in results.values()}
+    independent_trace = {
+        result.independent_reset_trace for result in results.values()
     }
-    if len(independent) != 1:
+    if len(independent_bpm) != 1 or len(independent_trace) != 1:
         raise ValueError(f"{replay.sample}: independent reset drift across A0/A1/A2")
     return results
 
@@ -154,6 +158,15 @@ def evaluate_observability_candidate(
         sample_metrics=metrics,
         independent_reset_bpm=tuple(
             float(row["independent_reset_bpm"]) for row in rows
+        ),
+        independent_reset_trace=tuple(
+            json.dumps(
+                row["independent_reset_trace"],
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            for row in rows
         ),
     )
 
@@ -328,6 +341,27 @@ def run_observability_experiment(
     _write_rows(output_dir / "track_a_sample_metrics.csv", sample_rows)
     _write_rows(output_dir / "track_a_window_metrics.csv", window_rows)
     _write_rows(output_dir / "track_a_candidate_summary.csv", summaries)
+    audit = _build_track_a_audit(
+        lite_batch_dir=lite_batch_dir,
+        output_dir=output_dir,
+        candidates=candidates,
+    )
+    (output_dir / "track_a_audit.json").write_text(
+        json.dumps(audit, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    decision["audit_status"] = audit["status"]
+    decision["source_batch_commit"] = audit["source_batch_code"]["commit"]
+    decision["input_manifest_sha256"] = audit["input_manifest_sha256"]
+    if audit["status"] != "PASS":
+        decision.update(
+            {
+                "verdict": "NO_GO",
+                "selected_candidate": None,
+                "yzy_allowed": False,
+                "reason": "track_a_audit_failed",
+            }
+        )
     (output_dir / "track_a_decision.json").write_text(
         json.dumps(decision, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -342,6 +376,77 @@ def run_observability_experiment(
         "sample_metrics": sample_rows,
         "output_dir": str(output_dir),
     }
+
+
+def _build_track_a_audit(
+    *,
+    lite_batch_dir: Path,
+    output_dir: Path,
+    candidates: Sequence[ObservabilityCandidate],
+) -> dict[str, Any]:
+    batch_audit_path = lite_batch_dir / "batch_audit.json"
+    batch_audit = json.loads(batch_audit_path.read_text(encoding="utf-8"))
+    source_files = [
+        path
+        for path in sorted(lite_batch_dir.rglob("*"))
+        if path.is_file() and path.suffix.lower() in {".csv", ".json"}
+    ]
+    inputs = {
+        str(path.relative_to(lite_batch_dir)).replace("\\", "/"): _sha256_file(path)
+        for path in source_files
+    }
+    input_manifest_sha256 = _canonical_sha256(inputs)
+    repo_root = Path(__file__).resolve().parents[4]
+    code_commit = _git_output(repo_root, "rev-parse", "HEAD")
+    code_dirty = bool(_git_output(repo_root, "status", "--short"))
+    outputs = {
+        path.name: _sha256_file(path)
+        for path in sorted(output_dir.glob("track_a_*.csv"))
+    }
+    status = (
+        "PASS"
+        if str(batch_audit.get("status", "")).lower() == "pass"
+        and bool(inputs)
+        and bool(outputs)
+        and bool(code_commit)
+        and not code_dirty
+        else "FAIL"
+    )
+    return {
+        "status": status,
+        "source_batch_audit": str(batch_audit_path.resolve()),
+        "source_batch_code": batch_audit.get("code", {}),
+        "source_batch_protocol": batch_audit.get("protocol", {}),
+        "source_batch_audit_sha256": _sha256_file(batch_audit_path),
+        "input_manifest_sha256": input_manifest_sha256,
+        "input_files": inputs,
+        "candidate_configurations": [asdict(candidate) for candidate in candidates],
+        "replay_code": {"commit": code_commit, "dirty": code_dirty},
+        "output_csv_sha256": outputs,
+    }
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _canonical_sha256(value: Any) -> str:
+    payload = json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _git_output(repo_root: Path, *args: str) -> str:
+    completed = subprocess.run(
+        ["git", "-C", str(repo_root), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return completed.stdout.strip()
 
 
 def _cohort_by_sample(manifest: Any) -> dict[str, str]:

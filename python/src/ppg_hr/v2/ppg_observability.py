@@ -54,4 +54,3 @@ def _physiological_periodicity(values: np.ndarray, fs: float) -> float:
         return 0.0
     score = float(np.max(positive[min_lag : max_lag + 1]) / energy)
     return float(np.clip(score, 0.0, 1.0))
-

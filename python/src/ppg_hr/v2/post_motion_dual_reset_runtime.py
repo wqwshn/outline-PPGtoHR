@@ -267,14 +267,23 @@ def apply_frozen_dual_reset(
         if not 0 <= global_idx < output.size:
             raise ValueError(f"dual-reset window index out of range: {global_idx}")
         output[global_idx] = float(timeline["final_bpm"][local_idx])
+        switch_state = str(timeline["switch_states"][local_idx])
         row.update(
             {
                 "bootstrap_admissible": bool(timeline["bootstrap_admissible"]),
                 "bootstrap_reason": timeline["bootstrap_reason"],
                 "switch_final_bpm": float(timeline["final_bpm"][local_idx]),
                 "switch_guard_reason": timeline["guard_reasons"][local_idx] or "",
-                "switch_state": timeline["switch_states"][local_idx],
+                "switch_state": switch_state,
                 "switch_reason_detail": timeline["switch_reasons"][local_idx] or "",
+                "handoff_consumed": switch_state
+                in {
+                    "bootstrap_provisional",
+                    "ready_confirmed",
+                    "gap_rescue",
+                    "stable_crossover",
+                    "handoff_active",
+                },
             }
         )
 

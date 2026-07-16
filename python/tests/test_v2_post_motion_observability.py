@@ -379,6 +379,8 @@ def test_frozen_replay_reports_post60_risk_and_transition_timing() -> None:
     assert result.sample_metrics["post60_e20_count"] == 3
     assert result.sample_metrics["post60_final_mae_bpm"] < 20.0
     assert result.window_rows[-1]["switch_state"] == "handoff_active"
+    assert result.window_rows[0]["handoff_consumed"] is False
+    assert result.window_rows[-1]["handoff_consumed"] is True
 
 
 def test_a0_a1_a2_matrix_keeps_independent_reset_exactly_identical() -> None:

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 import optuna
 
@@ -18,6 +18,12 @@ from .types import V2RunConfig
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 _INVALID_OBJECTIVE_PENALTY = 1e9
+_TAIL_SAFE_POLICY = "post_motion_e20_nonregression"
+_SELECTION_POLICIES = {"min_aae", _TAIL_SAFE_POLICY}
+
+
+class NoTailSafeTrialError(RuntimeError):
+    """Raised when a fail-closed BO run has no tail-safe candidate."""
 
 
 @dataclass(frozen=True)
@@ -26,6 +32,8 @@ class V2BayesConfig:
     num_seed_points: int = 10
     num_repeats: int = 3
     random_state: int = 42
+    selection_policy: str = "min_aae"
+    max_post_motion_60s_e20_count: int | None = None
 
 
 @dataclass
@@ -45,6 +53,8 @@ def optimise_v2(
     on_trial_step: Callable[[dict], None] | None = None,
     qc: dict | None = None,
 ) -> V2OptimiseResult:
+    if config.selection_policy not in _SELECTION_POLICIES:
+        raise ValueError(f"unknown BO selection policy: {config.selection_policy}")
     active_space = space or v2_search_space_for_preset(
         base.adaptive_filter,
         base.algorithm_preset,
@@ -52,6 +62,9 @@ def optimise_v2(
     if not active_space.names():
         result = solve_v2(base)
         value = _finite_objective_value(result.err_stats["final_aae_bpm"])
+        tail_e20 = _tail_e20_count(result.err_stats)
+        tail_windows = _tail_window_count(result.err_stats)
+        eligible = _tail_safe_eligible(config, tail_e20, tail_windows)
         row = {
             "repeat_idx": 1,
             "repeat_total": 1,
@@ -63,10 +76,15 @@ def optimise_v2(
             "value": value,
             "best_in_repeat": value,
             "best_overall": value,
+            "post_motion_60s_e20_count": tail_e20,
+            "post_motion_60s_window_count": tail_windows,
+            "tail_safe_eligible": eligible,
         }
         history = [row]
         if on_trial_step is not None:
             on_trial_step(row)
+        if config.selection_policy == _TAIL_SAFE_POLICY and not eligible:
+            raise NoTailSafeTrialError("没有满足运动后尾段安全门槛的 BO trial")
         report = save_v2_report(
             out_path,
             result,
@@ -106,6 +124,8 @@ def optimise_v2(
             cfg = base.__class__(**{**base.__dict__, **params})
             result = solve_v2(cfg)
             value = _finite_objective_value(result.err_stats["final_aae_bpm"])
+            tail_e20 = _tail_e20_count(result.err_stats)
+            tail_windows = _tail_window_count(result.err_stats)
             _repeat_best_ref[0] = min(_repeat_best_ref[0], value)
             best_overall_ref[0] = min(best_overall_ref[0], value)
             global_trial = _repeat_idx0 * trials_per_repeat + trial.number + 1
@@ -120,6 +140,13 @@ def optimise_v2(
                 "value": value,
                 "best_in_repeat": _repeat_best_ref[0],
                 "best_overall": best_overall_ref[0],
+                "post_motion_60s_e20_count": tail_e20,
+                "post_motion_60s_window_count": tail_windows,
+                "tail_safe_eligible": _tail_safe_eligible(
+                    config,
+                    tail_e20,
+                    tail_windows,
+                ),
                 **params,
             }
             history.append(row)
@@ -138,12 +165,23 @@ def optimise_v2(
             show_progress_bar=False,
         )
         current = float(study.best_value)
-        if current < best_error:
+        if config.selection_policy != _TAIL_SAFE_POLICY and current < best_error:
             best_error = current
             best_params = decode_v2(
                 active_space,
                 {name: int(study.best_params[name]) for name in active_space.names()},
             )
+
+    if config.selection_policy == _TAIL_SAFE_POLICY:
+        eligible_rows = [row for row in history if bool(row["tail_safe_eligible"])]
+        if not eligible_rows:
+            raise NoTailSafeTrialError("没有满足运动后尾段安全门槛的 BO trial")
+        selected = min(
+            eligible_rows,
+            key=lambda row: (float(row["value"]), int(row["global_trial"])),
+        )
+        best_error = float(selected["value"])
+        best_params = {name: selected[name] for name in active_space.names()}
 
     best_cfg = base.__class__(**{**base.__dict__, **best_params})
     best_result = solve_v2(best_cfg)
@@ -168,3 +206,39 @@ def _finite_objective_value(value: object) -> float:
     except (TypeError, ValueError):
         return _INVALID_OBJECTIVE_PENALTY
     return objective if math.isfinite(objective) else _INVALID_OBJECTIVE_PENALTY
+
+
+def _tail_e20_count(err_stats: dict[str, float]) -> int | None:
+    value = err_stats.get("post_motion_60s_e20_count")
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return int(parsed) if math.isfinite(parsed) else None
+
+
+def _tail_window_count(err_stats: dict[str, float]) -> int | None:
+    value = err_stats.get("post_motion_60s_window_count")
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return int(parsed) if math.isfinite(parsed) else None
+
+
+def _tail_safe_eligible(
+    config: V2BayesConfig,
+    tail_e20: int | None,
+    tail_windows: int | None,
+) -> bool:
+    if config.selection_policy != _TAIL_SAFE_POLICY:
+        return True
+    threshold = config.max_post_motion_60s_e20_count
+    if threshold is None:
+        raise ValueError("尾段安全选择策略必须提供 max_post_motion_60s_e20_count")
+    return (
+        tail_e20 is not None
+        and tail_windows is not None
+        and tail_windows > 0
+        and tail_e20 <= int(threshold)
+    )

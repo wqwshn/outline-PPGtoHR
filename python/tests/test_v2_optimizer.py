@@ -13,7 +13,7 @@ from ppg_hr.v2.algorithm_presets import (
     normalise_v2_algorithm_preset,
     v2_search_space_for_preset,
 )
-from ppg_hr.v2.optimizer import V2BayesConfig, optimise_v2
+from ppg_hr.v2.optimizer import NoTailSafeTrialError, V2BayesConfig, optimise_v2
 from ppg_hr.v2.search_space import V2SearchSpace, default_v2_search_space, reduced_v2_search_space
 from ppg_hr.v2.signal_preparation import solver_params_from_v2
 from ppg_hr.v2.solver import V2SolverResult
@@ -442,3 +442,190 @@ def test_optimise_v2_records_repeat_and_trial_progress(tmp_path: Path) -> None:
     assert all(row["repeat_total"] == 2 for row in progress)
     assert all(row["trial_total"] == 2 for row in progress)
     assert result.best_error == min(row["value"] for row in result.history)
+
+
+def _two_fs_target_space() -> V2SearchSpace:
+    return V2SearchSpace(
+        fs_target=[25, 50],
+        max_order=None,
+        lms_mu_base=None,
+        smooth_win_len=None,
+        spec_penalty_width=None,
+        hr_range_hz=None,
+        slew_limit_bpm=None,
+        slew_step_bpm=None,
+        hr_range_rest=None,
+        slew_limit_rest=None,
+        slew_step_rest=None,
+        time_bias=None,
+    )
+
+
+def test_tail_safe_selection_excludes_lower_aae_trial_with_new_e20(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    data, ref = _write_pair(tmp_path)
+    base = V2RunConfig(data_path=data, ref_path=ref, reference_groups_order=())
+
+    def fake_solve_v2(run_cfg: V2RunConfig) -> V2SolverResult:
+        unsafe = run_cfg.fs_target == 25
+        return V2SolverResult(
+            HR=np.array([[4.0, 72.0, 72.0, 72.0, 0.0, 0.0]], dtype=float),
+            err_stats={
+                "final_aae_bpm": 1.0 if unsafe else 1.5,
+                "post_motion_60s_e20_count": 2.0 if unsafe else 0.0,
+                "post_motion_60s_window_count": 60.0,
+            },
+            metadata={"schema_version": "v2"},
+            window_table=[],
+        )
+
+    import ppg_hr.v2.optimizer as optimizer
+
+    monkeypatch.setattr(optimizer, "solve_v2", fake_solve_v2)
+    monkeypatch.setattr(
+        optimizer.optuna.samplers,
+        "TPESampler",
+        lambda **_: optimizer.optuna.samplers.GridSampler({"fs_target": [0, 1]}),
+    )
+    result = optimise_v2(
+        base,
+        V2BayesConfig(
+            max_iterations=2,
+            num_seed_points=2,
+            num_repeats=1,
+            random_state=3,
+            selection_policy="post_motion_e20_nonregression",
+            max_post_motion_60s_e20_count=0,
+        ),
+        out_path=tmp_path / "tail-safe.json",
+        space=_two_fs_target_space(),
+    )
+
+    assert result.best_params == {"fs_target": 50}
+    assert result.best_error == 1.5
+    assert {row["post_motion_60s_e20_count"] for row in result.history} == {0, 2}
+    assert sum(bool(row["tail_safe_eligible"]) for row in result.history) == 1
+
+
+def test_default_selection_still_minimises_aae(tmp_path: Path, monkeypatch) -> None:
+    data, ref = _write_pair(tmp_path)
+    base = V2RunConfig(data_path=data, ref_path=ref, reference_groups_order=())
+
+    def fake_solve_v2(run_cfg: V2RunConfig) -> V2SolverResult:
+        unsafe = run_cfg.fs_target == 25
+        return V2SolverResult(
+            HR=np.array([[4.0, 72.0, 72.0, 72.0, 0.0, 0.0]], dtype=float),
+            err_stats={
+                "final_aae_bpm": 1.0 if unsafe else 1.5,
+                "post_motion_60s_e20_count": 2.0 if unsafe else 0.0,
+                "post_motion_60s_window_count": 60.0,
+            },
+            metadata={"schema_version": "v2"},
+            window_table=[],
+        )
+
+    import ppg_hr.v2.optimizer as optimizer
+
+    monkeypatch.setattr(optimizer, "solve_v2", fake_solve_v2)
+    monkeypatch.setattr(
+        optimizer.optuna.samplers,
+        "TPESampler",
+        lambda **_: optimizer.optuna.samplers.GridSampler({"fs_target": [0, 1]}),
+    )
+    result = optimise_v2(
+        base,
+        V2BayesConfig(max_iterations=2, num_seed_points=2, num_repeats=1),
+        out_path=tmp_path / "legacy-selection.json",
+        space=_two_fs_target_space(),
+    )
+
+    assert result.best_params == {"fs_target": 25}
+    assert result.best_error == 1.0
+
+
+def test_tail_safe_selection_fails_closed_when_no_trial_is_eligible(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    data, ref = _write_pair(tmp_path)
+    base = V2RunConfig(data_path=data, ref_path=ref, reference_groups_order=())
+
+    def fake_solve_v2(run_cfg: V2RunConfig) -> V2SolverResult:
+        return V2SolverResult(
+            HR=np.array([[4.0, 72.0, 72.0, 72.0, 0.0, 0.0]], dtype=float),
+            err_stats={
+                "final_aae_bpm": float(run_cfg.fs_target),
+                "post_motion_60s_e20_count": 1.0,
+                "post_motion_60s_window_count": 60.0,
+            },
+            metadata={"schema_version": "v2"},
+            window_table=[],
+        )
+
+    import ppg_hr.v2.optimizer as optimizer
+
+    monkeypatch.setattr(optimizer, "solve_v2", fake_solve_v2)
+    with pytest.raises(NoTailSafeTrialError, match="没有满足运动后尾段安全门槛"):
+        optimise_v2(
+            base,
+            V2BayesConfig(
+                max_iterations=2,
+                num_seed_points=2,
+                num_repeats=1,
+                selection_policy="post_motion_e20_nonregression",
+                max_post_motion_60s_e20_count=0,
+            ),
+            out_path=tmp_path / "no-safe-trial.json",
+            space=_two_fs_target_space(),
+        )
+
+
+def test_tail_safe_selection_rejects_zero_evidence_tail(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    data, ref = _write_pair(tmp_path)
+    base = V2RunConfig(data_path=data, ref_path=ref, reference_groups_order=())
+
+    def fake_solve_v2(run_cfg: V2RunConfig) -> V2SolverResult:
+        return V2SolverResult(
+            HR=np.array([[4.0, 72.0, 72.0, 72.0, 0.0, 0.0]], dtype=float),
+            err_stats={
+                "final_aae_bpm": 1.0,
+                "post_motion_60s_e20_count": 0.0,
+                "post_motion_60s_window_count": 0.0,
+            },
+            metadata={"schema_version": "v2"},
+            window_table=[],
+        )
+
+    import ppg_hr.v2.optimizer as optimizer
+
+    monkeypatch.setattr(optimizer, "solve_v2", fake_solve_v2)
+    with pytest.raises(NoTailSafeTrialError):
+        optimise_v2(
+            base,
+            V2BayesConfig(
+                max_iterations=1,
+                num_seed_points=1,
+                num_repeats=1,
+                selection_policy="post_motion_e20_nonregression",
+                max_post_motion_60s_e20_count=0,
+            ),
+            out_path=tmp_path / "zero-tail.json",
+            space=_two_fs_target_space(),
+        )
+
+
+def test_unknown_selection_policy_is_rejected(tmp_path: Path) -> None:
+    data, ref = _write_pair(tmp_path)
+    base = V2RunConfig(data_path=data, ref_path=ref, reference_groups_order=())
+
+    with pytest.raises(ValueError, match="unknown BO selection policy"):
+        optimise_v2(
+            base,
+            V2BayesConfig(selection_policy="typo"),
+            out_path=tmp_path / "typo.json",
+        )
