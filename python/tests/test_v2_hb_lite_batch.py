@@ -144,6 +144,46 @@ def test_audited_runner_keeps_hf_primary_and_enables_acc_comparison(
     assert captured["comparison_groups"] == (("ACC",),)
 
 
+def test_exploratory_runner_preserves_upstream_no_go_in_audit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    decision = tmp_path / "decision.json"
+    decision.write_text(
+        '{"verdict":"NO_GO","selected_candidate":null,'
+        '"reason":"bobi2_not_below_3_bpm"}',
+        encoding="utf-8",
+    )
+    output = tmp_path / "out"
+    output.mkdir()
+    captured: dict[str, Any] = {}
+
+    def fake_pipeline(**kwargs: Any) -> dict[str, Any]:
+        captured.update(kwargs)
+        return {"records": [], "output_dir": output}
+
+    def fake_audit(**kwargs: Any) -> dict[str, Any]:
+        captured["run_authorization"] = kwargs["run_authorization"]
+        return {"status": "pass", "failures": []}
+
+    monkeypatch.setattr(hb_lite_batch, "run_v2_batch_pipeline", fake_pipeline)
+    monkeypatch.setattr(hb_lite_batch, "audit_hb_lite_batch", fake_audit)
+
+    run_audited_hb_lite_batch(
+        input_dir=tmp_path,
+        output_dir=output,
+        sample_stems=HB24_SAMPLE_STEMS,
+        fixed_validation_decision_path=decision,
+        exploratory_candidate="minimal_provisional_reanchor",
+    )
+
+    assert captured["run_config_overrides"][
+        "post_motion_minimal_provisional_enable"
+    ] is True
+    assert captured["run_authorization"]["upstream_verdict"] == "NO_GO"
+    assert captured["run_authorization"]["merge_eligibility_unchanged"] is True
+
+
 def test_audited_runner_rejects_incomplete_hb24_manifest(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="exact HB24 manifest"):
         run_audited_hb_lite_batch(

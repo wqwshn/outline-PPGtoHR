@@ -20,6 +20,7 @@ _CANDIDATE_RELOCATION = {
     "minimal_none": "none",
     "minimal_a2": "a2",
     "minimal_reanchor": "controlled_reanchor",
+    "minimal_provisional_reanchor": "controlled_reanchor",
 }
 
 
@@ -147,6 +148,34 @@ def require_fixed_validation_go(decision_path: str | Path) -> dict[str, Any]:
     return decision
 
 
+def require_exploratory_no_go(
+    decision_path: str | Path,
+    *,
+    candidate: str,
+) -> dict[str, Any]:
+    """Authorize an explicitly labelled expansion without rewriting NO-GO as GO."""
+
+    path = Path(decision_path)
+    decision = json.loads(path.read_text(encoding="utf-8"))
+    if _verdict(decision, stage="exploratory upstream") is not Verdict.NO_GO:
+        raise RuntimeError("exploratory override requires an upstream NO_GO")
+    if decision.get("selected_candidate") is not None:
+        raise ValueError("upstream NO_GO must not select a candidate")
+    relocation = _CANDIDATE_RELOCATION.get(candidate)
+    if relocation is None:
+        raise ValueError(f"unsupported exploratory candidate: {candidate}")
+    return {
+        "verdict": "EXPLORATORY_OVERRIDE",
+        "upstream_verdict": "NO_GO",
+        "upstream_decision_path": str(path.resolve()),
+        "upstream_reason": decision.get("reason"),
+        "selected_candidate": candidate,
+        "selected_relocation_mode": relocation,
+        "bo_allowed_by_user_override": True,
+        "merge_eligibility_unchanged": True,
+    }
+
+
 def frozen_minimal_run_overrides(decision: Mapping[str, Any]) -> dict[str, Any]:
     """Bind a passed candidate to the exact mechanism used by the ablation."""
 
@@ -160,6 +189,9 @@ def frozen_minimal_run_overrides(decision: Mapping[str, Any]) -> dict[str, Any]:
         "post_motion_dual_reset_handoff_only_switch": False,
         "post_motion_minimal_handoff_enable": True,
         "post_motion_minimal_relocation_mode": relocation,
+        "post_motion_minimal_provisional_enable": (
+            selected == "minimal_provisional_reanchor"
+        ),
         "post_motion_dual_reset_prior_invalidation_enable": False,
         "post_motion_dual_reset_post_switch_hold_actual_final": False,
         "post_motion_dual_reset_gap_rescue_gap_bpm": 18.0,

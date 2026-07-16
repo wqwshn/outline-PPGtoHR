@@ -19,6 +19,7 @@ from .optimizer import V2BayesConfig
 from .post_motion_dual_reset_runtime import FrozenDualResetConfig
 from .post_motion_minimal_pipeline_gate import (
     frozen_minimal_run_overrides,
+    require_exploratory_no_go,
     require_fixed_validation_go,
 )
 from .report import load_v2_report
@@ -48,6 +49,7 @@ def run_audited_hb_lite_batch(
     sample_stems: tuple[str, ...],
     fixed_validation_decision_path: Path,
     bayes_cfg: V2BayesConfig = HB_LITE_BAYES_CONFIG,
+    exploratory_candidate: str | None = None,
 ) -> dict[str, Any]:
     if not sample_stems:
         raise ValueError("sample_stems must not be empty")
@@ -64,7 +66,13 @@ def run_audited_hb_lite_batch(
         raise ValueError(
             f"HB Lite batch requires exact HB24 manifest; missing={missing}, extra={extra}"
         )
-    fixed_decision = require_fixed_validation_go(fixed_validation_decision_path)
+    if exploratory_candidate is None:
+        fixed_decision = require_fixed_validation_go(fixed_validation_decision_path)
+    else:
+        fixed_decision = require_exploratory_no_go(
+            fixed_validation_decision_path,
+            candidate=exploratory_candidate,
+        )
     mechanism_overrides = frozen_minimal_run_overrides(fixed_decision)
     result = run_v2_batch_pipeline(
         input_dir=input_dir,
@@ -86,6 +94,7 @@ def run_audited_hb_lite_batch(
         bayes_cfg=bayes_cfg,
         output_dir=Path(result["output_dir"]),
         mechanism_overrides=mechanism_overrides,
+        run_authorization=fixed_decision,
     )
     audit_path = Path(result["output_dir"]) / "batch_audit.json"
     audit_path.write_text(
@@ -104,6 +113,7 @@ def audit_hb_lite_batch(
     bayes_cfg: V2BayesConfig,
     output_dir: Path,
     mechanism_overrides: dict[str, Any] | None = None,
+    run_authorization: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     failures: list[str] = []
     if bayes_cfg != HB_LITE_BAYES_CONFIG:
@@ -152,6 +162,7 @@ def audit_hb_lite_batch(
             "search_space": asdict(v2_search_space_for_preset("lms", "lite")),
             "frozen_dual_reset": asdict(FrozenDualResetConfig()),
             "minimal_handoff_overrides": mechanism_overrides,
+            "run_authorization": run_authorization,
         },
         "code": _code_provenance(),
         "requested_samples": sorted(requested),
@@ -379,6 +390,14 @@ def _parse_args() -> argparse.Namespace:
         required=True,
         help="Machine decision that must explicitly allow this BO batch.",
     )
+    parser.add_argument(
+        "--exploratory-candidate",
+        choices=("minimal_provisional_reanchor",),
+        help=(
+            "Explicitly run a user-directed expansion after upstream NO-GO; "
+            "does not change merge eligibility."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -390,6 +409,7 @@ def main() -> None:
         sample_stems=tuple(args.samples),
         fixed_validation_decision_path=args.fixed_validation_decision,
         bayes_cfg=HB_LITE_BAYES_CONFIG,
+        exploratory_candidate=args.exploratory_candidate,
     )
     print(result["audit_path"])
 
