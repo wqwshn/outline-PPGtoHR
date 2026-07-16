@@ -15,9 +15,9 @@ import matplotlib.pyplot as plt
 from .post_motion_reset_fft_reacquire import load_lite_report_config
 from .prior_invalidation_experiment import (
     TYPICAL_SAMPLES,
-    aligned_reference_bpm,
     build_prior_invalidation_configs,
 )
+from .reference_overlap import aligned_reference_bpm
 from .solver import solve_v2
 
 

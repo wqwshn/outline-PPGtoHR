@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from scipy.interpolate import interp1d
 
 from .handoff_only_switch_experiment import (
     FAILURE_SAMPLES,
@@ -49,31 +48,6 @@ def build_prior_invalidation_configs(
         post_motion_dual_reset_prior_invalidation_prior_decline_bpm_per_window=0.5,
     )
     return current, candidate
-
-
-def aligned_reference_bpm(
-    hr: np.ndarray,
-    time_bias: float,
-    reference_bounds: tuple[float, float] | None = None,
-) -> np.ndarray:
-    """Return the reference paired with each algorithm window by MAE timing."""
-
-    values = np.asarray(hr, dtype=float)
-    if values.size == 0:
-        return np.asarray([], dtype=float)
-    time = values[:, 0]
-    aligned_time = time + float(time_bias)
-    interpolate = interp1d(
-        time,
-        values[:, 1],
-        kind="linear",
-        fill_value="extrapolate",
-        assume_sorted=False,
-    )
-    reference = np.asarray(interpolate(aligned_time), dtype=float)
-    bounds = reference_bounds or (float(np.min(time)), float(np.max(time)))
-    reference[(aligned_time < bounds[0]) | (aligned_time > bounds[1])] = np.nan
-    return reference
 
 
 def evaluate_report(report_path: str | Path) -> dict[str, Any]:

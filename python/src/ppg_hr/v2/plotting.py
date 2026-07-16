@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 from .output_paths import prepare_output_dir, safe_output_path
 from .reference_groups import color_for_reference_order, method_label, reference_order_key
-from .reference_overlap import reference_overlap_mask
+from .reference_overlap import aligned_reference_bpm, reference_overlap_mask
 from .report import is_v2_report, load_v2_report
 
 _PLOT_CURVES = ("reference", "fft", "adaptive")
@@ -686,20 +686,11 @@ def _slew_recovery_to_primary(
 
 
 def _aligned_reference_bpm(hr: np.ndarray, time_bias: float) -> np.ndarray:
-    arr = np.asarray(hr, dtype=float)
-    if arr.ndim != 2 or arr.shape[1] < 2:
-        return np.asarray([], dtype=float)
-    t_aligned = arr[:, 0] + float(time_bias)
-    if arr.shape[0] < 2:
-        return arr[:, 1].copy()
-    ref_interp = interp1d(
-        arr[:, 0],
-        arr[:, 1],
-        kind="linear",
-        fill_value="extrapolate",
-        assume_sorted=False,
+    return aligned_reference_bpm(
+        hr,
+        time_bias,
+        mask_outside_bounds=False,
     )
-    return np.asarray(ref_interp(t_aligned), dtype=float)
 
 
 def _write_error_csv(

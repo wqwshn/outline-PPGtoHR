@@ -8,10 +8,10 @@ import pytest
 
 from ppg_hr.v2.post_motion_reset_fft_reacquire import load_lite_report_config
 from ppg_hr.v2.prior_invalidation_experiment import (
-    aligned_reference_bpm,
     build_prior_invalidation_configs,
     evaluate_report,
 )
+from ppg_hr.v2.reference_overlap import aligned_reference_bpm
 
 
 def _hb_report(sample: str) -> Path | None:
