@@ -41,6 +41,7 @@ from .post_motion_dynamic_guard_policy import (
     event_dicts,
     switch_mask_and_events,
 )
+from .ppg_observability import measure_ppg_observability
 from .raw_fft_candidates import (
     RawFftCandidateFrame,
     extract_raw_fft_candidates,
@@ -2068,16 +2069,27 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 for value in baseline_final[:idx]
                 if math.isfinite(float(value))
             )
+            raw_ppg_window = prepared.ppg[idx_s:idx_e]
+            raw_candidates = extract_raw_fft_candidates(
+                raw_ppg_window,
+                prepared.fs,
+            )
+            observability = measure_ppg_observability(
+                raw_ppg_window,
+                prepared.fs,
+                raw_candidates,
+            )
             runtime_windows.append(
                 DualResetRuntimeWindow(
                     window_idx=idx,
+                    start_s=float(row["start_s"]),
                     center_s=center_s,
                     reliable=bool(row.get("reliable", True)),
                     archived_final_bpm=float(baseline_final[idx]),
                     archived_final_history=history,
-                    candidates=extract_raw_fft_candidates(
-                        prepared.ppg[idx_s:idx_e], prepared.fs
-                    ),
+                    candidates=raw_candidates,
+                    periodicity=observability.periodicity,
+                    peak_competition=observability.peak_competition,
                 )
             )
         dual_result = apply_frozen_dual_reset(

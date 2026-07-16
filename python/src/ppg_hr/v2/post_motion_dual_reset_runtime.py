@@ -10,7 +10,12 @@ from typing import Any
 
 import numpy as np
 
-from .post_motion_dual_reset import DualResetInput, DualResetTracker
+from .post_motion_dual_reset import (
+    DualResetInput,
+    DualResetTracker,
+    ResetQualification,
+    SwitchTargetReadiness,
+)
 from .raw_fft_candidates import RawFftCandidateFrame
 
 
@@ -19,6 +24,7 @@ class FrozenDualResetConfig:
     """Mechanism constants frozen by the N4 HB24 confirmation."""
 
     name: str = "controlled_reanchor_remote25_causal_bootstrap"
+    experiment_mode: str = "a0"
     mechanism: str = "trend_persistence"
     prior_half_life_s: float = 10.0
     hits_required: int = 3
@@ -35,6 +41,14 @@ class FrozenDualResetConfig:
     bootstrap_confirmation_deadline_s: float = 20.0
     raw_final_guard_radius_bpm: float = 30.0
     held_fallback_windows: int = 2
+    observability_periodicity_min: float = 0.5
+    observability_peak_competition_min: float = 1.3
+    observability_continuity_bpm: float = 6.0
+    observability_recovery_hits: int = 2
+    a2_qualification_windows: int = 3
+    gap_rescue_gap_bpm: float = 20.0
+    stable_crossover_gap_bpm: float = 6.0
+    stable_crossover_windows: int = 2
 
 
 @dataclass(frozen=True)
@@ -45,6 +59,9 @@ class DualResetRuntimeWindow:
     archived_final_bpm: float
     archived_final_history: tuple[float, ...]
     candidates: RawFftCandidateFrame
+    start_s: float | None = None
+    periodicity: float = 1.0
+    peak_competition: float = float("inf")
 
 
 @dataclass(frozen=True)
@@ -64,6 +81,8 @@ def apply_frozen_dual_reset(
     """Replay the frozen causal tracker and switch adapter over one solve."""
 
     cfg = config or FrozenDualResetConfig()
+    if cfg.experiment_mode not in {"a0", "a1", "a2"}:
+        raise ValueError(f"unknown dual-reset experiment mode: {cfg.experiment_mode}")
     output = np.asarray(baseline_final_bpm, dtype=float).copy()
     if not windows:
         return DualResetRuntimeResult(
@@ -72,7 +91,7 @@ def apply_frozen_dual_reset(
             metadata=_metadata(cfg, enabled=True, reason="no_post_motion_windows"),
         )
 
-    tracker = DualResetTracker(
+    tracker_kwargs = dict(
         mechanism=cfg.mechanism,
         prior_half_life_s=cfg.prior_half_life_s,
         hits_required=cfg.hits_required,
@@ -83,14 +102,122 @@ def apply_frozen_dual_reset(
         controlled_reanchor=cfg.controlled_reanchor,
         reanchor_min_gap_bpm=cfg.reanchor_min_gap_bpm,
     )
+    tracker = DualResetTracker(**tracker_kwargs)
+    independent_tracker = (
+        tracker
+        if cfg.experiment_mode == "a0"
+        else DualResetTracker(**tracker_kwargs)
+    )
+    handoff_tracker = (
+        tracker
+        if cfg.experiment_mode == "a0"
+        else DualResetTracker(**tracker_kwargs)
+    )
+    observability_hits = 0
+    observability_ever_recovered = False
+    previous_observable_top_bpm: float | None = None
+    reinitialization_count = 0
+    first_recovery_inputs: list[DualResetInput] = []
     rows: list[dict[str, Any]] = []
     for window in windows:
-        step = tracker.step(
-            DualResetInput(
-                center_s=window.center_s,
-                candidates=window.candidates,
-                reliable=window.reliable,
-                previous_final_bpm=window.archived_final_history,
+        tracker_input = DualResetInput(
+            center_s=window.center_s,
+            candidates=window.candidates,
+            reliable=window.reliable,
+            previous_final_bpm=window.archived_final_history,
+        )
+        independent_step = independent_tracker.step(tracker_input)
+        observability = _observability_step(
+            window,
+            motion_end_s=motion_end_s,
+            config=cfg,
+            previous_top_bpm=previous_observable_top_bpm,
+            previous_hits=observability_hits,
+            ever_recovered=observability_ever_recovered,
+        )
+        observability_hits = int(observability["hits"])
+        if bool(observability["basic_evidence"]):
+            previous_observable_top_bpm = observability["top_bpm"]
+        else:
+            previous_observable_top_bpm = None
+        recovered = observability["state"] == "recovered"
+        first_recovery = recovered and not observability_ever_recovered
+        if not observability_ever_recovered:
+            if bool(observability["basic_evidence"]):
+                first_recovery_inputs.append(tracker_input)
+            else:
+                first_recovery_inputs.clear()
+        if observability["state"] == "lost_after_recovery":
+            handoff_tracker.revoke_target_evidence()
+        observability_ever_recovered = observability_ever_recovered or recovered
+        if cfg.experiment_mode == "a0":
+            step = independent_step
+        elif recovered:
+            if cfg.experiment_mode == "a2" and first_recovery:
+                a2_tracker_kwargs = {
+                    **tracker_kwargs,
+                    "qualification_windows": max(
+                        cfg.hits_required,
+                        min(
+                            cfg.qualification_windows,
+                            cfg.a2_qualification_windows,
+                        ),
+                    ),
+                }
+                handoff_tracker = DualResetTracker(**a2_tracker_kwargs)
+                reinitialization_count += 1
+                replayed_steps = [
+                    handoff_tracker.step(recovery_input)
+                    for recovery_input in first_recovery_inputs
+                ]
+                handoff_step = replayed_steps[-1]
+                first_recovery_inputs.clear()
+            else:
+                handoff_step = handoff_tracker.step(tracker_input)
+            step = handoff_step
+        else:
+            step = None
+        qualification = (
+            independent_step.qualification
+            if cfg.experiment_mode == "a0"
+            else (
+                step.qualification
+                if step is not None
+                else _frozen_qualification(observability["state"])
+            )
+        )
+        readiness = (
+            independent_step.switch_target_readiness
+            if cfg.experiment_mode == "a0"
+            else (
+                step.switch_target_readiness
+                if step is not None
+                else _frozen_readiness(observability["state"])
+            )
+        )
+        handoff_bpm = (
+            independent_step.handoff_bpm
+            if cfg.experiment_mode == "a0"
+            else (
+                step.handoff_bpm
+                if step is not None
+                else float(window.archived_final_bpm)
+            )
+        )
+        handoff_trace = (
+            independent_step.handoff_trace
+            if cfg.experiment_mode == "a0"
+            else (
+                step.handoff_trace
+                if step is not None
+                else {
+                    "selection": "observability_frozen",
+                    "source": "observability_frozen",
+                    "selected_rank": 0,
+                    "selected_candidate_bpm": None,
+                    "tracked_bpm": float(window.archived_final_bpm),
+                    "limited_bpm": float(window.archived_final_bpm),
+                }
             )
         )
         rows.append(
@@ -98,27 +225,43 @@ def apply_frozen_dual_reset(
                 "window_idx": int(window.window_idx),
                 "center_s": float(window.center_s),
                 "archived_final_bpm": float(window.archived_final_bpm),
-                "independent_reset_bpm": float(step.independent_bpm),
-                "handoff_reset_bpm": float(step.handoff_bpm),
-                "handoff_bpm": float(step.handoff_bpm),
-                "candidate_qualified": bool(step.qualification.qualified),
-                "qualification_reason": step.qualification.reason,
-                "qualification_stable_hits": int(step.qualification.stable_hits),
-                "qualification_observed_windows": int(step.qualification.observed_windows),
-                "switch_target_ready": bool(step.switch_target_readiness.ready),
-                "switch_target_readiness_reason": step.switch_target_readiness.reason,
-                "switch_target_ready_hits": int(step.switch_target_readiness.stable_hits),
+                "independent_reset_bpm": float(independent_step.independent_bpm),
+                "handoff_reset_bpm": float(handoff_bpm),
+                "handoff_bpm": float(handoff_bpm),
+                "candidate_qualified": bool(qualification.qualified),
+                "qualification_reason": qualification.reason,
+                "qualification_stable_hits": int(qualification.stable_hits),
+                "qualification_observed_windows": int(qualification.observed_windows),
+                "switch_target_ready": bool(readiness.ready),
+                "switch_target_readiness_reason": readiness.reason,
+                "switch_target_ready_hits": int(readiness.stable_hits),
                 "candidate_handoff_gap_bpm": (
-                    step.switch_target_readiness.candidate_handoff_gap_bpm
+                    readiness.candidate_handoff_gap_bpm
                 ),
-                "independent_reset_trace": step.independent_trace,
-                "handoff_reset_trace": step.handoff_trace,
-                "handoff_trace": step.handoff_trace,
+                "independent_reset_trace": independent_step.independent_trace,
+                "handoff_reset_trace": handoff_trace,
+                "handoff_trace": handoff_trace,
                 "raw_top5": window.candidates.top(),
+                "window_fully_post_motion": bool(observability["fully_post_motion"]),
+                "observability_state": observability["state"],
+                "observability_positive": bool(observability["positive"]),
+                "observability_reason": observability["reason"],
+                "observability_periodicity": float(window.periodicity),
+                "observability_peak_competition": float(window.peak_competition),
+                "observability_hits": observability_hits,
+                "handoff_reinitialization_count": reinitialization_count,
             }
         )
 
-    timeline = causal_bootstrap_timeline(rows, motion_end_s=motion_end_s, config=cfg)
+    timeline = (
+        causal_bootstrap_timeline(rows, motion_end_s=motion_end_s, config=cfg)
+        if cfg.experiment_mode == "a0"
+        else ready_gated_handoff_timeline(
+            rows,
+            motion_end_s=motion_end_s,
+            config=cfg,
+        )
+    )
     for local_idx, row in enumerate(rows):
         global_idx = int(row["window_idx"])
         if not 0 <= global_idx < output.size:
@@ -148,6 +291,109 @@ def apply_frozen_dual_reset(
         }
     )
     return DualResetRuntimeResult(output, tuple(rows), meta)
+
+
+def _observability_step(
+    window: DualResetRuntimeWindow,
+    *,
+    motion_end_s: float,
+    config: FrozenDualResetConfig,
+    previous_top_bpm: float | None,
+    previous_hits: int,
+    ever_recovered: bool,
+) -> dict[str, Any]:
+    peaks = window.candidates.top()
+    top_bpm = float(peaks[0][0]) if peaks else None
+    start_s = (
+        float(window.start_s)
+        if window.start_s is not None
+        else float(window.center_s)
+    )
+    fully_post_motion = start_s >= float(motion_end_s)
+    basic_evidence = bool(
+        fully_post_motion
+        and window.reliable
+        and top_bpm is not None
+        and math.isfinite(float(window.periodicity))
+        and float(window.periodicity) >= config.observability_periodicity_min
+        and not math.isnan(float(window.peak_competition))
+        and float(window.peak_competition)
+        >= config.observability_peak_competition_min
+    )
+    continuous = bool(
+        basic_evidence
+        and previous_top_bpm is not None
+        and top_bpm is not None
+        and abs(top_bpm - previous_top_bpm)
+        <= config.observability_continuity_bpm
+    )
+    if not basic_evidence:
+        hits = 0
+    elif previous_hits == 0:
+        hits = 1
+    elif continuous:
+        hits = previous_hits + 1
+    else:
+        hits = 1
+    recovered = hits >= config.observability_recovery_hits
+    if recovered:
+        state = "recovered"
+    elif ever_recovered and not basic_evidence:
+        state = "lost_after_recovery"
+    elif hits > 0:
+        state = "recovering"
+    else:
+        state = "unobservable"
+    if not fully_post_motion:
+        reason = "window_overlaps_motion"
+    elif not window.reliable:
+        reason = "unreliable"
+    elif top_bpm is None:
+        reason = "no_raw_peak"
+    elif float(window.periodicity) < config.observability_periodicity_min:
+        reason = "low_periodicity"
+    elif float(window.peak_competition) < config.observability_peak_competition_min:
+        reason = "peak_competition"
+    elif recovered:
+        reason = "continuous_ppg_evidence"
+    else:
+        reason = "awaiting_continuity"
+    return {
+        "state": state,
+        "reason": reason,
+        "positive": recovered,
+        "basic_evidence": basic_evidence,
+        "fully_post_motion": fully_post_motion,
+        "top_bpm": top_bpm,
+        "hits": hits,
+    }
+
+
+def _frozen_qualification(state: str) -> ResetQualification:
+    return ResetQualification(
+        qualified=False,
+        reason=f"observability_{state}",
+        stable_hits=0,
+        observed_windows=0,
+        selected_amp_ratio=0.0,
+        held_previous_count=0,
+        state_age_windows=0,
+        established_reason=None,
+        revoked_reason=None,
+    )
+
+
+def _frozen_readiness(state: str) -> SwitchTargetReadiness:
+    return SwitchTargetReadiness(
+        ready=False,
+        reason=f"observability_{state}",
+        stable_hits=0,
+        observed_windows=0,
+        candidate_handoff_gap_bpm=None,
+        state_age_windows=0,
+        established_reason=None,
+        revoked_reason=None,
+    )
 
 
 def causal_bootstrap_timeline(
@@ -259,6 +505,84 @@ def causal_bootstrap_timeline(
     return _timeline(output, True, reason, guard_reasons, switch_states, switch_reasons)
 
 
+def ready_gated_handoff_timeline(
+    rows: Sequence[dict[str, Any]],
+    *,
+    motion_end_s: float,
+    config: FrozenDualResetConfig | None = None,
+) -> dict[str, Any]:
+    """Consume a handoff target only after observability and readiness agree."""
+
+    cfg = config or FrozenDualResetConfig(experiment_mode="a1")
+    output = [float(row["archived_final_bpm"]) for row in rows]
+    guards: list[str | None] = [None] * len(rows)
+    states = ["archived_final"] * len(rows)
+    reasons: list[str | None] = [None] * len(rows)
+    ever_ready = False
+    switched = False
+    permanent_abstain = False
+    stable_hits = 0
+    for index, row in enumerate(rows):
+        elapsed = float(row["center_s"]) - float(motion_end_s)
+        if permanent_abstain:
+            states[index] = "safe_abstain"
+            reasons[index] = "confirmation_timeout"
+            continue
+        if not ever_ready and elapsed > cfg.bootstrap_confirmation_deadline_s:
+            permanent_abstain = True
+            states[index] = "safe_abstain"
+            reasons[index] = "confirmation_timeout"
+            continue
+        if row.get("observability_state") != "recovered":
+            stable_hits = 0
+            states[index] = "observability_frozen"
+            reasons[index] = str(row.get("observability_reason") or "not_recovered")
+            continue
+        if not bool(row.get("switch_target_ready")):
+            stable_hits = 0
+            states[index] = "target_not_ready"
+            reasons[index] = str(
+                row.get("switch_target_readiness_reason") or "not_ready"
+            )
+            continue
+        ever_ready = True
+        target = float(row["handoff_bpm"])
+        current_final = float(row["archived_final_bpm"])
+        gap = abs(target - current_final)
+        if switched:
+            output[index] = target
+            states[index] = "handoff_active"
+            reasons[index] = "ready_target_continues"
+        elif gap >= cfg.gap_rescue_gap_bpm:
+            stable_hits = 0
+            output[index] = target
+            states[index] = "gap_rescue"
+            reasons[index] = "ready_high_gap_hard_switch"
+            switched = True
+        elif gap <= cfg.stable_crossover_gap_bpm:
+            stable_hits += 1
+            if stable_hits >= cfg.stable_crossover_windows:
+                output[index] = target
+                states[index] = "stable_crossover"
+                reasons[index] = "ready_reachable_non_hard_crossover"
+                switched = True
+            else:
+                states[index] = "ready_waiting_crossover"
+                reasons[index] = "awaiting_stable_crossover"
+        else:
+            stable_hits = 0
+            states[index] = "ready_waiting_crossover"
+            reasons[index] = "ready_intermediate_gap"
+    return _timeline(
+        output,
+        switched,
+        "ready_gated_handoff" if switched else "no_consumable_target",
+        guards,
+        states,
+        reasons,
+    )
+
+
 def _timeline(output, admitted, reason, guards, states, reasons) -> dict[str, Any]:
     return {
         "final_bpm": tuple(output),
@@ -281,6 +605,7 @@ def _metadata(cfg: FrozenDualResetConfig, *, enabled: bool, reason: str) -> dict
         "enabled": bool(enabled),
         "status": reason,
         "candidate": cfg.name,
+        "experiment_mode": cfg.experiment_mode,
         "switch_adapter": "causal_bootstrap",
         "frozen_parameters": {
             key: value for key, value in cfg.__dict__.items() if key != "name"

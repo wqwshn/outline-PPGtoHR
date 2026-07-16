@@ -158,6 +158,19 @@ class DualResetTracker:
         self._frozen_trend_bpm_per_window = 0.0
         self._window_index = 0
 
+    def revoke_target_evidence(self) -> None:
+        """Revoke consumable target evidence without resetting trajectory state."""
+
+        self._qualification_hits.clear()
+        self._readiness_hits.clear()
+        self._held_history.clear()
+        self._raw_top_track.clear()
+        self._previous_selected_candidate_bpm = None
+        self._previous_qualified = False
+        self._previous_ready = False
+        self._qualification_state_age = 0
+        self._readiness_state_age = 0
+
     def step(self, input: DualResetInput) -> DualResetStep:
         peaks = input.candidates.top()
         if self._prior_started_s is None:

@@ -22,6 +22,7 @@ from ppg_hr.v2.post_motion_dynamic_guard_policy import (
     switch_mask_and_events,
 )
 from ppg_hr.v2.post_motion_reset_fft_reacquire import load_lite_report_config
+from ppg_hr.v2.ppg_observability import measure_ppg_observability
 from ppg_hr.v2.raw_fft_candidates import (
     RawFftCandidateFrame,
     extract_raw_fft_candidates,
@@ -73,6 +74,9 @@ class ReplayEvidenceWindow:
     candidates: RawFftCandidateFrame
     reliable: bool
     archived_final_history: tuple[float, ...]
+    start_s: float | None = None
+    periodicity: float = 1.0
+    peak_competition: float = float("inf")
 
 
 @dataclass(frozen=True)
@@ -1255,13 +1259,22 @@ def _load_sample_replay(sample: str, lite_batch_dir: Path) -> SampleReplay:
         idx_e = idx_s + int(round(float(cfg.window_seconds) * prepared.fs))
         if idx_s < 0 or idx_e > prepared.ppg.size:
             raise ValueError(f"raw PPG window is out of range at {sample} center={center_s}")
-        frame = extract_raw_fft_candidates(prepared.ppg[idx_s:idx_e], prepared.fs)
+        raw_ppg_window = prepared.ppg[idx_s:idx_e]
+        frame = extract_raw_fft_candidates(raw_ppg_window, prepared.fs)
+        observability = measure_ppg_observability(
+            raw_ppg_window,
+            prepared.fs,
+            frame,
+        )
         evidence.append(
             ReplayEvidenceWindow(
                 center_s=center_s,
                 candidates=frame,
                 reliable=bool(row.get("reliable", True)),
                 archived_final_history=archived_history,
+                start_s=start_s,
+                periodicity=observability.periodicity,
+                peak_competition=observability.peak_competition,
             )
         )
         offline.append(offline_window)
@@ -1273,6 +1286,12 @@ def _load_sample_replay(sample: str, lite_batch_dir: Path) -> SampleReplay:
         evidence=tuple(evidence),
         offline=tuple(offline),
     )
+
+
+def load_sample_replay(sample: str, lite_batch_dir: Path) -> SampleReplay:
+    """Load one frozen Lite timeline with causal raw-PPG evidence."""
+
+    return _load_sample_replay(sample, lite_batch_dir)
 
 
 def is_in_archived_timeline(
