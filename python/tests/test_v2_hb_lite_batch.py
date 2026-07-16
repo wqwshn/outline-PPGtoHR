@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import ppg_hr.v2.hb_lite_batch as hb_lite_batch
 import pytest
 
+import ppg_hr.v2.hb_lite_batch as hb_lite_batch
 from ppg_hr.v2.hb_lite_batch import (
     _audit_artifact_sets,
     _audit_summary_samples,
