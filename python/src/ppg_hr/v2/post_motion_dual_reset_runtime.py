@@ -16,6 +16,11 @@ from .post_motion_dual_reset import (
     ResetQualification,
     SwitchTargetReadiness,
 )
+from .post_motion_minimal_handoff import (
+    MinimalHandoffConfig,
+    MinimalHandoffInput,
+    run_minimal_handoff,
+)
 from .raw_fft_candidates import RawFftCandidateFrame
 
 
@@ -55,6 +60,7 @@ class FrozenDualResetConfig:
     stable_crossover_gap_bpm: float = 6.0
     stable_crossover_windows: int = 2
     post_switch_hold_actual_final: bool = False
+    minimal_handoff_enabled: bool = False
 
 
 @dataclass(frozen=True)
@@ -117,16 +123,26 @@ def apply_frozen_dual_reset(
             cfg.prior_invalidation_min_prior_decline_bpm_per_window
         ),
     )
+    handoff_tracker_kwargs = (
+        {
+            **tracker_kwargs,
+            "controlled_reanchor": False,
+            "prior_invalidation_enabled": False,
+        }
+        if cfg.minimal_handoff_enabled
+        else tracker_kwargs
+    )
     tracker = DualResetTracker(**tracker_kwargs)
+    separate_trackers = cfg.minimal_handoff_enabled or cfg.experiment_mode != "a0"
     independent_tracker = (
         tracker
-        if cfg.experiment_mode == "a0"
+        if not separate_trackers
         else DualResetTracker(**tracker_kwargs)
     )
     handoff_tracker = (
         tracker
-        if cfg.experiment_mode == "a0"
-        else DualResetTracker(**tracker_kwargs)
+        if not separate_trackers
+        else DualResetTracker(**handoff_tracker_kwargs)
     )
     observability_hits = 0
     observability_ever_recovered = False
@@ -162,15 +178,24 @@ def apply_frozen_dual_reset(
                 first_recovery_inputs.append(tracker_input)
             else:
                 first_recovery_inputs.clear()
-        if observability["state"] == "lost_after_recovery":
+        if (
+            not cfg.minimal_handoff_enabled
+            and observability["state"] == "lost_after_recovery"
+        ):
             handoff_tracker.revoke_target_evidence()
         observability_ever_recovered = observability_ever_recovered or recovered
-        if cfg.experiment_mode == "a0":
+        if cfg.experiment_mode == "a0" and not cfg.minimal_handoff_enabled:
             step = independent_step
-        elif recovered:
-            if cfg.experiment_mode == "a2" and first_recovery:
+        elif recovered or (
+            cfg.minimal_handoff_enabled and observability_ever_recovered
+        ):
+            if (
+                not cfg.minimal_handoff_enabled
+                and cfg.experiment_mode == "a2"
+                and first_recovery
+            ):
                 a2_tracker_kwargs = {
-                    **tracker_kwargs,
+                    **handoff_tracker_kwargs,
                     "qualification_windows": max(
                         cfg.hits_required,
                         min(
@@ -194,7 +219,7 @@ def apply_frozen_dual_reset(
             step = None
         qualification = (
             independent_step.qualification
-            if cfg.experiment_mode == "a0"
+            if cfg.experiment_mode == "a0" and not cfg.minimal_handoff_enabled
             else (
                 step.qualification
                 if step is not None
@@ -203,7 +228,7 @@ def apply_frozen_dual_reset(
         )
         readiness = (
             independent_step.switch_target_readiness
-            if cfg.experiment_mode == "a0"
+            if cfg.experiment_mode == "a0" and not cfg.minimal_handoff_enabled
             else (
                 step.switch_target_readiness
                 if step is not None
@@ -212,7 +237,7 @@ def apply_frozen_dual_reset(
         )
         handoff_bpm = (
             independent_step.handoff_bpm
-            if cfg.experiment_mode == "a0"
+            if cfg.experiment_mode == "a0" and not cfg.minimal_handoff_enabled
             else (
                 step.handoff_bpm
                 if step is not None
@@ -221,7 +246,7 @@ def apply_frozen_dual_reset(
         )
         handoff_trace = (
             independent_step.handoff_trace
-            if cfg.experiment_mode == "a0"
+            if cfg.experiment_mode == "a0" and not cfg.minimal_handoff_enabled
             else (
                 step.handoff_trace
                 if step is not None
@@ -250,6 +275,14 @@ def apply_frozen_dual_reset(
                 "switch_target_ready": bool(readiness.ready),
                 "switch_target_readiness_reason": readiness.reason,
                 "switch_target_ready_hits": int(readiness.stable_hits),
+                "candidate_stable": bool(qualification.qualified),
+                "tracker_converged": bool(readiness.ready),
+                "target_consumable": bool(
+                    observability_ever_recovered
+                    and qualification.qualified
+                    and readiness.ready
+                ),
+                "ppg_startup_gate_open": bool(observability_ever_recovered),
                 "candidate_handoff_gap_bpm": (
                     readiness.candidate_handoff_gap_bpm
                 ),
@@ -268,21 +301,62 @@ def apply_frozen_dual_reset(
             }
         )
 
-    timeline = (
-        causal_bootstrap_timeline(rows, motion_end_s=motion_end_s, config=cfg)
-        if cfg.experiment_mode == "a0"
-        else ready_gated_handoff_timeline(
-            rows,
-            motion_end_s=motion_end_s,
-            config=cfg,
+    if cfg.minimal_handoff_enabled:
+        minimal = run_minimal_handoff(
+            tuple(
+                MinimalHandoffInput(
+                    archived_final_bpm=float(row["archived_final_bpm"]),
+                    handoff_target_bpm=float(row["handoff_bpm"]),
+                    ppg_startup_gate_open=bool(row["ppg_startup_gate_open"]),
+                    candidate_stable=bool(row["candidate_stable"]),
+                    tracker_converged=bool(row["tracker_converged"]),
+                )
+                for row in rows
+            ),
+            config=MinimalHandoffConfig(
+                hard_switch_gap_bpm=18.0,
+                stable_crossover_gap_bpm=cfg.stable_crossover_gap_bpm,
+                stable_crossover_windows=cfg.stable_crossover_windows,
+            ),
         )
-    )
+        timeline = {
+            "final_bpm": minimal.final_bpm,
+            "bootstrap_admissible": minimal.switched,
+            "bootstrap_reason": (
+                "minimal_handoff_switched"
+                if minimal.switched
+                else "no_consumable_target"
+            ),
+            "guard_reasons": tuple(None for _ in rows),
+            "switch_states": tuple(
+                str(trace["switch_state"]) for trace in minimal.trace
+            ),
+            "switch_reasons": tuple(
+                str(trace["switch_reason"]) for trace in minimal.trace
+            ),
+            "minimal_trace": minimal.trace,
+        }
+    else:
+        timeline = (
+            causal_bootstrap_timeline(rows, motion_end_s=motion_end_s, config=cfg)
+            if cfg.experiment_mode == "a0"
+            else ready_gated_handoff_timeline(
+                rows,
+                motion_end_s=motion_end_s,
+                config=cfg,
+            )
+        )
     for local_idx, row in enumerate(rows):
         global_idx = int(row["window_idx"])
         if not 0 <= global_idx < output.size:
             raise ValueError(f"dual-reset window index out of range: {global_idx}")
         output[global_idx] = float(timeline["final_bpm"][local_idx])
         switch_state = str(timeline["switch_states"][local_idx])
+        minimal_trace = (
+            timeline.get("minimal_trace", ())[local_idx]
+            if timeline.get("minimal_trace")
+            else {}
+        )
         row.update(
             {
                 "bootstrap_admissible": bool(timeline["bootstrap_admissible"]),
@@ -299,6 +373,7 @@ def apply_frozen_dual_reset(
                     "stable_crossover",
                     "handoff_active",
                 },
+                **minimal_trace,
             }
         )
 
@@ -646,7 +721,11 @@ def _metadata(cfg: FrozenDualResetConfig, *, enabled: bool, reason: str) -> dict
         "status": reason,
         "candidate": cfg.name,
         "experiment_mode": cfg.experiment_mode,
-        "switch_adapter": "causal_bootstrap",
+        "switch_adapter": (
+            "minimal_single_writer"
+            if cfg.minimal_handoff_enabled
+            else "causal_bootstrap"
+        ),
         "frozen_parameters": {
             key: value for key, value in cfg.__dict__.items() if key != "name"
         },

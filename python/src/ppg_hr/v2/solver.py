@@ -2400,6 +2400,7 @@ def _dual_reset_runtime_config(cfg: V2RunConfig) -> FrozenDualResetConfig:
 
     return FrozenDualResetConfig(
         experiment_mode=str(cfg.post_motion_dual_reset_experiment_mode),
+        minimal_handoff_enabled=bool(cfg.post_motion_minimal_handoff_enable),
         post_switch_hold_actual_final=bool(
             cfg.post_motion_dual_reset_post_switch_hold_actual_final
         ),
@@ -2449,7 +2450,10 @@ def _apply_handoff_only_switch_boundary(
 
     if not (
         bool(cfg.post_motion_dual_reset_enable)
-        and bool(cfg.post_motion_dual_reset_handoff_only_switch)
+        and (
+            bool(cfg.post_motion_dual_reset_handoff_only_switch)
+            or bool(cfg.post_motion_minimal_handoff_enable)
+        )
     ):
         return legacy_mask, legacy_switch_idx, legacy_events, []
 
@@ -2458,10 +2462,12 @@ def _apply_handoff_only_switch_boundary(
     if src.size:
         motion_start_s = float(motion_segment["start_s"])
         mask[src[:, 0] >= motion_start_s - 1e-9] = True
-    suppressed = [
-        {**event, "suppressed_by": "handoff_only_switch"}
-        for event in legacy_events
-    ]
+    suppressed_by = (
+        "minimal_single_writer_handoff"
+        if bool(cfg.post_motion_minimal_handoff_enable)
+        else "handoff_only_switch"
+    )
+    suppressed = [{**event, "suppressed_by": suppressed_by} for event in legacy_events]
     return mask, None, [], suppressed
 
 

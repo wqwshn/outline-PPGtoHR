@@ -266,6 +266,87 @@ def test_a1_hard_switches_only_after_observability_and_target_are_ready() -> Non
     ]["handoff_reset_bpm"]
 
 
+def test_minimal_handoff_keeps_independent_trace_and_never_reinitialises() -> None:
+    quality = (True, True, True, True, False, True, True, True)
+    windows = tuple(
+        DualResetRuntimeWindow(
+            window_idx=index,
+            start_s=10.0 + index,
+            center_s=14.0 + index,
+            reliable=True,
+            archived_final_bpm=170.0,
+            archived_final_history=(176.0, 174.0, 172.0),
+            candidates=_frame((136.0 - min(index, 4), 1.0), (58.0, 0.4)),
+            periodicity=0.75 if good else 0.2,
+            peak_competition=1.8 if good else 1.1,
+        )
+        for index, good in enumerate(quality)
+    )
+    baseline = np.full(len(windows), 170.0)
+    frozen = apply_frozen_dual_reset(
+        windows,
+        motion_end_s=10.0,
+        baseline_final_bpm=baseline,
+        config=FrozenDualResetConfig(
+            experiment_mode="a1",
+            hits_required=1,
+            qualification_windows=1,
+            observability_recovery_hits=2,
+        ),
+    )
+    minimal = apply_frozen_dual_reset(
+        windows,
+        motion_end_s=10.0,
+        baseline_final_bpm=baseline,
+        config=FrozenDualResetConfig(
+            minimal_handoff_enabled=True,
+            hits_required=1,
+            qualification_windows=1,
+            observability_recovery_hits=2,
+        ),
+    )
+
+    assert [row["independent_reset_bpm"] for row in minimal.window_rows] == [
+        row["independent_reset_bpm"] for row in frozen.window_rows
+    ]
+    assert [row["independent_reset_trace"] for row in minimal.window_rows] == [
+        row["independent_reset_trace"] for row in frozen.window_rows
+    ]
+    assert [row["raw_top5"] for row in minimal.window_rows] == [
+        row["raw_top5"] for row in frozen.window_rows
+    ]
+    for row in minimal.window_rows:
+        assert {
+            "selected_rank",
+            "search_min_bpm",
+            "search_max_bpm",
+            "source",
+        } <= set(row["independent_reset_trace"])
+    assert all(
+        row["handoff_reinitialization_count"] == 0
+        for row in minimal.window_rows
+    )
+    assert all(
+        {"candidate_stable", "tracker_converged", "target_consumable"} <= set(row)
+        for row in minimal.window_rows
+    )
+    assert minimal.window_rows[0]["independent_reset_trace"]["selection"] == (
+        "raw_evidence/no_prior"
+    )
+    assert minimal.window_rows[1]["handoff_reset_trace"]["selection"] == (
+        "trend_persistence"
+    )
+    first_consumed = next(
+        index
+        for index, row in enumerate(minimal.window_rows)
+        if row["handoff_consumed"]
+    )
+    assert all(
+        row["final_writer"] == "switch_adapter"
+        for row in minimal.window_rows[first_consumed:]
+    )
+
+
 def test_stable_crossover_requires_consecutive_reachable_ready_windows() -> None:
     rows = [
         {

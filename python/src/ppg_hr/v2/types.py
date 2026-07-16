@@ -57,6 +57,7 @@ class V2RunConfig:
     post_motion_dual_reset_enable: bool = False
     post_motion_dual_reset_experiment_mode: Literal["a0", "a1", "a2"] = "a0"
     post_motion_dual_reset_handoff_only_switch: bool = False
+    post_motion_minimal_handoff_enable: bool = False
     post_motion_dual_reset_post_switch_hold_actual_final: bool = False
     post_motion_dual_reset_gap_rescue_gap_bpm: float = 20.0
     post_motion_dual_reset_observability_periodicity_min: float = 0.5

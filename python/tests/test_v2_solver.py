@@ -2128,6 +2128,36 @@ def test_handoff_only_switch_suppresses_legacy_dynamic_guard_consumption() -> No
     assert suppressed[0]["suppressed_by"] == "handoff_only_switch"
 
 
+def test_minimal_handoff_also_reduces_legacy_guard_to_audit_only() -> None:
+    from ppg_hr.v2.solver import _apply_handoff_only_switch_boundary
+
+    source = np.zeros((4, 9), dtype=float)
+    source[:, 0] = [0.0, 10.0, 20.0, 30.0]
+    cfg = V2RunConfig(
+        data_path=Path("sample.csv"),
+        ref_path=Path("sample_ref.csv"),
+        post_motion_dual_reset_enable=True,
+        post_motion_minimal_handoff_enable=True,
+    )
+    event = {"window_idx": 3, "switch_reason": "gap_rescue"}
+
+    mask, switch_idx, actual, suppressed = _apply_handoff_only_switch_boundary(
+        np.asarray([False, True, True, False]),
+        3,
+        [event],
+        source,
+        {"start_s": 10.0, "end_s": 20.0},
+        cfg,
+    )
+
+    assert mask.tolist() == [False, True, True, True]
+    assert switch_idx is None
+    assert actual == []
+    assert suppressed == [
+        {**event, "suppressed_by": "minimal_single_writer_handoff"}
+    ]
+
+
 def test_dual_reset_runtime_config_uses_a2_loose_observability_platform() -> None:
     from ppg_hr.v2.solver import _dual_reset_runtime_config
 
@@ -2143,6 +2173,7 @@ def test_dual_reset_runtime_config_uses_a2_loose_observability_platform() -> Non
     runtime = _dual_reset_runtime_config(cfg)
 
     assert runtime.experiment_mode == "a2"
+    assert runtime.minimal_handoff_enabled is False
     assert runtime.observability_periodicity_min == 0.4
     assert runtime.observability_peak_competition_min == 1.1
     assert runtime.observability_recovery_hits == 2
