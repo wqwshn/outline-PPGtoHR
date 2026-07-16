@@ -1,6 +1,6 @@
 # 只在可观测性恢复后一次性重启交接 reset
 
-Status: accepted
+Status: accepted; one-way startup simplification proposed by ADR-0027
 
 运动后初期窗口可能仍包含运动信号或尚未形成清晰 PPG 心搏，错误低频一旦进入 reset 历史，即使真实峰随后成为 raw top-1，也会因搜索范围不可达而持续低锁。系统只允许交接 reset 在首个完整运动后窗口之后，依据无参考、因果的 raw PPG 可观测性恢复证据执行一次内部重新初始化；独立 reset FFT 保持数值和状态不变，以继续承担纯 PPG 对照。
 

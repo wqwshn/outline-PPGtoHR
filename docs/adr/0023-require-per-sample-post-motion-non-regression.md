@@ -1,6 +1,6 @@
 # 运动后正常样本采用逐样本硬防退化门槛
 
-Status: accepted
+Status: accepted; acceptance revision proposed by ADR-0027
 
 交接 reset FFT、稳定交汇和持续高差硬切的候选必须逐条通过正常 HB 样本的运动后防退化门槛；失效样本上的大幅 MAE 收益不得抵消任一正常样本新增的错误硬切、E20 灾难窗口或明显 post-motion 60 s MAE 回归。正常样本集合均值只用于已通过逐样本门槛的候选排序。
 

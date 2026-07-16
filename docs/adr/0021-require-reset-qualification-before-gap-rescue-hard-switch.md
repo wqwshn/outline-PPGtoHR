@@ -1,6 +1,6 @@
 # gap rescue 硬切前必须取得交接 reset 资格
 
-Status: accepted
+Status: accepted; control terminology proposed for consolidation by ADR-0027
 
 `gap_rescue` 保留立即切换到交接 reset FFT 的能力，以快速纠正运动段心率高漂移并减少运动后错误窗口；但持续轨迹高差不再同时承担 reset 目标可信度判断。实验必须先独立证明交接 reset FFT 能稳定利用 raw PPG 真实峰，并定义不依赖参考心率的交接 reset 资格；只有目标已取得该资格时，持续高差回切才允许执行硬切。
 

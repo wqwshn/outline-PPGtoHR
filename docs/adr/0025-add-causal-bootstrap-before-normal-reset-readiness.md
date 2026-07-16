@@ -1,6 +1,6 @@
 # 在正常 reset 就绪前增加独立的因果 bootstrap 启动状态
 
-Status: accepted
+Status: accepted; removal from the minimal candidate proposed by ADR-0027
 
 交接 reset 的公开状态分为三个层次：`candidate_qualified` 只认证 selected raw PPG 候选轨迹；`bootstrap_admissible` 只在启动阶段认证“因果 Final 弱先验与当前 raw top-5 handoff 足以支持一次有界试接管”；`switch_target_ready` 继续认证 handoff 已追上候选、可被 `gap_rescue` 或 `stable_crossover` 正常消费。三者不得互相冒充，因果 Final 冲突不得写入 raw 候选资格。
 
