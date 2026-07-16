@@ -347,6 +347,70 @@ def test_minimal_handoff_keeps_independent_trace_and_never_reinitialises() -> No
     )
 
 
+def test_minimal_handoff_relocation_modes_are_explicit_and_isolated() -> None:
+    raw = (50.0, 145.0, 144.0, 143.0, 142.0, 141.0)
+    windows = tuple(
+        DualResetRuntimeWindow(
+            window_idx=index,
+            start_s=float(index),
+            center_s=4.0 + index,
+            reliable=True,
+            archived_final_bpm=164.0 - index,
+            archived_final_history=(168.0, 166.0, 164.0),
+            candidates=_frame((bpm, 1.0), (55.0, 0.5)),
+            periodicity=0.8,
+            peak_competition=2.0,
+        )
+        for index, bpm in enumerate(raw)
+    )
+    baseline = np.asarray([164.0 - index for index in range(len(raw))])
+
+    results = {
+        mode: apply_frozen_dual_reset(
+            windows,
+            motion_end_s=0.0,
+            baseline_final_bpm=baseline,
+            config=FrozenDualResetConfig(
+                minimal_handoff_enabled=True,
+                minimal_relocation_mode=mode,
+                observability_recovery_hits=1,
+            ),
+        )
+        for mode in ("none", "a2", "controlled_reanchor", "a2_reanchor")
+    }
+
+    assert max(
+        row["handoff_reinitialization_count"]
+        for row in results["none"].window_rows
+    ) == 0
+    assert max(
+        row["handoff_reinitialization_count"]
+        for row in results["a2"].window_rows
+    ) == 1
+    assert not any(
+        row["handoff_reset_trace"]["reanchor_event"]
+        for row in results["none"].window_rows
+    )
+    assert any(
+        row["handoff_reset_trace"]["reanchor_event"]
+        for row in results["controlled_reanchor"].window_rows
+    )
+    assert [row["independent_reset_trace"] for row in results["none"].window_rows] == [
+        row["independent_reset_trace"]
+        for row in results["a2_reanchor"].window_rows
+    ]
+    assert {
+        row["tracker_qualification_windows"]
+        for result in results.values()
+        for row in result.window_rows
+    } == {4}
+    assert {
+        row["tracker_hits_required"]
+        for result in results.values()
+        for row in result.window_rows
+    } == {3}
+
+
 def test_stable_crossover_requires_consecutive_reachable_ready_windows() -> None:
     rows = [
         {

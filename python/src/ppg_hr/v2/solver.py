@@ -2401,6 +2401,7 @@ def _dual_reset_runtime_config(cfg: V2RunConfig) -> FrozenDualResetConfig:
     return FrozenDualResetConfig(
         experiment_mode=str(cfg.post_motion_dual_reset_experiment_mode),
         minimal_handoff_enabled=bool(cfg.post_motion_minimal_handoff_enable),
+        minimal_relocation_mode=str(cfg.post_motion_minimal_relocation_mode),
         post_switch_hold_actual_final=bool(
             cfg.post_motion_dual_reset_post_switch_hold_actual_final
         ),

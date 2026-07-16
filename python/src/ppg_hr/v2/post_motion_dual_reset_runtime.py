@@ -61,6 +61,7 @@ class FrozenDualResetConfig:
     stable_crossover_windows: int = 2
     post_switch_hold_actual_final: bool = False
     minimal_handoff_enabled: bool = False
+    minimal_relocation_mode: str = "none"
 
 
 @dataclass(frozen=True)
@@ -95,6 +96,11 @@ def apply_frozen_dual_reset(
     cfg = config or FrozenDualResetConfig()
     if cfg.experiment_mode not in {"a0", "a1", "a2"}:
         raise ValueError(f"unknown dual-reset experiment mode: {cfg.experiment_mode}")
+    relocation_modes = {"none", "a2", "controlled_reanchor", "a2_reanchor"}
+    if cfg.minimal_relocation_mode not in relocation_modes:
+        raise ValueError(
+            f"unknown minimal relocation mode: {cfg.minimal_relocation_mode}"
+        )
     output = np.asarray(baseline_final_bpm, dtype=float).copy()
     if not windows:
         return DualResetRuntimeResult(
@@ -126,7 +132,8 @@ def apply_frozen_dual_reset(
     handoff_tracker_kwargs = (
         {
             **tracker_kwargs,
-            "controlled_reanchor": False,
+            "controlled_reanchor": cfg.minimal_relocation_mode
+            in {"controlled_reanchor", "a2_reanchor"},
             "prior_invalidation_enabled": False,
         }
         if cfg.minimal_handoff_enabled
@@ -143,6 +150,9 @@ def apply_frozen_dual_reset(
         tracker
         if not separate_trackers
         else DualResetTracker(**handoff_tracker_kwargs)
+    )
+    handoff_qualification_windows = int(
+        handoff_tracker_kwargs["qualification_windows"]
     )
     observability_hits = 0
     observability_ever_recovered = False
@@ -193,18 +203,29 @@ def apply_frozen_dual_reset(
                 not cfg.minimal_handoff_enabled
                 and cfg.experiment_mode == "a2"
                 and first_recovery
+            ) or (
+                cfg.minimal_handoff_enabled
+                and cfg.minimal_relocation_mode in {"a2", "a2_reanchor"}
+                and first_recovery
             ):
-                a2_tracker_kwargs = {
-                    **handoff_tracker_kwargs,
-                    "qualification_windows": max(
-                        cfg.hits_required,
-                        min(
-                            cfg.qualification_windows,
-                            cfg.a2_qualification_windows,
+                a2_tracker_kwargs = (
+                    handoff_tracker_kwargs
+                    if cfg.minimal_handoff_enabled
+                    else {
+                        **handoff_tracker_kwargs,
+                        "qualification_windows": max(
+                            cfg.hits_required,
+                            min(
+                                cfg.qualification_windows,
+                                cfg.a2_qualification_windows,
+                            ),
                         ),
-                    ),
-                }
+                    }
+                )
                 handoff_tracker = DualResetTracker(**a2_tracker_kwargs)
+                handoff_qualification_windows = int(
+                    a2_tracker_kwargs["qualification_windows"]
+                )
                 reinitialization_count += 1
                 replayed_steps = [
                     handoff_tracker.step(recovery_input)
@@ -283,6 +304,10 @@ def apply_frozen_dual_reset(
                     and readiness.ready
                 ),
                 "ppg_startup_gate_open": bool(observability_ever_recovered),
+                "tracker_hits_required": int(cfg.hits_required),
+                "tracker_qualification_windows": int(
+                    handoff_qualification_windows
+                ),
                 "candidate_handoff_gap_bpm": (
                     readiness.candidate_handoff_gap_bpm
                 ),
