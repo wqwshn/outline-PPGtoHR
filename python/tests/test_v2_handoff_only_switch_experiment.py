@@ -87,3 +87,14 @@ def test_run2_post_switch_freeze_removes_most_broken_e20_but_exposes_ready_laten
     # Before the post-switch latch, the same experiment produced 23 E20 windows.
     assert row["new_post60_e20_count"] < 23
     assert row["new_down_up_bounce_count"] == 0
+
+
+def test_xiezi3_intermediate_gap_no_longer_regresses() -> None:
+    report = _hb_report("xiezi3")
+    if report is None:
+        pytest.skip("HB xiezi3 N5 report is not available")
+
+    row = evaluate_report(report)
+
+    assert row["delta_post60_mae_bpm"] <= 1.0
+    assert row["new_post60_e20_count"] <= row["old_post60_e20_count"]

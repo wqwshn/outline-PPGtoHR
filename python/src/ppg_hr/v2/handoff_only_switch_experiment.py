@@ -14,6 +14,7 @@ import numpy as np
 
 from .post_motion_reset_fft_reacquire import load_lite_report_config
 from .solver import solve_v2
+from .types import V2RunConfig
 
 DEFAULT_SAMPLES = (
     "bobi2",
@@ -108,24 +109,40 @@ def evaluate_report(report_path: str | Path) -> dict[str, Any]:
     path = Path(report_path)
     payload = json.loads(path.read_text(encoding="utf-8"))
     base = load_lite_report_config(payload)
+    baseline_config, candidate_config = build_replay_configs(base)
+    baseline_result = solve_v2(baseline_config)
+    result = solve_v2(candidate_config)
+    return _evaluate_results(payload, baseline_result, result)
+
+
+def build_replay_configs(
+    base: V2RunConfig,
+) -> tuple[V2RunConfig, V2RunConfig]:
+    """Build the shared baseline/candidate pair used by metrics and figures."""
+
     baseline_config = replace(
         base,
         post_motion_dual_reset_enable=True,
         post_motion_dual_reset_experiment_mode="a0",
         post_motion_dual_reset_handoff_only_switch=False,
     )
-    config = replace(
+    candidate_config = replace(
         base,
         post_motion_dual_reset_enable=True,
         post_motion_dual_reset_experiment_mode="a2",
         post_motion_dual_reset_handoff_only_switch=True,
         post_motion_dual_reset_post_switch_hold_actual_final=True,
+        post_motion_dual_reset_gap_rescue_gap_bpm=18.0,
         post_motion_dual_reset_observability_periodicity_min=0.4,
         post_motion_dual_reset_observability_peak_competition_min=1.1,
         post_motion_dual_reset_observability_recovery_hits=2,
     )
-    baseline_result = solve_v2(baseline_config)
-    result = solve_v2(config)
+    return baseline_config, candidate_config
+
+
+def _evaluate_results(payload, baseline_result, result) -> dict[str, Any]:
+    """Calculate acceptance metrics from one shared replay pair."""
+
     motion_end_s = float(result.metadata["motion_segment"]["end_s"])
     old = _tail_metrics(baseline_result.window_table, motion_end_s)
     new = _tail_metrics(result.window_table, motion_end_s)

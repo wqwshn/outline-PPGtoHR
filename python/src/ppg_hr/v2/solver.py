@@ -2403,6 +2403,9 @@ def _dual_reset_runtime_config(cfg: V2RunConfig) -> FrozenDualResetConfig:
         post_switch_hold_actual_final=bool(
             cfg.post_motion_dual_reset_post_switch_hold_actual_final
         ),
+        gap_rescue_gap_bpm=float(
+            cfg.post_motion_dual_reset_gap_rescue_gap_bpm
+        ),
         observability_periodicity_min=float(
             cfg.post_motion_dual_reset_observability_periodicity_min
         ),

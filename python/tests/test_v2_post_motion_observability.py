@@ -354,6 +354,34 @@ def test_gap_rescue_holds_actual_final_when_observability_drops_after_switch() -
     assert default_timeline["final_bpm"] == (80.0, 138.0, 136.0, 134.0, 79.0)
 
 
+def test_ready_target_at_18_bpm_gap_uses_gap_rescue() -> None:
+    rows = [
+        {
+            "center_s": 11.0,
+            "archived_final_bpm": 99.0,
+            "handoff_bpm": 80.0,
+            "observability_state": "recovered",
+            "switch_target_ready": True,
+        }
+    ]
+
+    from ppg_hr.v2.post_motion_dual_reset_runtime import (
+        ready_gated_handoff_timeline,
+    )
+
+    timeline = ready_gated_handoff_timeline(
+        rows,
+        motion_end_s=10.0,
+        config=FrozenDualResetConfig(
+            experiment_mode="a2",
+            gap_rescue_gap_bpm=18.0,
+        ),
+    )
+
+    assert timeline["final_bpm"] == (80.0,)
+    assert timeline["switch_states"] == ("gap_rescue",)
+
+
 def test_confirmation_deadline_permanently_safe_abstains() -> None:
     rows = [
         {
