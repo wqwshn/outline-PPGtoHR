@@ -45,12 +45,17 @@ def build_prior_invalidation_configs(
         post_motion_dual_reset_prior_invalidation_enable=True,
         post_motion_dual_reset_prior_invalidation_hits=3,
         post_motion_dual_reset_prior_invalidation_gap_bpm=40.0,
-        post_motion_dual_reset_prior_invalidation_decline_bpm=0.5,
+        post_motion_dual_reset_prior_invalidation_raw_decline_bpm=0.5,
+        post_motion_dual_reset_prior_invalidation_prior_decline_bpm_per_window=0.5,
     )
     return current, candidate
 
 
-def aligned_reference_bpm(hr: np.ndarray, time_bias: float) -> np.ndarray:
+def aligned_reference_bpm(
+    hr: np.ndarray,
+    time_bias: float,
+    reference_bounds: tuple[float, float] | None = None,
+) -> np.ndarray:
     """Return the reference paired with each algorithm window by MAE timing."""
 
     values = np.asarray(hr, dtype=float)
@@ -66,7 +71,8 @@ def aligned_reference_bpm(hr: np.ndarray, time_bias: float) -> np.ndarray:
         assume_sorted=False,
     )
     reference = np.asarray(interpolate(aligned_time), dtype=float)
-    reference[(aligned_time < np.min(time)) | (aligned_time > np.max(time))] = np.nan
+    bounds = reference_bounds or (float(np.min(time)), float(np.max(time)))
+    reference[(aligned_time < bounds[0]) | (aligned_time > bounds[1])] = np.nan
     return reference
 
 

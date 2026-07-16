@@ -2424,8 +2424,11 @@ def _dual_reset_runtime_config(cfg: V2RunConfig) -> FrozenDualResetConfig:
         prior_invalidation_min_gap_bpm=float(
             cfg.post_motion_dual_reset_prior_invalidation_gap_bpm
         ),
-        prior_invalidation_min_decline_bpm=float(
-            cfg.post_motion_dual_reset_prior_invalidation_decline_bpm
+        prior_invalidation_min_raw_decline_bpm=float(
+            cfg.post_motion_dual_reset_prior_invalidation_raw_decline_bpm
+        ),
+        prior_invalidation_min_prior_decline_bpm_per_window=float(
+            cfg.post_motion_dual_reset_prior_invalidation_prior_decline_bpm_per_window
         ),
     )
 

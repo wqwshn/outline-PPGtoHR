@@ -40,7 +40,11 @@ def test_prior_invalidation_candidate_changes_only_experimental_handoff_knobs() 
     assert candidate.post_motion_dual_reset_prior_invalidation_enable is True
     assert candidate.post_motion_dual_reset_prior_invalidation_hits == 3
     assert candidate.post_motion_dual_reset_prior_invalidation_gap_bpm == 40.0
-    assert candidate.post_motion_dual_reset_prior_invalidation_decline_bpm == 0.5
+    assert candidate.post_motion_dual_reset_prior_invalidation_raw_decline_bpm == 0.5
+    assert (
+        candidate.post_motion_dual_reset_prior_invalidation_prior_decline_bpm_per_window
+        == 0.5
+    )
     assert current.data_path == candidate.data_path
     assert current.time_bias == candidate.time_bias
 
@@ -58,6 +62,13 @@ def test_aligned_reference_uses_the_same_positive_time_bias_as_mae() -> None:
 
     assert aligned[:2].tolist() == [90.0, 80.0]
     assert np.isnan(aligned[2])
+
+    reference_extends_past_algorithm_windows = aligned_reference_bpm(
+        hr,
+        time_bias=1.0,
+        reference_bounds=(0.0, 3.0),
+    )
+    assert reference_extends_past_algorithm_windows.tolist() == [90.0, 80.0, 70.0]
 
 
 def test_run2_real_replay_invalidates_prior_earlier_without_touching_independent_fft() -> None:

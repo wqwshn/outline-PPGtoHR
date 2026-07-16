@@ -65,7 +65,8 @@ class V2RunConfig:
     post_motion_dual_reset_prior_invalidation_enable: bool = False
     post_motion_dual_reset_prior_invalidation_hits: int = 3
     post_motion_dual_reset_prior_invalidation_gap_bpm: float = 40.0
-    post_motion_dual_reset_prior_invalidation_decline_bpm: float = 0.5
+    post_motion_dual_reset_prior_invalidation_raw_decline_bpm: float = 0.5
+    post_motion_dual_reset_prior_invalidation_prior_decline_bpm_per_window: float = 0.5
     max_recovery_seconds: float = 30.0
     recovery_trigger_bpm: float = 20.0
     pre_motion_context_seconds: float = 30.0

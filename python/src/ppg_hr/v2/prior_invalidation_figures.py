@@ -6,6 +6,10 @@ import argparse
 import json
 from pathlib import Path
 
+import matplotlib
+
+matplotlib.use("Agg", force=True)
+
 import matplotlib.pyplot as plt
 
 from .post_motion_reset_fft_reacquire import load_lite_report_config
@@ -38,7 +42,15 @@ def render_report(report_path: str | Path, output_dir: str | Path) -> Path:
     current = solve_v2(current_config)
     candidate = solve_v2(candidate_config)
     time = candidate.HR[:, 0]
-    reference = aligned_reference_bpm(candidate.HR, candidate_config.time_bias)
+    overlap = candidate.metadata["reference_overlap"]
+    reference = aligned_reference_bpm(
+        candidate.HR,
+        candidate_config.time_bias,
+        reference_bounds=(
+            float(overlap["ref_start_s"]),
+            float(overlap["ref_end_s"]),
+        ),
+    )
     motion = candidate.metadata["motion_segment"]
     sample = Path(str(payload["data_path"])).stem.split("_")[0]
     event = next(
@@ -65,7 +77,7 @@ def render_report(report_path: str | Path, output_dir: str | Path) -> Path:
     ax.plot(
         current.HR[:, 0],
         current.HR[:, 3],
-        color="#6F91B3",
+        color="#9AA0A6",
         linewidth=1.15,
         linestyle=(0, (4.0, 2.4)),
         label="Current handoff",

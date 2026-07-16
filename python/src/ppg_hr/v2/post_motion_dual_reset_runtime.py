@@ -48,7 +48,8 @@ class FrozenDualResetConfig:
     prior_invalidation_enabled: bool = False
     prior_invalidation_hits_required: int = 3
     prior_invalidation_min_gap_bpm: float = 40.0
-    prior_invalidation_min_decline_bpm: float = 0.5
+    prior_invalidation_min_raw_decline_bpm: float = 0.5
+    prior_invalidation_min_prior_decline_bpm_per_window: float = 0.5
     a2_qualification_windows: int = 3
     gap_rescue_gap_bpm: float = 20.0
     stable_crossover_gap_bpm: float = 6.0
@@ -109,7 +110,12 @@ def apply_frozen_dual_reset(
         prior_invalidation_enabled=cfg.prior_invalidation_enabled,
         prior_invalidation_hits_required=cfg.prior_invalidation_hits_required,
         prior_invalidation_min_gap_bpm=cfg.prior_invalidation_min_gap_bpm,
-        prior_invalidation_min_decline_bpm=cfg.prior_invalidation_min_decline_bpm,
+        prior_invalidation_min_raw_decline_bpm=(
+            cfg.prior_invalidation_min_raw_decline_bpm
+        ),
+        prior_invalidation_min_prior_decline_bpm_per_window=(
+            cfg.prior_invalidation_min_prior_decline_bpm_per_window
+        ),
     )
     tracker = DualResetTracker(**tracker_kwargs)
     independent_tracker = (

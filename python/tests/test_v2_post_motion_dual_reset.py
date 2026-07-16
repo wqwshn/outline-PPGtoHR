@@ -310,7 +310,8 @@ def test_directional_prior_invalidation_reanchors_declining_remote_evidence_once
         prior_invalidation_enabled=True,
         prior_invalidation_hits_required=3,
         prior_invalidation_min_gap_bpm=40.0,
-        prior_invalidation_min_decline_bpm=0.5,
+        prior_invalidation_min_raw_decline_bpm=0.5,
+        prior_invalidation_min_prior_decline_bpm_per_window=0.5,
     )
     final_history = (140.0, 138.0, 136.0)
     results = [
@@ -349,7 +350,8 @@ def test_directional_prior_invalidation_rejects_rising_remote_evidence() -> None
         prior_invalidation_enabled=True,
         prior_invalidation_hits_required=2,
         prior_invalidation_min_gap_bpm=30.0,
-        prior_invalidation_min_decline_bpm=0.5,
+        prior_invalidation_min_raw_decline_bpm=0.5,
+        prior_invalidation_min_prior_decline_bpm_per_window=0.5,
     )
     final_history = (116.0, 114.0, 112.0)
     results = [
@@ -447,6 +449,27 @@ def test_handoff_abandons_wrong_prior_for_persistent_remote_raw_top_peak() -> No
     assert results[-1].handoff_trace["source"] == "persistent_raw_top_1"
     assert results[-1].handoff_trace["tracked_bpm"] == 57.0
     assert results[-1].handoff_trace["limited_bpm"] == 132.0
+
+
+def test_prior_invalidation_history_does_not_change_three_window_persistence() -> None:
+    tracker = DualResetTracker(
+        prior_invalidation_enabled=True,
+        prior_invalidation_hits_required=4,
+    )
+    results = []
+    for index, top_bpm in enumerate((20.0, 55.0, 56.0, 57.0)):
+        results.append(
+            tracker.step(
+                DualResetInput(
+                    center_s=30.0 + index,
+                    candidates=_frame((top_bpm, 1.0), (135.0, 0.5)),
+                    reliable=True,
+                    previous_final_bpm=(138.0, 136.0, 134.0),
+                )
+            )
+        )
+
+    assert results[-1].handoff_trace["source"] == "persistent_raw_top_1"
 
 
 def test_final_prior_uses_causal_medians_clipped_trend_and_configured_decay() -> None:

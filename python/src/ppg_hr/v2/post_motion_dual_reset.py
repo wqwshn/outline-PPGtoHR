@@ -89,7 +89,8 @@ class DualResetTracker:
         prior_invalidation_enabled: bool = False,
         prior_invalidation_hits_required: int = 3,
         prior_invalidation_min_gap_bpm: float = 40.0,
-        prior_invalidation_min_decline_bpm: float = 0.5,
+        prior_invalidation_min_raw_decline_bpm: float = 0.5,
+        prior_invalidation_min_prior_decline_bpm_per_window: float = 0.5,
     ) -> None:
         if prior_half_life_s not in (5.0, 10.0, 15.0):
             raise ValueError("prior_half_life_s must be one of 5, 10, or 15 seconds")
@@ -117,8 +118,12 @@ class DualResetTracker:
             raise ValueError("prior_invalidation_hits_required must be at least 2")
         if prior_invalidation_min_gap_bpm <= 0.0:
             raise ValueError("prior_invalidation_min_gap_bpm must be positive")
-        if prior_invalidation_min_decline_bpm <= 0.0:
-            raise ValueError("prior_invalidation_min_decline_bpm must be positive")
+        if prior_invalidation_min_raw_decline_bpm <= 0.0:
+            raise ValueError("prior_invalidation_min_raw_decline_bpm must be positive")
+        if prior_invalidation_min_prior_decline_bpm_per_window <= 0.0:
+            raise ValueError(
+                "prior_invalidation_min_prior_decline_bpm_per_window must be positive"
+            )
         self._tracking = tracking or DirectionalTrackingParams(
             range_up_bpm=20.0,
             range_down_bpm=25.0,
@@ -156,8 +161,11 @@ class DualResetTracker:
         self._prior_invalidation_min_gap_bpm = float(
             prior_invalidation_min_gap_bpm
         )
-        self._prior_invalidation_min_decline_bpm = float(
-            prior_invalidation_min_decline_bpm
+        self._prior_invalidation_min_raw_decline_bpm = float(
+            prior_invalidation_min_raw_decline_bpm
+        )
+        self._prior_invalidation_min_prior_decline_bpm_per_window = float(
+            prior_invalidation_min_prior_decline_bpm_per_window
         )
         self._prior_invalidated = False
         self._observed_windows = 0
@@ -173,7 +181,8 @@ class DualResetTracker:
         self._target_ever_ready = False
         self._qualification_state_age = 0
         self._previous_qualified = False
-        self._raw_top_track: deque[float] = deque(
+        self._raw_top_track: deque[float] = deque(maxlen=3)
+        self._prior_invalidation_track: deque[float] = deque(
             maxlen=max(3, self._prior_invalidation_hits_required)
         )
         self._prior_started_s: float | None = None
@@ -188,6 +197,7 @@ class DualResetTracker:
         self._readiness_hits.clear()
         self._held_history.clear()
         self._raw_top_track.clear()
+        self._prior_invalidation_track.clear()
         self._previous_selected_candidate_bpm = None
         self._previous_qualified = False
         self._previous_ready = False
@@ -255,8 +265,10 @@ class DualResetTracker:
         raw_top_persistent = False
         if not peaks:
             self._raw_top_track.clear()
+            self._prior_invalidation_track.clear()
         else:
             self._raw_top_track.append(peaks[0][0])
+            self._prior_invalidation_track.append(peaks[0][0])
             raw_top_persistent = len(self._raw_top_track) == 3 and all(
                 abs(current - previous) <= self._trajectory_tolerance_bpm
                 for previous, current in zip(
@@ -285,7 +297,7 @@ class DualResetTracker:
         selected_candidate = handoff_trace["selected_candidate_bpm"]
         prior_invalidation_event = False
         prior_invalidation_from_bpm: float | None = None
-        raw_track = tuple(self._raw_top_track)
+        raw_track = tuple(self._prior_invalidation_track)
         invalidation_track = raw_track[-self._prior_invalidation_hits_required :]
         invalidation_track_continuous = bool(
             len(invalidation_track) == self._prior_invalidation_hits_required
@@ -301,7 +313,7 @@ class DualResetTracker:
         invalidation_track_declining = bool(
             invalidation_track_continuous
             and invalidation_track[-1] - invalidation_track[0]
-            <= -self._prior_invalidation_min_decline_bpm
+            <= -self._prior_invalidation_min_raw_decline_bpm
         )
         if (
             self._prior_invalidation_enabled
@@ -309,7 +321,8 @@ class DualResetTracker:
             and not self._prior_invalidated
             and not self._target_ever_ready
             and predicted_prior is not None
-            and trend <= -self._prior_invalidation_min_decline_bpm
+            and trend
+            <= -self._prior_invalidation_min_prior_decline_bpm_per_window
             and peaks
             and abs(float(peaks[0][0]) - predicted_prior)
             >= self._prior_invalidation_min_gap_bpm

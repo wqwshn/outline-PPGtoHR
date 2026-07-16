@@ -1,5 +1,9 @@
 # PPG Heart Rate Algorithm
 
+**方向一致的旧先验失效**：
+交接 reset tracker 在完整运动后、PPG 已恢复可观测时，根据连续 raw 候选轨迹与冻结 Final 趋势同向变化、且两者持续显著分离，判定启动阶段弱先验已不再代表可达心率轨迹的因果事件。该事件只允许交接 tracker 内部一次性重锚，不直接修改 Final，也不自动授予 switch target ready。
+_Avoid_：raw 连续即硬切、参考心率门控、运动重叠窗口作恢复证据、独立 reset 重初始化
+
 This context defines the domain language used when discussing PPG heart-rate estimation across rest, motion, and post-motion periods.
 
 ## Language
