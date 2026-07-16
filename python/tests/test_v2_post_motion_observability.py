@@ -334,6 +334,14 @@ def test_gap_rescue_holds_actual_final_when_observability_drops_after_switch() -
     timeline = ready_gated_handoff_timeline(
         rows,
         motion_end_s=10.0,
+        config=FrozenDualResetConfig(
+            experiment_mode="a2",
+            post_switch_hold_actual_final=True,
+        ),
+    )
+    default_timeline = ready_gated_handoff_timeline(
+        rows,
+        motion_end_s=10.0,
         config=FrozenDualResetConfig(experiment_mode="a2"),
     )
 
@@ -343,6 +351,7 @@ def test_gap_rescue_holds_actual_final_when_observability_drops_after_switch() -
         "handoff_frozen",
         "handoff_frozen",
     )
+    assert default_timeline["final_bpm"] == (80.0, 138.0, 136.0, 134.0, 79.0)
 
 
 def test_confirmation_deadline_permanently_safe_abstains() -> None:

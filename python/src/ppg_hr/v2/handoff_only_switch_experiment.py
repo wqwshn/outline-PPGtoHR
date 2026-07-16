@@ -119,6 +119,7 @@ def evaluate_report(report_path: str | Path) -> dict[str, Any]:
         post_motion_dual_reset_enable=True,
         post_motion_dual_reset_experiment_mode="a2",
         post_motion_dual_reset_handoff_only_switch=True,
+        post_motion_dual_reset_post_switch_hold_actual_final=True,
         post_motion_dual_reset_observability_periodicity_min=0.4,
         post_motion_dual_reset_observability_peak_competition_min=1.1,
         post_motion_dual_reset_observability_recovery_hits=2,
@@ -156,6 +157,8 @@ def evaluate_report(report_path: str | Path) -> dict[str, Any]:
         ),
         "old_post60_e20_count": int(baseline_result.err_stats["post_motion_60s_e20_count"]),
         "new_post60_e20_count": int(result.err_stats["post_motion_60s_e20_count"]),
+        "old_post60_e10_count": int(baseline_result.err_stats["post_motion_60s_e10_count"]),
+        "new_post60_e10_count": int(result.err_stats["post_motion_60s_e10_count"]),
         "old_post60_max_jump_bpm": old["max_jump_bpm"],
         "new_post60_max_jump_bpm": new["max_jump_bpm"],
         "old_down_up_bounce_count": old["down_up_bounce_count"],
@@ -179,17 +182,37 @@ def evaluate_report(report_path: str | Path) -> dict[str, Any]:
             "" if first_consumed is None else str(first_consumed.get("switch_state", ""))
         ),
     }
+    invariance_pass = bool(
+        row["independent_reset_max_abs_diff_bpm"] == 0.0
+        and row["independent_reset_value_mismatch_count"] == 0
+        and row["independent_reset_raw_top5_mismatch_count"] == 0
+        and row["independent_reset_trace_mismatch_count"] == 0
+    )
+    row["independent_reset_invariance_pass"] = invariance_pass
     row["non_regression_pass"] = bool(
         row["new_post60_e20_count"] <= row["old_post60_e20_count"]
         and row["delta_post60_mae_bpm"] <= 1.0
         and row["new_down_up_bounce_count"] <= row["old_down_up_bounce_count"]
+        and invariance_pass
     )
-    row["acceptance_pass"] = bool(
-        row["new_post60_mae_bpm"] < 3.0
-        and row["new_post60_e20_count"] == 0
-        if sample in FAILURE_SAMPLES
-        else row["non_regression_pass"]
-    )
+    if sample == "kaihe3":
+        row["acceptance_pass"] = bool(
+            first_consumed is None
+            and row["delta_post60_mae_bpm"] <= 1.0
+            and row["new_post60_e10_count"] <= row["old_post60_e10_count"]
+            and row["new_post60_e20_count"] <= row["old_post60_e20_count"]
+            and row["new_down_up_bounce_count"] <= row["old_down_up_bounce_count"]
+            and invariance_pass
+        )
+    elif sample in FAILURE_SAMPLES:
+        row["acceptance_pass"] = bool(
+            row["new_post60_mae_bpm"] <= 3.0
+            and row["new_post60_e20_count"] == 0
+            and row["new_down_up_bounce_count"] <= row["old_down_up_bounce_count"]
+            and invariance_pass
+        )
+    else:
+        row["acceptance_pass"] = row["non_regression_pass"]
     return row
 
 

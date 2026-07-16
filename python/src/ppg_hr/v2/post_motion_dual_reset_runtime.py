@@ -49,6 +49,7 @@ class FrozenDualResetConfig:
     gap_rescue_gap_bpm: float = 20.0
     stable_crossover_gap_bpm: float = 6.0
     stable_crossover_windows: int = 2
+    post_switch_hold_actual_final: bool = False
 
 
 @dataclass(frozen=True)
@@ -544,7 +545,7 @@ def ready_gated_handoff_timeline(
             continue
         if row.get("observability_state") != "recovered":
             stable_hits = 0
-            if switched:
+            if switched and cfg.post_switch_hold_actual_final:
                 output[index] = output[index - 1]
                 states[index] = "handoff_frozen"
                 reasons[index] = str(
@@ -558,7 +559,7 @@ def ready_gated_handoff_timeline(
             continue
         if not bool(row.get("switch_target_ready")):
             stable_hits = 0
-            if switched:
+            if switched and cfg.post_switch_hold_actual_final:
                 output[index] = output[index - 1]
                 states[index] = "handoff_frozen"
                 reasons[index] = str(

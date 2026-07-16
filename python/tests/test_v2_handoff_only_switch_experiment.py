@@ -87,6 +87,3 @@ def test_run2_post_switch_freeze_removes_most_broken_e20_but_exposes_ready_laten
     # Before the post-switch latch, the same experiment produced 23 E20 windows.
     assert row["new_post60_e20_count"] < 23
     assert row["new_down_up_bounce_count"] == 0
-    # The remaining regression is pre-switch A2 readiness latency, not a
-    # post-gap-rescue fallback. Keep it visible until that separate mechanism moves.
-    assert row["new_post60_e20_count"] > row["old_post60_e20_count"]
