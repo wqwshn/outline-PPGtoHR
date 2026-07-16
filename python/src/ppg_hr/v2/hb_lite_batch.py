@@ -29,6 +29,16 @@ HB_LITE_BAYES_CONFIG = V2BayesConfig(
     num_repeats=1,
     random_state=42,
 )
+HB24_SAMPLE_STEMS = (
+    "bobi1", "bobi2", "bobi3",
+    "jianpan1", "jianpan2", "jianpan3",
+    "kaihe1", "kaihe2", "kaihe3",
+    "quanji1", "quanji2", "quanji3",
+    "run1", "run2", "run3",
+    "tiaosheng1", "tiaosheng2", "tiaosheng3",
+    "woli1", "woli2", "woli3",
+    "xiezi1", "xiezi2", "xiezi3",
+)
 
 
 def run_audited_hb_lite_batch(
@@ -47,6 +57,12 @@ def run_audited_hb_lite_batch(
     if bayes_cfg != HB_LITE_BAYES_CONFIG:
         raise ValueError(
             "HB Lite N5 requires exactly 1x40, 10 seed points, random_state=42"
+        )
+    if set(normalised) != set(HB24_SAMPLE_STEMS):
+        missing = sorted(set(HB24_SAMPLE_STEMS) - set(normalised))
+        extra = sorted(set(normalised) - set(HB24_SAMPLE_STEMS))
+        raise ValueError(
+            f"HB Lite batch requires exact HB24 manifest; missing={missing}, extra={extra}"
         )
     fixed_decision = require_fixed_validation_go(fixed_validation_decision_path)
     mechanism_overrides = frozen_minimal_run_overrides(fixed_decision)

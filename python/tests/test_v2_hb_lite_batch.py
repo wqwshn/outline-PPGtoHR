@@ -8,6 +8,7 @@ import pytest
 import ppg_hr.v2.hb_lite_batch as hb_lite_batch
 from ppg_hr.v2.batch_pipeline import V2BatchRecord
 from ppg_hr.v2.hb_lite_batch import (
+    HB24_SAMPLE_STEMS,
     _audit_acc_comparison,
     _audit_artifact_sets,
     _audit_summary_samples,
@@ -135,12 +136,22 @@ def test_audited_runner_keeps_hf_primary_and_enables_acc_comparison(
     run_audited_hb_lite_batch(
         input_dir=tmp_path,
         output_dir=output,
-        sample_stems=("bobi1",),
+        sample_stems=HB24_SAMPLE_STEMS,
         fixed_validation_decision_path=decision,
     )
 
     assert captured["reference_groups_order"] == ("HF",)
     assert captured["comparison_groups"] == (("ACC",),)
+
+
+def test_audited_runner_rejects_incomplete_hb24_manifest(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="exact HB24 manifest"):
+        run_audited_hb_lite_batch(
+            input_dir=tmp_path,
+            output_dir=tmp_path / "out",
+            sample_stems=("bobi1",),
+            fixed_validation_decision_path=tmp_path / "not-read.json",
+        )
 
 
 def test_acc_comparison_audit_fails_closed_when_curve_is_missing(
