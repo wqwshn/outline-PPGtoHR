@@ -10,6 +10,7 @@
 - 启用 `handoff_only_switch` 后，旧 dynamic guard 的切换事件只作审计记录，不再直接改写 Final。
 - Final 保持 adaptive，直到 A2 可观测性恢复、一次性重启及目标 ready 后，再由交接 reset 的 `gap_rescue` 或 `stable_crossover` 接管。
 - 所有新配置默认关闭或保持 A0，原有默认路径不变。
+- 独立 reset FFT 除最终数值外，还逐窗核对 raw top-5、selected rank、搜索范围和输出来源；10 个样本均为零差异。
 
 ## 固定参数回放
 

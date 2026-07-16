@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -55,7 +55,7 @@ class V2RunConfig:
     post_motion_dynamic_guard_gap_rescue_fft_stable_windows: int = 3
     post_motion_dynamic_guard_gap_rescue_fft_stable_bpm: float = 6.0
     post_motion_dual_reset_enable: bool = False
-    post_motion_dual_reset_experiment_mode: str = "a0"
+    post_motion_dual_reset_experiment_mode: Literal["a0", "a1", "a2"] = "a0"
     post_motion_dual_reset_handoff_only_switch: bool = False
     post_motion_dual_reset_observability_periodicity_min: float = 0.5
     post_motion_dual_reset_observability_peak_competition_min: float = 1.3

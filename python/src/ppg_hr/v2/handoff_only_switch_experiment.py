@@ -65,6 +65,42 @@ def _tail_metrics(rows: Sequence[dict[str, Any]], motion_end_s: float) -> dict[s
     }
 
 
+def _independent_reset_invariance(
+    baseline_rows: Sequence[dict[str, Any]],
+    candidate_rows: Sequence[dict[str, Any]],
+) -> dict[str, int]:
+    """Compare the independent reset's value and complete causal trace."""
+
+    baseline = {
+        int(row["window_idx"]): row
+        for row in baseline_rows
+        if "independent_reset_bpm" in row
+    }
+    candidate = {
+        int(row["window_idx"]): row
+        for row in candidate_rows
+        if "independent_reset_bpm" in row
+    }
+    shared = sorted(set(baseline) & set(candidate))
+    return {
+        "window_count": len(shared),
+        "value_mismatch_count": sum(
+            float(baseline[idx]["independent_reset_bpm"])
+            != float(candidate[idx]["independent_reset_bpm"])
+            for idx in shared
+        ),
+        "raw_top5_mismatch_count": sum(
+            baseline[idx].get("raw_top5") != candidate[idx].get("raw_top5")
+            for idx in shared
+        ),
+        "trace_mismatch_count": sum(
+            baseline[idx].get("independent_reset_trace")
+            != candidate[idx].get("independent_reset_trace")
+            for idx in shared
+        ),
+    }
+
+
 def evaluate_report(report_path: str | Path) -> dict[str, Any]:
     """Replay one frozen N5 best point with the experimental switch boundary."""
 
@@ -97,6 +133,10 @@ def evaluate_report(report_path: str | Path) -> dict[str, Any]:
         else float("nan")
     )
     dual = result.metadata["post_motion_dual_reset"]
+    independent = _independent_reset_invariance(
+        baseline_result.window_table,
+        result.window_table,
+    )
     first_consumed = next(
         (row for row in result.window_table if bool(row.get("handoff_consumed"))),
         None,
@@ -119,6 +159,16 @@ def evaluate_report(report_path: str | Path) -> dict[str, Any]:
         "old_down_up_bounce_count": old["down_up_bounce_count"],
         "new_down_up_bounce_count": new["down_up_bounce_count"],
         "independent_reset_max_abs_diff_bpm": independent_diff,
+        "independent_reset_window_count": independent["window_count"],
+        "independent_reset_value_mismatch_count": independent[
+            "value_mismatch_count"
+        ],
+        "independent_reset_raw_top5_mismatch_count": independent[
+            "raw_top5_mismatch_count"
+        ],
+        "independent_reset_trace_mismatch_count": independent[
+            "trace_mismatch_count"
+        ],
         "suppressed_legacy_switch_count": len(dual.get("suppressed_legacy_switch_events", [])),
         "first_handoff_center_s": (
             None if first_consumed is None else float(first_consumed["center_s"])
