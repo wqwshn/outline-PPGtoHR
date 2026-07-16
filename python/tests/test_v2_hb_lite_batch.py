@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
+import ppg_hr.v2.hb_lite_batch as hb_lite_batch
 import pytest
 
 from ppg_hr.v2.hb_lite_batch import (
@@ -100,3 +102,40 @@ def test_summary_audit_rejects_duplicate_or_extra_rows(tmp_path: Path) -> None:
         "summary_sample_multiset_mismatch: "
         "expected=['bobi1'], actual=['bobi1', 'bobi1', 'extra']"
     ]
+
+
+def test_audited_runner_keeps_hf_primary_and_enables_acc_comparison(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    decision = tmp_path / "fixed.json"
+    decision.write_text(
+        '{"verdict":"GO","bo_allowed":true,'
+        '"selected_candidate":"minimal_none",'
+        '"selected_relocation_mode":"none"}',
+        encoding="utf-8",
+    )
+    output = tmp_path / "out"
+    output.mkdir()
+    captured: dict[str, Any] = {}
+
+    def fake_pipeline(**kwargs: Any) -> dict[str, Any]:
+        captured.update(kwargs)
+        return {"records": [], "output_dir": output}
+
+    monkeypatch.setattr(hb_lite_batch, "run_v2_batch_pipeline", fake_pipeline)
+    monkeypatch.setattr(
+        hb_lite_batch,
+        "audit_hb_lite_batch",
+        lambda **_kwargs: {"status": "pass", "failures": []},
+    )
+
+    run_audited_hb_lite_batch(
+        input_dir=tmp_path,
+        output_dir=output,
+        sample_stems=("bobi1",),
+        fixed_validation_decision_path=decision,
+    )
+
+    assert captured["reference_groups_order"] == ("HF",)
+    assert captured["comparison_groups"] == (("ACC",),)
