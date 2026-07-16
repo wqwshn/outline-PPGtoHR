@@ -97,3 +97,35 @@ def test_no_consumable_target_has_no_permanent_timeout() -> None:
     assert result.final_bpm[:100] == tuple(150.0 - index for index in range(100))
     assert result.final_bpm[-1] == 110.0
     assert "safe_abstain" not in {row["switch_state"] for row in result.trace}
+
+
+def test_admitted_provisional_target_is_consumed_before_normal_readiness() -> None:
+    result = run_minimal_handoff(
+        (
+            MinimalHandoffInput(
+                archived_final_bpm=165.0,
+                handoff_target_bpm=157.5,
+                ppg_startup_gate_open=False,
+                candidate_stable=False,
+                tracker_converged=False,
+                provisional_admissible=True,
+                provisional_target_bpm=157.5,
+            ),
+            MinimalHandoffInput(
+                archived_final_bpm=163.5,
+                handoff_target_bpm=154.5,
+                ppg_startup_gate_open=False,
+                candidate_stable=False,
+                tracker_converged=False,
+                provisional_admissible=True,
+                provisional_target_bpm=154.5,
+            ),
+        )
+    )
+
+    assert result.final_bpm == (157.5, 154.5)
+    assert [row["switch_state"] for row in result.trace] == [
+        "bootstrap_provisional",
+        "bootstrap_provisional",
+    ]
+    assert {row["final_writer"] for row in result.trace} == {"switch_adapter"}

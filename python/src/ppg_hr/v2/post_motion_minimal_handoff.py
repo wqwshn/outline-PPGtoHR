@@ -25,6 +25,8 @@ class MinimalHandoffInput:
     ppg_startup_gate_open: bool
     candidate_stable: bool
     tracker_converged: bool
+    provisional_admissible: bool = False
+    provisional_target_bpm: float = float("nan")
 
 
 @dataclass(frozen=True)
@@ -74,6 +76,15 @@ def run_minimal_handoff(
             source = (
                 "handoff_target" if target_consumable else "handoff_hold"
             )
+        elif (
+            window.provisional_admissible
+            and math.isfinite(float(window.provisional_target_bpm))
+        ):
+            crossover_hits = 0
+            final = float(window.provisional_target_bpm)
+            state = "bootstrap_provisional"
+            reason = "causal_provisional_target_admitted"
+            source = "handoff_provisional"
         elif not target_consumable or not math.isfinite(target):
             crossover_hits = 0
             final = archived

@@ -58,6 +58,7 @@ class V2RunConfig:
     post_motion_dual_reset_experiment_mode: Literal["a0", "a1", "a2"] = "a0"
     post_motion_dual_reset_handoff_only_switch: bool = False
     post_motion_minimal_handoff_enable: bool = False
+    post_motion_minimal_provisional_enable: bool = False
     post_motion_minimal_relocation_mode: Literal[
         "none", "a2", "controlled_reanchor", "a2_reanchor"
     ] = "none"

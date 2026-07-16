@@ -65,6 +65,38 @@ def build_ablation_configs(base: V2RunConfig) -> dict[str, V2RunConfig]:
     }
 
 
+def build_provisional_configs(base: V2RunConfig) -> dict[str, V2RunConfig]:
+    common = replace(
+        base,
+        post_motion_dual_reset_enable=True,
+        post_motion_dual_reset_experiment_mode="a0",
+        post_motion_dual_reset_handoff_only_switch=False,
+        post_motion_minimal_handoff_enable=True,
+        post_motion_minimal_relocation_mode="controlled_reanchor",
+        post_motion_dual_reset_prior_invalidation_enable=False,
+        post_motion_dual_reset_post_switch_hold_actual_final=False,
+        post_motion_dual_reset_gap_rescue_gap_bpm=18.0,
+    )
+    return {
+        "minimal_reanchor": common,
+        "minimal_provisional_reanchor": replace(
+            common,
+            post_motion_minimal_provisional_enable=True,
+        ),
+    }
+
+
+def build_provisional_candidates() -> tuple[MinimalRelocationCandidate, ...]:
+    return (
+        MinimalRelocationCandidate(
+            "minimal_reanchor", "controlled_reanchor", 1
+        ),
+        MinimalRelocationCandidate(
+            "minimal_provisional_reanchor", "controlled_reanchor", 2
+        ),
+    )
+
+
 def select_relocation_candidate(
     candidates: Sequence[MinimalRelocationCandidate],
     summaries: Sequence[Mapping[str, Any]],
@@ -130,12 +162,17 @@ def run_relocation_ablation(
     main_report_dir: str | Path,
     output_dir: str | Path,
     samples: Sequence[str] = DEFAULT_SAMPLES,
+    provisional_experiment: bool = False,
 ) -> dict[str, Any]:
     source = Path(report_dir)
     main_source = Path(main_report_dir)
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
-    candidates = build_relocation_candidates()
+    candidates = (
+        build_provisional_candidates()
+        if provisional_experiment
+        else build_relocation_candidates()
+    )
     sample_rows: list[dict[str, Any]] = []
     window_rows: list[dict[str, Any]] = []
 
@@ -157,9 +194,13 @@ def run_relocation_ablation(
             analyse_archived_report(main_payload)["post60_mae_bpm"]
         )
         base = load_lite_report_config(matches[0])
-        configs = build_ablation_configs(base)
+        configs = (
+            build_provisional_configs(base)
+            if provisional_experiment
+            else build_ablation_configs(base)
+        )
         results = {name: solve_v2(config) for name, config in configs.items()}
-        baseline = results["minimal_none"]
+        baseline = results[candidates[0].name]
         for candidate in candidates:
             result = results[candidate.name]
             row, windows = _evaluate_result(
@@ -457,12 +498,14 @@ def main() -> None:
     parser.add_argument("main_report_dir", type=Path)
     parser.add_argument("output_dir", type=Path)
     parser.add_argument("--samples", nargs="*")
+    parser.add_argument("--provisional-experiment", action="store_true")
     args = parser.parse_args()
     result = run_relocation_ablation(
         args.report_dir,
         args.main_report_dir,
         args.output_dir,
         samples=tuple(args.samples or DEFAULT_SAMPLES),
+        provisional_experiment=bool(args.provisional_experiment),
     )
     print(json.dumps(result["decision"], ensure_ascii=False, indent=2))
 

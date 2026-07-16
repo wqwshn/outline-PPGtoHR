@@ -347,6 +347,41 @@ def test_minimal_handoff_keeps_independent_trace_and_never_reinitialises() -> No
     )
 
 
+def test_minimal_provisional_mode_updates_and_consumes_before_ready() -> None:
+    windows = tuple(
+        DualResetRuntimeWindow(
+            window_idx=index,
+            start_s=10.0 + index,
+            center_s=14.0 + index,
+            reliable=True,
+            archived_final_bpm=170.0,
+            archived_final_history=(176.0, 174.0, 172.0),
+            candidates=_frame((136.0 - index, 1.0), (58.0, 0.4)),
+            periodicity=0.2,
+            peak_competition=1.1,
+        )
+        for index in range(5)
+    )
+
+    result = apply_frozen_dual_reset(
+        windows,
+        motion_end_s=10.0,
+        baseline_final_bpm=np.full(len(windows), 170.0),
+        config=FrozenDualResetConfig(
+            minimal_handoff_enabled=True,
+            minimal_provisional_enabled=True,
+            minimal_relocation_mode="controlled_reanchor",
+            hits_required=1,
+            qualification_windows=1,
+            observability_recovery_hits=2,
+        ),
+    )
+
+    assert result.window_rows[0]["handoff_reset_bpm"] != 170.0
+    assert result.window_rows[0]["switch_target_ready"] is False
+    assert result.window_rows[0]["final_writer"] == "switch_adapter"
+
+
 def test_minimal_handoff_relocation_modes_are_explicit_and_isolated() -> None:
     raw = (50.0, 145.0, 144.0, 143.0, 142.0, 141.0)
     windows = tuple(

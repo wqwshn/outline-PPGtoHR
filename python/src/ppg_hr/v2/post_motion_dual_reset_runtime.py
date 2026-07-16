@@ -61,6 +61,7 @@ class FrozenDualResetConfig:
     stable_crossover_windows: int = 2
     post_switch_hold_actual_final: bool = False
     minimal_handoff_enabled: bool = False
+    minimal_provisional_enabled: bool = False
     minimal_relocation_mode: str = "none"
 
 
@@ -196,6 +197,9 @@ def apply_frozen_dual_reset(
         observability_ever_recovered = observability_ever_recovered or recovered
         if cfg.experiment_mode == "a0" and not cfg.minimal_handoff_enabled:
             step = independent_step
+        elif cfg.minimal_handoff_enabled and cfg.minimal_provisional_enabled:
+            handoff_step = handoff_tracker.step(tracker_input)
+            step = handoff_step
         elif recovered or (
             cfg.minimal_handoff_enabled and observability_ever_recovered
         ):
@@ -327,6 +331,15 @@ def apply_frozen_dual_reset(
         )
 
     if cfg.minimal_handoff_enabled:
+        provisional_timeline = (
+            causal_bootstrap_timeline(
+                rows,
+                motion_end_s=motion_end_s,
+                config=cfg,
+            )
+            if cfg.minimal_provisional_enabled
+            else None
+        )
         minimal = run_minimal_handoff(
             tuple(
                 MinimalHandoffInput(
@@ -335,8 +348,18 @@ def apply_frozen_dual_reset(
                     ppg_startup_gate_open=bool(row["ppg_startup_gate_open"]),
                     candidate_stable=bool(row["candidate_stable"]),
                     tracker_converged=bool(row["tracker_converged"]),
+                    provisional_admissible=bool(
+                        provisional_timeline
+                        and provisional_timeline["switch_states"][index]
+                        in {"bootstrap_provisional", "ready_confirmed"}
+                    ),
+                    provisional_target_bpm=(
+                        float(provisional_timeline["final_bpm"][index])
+                        if provisional_timeline
+                        else float("nan")
+                    ),
                 )
-                for row in rows
+                for index, row in enumerate(rows)
             ),
             config=MinimalHandoffConfig(
                 hard_switch_gap_bpm=18.0,
@@ -346,11 +369,21 @@ def apply_frozen_dual_reset(
         )
         timeline = {
             "final_bpm": minimal.final_bpm,
-            "bootstrap_admissible": minimal.switched,
+            "bootstrap_admissible": bool(
+                minimal.switched
+                or (
+                    provisional_timeline
+                    and provisional_timeline["bootstrap_admissible"]
+                )
+            ),
             "bootstrap_reason": (
-                "minimal_handoff_switched"
-                if minimal.switched
-                else "no_consumable_target"
+                str(provisional_timeline["bootstrap_reason"])
+                if provisional_timeline
+                else (
+                    "minimal_handoff_switched"
+                    if minimal.switched
+                    else "no_consumable_target"
+                )
             ),
             "guard_reasons": tuple(None for _ in rows),
             "switch_states": tuple(

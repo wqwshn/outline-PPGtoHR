@@ -6,6 +6,7 @@ from pathlib import Path
 from ppg_hr.v2.post_motion_minimal_ablation import (
     MinimalRelocationCandidate,
     build_ablation_configs,
+    build_provisional_configs,
     build_relocation_candidates,
     select_relocation_candidate,
 )
@@ -48,6 +49,21 @@ def test_ablation_configs_change_only_the_declared_relocation_mode() -> None:
         values.pop("post_motion_minimal_relocation_mode")
         common.append(values)
     assert all(values == common[0] for values in common[1:])
+
+
+def test_provisional_experiment_changes_only_provisional_consumption() -> None:
+    base = V2RunConfig(
+        data_path=Path("sample.csv"),
+        ref_path=Path("sample_ref.csv"),
+    )
+
+    configs = build_provisional_configs(base)
+    baseline = asdict(configs["minimal_reanchor"])
+    candidate = asdict(configs["minimal_provisional_reanchor"])
+    differing = {key for key in baseline if baseline[key] != candidate[key]}
+
+    assert differing == {"post_motion_minimal_provisional_enable"}
+    assert candidate["post_motion_minimal_provisional_enable"] is True
 
 
 def test_candidate_selection_uses_continuity_then_normal_mae_then_complexity() -> None:
