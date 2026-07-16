@@ -5,6 +5,7 @@ from pathlib import Path
 
 from ppg_hr.v2.post_motion_minimal_ablation import (
     MinimalRelocationCandidate,
+    _candidate_summary,
     build_ablation_configs,
     build_provisional_configs,
     build_relocation_candidates,
@@ -64,6 +65,52 @@ def test_provisional_experiment_changes_only_provisional_consumption() -> None:
 
     assert differing == {"post_motion_minimal_provisional_enable"}
     assert candidate["post_motion_minimal_provisional_enable"] is True
+
+
+def test_provisional_acceptance_uses_minimal_reanchor_as_baseline() -> None:
+    candidate = MinimalRelocationCandidate(
+        "minimal_provisional_reanchor",
+        "controlled_reanchor",
+        2,
+    )
+    common = {
+        "candidate": candidate.name,
+        "lost_existing_sub3_rescue": False,
+        "independent_reset_invariant": True,
+        "bounce_count": 0,
+        "wrong_hard_switch_count": 0,
+        "first_switch_center_s": 140.0,
+        "control_state_count": 3,
+        "control_transition_count": 2,
+    }
+    rows = [
+        {
+            **common,
+            "sample": "bobi2",
+            "cohort": "failure",
+            "post60_mae_bpm": 2.9,
+            "delta_vs_main_post60_mae_bpm": -10.0,
+            "delta_vs_experiment_baseline_post60_mae_bpm": -5.0,
+        },
+        {
+            **common,
+            "sample": "run1",
+            "cohort": "normal",
+            "post60_mae_bpm": 4.0,
+            "delta_vs_main_post60_mae_bpm": -1.0,
+            "delta_vs_experiment_baseline_post60_mae_bpm": 0.6,
+        },
+    ]
+
+    summary = _candidate_summary(
+        candidate,
+        rows,
+        provisional_experiment=True,
+    )
+
+    assert summary["acceptance_pass"] is False
+    assert "normal_pool_delta_over_0.5_bpm" in summary["failed_gates"]
+    assert summary["acceptance_baseline"] == "minimal_reanchor"
 
 
 def test_candidate_selection_uses_continuity_then_normal_mae_then_complexity() -> None:

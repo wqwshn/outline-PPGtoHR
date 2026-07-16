@@ -129,3 +129,49 @@ def test_admitted_provisional_target_is_consumed_before_normal_readiness() -> No
         "bootstrap_provisional",
     ]
     assert {row["final_writer"] for row in result.trace} == {"switch_adapter"}
+
+
+def test_formal_target_supersedes_provisional_and_switch_is_irreversible() -> None:
+    result = run_minimal_handoff(
+        (
+            MinimalHandoffInput(
+                archived_final_bpm=165.0,
+                handoff_target_bpm=157.5,
+                ppg_startup_gate_open=False,
+                candidate_stable=False,
+                tracker_converged=False,
+                provisional_admissible=True,
+                provisional_target_bpm=157.5,
+                provisional_state="bootstrap_provisional",
+                provisional_reason="bootstrap_admitted",
+            ),
+            MinimalHandoffInput(
+                archived_final_bpm=160.0,
+                handoff_target_bpm=130.0,
+                ppg_startup_gate_open=True,
+                candidate_stable=True,
+                tracker_converged=True,
+                provisional_admissible=True,
+                provisional_target_bpm=130.0,
+                provisional_state="ready_confirmed",
+                provisional_reason="normal_ready_confirmed",
+            ),
+            MinimalHandoffInput(
+                archived_final_bpm=150.0,
+                handoff_target_bpm=120.0,
+                ppg_startup_gate_open=False,
+                candidate_stable=False,
+                tracker_converged=False,
+                provisional_state="fallback_archived_final",
+                provisional_reason="ready_revoked:not_ready",
+            ),
+        )
+    )
+
+    assert result.final_bpm == (157.5, 130.0, 130.0)
+    assert [row["switch_state"] for row in result.trace] == [
+        "bootstrap_provisional",
+        "gap_rescue",
+        "handoff_active",
+    ]
+    assert result.switched is True

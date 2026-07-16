@@ -201,6 +201,9 @@ def run_relocation_ablation(
         )
         results = {name: solve_v2(config) for name, config in configs.items()}
         baseline = results[candidates[0].name]
+        experiment_baseline_post60_mae = float(
+            baseline.err_stats["post_motion_60s_mae_bpm"]
+        )
         for candidate in candidates:
             result = results[candidate.name]
             row, windows = _evaluate_result(
@@ -211,12 +214,20 @@ def run_relocation_ablation(
                 result,
                 main_post60_mae=main_post60_mae,
                 source_post60_mae=source_post60_mae,
+                experiment_baseline_post60_mae=(
+                    experiment_baseline_post60_mae
+                ),
             )
             sample_rows.append(row)
             window_rows.extend(windows)
 
     summaries = [
-        _candidate_summary(candidate, sample_rows) for candidate in candidates
+        _candidate_summary(
+            candidate,
+            sample_rows,
+            provisional_experiment=provisional_experiment,
+        )
+        for candidate in candidates
     ]
     decision = select_relocation_candidate(candidates, summaries)
     decision["sample_order"] = list(samples)
@@ -247,6 +258,7 @@ def _evaluate_result(
     result: V2SolverResult,
     main_post60_mae: float,
     source_post60_mae: float,
+    experiment_baseline_post60_mae: float,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     motion_end_s = float(result.metadata["motion_segment"]["end_s"])
     reference = aligned_reference_bpm(result.HR, float(config.time_bias))
@@ -298,6 +310,13 @@ def _evaluate_result(
             result.err_stats["post_motion_60s_mae_bpm"] - main_post60_mae
         ),
         "source_post60_mae_bpm": source_post60_mae,
+        "experiment_baseline_post60_mae_bpm": (
+            experiment_baseline_post60_mae
+        ),
+        "delta_vs_experiment_baseline_post60_mae_bpm": float(
+            result.err_stats["post_motion_60s_mae_bpm"]
+            - experiment_baseline_post60_mae
+        ),
         "lost_existing_sub3_rescue": bool(
             source_post60_mae < 3.0
             and float(result.err_stats["post_motion_60s_mae_bpm"]) >= 3.0
@@ -395,19 +414,27 @@ def _independent_invariance(
 def _candidate_summary(
     candidate: MinimalRelocationCandidate,
     rows: Sequence[Mapping[str, Any]],
+    *,
+    provisional_experiment: bool = False,
 ) -> dict[str, Any]:
     selected = [row for row in rows if row["candidate"] == candidate.name]
     failures = [row for row in selected if row["cohort"] == "failure"]
     normals = [row for row in selected if row["cohort"] == "normal"]
-    normal_delta = fmean(
+    delta_key = (
+        "delta_vs_experiment_baseline_post60_mae_bpm"
+        if provisional_experiment
+        else "delta_vs_main_post60_mae_bpm"
+    )
+    normal_delta = fmean(float(row[delta_key]) for row in normals)
+    failure_delta = fmean(float(row[delta_key]) for row in failures)
+    normal_delta_vs_main = fmean(
         float(row["delta_vs_main_post60_mae_bpm"]) for row in normals
     )
-    failure_delta = fmean(
+    failure_delta_vs_main = fmean(
         float(row["delta_vs_main_post60_mae_bpm"]) for row in failures
     )
     normal_review = sum(
-        float(row["delta_vs_main_post60_mae_bpm"]) > 2.0
-        for row in normals
+        float(row[delta_key]) > 2.0 for row in normals
     )
     lost_rescues = sum(
         bool(row["lost_existing_sub3_rescue"]) for row in failures
@@ -418,6 +445,14 @@ def _candidate_summary(
     bounce_count = sum(int(row["bounce_count"]) for row in selected)
     wrong_switches = sum(
         int(row["wrong_hard_switch_count"]) for row in selected
+    )
+    bobi2_mae = next(
+        (
+            float(row["post60_mae_bpm"])
+            for row in failures
+            if row["sample"] == "bobi2"
+        ),
+        float("inf"),
     )
     switch_centers = [
         float(row["first_switch_center_s"])
@@ -430,8 +465,9 @@ def _candidate_summary(
         and wrong_switches == 0
         and normal_delta <= 0.5
         and normal_review == 0
-        and failure_delta < 0.0
+        and (provisional_experiment or failure_delta < 0.0)
         and lost_rescues == 0
+        and (not provisional_experiment or bobi2_mae < 3.0)
     )
     failed_gates = []
     if not invariant:
@@ -444,10 +480,12 @@ def _candidate_summary(
         failed_gates.append("normal_pool_delta_over_0.5_bpm")
     if normal_review:
         failed_gates.append("normal_sample_regression_over_2_bpm")
-    if failure_delta >= 0.0:
+    if not provisional_experiment and failure_delta >= 0.0:
         failed_gates.append("failure_pool_no_improvement")
     if lost_rescues:
         failed_gates.append("lost_existing_sub3_rescue")
+    if provisional_experiment and bobi2_mae >= 3.0:
+        failed_gates.append("bobi2_not_below_3_bpm")
     return {
         "candidate": candidate.name,
         "relocation_mode": candidate.relocation_mode,
@@ -462,9 +500,15 @@ def _candidate_summary(
         "all_mean_post60_mae_bpm": fmean(
             float(row["post60_mae_bpm"]) for row in selected
         ),
-        "normal_mean_delta_vs_main_bpm": normal_delta,
+        "normal_mean_delta_vs_main_bpm": normal_delta_vs_main,
+        "acceptance_baseline": (
+            "minimal_reanchor" if provisional_experiment else "main"
+        ),
+        "normal_mean_delta_vs_acceptance_baseline_bpm": normal_delta,
         "normal_regression_over_2bpm_count": normal_review,
-        "failure_mean_delta_vs_main_bpm": failure_delta,
+        "failure_mean_delta_vs_main_bpm": failure_delta_vs_main,
+        "failure_mean_delta_vs_acceptance_baseline_bpm": failure_delta,
+        "bobi2_post60_mae_bpm": bobi2_mae,
         "lost_existing_sub3_rescue_count": lost_rescues,
         "bounce_count": bounce_count,
         "wrong_hard_switch_count": wrong_switches,

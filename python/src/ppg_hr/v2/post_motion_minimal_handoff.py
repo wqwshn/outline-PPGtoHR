@@ -27,6 +27,8 @@ class MinimalHandoffInput:
     tracker_converged: bool
     provisional_admissible: bool = False
     provisional_target_bpm: float = float("nan")
+    provisional_state: str = ""
+    provisional_reason: str = ""
 
 
 @dataclass(frozen=True)
@@ -76,22 +78,7 @@ def run_minimal_handoff(
             source = (
                 "handoff_target" if target_consumable else "handoff_hold"
             )
-        elif (
-            window.provisional_admissible
-            and math.isfinite(float(window.provisional_target_bpm))
-        ):
-            crossover_hits = 0
-            final = float(window.provisional_target_bpm)
-            state = "bootstrap_provisional"
-            reason = "causal_provisional_target_admitted"
-            source = "handoff_provisional"
-        elif not target_consumable or not math.isfinite(target):
-            crossover_hits = 0
-            final = archived
-            state = "waiting_for_consumable_target"
-            reason = "target_not_consumable"
-            source = "adaptive_baseline"
-        else:
+        elif target_consumable and math.isfinite(target):
             gap = abs(target - archived)
             if gap >= cfg.hard_switch_gap_bpm:
                 crossover_hits = 0
@@ -119,6 +106,24 @@ def run_minimal_handoff(
                 state = "waiting_intermediate_gap"
                 reason = "consumable_intermediate_gap"
                 source = "adaptive_baseline"
+        elif (
+            window.provisional_admissible
+            and math.isfinite(float(window.provisional_target_bpm))
+        ):
+            crossover_hits = 0
+            final = float(window.provisional_target_bpm)
+            state = window.provisional_state or "bootstrap_provisional"
+            reason = (
+                window.provisional_reason
+                or "causal_provisional_target_admitted"
+            )
+            source = "handoff_provisional"
+        else:
+            crossover_hits = 0
+            final = archived
+            state = window.provisional_state or "waiting_for_consumable_target"
+            reason = window.provisional_reason or "target_not_consumable"
+            source = "adaptive_baseline"
 
         final_values.append(float(final))
         trace.append(

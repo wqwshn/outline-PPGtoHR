@@ -351,12 +351,25 @@ def apply_frozen_dual_reset(
                     provisional_admissible=bool(
                         provisional_timeline
                         and provisional_timeline["switch_states"][index]
-                        in {"bootstrap_provisional", "ready_confirmed"}
+                        == "bootstrap_provisional"
                     ),
                     provisional_target_bpm=(
                         float(provisional_timeline["final_bpm"][index])
                         if provisional_timeline
                         else float("nan")
+                    ),
+                    provisional_state=(
+                        str(provisional_timeline["switch_states"][index])
+                        if provisional_timeline
+                        else ""
+                    ),
+                    provisional_reason=(
+                        str(
+                            provisional_timeline["switch_reasons"][index]
+                            or ""
+                        )
+                        if provisional_timeline
+                        else ""
                     ),
                 )
                 for index, row in enumerate(rows)
@@ -385,7 +398,11 @@ def apply_frozen_dual_reset(
                     else "no_consumable_target"
                 )
             ),
-            "guard_reasons": tuple(None for _ in rows),
+            "guard_reasons": (
+                tuple(provisional_timeline["guard_reasons"])
+                if provisional_timeline
+                else tuple(None for _ in rows)
+            ),
             "switch_states": tuple(
                 str(trace["switch_state"]) for trace in minimal.trace
             ),
