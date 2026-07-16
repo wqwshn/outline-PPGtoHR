@@ -2,7 +2,7 @@
 
 ## Problem Statement
 
-主分支在 HB24 的历史批次 `20260711_195903_lite_raw_bandpass_full_LMS+H` 中暴露了运动后静息段错误切回纯 reset FFT、低频锁定和 `kaihe2` 式大幅下切后立即回跳。当前研究分支虽然通过独立 reset FFT、Final 弱先验交接 tracker、可观测性、一次性重启、资格、ready、受控重锚、handoff-only、两种切换、切换后保持及旧先验失效等机制改善了部分失效样本，但控制状态和参数已经层层叠加。一个安全门可能修复一个样本，却推迟或错误切换另一个样本；典型结果中 `kaihe2/tiaosheng3` 明显改善，而 `run1/run2/xiezi2` 出现不同程度的 MAE 回归。
+主分支在 HB24 的历史批次 `20260711_195903_lite_raw_bandpass_full_LMS+H` 中暴露了运动后静息段错误切回纯 reset FFT 和低频锁定；其中 `kaihe2` 是大幅错误下切后持续低锁。后来 N5 双 reset 批次才出现 `kaihe2` 大幅下切后立即回跳。当前研究分支虽然通过独立 reset FFT、Final 弱先验交接 tracker、可观测性、一次性重启、资格、ready、受控重锚、handoff-only、两种切换、切换后保持及旧先验失效等机制改善了部分失效样本，但控制状态和参数已经层层叠加。一个安全门可能修复一个样本，却推迟或错误切换另一个样本；典型结果中 `kaihe2/tiaosheng3` 明显改善，而 `run1/run2/xiezi2` 出现不同程度的 MAE 回归。
 
 本轮不再围绕失败样本增加门或阈值，而是回到主分支历史产物，先建立可重复的逐窗差分反馈，再通过消融和减法重构恢复一个只有单一 Final 写入权、单一可消费目标判定和一次性 PPG 启动门的最小运动后状态机。算法收益、正常样本退化、非生理反向跳变和机制复杂度必须同时报告。
 
@@ -99,7 +99,7 @@
 ## Testing Decisions
 
 - 最高测试缝为完整 `solve_v2` 运动后时间线：同一数据、同一 Lite 参数分别执行主分支语义和各精简候选，比较 Final、独立 reset、交接目标、状态、切换事件与对齐误差。该缝直接覆盖用户观察到的跳水症状。
-- 建立快速、确定性的固定报告 replay 作为 `diagnosing-bugs` 反馈环。它必须能在旧主分支基线上捕获 `kaihe2` 的 down-up bounce，并在候选中验证事件消失。
+- 建立快速、确定性的固定报告 replay 作为 `diagnosing-bugs` 反馈环。它必须能在旧主分支基线上捕获 `kaihe2` 的错误下切后持续低锁，并在 N5 双 reset 基线上捕获 down-up bounce；候选中两种事件都必须消失。
 - 控制器测试只验证外部状态与输出：唯一 Final 写入者、一次启动、`target_consumable` 前不得切换、18 BPM hard rescue、6 BPM/2 窗 crossover、6–18 BPM 等待、切换不可逆、无永久超时。测试不得绑定私有 helper 的实现顺序。
 - 独立 reset 不变性测试逐窗比较数值、raw top-5、selected rank、搜索边界和来源 trace；任一差异为硬失败。
 - 消融测试依次运行 `main`、最小 handoff、最小 handoff+A2、最小 handoff+重锚、A2+重锚，不在同一轮修改阈值。
