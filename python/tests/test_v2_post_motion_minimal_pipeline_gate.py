@@ -8,6 +8,7 @@ import pytest
 from ppg_hr.v2.post_motion_minimal_pipeline_gate import (
     build_bo_decision,
     build_fixed_validation_decision,
+    frozen_minimal_run_overrides,
     require_fixed_validation_go,
     write_stopped_pipeline_decisions,
 )
@@ -111,6 +112,7 @@ def test_hb_lite_entry_accepts_only_explicit_go_contract(tmp_path: Path) -> None
                 "verdict": "GO",
                 "bo_allowed": True,
                 "selected_candidate": "minimal_reanchor",
+                "selected_relocation_mode": "controlled_reanchor",
             }
         ),
         encoding="utf-8",
@@ -119,3 +121,26 @@ def test_hb_lite_entry_accepts_only_explicit_go_contract(tmp_path: Path) -> None
     loaded = require_fixed_validation_go(decision)
 
     assert loaded["selected_candidate"] == "minimal_reanchor"
+
+
+def test_fixed_go_binds_candidate_to_frozen_minimal_config(tmp_path: Path) -> None:
+    decision = tmp_path / "fixed.json"
+    decision.write_text(
+        json.dumps(
+            {
+                "verdict": "GO",
+                "bo_allowed": True,
+                "selected_candidate": "minimal_a2",
+                "selected_relocation_mode": "a2",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    overrides = frozen_minimal_run_overrides(
+        require_fixed_validation_go(decision)
+    )
+
+    assert overrides["post_motion_minimal_handoff_enable"] is True
+    assert overrides["post_motion_minimal_relocation_mode"] == "a2"
+    assert overrides["post_motion_dual_reset_gap_rescue_gap_bpm"] == 18.0

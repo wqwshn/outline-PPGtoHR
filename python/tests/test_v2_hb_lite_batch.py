@@ -19,6 +19,7 @@ def test_audited_runner_rejects_duplicate_samples_before_running(tmp_path: Path)
             input_dir=tmp_path,
             output_dir=tmp_path / "out",
             sample_stems=("bobi1", "bobi1"),
+            fixed_validation_decision_path=tmp_path / "not-read.json",
         )
 
 
@@ -28,6 +29,7 @@ def test_audited_runner_rejects_non_frozen_bo_budget(tmp_path: Path) -> None:
             input_dir=tmp_path,
             output_dir=tmp_path / "out",
             sample_stems=("bobi1",),
+            fixed_validation_decision_path=tmp_path / "not-read.json",
             bayes_cfg=V2BayesConfig(
                 max_iterations=20,
                 num_seed_points=10,

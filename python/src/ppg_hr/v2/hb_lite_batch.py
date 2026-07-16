@@ -17,7 +17,10 @@ from .algorithm_presets import v2_search_space_for_preset
 from .batch_pipeline import V2BatchRecord, run_v2_batch_pipeline
 from .optimizer import V2BayesConfig
 from .post_motion_dual_reset_runtime import FrozenDualResetConfig
-from .post_motion_minimal_pipeline_gate import require_fixed_validation_go
+from .post_motion_minimal_pipeline_gate import (
+    frozen_minimal_run_overrides,
+    require_fixed_validation_go,
+)
 from .report import load_v2_report
 
 HB_LITE_BAYES_CONFIG = V2BayesConfig(
@@ -33,6 +36,7 @@ def run_audited_hb_lite_batch(
     input_dir: Path,
     output_dir: Path,
     sample_stems: tuple[str, ...],
+    fixed_validation_decision_path: Path,
     bayes_cfg: V2BayesConfig = HB_LITE_BAYES_CONFIG,
 ) -> dict[str, Any]:
     if not sample_stems:
@@ -44,6 +48,8 @@ def run_audited_hb_lite_batch(
         raise ValueError(
             "HB Lite N5 requires exactly 1x40, 10 seed points, random_state=42"
         )
+    fixed_decision = require_fixed_validation_go(fixed_validation_decision_path)
+    mechanism_overrides = frozen_minimal_run_overrides(fixed_decision)
     result = run_v2_batch_pipeline(
         input_dir=input_dir,
         output_dir=output_dir,
@@ -55,13 +61,14 @@ def run_audited_hb_lite_batch(
         bayes_cfg=bayes_cfg,
         algorithm_preset="lite",
         sample_stems=sample_stems,
-        run_config_overrides={"post_motion_dual_reset_enable": True},
+        run_config_overrides=mechanism_overrides,
     )
     audit = audit_hb_lite_batch(
         records=result["records"],
         requested_samples=sample_stems,
         bayes_cfg=bayes_cfg,
         output_dir=Path(result["output_dir"]),
+        mechanism_overrides=mechanism_overrides,
     )
     audit_path = Path(result["output_dir"]) / "batch_audit.json"
     audit_path.write_text(
@@ -79,6 +86,7 @@ def audit_hb_lite_batch(
     requested_samples: tuple[str, ...],
     bayes_cfg: V2BayesConfig,
     output_dir: Path,
+    mechanism_overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     failures: list[str] = []
     if bayes_cfg != HB_LITE_BAYES_CONFIG:
@@ -125,6 +133,7 @@ def audit_hb_lite_batch(
             "bayes": asdict(bayes_cfg),
             "search_space": asdict(v2_search_space_for_preset("lms", "lite")),
             "frozen_dual_reset": asdict(FrozenDualResetConfig()),
+            "minimal_handoff_overrides": mechanism_overrides,
         },
         "code": _code_provenance(),
         "requested_samples": sorted(requested),
@@ -310,11 +319,11 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
-    require_fixed_validation_go(args.fixed_validation_decision)
     result = run_audited_hb_lite_batch(
         input_dir=args.input_dir,
         output_dir=args.output_dir,
         sample_stems=tuple(args.samples),
+        fixed_validation_decision_path=args.fixed_validation_decision,
         bayes_cfg=HB_LITE_BAYES_CONFIG,
     )
     print(result["audit_path"])

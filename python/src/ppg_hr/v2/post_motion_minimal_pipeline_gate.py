@@ -6,14 +6,21 @@ import argparse
 import hashlib
 import json
 from collections.abc import Mapping
-from enum import StrEnum
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
 
-class Verdict(StrEnum):
+class Verdict(str, Enum):  # noqa: UP042 - Python 3.10 compatibility
     GO = "GO"
     NO_GO = "NO_GO"
+
+
+_CANDIDATE_RELOCATION = {
+    "minimal_none": "none",
+    "minimal_a2": "a2",
+    "minimal_reanchor": "controlled_reanchor",
+}
 
 
 def _verdict(decision: Mapping[str, Any], *, stage: str) -> Verdict:
@@ -33,11 +40,15 @@ def build_fixed_validation_decision(
     if verdict is Verdict.GO:
         if not isinstance(selected, str) or not selected.strip():
             raise ValueError("GO ablation decision requires selected_candidate")
+        relocation = ablation_decision.get("selected_relocation_mode")
+        if _CANDIDATE_RELOCATION.get(selected) != relocation:
+            raise ValueError("GO candidate and relocation mode do not match")
         return {
             "verdict": "PENDING",
             "hb24_run_started": False,
             "bo_allowed": False,
             "selected_candidate": selected,
+            "selected_relocation_mode": relocation,
             "reason": "upstream_go_requires_explicit_hb24_execution",
         }
     if selected is not None:
@@ -130,7 +141,29 @@ def require_fixed_validation_go(decision_path: str | Path) -> dict[str, Any]:
     selected = decision.get("selected_candidate")
     if not isinstance(selected, str) or not selected.strip():
         raise ValueError("fixed-validation GO requires selected_candidate")
+    relocation = decision.get("selected_relocation_mode")
+    if _CANDIDATE_RELOCATION.get(selected) != relocation:
+        raise ValueError("fixed-validation candidate and relocation mode do not match")
     return decision
+
+
+def frozen_minimal_run_overrides(decision: Mapping[str, Any]) -> dict[str, Any]:
+    """Bind a passed candidate to the exact mechanism used by the ablation."""
+
+    selected = decision.get("selected_candidate")
+    relocation = decision.get("selected_relocation_mode")
+    if _CANDIDATE_RELOCATION.get(selected) != relocation:
+        raise ValueError("candidate is not bound to a supported relocation mode")
+    return {
+        "post_motion_dual_reset_enable": True,
+        "post_motion_dual_reset_experiment_mode": "a0",
+        "post_motion_dual_reset_handoff_only_switch": False,
+        "post_motion_minimal_handoff_enable": True,
+        "post_motion_minimal_relocation_mode": relocation,
+        "post_motion_dual_reset_prior_invalidation_enable": False,
+        "post_motion_dual_reset_post_switch_hold_actual_final": False,
+        "post_motion_dual_reset_gap_rescue_gap_bpm": 18.0,
+    }
 
 
 def main() -> None:
