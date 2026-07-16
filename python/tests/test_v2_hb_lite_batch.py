@@ -6,7 +6,9 @@ from typing import Any
 import pytest
 
 import ppg_hr.v2.hb_lite_batch as hb_lite_batch
+from ppg_hr.v2.batch_pipeline import V2BatchRecord
 from ppg_hr.v2.hb_lite_batch import (
+    _audit_acc_comparison,
     _audit_artifact_sets,
     _audit_summary_samples,
     audit_hb_lite_batch,
@@ -139,3 +141,70 @@ def test_audited_runner_keeps_hf_primary_and_enables_acc_comparison(
 
     assert captured["reference_groups_order"] == ("HF",)
     assert captured["comparison_groups"] == (("ACC",),)
+
+
+def test_acc_comparison_audit_fails_closed_when_curve_is_missing(
+    tmp_path: Path,
+) -> None:
+    hr_csv = tmp_path / "hr.csv"
+    hr_csv.write_text("time_s,final_bpm\n0,80\n", encoding="utf-8")
+    error_csv = tmp_path / "error.csv"
+    error_csv.write_text(
+        "method,total_aae\nLMS+H,1.0\n",
+        encoding="utf-8",
+    )
+    record = V2BatchRecord(
+        sample="bobi1_HB_0711.csv",
+        ppg_mode="green",
+        ppg_input_transform="raw_bandpass",
+        adaptive_filter="lms",
+        analysis_scope="full",
+        reference_order_key="HF",
+        qc_status="good",
+        report_path=tmp_path / "report.json",
+        best_error=1.0,
+        hr_csv=hr_csv,
+        error_csv=error_csv,
+    )
+    failures: list[str] = []
+
+    result = _audit_acc_comparison(record, prefix="bobi1", failures=failures)
+
+    assert failures == [
+        "bobi1:missing_acc_timeline_column",
+        "bobi1:missing_acc_metrics",
+    ]
+    assert result["timeline_finite_windows"] == 0
+
+
+def test_acc_comparison_audit_accepts_timeline_and_metrics(tmp_path: Path) -> None:
+    hr_csv = tmp_path / "hr.csv"
+    hr_csv.write_text(
+        "time_s,final_bpm,LMS+A_bpm\n0,80,79\n",
+        encoding="utf-8",
+    )
+    error_csv = tmp_path / "error.csv"
+    error_csv.write_text(
+        "method,total_aae\nLMS+A,1.5\n",
+        encoding="utf-8",
+    )
+    record = V2BatchRecord(
+        sample="bobi1_HB_0711.csv",
+        ppg_mode="green",
+        ppg_input_transform="raw_bandpass",
+        adaptive_filter="lms",
+        analysis_scope="full",
+        reference_order_key="HF",
+        qc_status="good",
+        report_path=tmp_path / "report.json",
+        best_error=1.0,
+        hr_csv=hr_csv,
+        error_csv=error_csv,
+    )
+    failures: list[str] = []
+
+    result = _audit_acc_comparison(record, prefix="bobi1", failures=failures)
+
+    assert failures == []
+    assert result["timeline_finite_windows"] == 1
+    assert result["metric_rows"] == 1

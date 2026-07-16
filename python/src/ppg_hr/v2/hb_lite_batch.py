@@ -163,6 +163,7 @@ def _audit_record(
     for label, path in required.items():
         if path is None or not Path(path).is_file():
             failures.append(f"{prefix}:missing_{label}")
+    acc_comparison = _audit_acc_comparison(record, prefix=prefix, failures=failures)
     payload: dict[str, Any] = {}
     if record.report_path.is_file():
         try:
@@ -223,6 +224,52 @@ def _audit_record(
             for label, path in required.items()
         },
         "dual_reset": dual,
+        "acc_comparison": acc_comparison,
+    }
+
+
+def _audit_acc_comparison(
+    record: V2BatchRecord,
+    *,
+    prefix: str,
+    failures: list[str],
+) -> dict[str, Any]:
+    label = "LMS+A"
+    column = f"{label}_bpm"
+    timeline_count = 0
+    metric_count = 0
+    if record.hr_csv is not None and Path(record.hr_csv).is_file():
+        with Path(record.hr_csv).open("r", encoding="utf-8-sig", newline="") as handle:
+            rows = list(csv.DictReader(handle))
+        if column not in (rows[0].keys() if rows else ()):
+            failures.append(f"{prefix}:missing_acc_timeline_column")
+        else:
+            for row in rows:
+                try:
+                    if math.isfinite(float(row[column])):
+                        timeline_count += 1
+                except (KeyError, TypeError, ValueError):
+                    continue
+            if timeline_count == 0:
+                failures.append(f"{prefix}:empty_acc_timeline")
+    if record.error_csv is not None and Path(record.error_csv).is_file():
+        with Path(record.error_csv).open(
+            "r", encoding="utf-8-sig", newline=""
+        ) as handle:
+            rows = list(csv.DictReader(handle))
+        acc_rows = [row for row in rows if row.get("method") == label]
+        for row in acc_rows:
+            try:
+                if math.isfinite(float(row["total_aae"])):
+                    metric_count += 1
+            except (KeyError, TypeError, ValueError):
+                continue
+        if metric_count == 0:
+            failures.append(f"{prefix}:missing_acc_metrics")
+    return {
+        "label": label,
+        "timeline_finite_windows": timeline_count,
+        "metric_rows": metric_count,
     }
 
 
