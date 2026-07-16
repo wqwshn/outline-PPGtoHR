@@ -1,5 +1,7 @@
 # 运动后静息精简交接机制：最终实验报告
 
+> 后续扩展：用户在本报告完成后明确要求继续运行 YZY、HB24 固定参数和 Lite BO。扩展结果不改变本报告的 NO-GO 结论，详见 `2026-07-17-post-motion-minimal-expansion-results.md`。
+
 ## 结论
 
 本轮结论为 **NO-GO**：当前 `minimal_reanchor` 及其唯一允许的调整版 `minimal_provisional_reanchor` 均不应并入主算法，也不继续进入 YZY、HB24 全量或 Lite BO。
