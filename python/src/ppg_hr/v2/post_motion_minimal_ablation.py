@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -283,14 +284,10 @@ def _evaluate_result(
         ),
         None,
     )
-    wrong_hard = int(
-        first_switch is not None
-        and first_switch > 0
-        and str(result.window_table[first_switch].get("switch_state"))
-        == "gap_rescue"
-        and abs(final[first_switch] - reference[first_switch]) > 20.0
-        and abs(final[first_switch] - reference[first_switch])
-        > abs(final[first_switch - 1] - reference[first_switch - 1])
+    wrong_hard = _count_wrong_hard_switches(
+        final=final,
+        reference=reference,
+        rows=result.window_table,
     )
     invariant = _independent_invariance(baseline.window_table, result.window_table)
     states = [
@@ -369,6 +366,33 @@ def _evaluate_result(
             }
         )
     return sample_row, windows
+
+
+def _count_wrong_hard_switches(
+    *,
+    final: np.ndarray,
+    reference: np.ndarray,
+    rows: Sequence[Mapping[str, Any]],
+) -> int:
+    count = 0
+    for row in rows:
+        if str(row.get("switch_state")) != "gap_rescue":
+            continue
+        index = int(row["window_idx"])
+        if index <= 0 or index >= final.size or index >= reference.size:
+            continue
+        current_error = abs(float(final[index]) - float(reference[index]))
+        previous_error = abs(
+            float(final[index - 1]) - float(reference[index - 1])
+        )
+        if (
+            math.isfinite(current_error)
+            and math.isfinite(previous_error)
+            and current_error > 20.0
+            and current_error > previous_error
+        ):
+            count += 1
+    return count
 
 
 def _independent_invariance(

@@ -3,9 +3,12 @@ from __future__ import annotations
 from dataclasses import asdict
 from pathlib import Path
 
+import numpy as np
+
 from ppg_hr.v2.post_motion_minimal_ablation import (
     MinimalRelocationCandidate,
     _candidate_summary,
+    _count_wrong_hard_switches,
     build_ablation_configs,
     build_provisional_configs,
     build_relocation_candidates,
@@ -111,6 +114,20 @@ def test_provisional_acceptance_uses_minimal_reanchor_as_baseline() -> None:
     assert summary["acceptance_pass"] is False
     assert "normal_pool_delta_over_0.5_bpm" in summary["failed_gates"]
     assert summary["acceptance_baseline"] == "minimal_reanchor"
+
+
+def test_wrong_hard_switch_audit_checks_switch_after_provisional_consumption() -> None:
+    count = _count_wrong_hard_switches(
+        final=np.asarray([105.0, 70.0, 72.0]),
+        reference=np.asarray([100.0, 100.0, 100.0]),
+        rows=(
+            {"window_idx": 0, "switch_state": "bootstrap_provisional"},
+            {"window_idx": 1, "switch_state": "gap_rescue"},
+            {"window_idx": 2, "switch_state": "handoff_active"},
+        ),
+    )
+
+    assert count == 1
 
 
 def test_candidate_selection_uses_continuity_then_normal_mae_then_complexity() -> None:
