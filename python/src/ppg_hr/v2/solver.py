@@ -32,6 +32,7 @@ from .algorithm_presets import (
 )
 from .post_motion_dual_reset_runtime import (
     DualResetRuntimeWindow,
+    FrozenDualResetConfig,
     apply_frozen_dual_reset,
 )
 from .post_motion_dynamic_guard_policy import (
@@ -1914,6 +1915,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
     postprocess_applied_count = 0
     post_motion_reacquire_start_idx: int | None = None
     post_motion_dynamic_guard_events: list[dict[str, Any]] = []
+    post_motion_dynamic_guard_suppressed_events: list[dict[str, Any]] = []
     source = np.asarray(rows, dtype=float) if rows else np.zeros((0, 9), dtype=float)
     if source.size:
         source[:, 2] = smoothdata_movmedian(source[:, 2], int(cfg.smooth_win_len))
@@ -1930,6 +1932,19 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 motion_segment,
                 cfg,
                 runtime_policy=runtime_policy,
+            )
+            (
+                used_adaptive_mask,
+                post_motion_reacquire_start_idx,
+                post_motion_dynamic_guard_events,
+                post_motion_dynamic_guard_suppressed_events,
+            ) = _apply_handoff_only_switch_boundary(
+                used_adaptive_mask,
+                post_motion_reacquire_start_idx,
+                post_motion_dynamic_guard_events,
+                source,
+                motion_segment,
+                cfg,
             )
 
             source[:, 5] = _blend_final_hr_by_mask(source, used_adaptive_mask)
@@ -2096,6 +2111,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
             runtime_windows,
             motion_end_s=float(motion_segment["end_s"]),
             baseline_final_bpm=baseline_final,
+            config=_dual_reset_runtime_config(cfg),
         )
         HR[:, 3] = dual_result.final_bpm
         trace_by_idx = {
@@ -2113,7 +2129,15 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
             if bool(trace_row.get("handoff_consumed")):
                 HR[idx, 5] = 1.0
                 row["used_adaptive"] = True
-        dual_reset_metadata = dual_result.metadata
+        dual_reset_metadata = {
+            **dual_result.metadata,
+            "handoff_only_switch": bool(
+                cfg.post_motion_dual_reset_handoff_only_switch
+            ),
+            "suppressed_legacy_switch_events": (
+                post_motion_dynamic_guard_suppressed_events
+            ),
+        }
 
     HR = _apply_v2_analysis_scope(HR, cfg, motion_segment)
 
@@ -2369,6 +2393,55 @@ def _recovery_should_trigger(
     adaptive_mean = float(np.mean(source[idxs, 2])) * 60.0
     fft_mean = float(np.mean(source[idxs, 4])) * 60.0
     return (adaptive_mean - fft_mean) > float(trigger_bpm)
+
+
+def _dual_reset_runtime_config(cfg: V2RunConfig) -> FrozenDualResetConfig:
+    """Translate explicit experiment knobs into the frozen runtime adapter."""
+
+    return FrozenDualResetConfig(
+        experiment_mode=str(cfg.post_motion_dual_reset_experiment_mode),
+        observability_periodicity_min=float(
+            cfg.post_motion_dual_reset_observability_periodicity_min
+        ),
+        observability_peak_competition_min=float(
+            cfg.post_motion_dual_reset_observability_peak_competition_min
+        ),
+        observability_recovery_hits=int(
+            cfg.post_motion_dual_reset_observability_recovery_hits
+        ),
+    )
+
+
+def _apply_handoff_only_switch_boundary(
+    legacy_mask: np.ndarray,
+    legacy_switch_idx: int | None,
+    legacy_events: list[dict[str, Any]],
+    source: np.ndarray,
+    motion_segment: dict[str, float],
+    cfg: V2RunConfig,
+) -> tuple[np.ndarray, int | None, list[dict[str, Any]], list[dict[str, Any]]]:
+    """Keep adaptive Final until the handoff reset declares its target ready.
+
+    The legacy guard remains observable: its would-switch events are retained for
+    audit, but it cannot consume the independent reset FFT in this opt-in mode.
+    """
+
+    if not (
+        bool(cfg.post_motion_dual_reset_enable)
+        and bool(cfg.post_motion_dual_reset_handoff_only_switch)
+    ):
+        return legacy_mask, legacy_switch_idx, legacy_events, []
+
+    mask = np.asarray(legacy_mask, dtype=bool).copy()
+    src = np.asarray(source, dtype=float)
+    if src.size:
+        motion_start_s = float(motion_segment["start_s"])
+        mask[src[:, 0] >= motion_start_s - 1e-9] = True
+    suppressed = [
+        {**event, "suppressed_by": "handoff_only_switch"}
+        for event in legacy_events
+    ]
+    return mask, None, [], suppressed
 
 
 def _post_motion_adaptive_mask(

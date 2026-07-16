@@ -2090,6 +2090,71 @@ def test_find_crossover_detects_fft_rise() -> None:
         assert source[idx, 4] < source[idx, 2]
 
 
+def test_handoff_only_switch_suppresses_legacy_dynamic_guard_consumption() -> None:
+    from ppg_hr.v2.solver import _apply_handoff_only_switch_boundary
+
+    source = np.zeros((5, 9), dtype=float)
+    source[:, 0] = [0.0, 10.0, 20.0, 30.0, 40.0]
+    legacy_mask = np.asarray([False, True, True, False, False])
+    events = [
+        {
+            "window_idx": 3,
+            "center_s": 30.0,
+            "switch_reason": "gap_rescue",
+            "hard_switch": True,
+        }
+    ]
+    cfg = V2RunConfig(
+        data_path=Path("sample.csv"),
+        ref_path=Path("sample_ref.csv"),
+        post_motion_dual_reset_enable=True,
+        post_motion_dual_reset_handoff_only_switch=True,
+        post_motion_dual_reset_experiment_mode="a2",
+    )
+
+    mask, switch_idx, actual, suppressed = _apply_handoff_only_switch_boundary(
+        legacy_mask,
+        3,
+        events,
+        source,
+        {"start_s": 10.0, "end_s": 20.0},
+        cfg,
+    )
+
+    assert mask.tolist() == [False, True, True, True, True]
+    assert switch_idx is None
+    assert actual == []
+    assert suppressed[0]["switch_reason"] == "gap_rescue"
+    assert suppressed[0]["suppressed_by"] == "handoff_only_switch"
+
+
+def test_dual_reset_runtime_config_uses_a2_loose_observability_platform() -> None:
+    from ppg_hr.v2.solver import _dual_reset_runtime_config
+
+    cfg = V2RunConfig(
+        data_path=Path("sample.csv"),
+        ref_path=Path("sample_ref.csv"),
+        post_motion_dual_reset_experiment_mode="a2",
+        post_motion_dual_reset_observability_periodicity_min=0.4,
+        post_motion_dual_reset_observability_peak_competition_min=1.1,
+        post_motion_dual_reset_observability_recovery_hits=2,
+    )
+
+    runtime = _dual_reset_runtime_config(cfg)
+
+    assert runtime.experiment_mode == "a2"
+    assert runtime.observability_periodicity_min == 0.4
+    assert runtime.observability_peak_competition_min == 1.1
+    assert runtime.observability_recovery_hits == 2
+
+
+def test_down_up_bounce_detector_requires_a_near_term_recovery() -> None:
+    from ppg_hr.v2.handoff_only_switch_experiment import count_down_up_bounces
+
+    assert count_down_up_bounces([145.0, 70.0, 70.0, 148.0]) == 1
+    assert count_down_up_bounces([145.0, 70.0, 70.0, 72.0]) == 0
+
+
 def test_find_crossover_forces_switch_at_max_recovery() -> None:
     from ppg_hr.v2.solver import _find_crossover_idx
 

@@ -55,6 +55,11 @@ class V2RunConfig:
     post_motion_dynamic_guard_gap_rescue_fft_stable_windows: int = 3
     post_motion_dynamic_guard_gap_rescue_fft_stable_bpm: float = 6.0
     post_motion_dual_reset_enable: bool = False
+    post_motion_dual_reset_experiment_mode: str = "a0"
+    post_motion_dual_reset_handoff_only_switch: bool = False
+    post_motion_dual_reset_observability_periodicity_min: float = 0.5
+    post_motion_dual_reset_observability_peak_competition_min: float = 1.3
+    post_motion_dual_reset_observability_recovery_hits: int = 2
     max_recovery_seconds: float = 30.0
     recovery_trigger_bpm: float = 20.0
     pre_motion_context_seconds: float = 30.0

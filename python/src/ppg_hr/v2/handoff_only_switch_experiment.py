@@ -1,0 +1,174 @@
+"""Fixed-parameter evaluation for the handoff-only dual-reset switch boundary."""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+from collections.abc import Sequence
+from dataclasses import replace
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+
+from .post_motion_reset_fft_reacquire import load_lite_report_config
+from .solver import solve_v2
+
+DEFAULT_SAMPLES = (
+    "bobi2",
+    "kaihe2",
+    "kaihe3",
+    "tiaosheng3",
+    "run1",
+    "run2",
+    "woli1",
+    "woli2",
+    "xiezi2",
+    "jianpan3",
+)
+
+
+def count_down_up_bounces(
+    values: Sequence[float],
+    *,
+    jump_bpm: float = 20.0,
+    recovery_windows: int = 5,
+) -> int:
+    """Count severe downward jumps followed by a near-term upward recovery."""
+
+    data = np.asarray(values, dtype=float)
+    count = 0
+    for idx in range(1, data.size):
+        if data[idx] - data[idx - 1] > -float(jump_bpm):
+            continue
+        stop = min(data.size, idx + int(recovery_windows) + 1)
+        if np.any(data[idx + 1 : stop] - data[idx] >= float(jump_bpm)):
+            count += 1
+    return count
+
+
+def _tail_metrics(rows: Sequence[dict[str, Any]], motion_end_s: float) -> dict[str, Any]:
+    tail = [row for row in rows if motion_end_s < float(row["center_s"]) <= motion_end_s + 60.0]
+    errors = np.asarray(
+        [float(row["final_hr_bpm"]) - float(row["ref_hr_bpm"]) for row in tail],
+        dtype=float,
+    )
+    final = np.asarray([float(row["final_hr_bpm"]) for row in tail], dtype=float)
+    return {
+        "mae_bpm": float(np.mean(np.abs(errors))) if errors.size else float("nan"),
+        "e10_count": int(np.count_nonzero(np.abs(errors) > 10.0)),
+        "e20_count": int(np.count_nonzero(np.abs(errors) > 20.0)),
+        "window_count": int(errors.size),
+        "max_jump_bpm": (float(np.max(np.abs(np.diff(final)))) if final.size > 1 else 0.0),
+        "down_up_bounce_count": count_down_up_bounces(final),
+    }
+
+
+def evaluate_report(report_path: str | Path) -> dict[str, Any]:
+    """Replay one frozen N5 best point with the experimental switch boundary."""
+
+    path = Path(report_path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    base = load_lite_report_config(payload)
+    baseline_config = replace(
+        base,
+        post_motion_dual_reset_enable=True,
+        post_motion_dual_reset_experiment_mode="a0",
+        post_motion_dual_reset_handoff_only_switch=False,
+    )
+    config = replace(
+        base,
+        post_motion_dual_reset_enable=True,
+        post_motion_dual_reset_experiment_mode="a2",
+        post_motion_dual_reset_handoff_only_switch=True,
+        post_motion_dual_reset_observability_periodicity_min=0.4,
+        post_motion_dual_reset_observability_peak_competition_min=1.1,
+        post_motion_dual_reset_observability_recovery_hits=2,
+    )
+    baseline_result = solve_v2(baseline_config)
+    result = solve_v2(config)
+    motion_end_s = float(result.metadata["motion_segment"]["end_s"])
+    old = _tail_metrics(baseline_result.window_table, motion_end_s)
+    new = _tail_metrics(result.window_table, motion_end_s)
+    independent_diff = (
+        float(np.max(np.abs(baseline_result.HR[:, 2] - result.HR[:, 2])))
+        if baseline_result.HR.shape == result.HR.shape
+        else float("nan")
+    )
+    dual = result.metadata["post_motion_dual_reset"]
+    first_consumed = next(
+        (row for row in result.window_table if bool(row.get("handoff_consumed"))),
+        None,
+    )
+    sample = Path(str(payload["data_path"])).stem.replace("_HB_0711", "")
+    return {
+        "sample": sample,
+        "old_full_aae_bpm": float(baseline_result.err_stats["final_aae_bpm"]),
+        "new_full_aae_bpm": float(result.err_stats["final_aae_bpm"]),
+        "old_post60_mae_bpm": float(baseline_result.err_stats["post_motion_60s_mae_bpm"]),
+        "new_post60_mae_bpm": float(result.err_stats["post_motion_60s_mae_bpm"]),
+        "delta_post60_mae_bpm": float(
+            result.err_stats["post_motion_60s_mae_bpm"]
+            - baseline_result.err_stats["post_motion_60s_mae_bpm"]
+        ),
+        "old_post60_e20_count": int(baseline_result.err_stats["post_motion_60s_e20_count"]),
+        "new_post60_e20_count": int(result.err_stats["post_motion_60s_e20_count"]),
+        "old_post60_max_jump_bpm": old["max_jump_bpm"],
+        "new_post60_max_jump_bpm": new["max_jump_bpm"],
+        "old_down_up_bounce_count": old["down_up_bounce_count"],
+        "new_down_up_bounce_count": new["down_up_bounce_count"],
+        "independent_reset_max_abs_diff_bpm": independent_diff,
+        "suppressed_legacy_switch_count": len(dual.get("suppressed_legacy_switch_events", [])),
+        "first_handoff_center_s": (
+            None if first_consumed is None else float(first_consumed["center_s"])
+        ),
+        "first_handoff_state": (
+            "" if first_consumed is None else str(first_consumed.get("switch_state", ""))
+        ),
+    }
+
+
+def run_experiment(
+    report_dir: str | Path,
+    output_dir: str | Path,
+    samples: Sequence[str] = DEFAULT_SAMPLES,
+) -> list[dict[str, Any]]:
+    """Evaluate representative failures and normal sentinels and write artefacts."""
+
+    source = Path(report_dir)
+    output = Path(output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for sample in samples:
+        matches = sorted(source.glob(f"{sample}_*-v2.json"))
+        if len(matches) != 1:
+            raise ValueError(f"{sample}: expected one report, found {len(matches)}")
+        rows.append(evaluate_report(matches[0]))
+
+    fieldnames = list(rows[0]) if rows else []
+    with (output / "representative_metrics.csv").open(
+        "w", encoding="utf-8-sig", newline=""
+    ) as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+    (output / "representative_metrics.json").write_text(
+        json.dumps(rows, ensure_ascii=False, indent=2, allow_nan=True),
+        encoding="utf-8",
+    )
+    return rows
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("report_dir", type=Path)
+    parser.add_argument("output_dir", type=Path)
+    parser.add_argument("--samples", nargs="*", default=list(DEFAULT_SAMPLES))
+    args = parser.parse_args()
+    rows = run_experiment(args.report_dir, args.output_dir, args.samples)
+    print(json.dumps(rows, ensure_ascii=False, indent=2, allow_nan=True))
+
+
+if __name__ == "__main__":
+    main()
