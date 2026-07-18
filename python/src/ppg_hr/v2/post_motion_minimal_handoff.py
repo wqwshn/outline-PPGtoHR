@@ -107,7 +107,10 @@ def run_minimal_handoff(
                 reason = "consumable_intermediate_gap"
                 source = "adaptive_baseline"
         elif (
-            window.provisional_admissible
+            (
+                window.provisional_admissible
+                or window.provisional_state == "ready_confirmed"
+            )
             and math.isfinite(float(window.provisional_target_bpm))
         ):
             crossover_hits = 0
