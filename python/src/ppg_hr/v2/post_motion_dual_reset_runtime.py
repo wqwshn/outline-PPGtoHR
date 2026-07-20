@@ -40,9 +40,6 @@ class FrozenDualResetConfig:
     controlled_reanchor: bool = True
     reanchor_min_gap_bpm: float = 25.0
     bootstrap_prior_gap_bpm: float = 25.0
-    bootstrap_compensation_trigger_bpm: float = 18.0
-    bootstrap_compensation_windows: int = 3
-    bootstrap_compensation_limit_bpm: float = 25.0
     bootstrap_confirmation_deadline_s: float = 20.0
     raw_final_guard_radius_bpm: float = 30.0
     held_fallback_windows: int = 2
@@ -376,7 +373,6 @@ def apply_frozen_dual_reset(
             ),
             config=MinimalHandoffConfig(
                 hard_switch_gap_bpm=18.0,
-                stable_crossover_gap_bpm=cfg.stable_crossover_gap_bpm,
                 stable_crossover_windows=cfg.stable_crossover_windows,
             ),
         )
@@ -605,8 +601,6 @@ def causal_bootstrap_timeline(
         switch_reasons[0] = f"bootstrap_rejected:{reason}"
         return _timeline(output, False, reason, guard_reasons, switch_states, switch_reasons)
 
-    initial_gap = abs(float(rows[0]["handoff_bpm"]) - float(rows[0]["archived_final_bpm"]))
-    compensate = initial_gap >= cfg.bootstrap_compensation_trigger_bpm
     confirmed = False
     revoked = False
     unavailable_windows = 0
@@ -646,12 +640,6 @@ def causal_bootstrap_timeline(
             continue
 
         target = float(row["handoff_bpm"])
-        if compensate and index < cfg.bootstrap_compensation_windows:
-            target += float(np.clip(
-                target - float(row["archived_final_bpm"]),
-                -cfg.bootstrap_compensation_limit_bpm,
-                cfg.bootstrap_compensation_limit_bpm,
-            ))
         archived = float(row["archived_final_bpm"])
         raw_top5 = row.get("raw_top5")
         if isinstance(raw_top5, str):

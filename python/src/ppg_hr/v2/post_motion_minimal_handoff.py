@@ -12,7 +12,6 @@ class MinimalHandoffConfig:
     """Fixed control thresholds; tracker evidence is supplied separately."""
 
     hard_switch_gap_bpm: float = 18.0
-    stable_crossover_gap_bpm: float = 6.0
     stable_crossover_windows: int = 2
 
 
@@ -64,19 +63,26 @@ def run_minimal_handoff(
         archived = float(window.archived_final_bpm)
 
         if switched:
-            final = (
-                target
-                if target_consumable and math.isfinite(target)
-                else final_values[-1]
+            target_available = bool(
+                target_consumable and math.isfinite(target)
             )
+            target_continuous = bool(
+                target_available
+                and abs(target - final_values[-1]) < cfg.hard_switch_gap_bpm
+            )
+            final = target if target_continuous else final_values[-1]
             state = "handoff_active"
             reason = (
                 "target_continues"
-                if target_consumable
-                else "irreversible_handoff_holds_control"
+                if target_continuous
+                else (
+                    "target_identity_discontinuous"
+                    if target_available
+                    else "irreversible_handoff_holds_control"
+                )
             )
             source = (
-                "handoff_target" if target_consumable else "handoff_hold"
+                "handoff_target" if target_continuous else "handoff_hold"
             )
         elif target_consumable and math.isfinite(target):
             gap = abs(target - archived)
@@ -87,25 +93,19 @@ def run_minimal_handoff(
                 state = "gap_rescue"
                 reason = "consumable_high_gap"
                 source = "handoff_target"
-            elif gap <= cfg.stable_crossover_gap_bpm:
+            else:
                 crossover_hits += 1
                 if crossover_hits >= cfg.stable_crossover_windows:
                     switched = True
                     final = target
                     state = "stable_crossover"
-                    reason = "consumable_close_target_confirmed"
+                    reason = "consumable_sub_hard_target_confirmed"
                     source = "handoff_target"
                 else:
                     final = archived
-                    state = "waiting_stable_crossover"
-                    reason = "awaiting_close_target_confirmation"
+                    state = "waiting_sub_hard_crossover"
+                    reason = "awaiting_sub_hard_target_confirmation"
                     source = "adaptive_baseline"
-            else:
-                crossover_hits = 0
-                final = archived
-                state = "waiting_intermediate_gap"
-                reason = "consumable_intermediate_gap"
-                source = "adaptive_baseline"
         elif (
             (
                 window.provisional_admissible
@@ -147,7 +147,7 @@ def run_minimal_handoff(
 
 
 def _validate_config(config: MinimalHandoffConfig) -> None:
-    if config.hard_switch_gap_bpm <= config.stable_crossover_gap_bpm:
-        raise ValueError("hard-switch gap must exceed stable-crossover gap")
+    if config.hard_switch_gap_bpm <= 0:
+        raise ValueError("hard-switch gap must be positive")
     if config.stable_crossover_windows < 1:
         raise ValueError("stable-crossover windows must be positive")

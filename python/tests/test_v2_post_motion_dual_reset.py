@@ -270,28 +270,41 @@ def test_controlled_reanchor_moves_only_handoff_after_causal_evidence() -> None:
     assert control_results[-1].handoff_bpm < 70.0
 
 
-def test_causal_prior_conflict_blocks_consumption_not_raw_candidate_qualification() -> None:
+def test_causal_prior_conflict_requires_separate_invalidation_evidence() -> None:
     tracker = DualResetTracker(
         mechanism="trend_persistence",
         controlled_reanchor=True,
         reanchor_prior_guard_bpm=45.0,
     )
     final_history = (168.0, 166.0, 164.0)
-    tracker.step(DualResetInput(0.0, _frame((50.0, 1.0)), True, final_history))
+    low_residual = [
+        tracker.step(
+            DualResetInput(
+                float(index),
+                _frame((45.0, 1.0), (160.0, 0.5)),
+                True,
+                final_history,
+            )
+        )
+        for index in range(4)
+    ]
 
     results = [
         tracker.step(
             DualResetInput(
                 float(index),
-                _frame((95.0, 1.0), (55.0, 0.5)),
+                _frame((95.0, 1.0), (160.0, 0.5)),
                 True,
                 final_history,
             )
         )
-        for index in range(1, 6)
+        for index in range(4, 9)
     ]
 
-    assert not any(result.handoff_trace["reanchor_event"] for result in results)
+    assert not any(
+        result.handoff_trace["reanchor_event"]
+        for result in (*low_residual, *results)
+    )
     assert results[-1].candidate_qualification.qualified is True
     assert (
         results[-1].candidate_qualification.reason
@@ -299,7 +312,6 @@ def test_causal_prior_conflict_blocks_consumption_not_raw_candidate_qualificatio
     )
     assert results[-1].switch_target_readiness.ready is False
     assert results[-1].switch_target_readiness.reason == "causal_prior_conflict"
-    assert results[-1].handoff_trace["startup_prior_compatible"] is False
 
 
 def test_directional_prior_invalidation_reanchors_declining_remote_evidence_once() -> None:

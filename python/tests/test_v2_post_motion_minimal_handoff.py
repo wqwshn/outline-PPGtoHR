@@ -50,7 +50,7 @@ def test_minimal_handoff_exposes_one_composed_consumption_fact() -> None:
     ]
 
 
-def test_normal_crossover_requires_two_consecutive_close_targets() -> None:
+def test_normal_crossover_requires_two_consecutive_sub_hard_targets() -> None:
     result = run_minimal_handoff(
         (
             _row(140.0, 130.0),
@@ -59,10 +59,25 @@ def test_normal_crossover_requires_two_consecutive_close_targets() -> None:
         )
     )
 
-    assert result.final_bpm == (140.0, 139.0, 133.0)
+    assert result.final_bpm == (140.0, 134.0, 133.0)
     assert [row["switch_state"] for row in result.trace] == [
-        "waiting_intermediate_gap",
-        "waiting_stable_crossover",
+        "waiting_sub_hard_crossover",
+        "stable_crossover",
+        "handoff_active",
+    ]
+
+
+def test_two_consumable_intermediate_targets_do_not_wait_forever() -> None:
+    result = run_minimal_handoff(
+        (
+            _row(92.0, 78.0),
+            _row(89.0, 77.0),
+        )
+    )
+
+    assert result.final_bpm == (92.0, 77.0)
+    assert [row["switch_state"] for row in result.trace] == [
+        "waiting_sub_hard_crossover",
         "stable_crossover",
     ]
 
@@ -84,6 +99,26 @@ def test_handoff_is_irreversible_after_a_bad_window() -> None:
     ]
     assert result.trace[1]["final_source"] == "handoff_hold"
     assert result.trace[1]["switch_state"] == "handoff_active"
+
+
+def test_post_switch_target_identity_cannot_make_a_second_hard_jump() -> None:
+    result = run_minimal_handoff(
+        (
+            _row(150.0, 125.0),
+            _row(148.0, 59.0),
+            _row(146.0, 113.0),
+        )
+    )
+
+    assert result.final_bpm == (125.0, 125.0, 113.0)
+    assert [row["final_source"] for row in result.trace] == [
+        "handoff_target",
+        "handoff_hold",
+        "handoff_target",
+    ]
+    assert result.trace[1]["switch_reason"] == (
+        "target_identity_discontinuous"
+    )
 
 
 def test_no_consumable_target_has_no_permanent_timeout() -> None:

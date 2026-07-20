@@ -764,8 +764,34 @@ def test_causal_bootstrap_uses_initial_prior_evidence_and_expires() -> None:
     assert result["switch_index"] == 0
     assert result["switch_states"][0] == "bootstrap_provisional"
     assert result["switch_states"][4] == "ready_confirmed"
-    assert result["final_bpm"][0] == pytest.approx(139.0)
+    assert result["final_bpm"][0] == pytest.approx(157.0)
     assert result["final_bpm"][3] == pytest.approx(rows[3]["handoff_bpm"])
+
+
+def test_provisional_bootstrap_never_extrapolates_beyond_handoff_target() -> None:
+    experiment = import_module("ppg_hr.v2.post_motion_dual_reset_experiment")
+    timeline = experiment.causal_bootstrap_timeline(
+        (
+            {
+                "center_s": 144.0,
+                "archived_final_bpm": 80.0,
+                "handoff_bpm": 58.0,
+                "handoff_trace": {
+                    "source": "raw_local_peaks",
+                    "selected_rank": 1,
+                    "predicted_prior_bpm": 60.0,
+                },
+                "qualification_reason": "insufficient_history",
+                "switch_target_ready": False,
+                "raw_top5": [[58.0, 1.0]],
+            },
+        ),
+        motion_end_s=143.0,
+    )
+
+    assert timeline["bootstrap_admissible"] is True
+    assert timeline["final_bpm"] == (58.0,)
+    assert timeline["switch_states"] == ("bootstrap_provisional",)
 
 
 def test_causal_bootstrap_rejects_remote_initial_handoff() -> None:
@@ -856,7 +882,7 @@ def test_causal_bootstrap_keeps_rescue_when_raw_peak_is_remote_from_final() -> N
         rows, motion_end_s=100.0, mode="bootstrap"
     )
 
-    assert result["final_bpm"] == (139.0,)
+    assert result["final_bpm"] == (157.0,)
     assert result["guard_reasons"] == (None,)
 
 
@@ -888,7 +914,7 @@ def test_causal_bootstrap_falls_back_after_sustained_evidence_loss() -> None:
         rows, motion_end_s=100.0, mode="bootstrap"
     )
 
-    assert result["final_bpm"] == (80.0, 80.0, 120.0)
+    assert result["final_bpm"] == (100.0, 100.0, 120.0)
     assert result["switch_states"] == (
         "bootstrap_provisional",
         "bootstrap_provisional",
