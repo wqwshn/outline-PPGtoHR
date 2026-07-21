@@ -22,6 +22,7 @@ PM-CHR 采用以下边界：
 - 运动后只有一个 switch adapter 可写 Final。目标可消费且相对当前 Final 的差达到 `18 BPM` 时立即高差快速交接；小于 `18 BPM` 时连续 `2` 窗确认后交接。
 - 正式交接不可逆。交接后的目标只有在相对上一已接受 Final 的差小于 `18 BPM` 时才能更新，否则由同一 adapter 保持上一值。
 - legacy dynamic guard 保留配置和 would-switch 审计事件，但 PM-CHR 生效时不再拥有 Final 写入权；旧固定保护窗只用于显式历史复现。
+- `prior_invalidation` 与 legacy post-switch hold 字段仅为归档实验配置兼容保留；PM-CHR 运行时强制忽略这些值，它们不属于在线生产控制面。
 
 已验证且提升为默认的配置为：`dual_reset=true`、`minimal_handoff=true`、`minimal_provisional=true`、`relocation=controlled_reanchor`、`gap=18 BPM`、`prior_invalidation=false`、legacy post-switch hold `false`。
 
@@ -37,6 +38,7 @@ PM-CHR 采用以下边界：
 
 - 普通 v2/Lite/GUI 路径无需实验 override 即可使用已经验证的运动后机制。
 - 历史字段 `post_motion_dual_reset_*`、`stable_crossover` 和 `gap_rescue` 暂时保留以兼容既有 JSON、实验脚本和报告，但文档中的产品术语分别采用 PM-CHR、亚硬切确认交接和高差快速交接。
+- PM-CHR 具备严格因果和低增量状态的在线化条件，但目标 MCU 的最坏时延、RAM 与功耗仍需单独验证。
 - 纯 FFT、无参考链路或 `analysis_scope="motion"` 不启动 PM-CHR，保持原有求解语义。
 - HB `run2/xiezi2`、YZY `bobi1/run4` 仍是已知运动后风险；HB `xiezi1` 提醒 BO 的 `time_bias` 与运动段目标可能产生耦合。后续调试必须先分类问题来源，不以新增运动后状态作为默认修复。
 - HB/YZY 只有两个受试者；上线前后需继续审计运动后 60 s MAE、E20、反向跳变、启动门延迟、prior conflict 和目标身份不连续事件。

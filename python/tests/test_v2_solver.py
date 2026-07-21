@@ -2185,6 +2185,63 @@ def test_dual_reset_runtime_config_uses_a2_loose_observability_platform() -> Non
     assert runtime.observability_recovery_hits == 2
 
 
+def test_dual_reset_runtime_config_names_the_production_pm_chr_bundle() -> None:
+    from ppg_hr.v2.post_motion_dual_reset_runtime import (
+        POST_MOTION_CAUSAL_HANDOFF_RECOVERY,
+    )
+    from ppg_hr.v2.solver import _dual_reset_runtime_config
+
+    cfg = V2RunConfig(
+        data_path=Path("sample.csv"),
+        ref_path=Path("sample_ref.csv"),
+    )
+
+    runtime = _dual_reset_runtime_config(cfg)
+
+    assert runtime.name == POST_MOTION_CAUSAL_HANDOFF_RECOVERY
+    assert runtime.minimal_handoff_enabled is True
+    assert runtime.minimal_provisional_enabled is True
+    assert runtime.minimal_relocation_mode == "controlled_reanchor"
+    assert runtime.gap_rescue_gap_bpm == 18.0
+
+
+def test_pm_chr_ignores_legacy_prior_invalidation_and_hold_knobs() -> None:
+    from ppg_hr.v2.post_motion_dual_reset_runtime import (
+        POST_MOTION_CAUSAL_HANDOFF_RECOVERY,
+    )
+    from ppg_hr.v2.solver import _dual_reset_runtime_config
+
+    cfg = V2RunConfig(
+        data_path=Path("sample.csv"),
+        ref_path=Path("sample_ref.csv"),
+        post_motion_dual_reset_prior_invalidation_enable=True,
+        post_motion_dual_reset_post_switch_hold_actual_final=True,
+    )
+
+    runtime = _dual_reset_runtime_config(cfg)
+
+    assert runtime.name == POST_MOTION_CAUSAL_HANDOFF_RECOVERY
+    assert runtime.prior_invalidation_enabled is False
+    assert runtime.post_switch_hold_actual_final is False
+
+
+def test_modified_pm_chr_thresholds_are_labelled_as_experimental() -> None:
+    from ppg_hr.v2.post_motion_dual_reset_runtime import (
+        LEGACY_DUAL_RESET_CANDIDATE,
+    )
+    from ppg_hr.v2.solver import _dual_reset_runtime_config
+
+    cfg = V2RunConfig(
+        data_path=Path("sample.csv"),
+        ref_path=Path("sample_ref.csv"),
+        post_motion_dual_reset_gap_rescue_gap_bpm=20.0,
+    )
+
+    runtime = _dual_reset_runtime_config(cfg)
+
+    assert runtime.name == LEGACY_DUAL_RESET_CANDIDATE
+
+
 def test_down_up_bounce_detector_requires_a_near_term_recovery() -> None:
     from ppg_hr.v2.handoff_only_switch_experiment import count_down_up_bounces
 

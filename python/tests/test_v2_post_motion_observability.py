@@ -8,9 +8,9 @@ from ppg_hr.v2.post_motion_dual_reset_experiment import (
     SampleReplay,
 )
 from ppg_hr.v2.post_motion_dual_reset_runtime import (
+    POST_MOTION_CAUSAL_HANDOFF_RECOVERY,
     DualResetRuntimeWindow,
     FrozenDualResetConfig,
-    POST_MOTION_CAUSAL_HANDOFF_RECOVERY,
     apply_frozen_dual_reset,
 )
 from ppg_hr.v2.post_motion_observability_experiment import (
@@ -28,6 +28,13 @@ def test_default_runtime_identifies_post_motion_causal_handoff_recovery() -> Non
         (),
         motion_end_s=0.0,
         baseline_final_bpm=np.asarray([80.0]),
+        config=FrozenDualResetConfig(
+            name=POST_MOTION_CAUSAL_HANDOFF_RECOVERY,
+            minimal_handoff_enabled=True,
+            minimal_provisional_enabled=True,
+            minimal_relocation_mode="controlled_reanchor",
+            gap_rescue_gap_bpm=18.0,
+        ),
     )
 
     assert result.metadata["candidate"] == POST_MOTION_CAUSAL_HANDOFF_RECOVERY

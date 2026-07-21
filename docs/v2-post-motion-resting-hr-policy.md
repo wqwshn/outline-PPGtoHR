@@ -72,11 +72,11 @@
 | `post_motion_dual_reset_prior_invalidation_enable` | `false` |
 | `post_motion_dual_reset_post_switch_hold_actual_final` | `false` |
 
-旧 `post_motion_dynamic_guard_*` 配置暂时保留，用于历史结果复现和审计；PM-CHR 生效时，其 would-switch 事件写入 `suppressed_legacy_switch_events`，不能改变 Final。
+旧 `post_motion_dynamic_guard_*` 配置暂时保留，用于历史结果复现和审计；PM-CHR 生效时，其 would-switch 事件写入 `suppressed_legacy_switch_events`，不能改变 Final。`prior_invalidation` 与 legacy post-switch hold 字段也只为历史配置反序列化保留，即使归档配置将其设为 true，PM-CHR 运行时仍强制忽略。
 
 ## 在线部署与诊断
 
-PM-CHR 只增加每窗 top-k 谱峰排序、少量标量阈值和短队列状态，不需要参考心率、未来窗口或全局回看。主要计算量仍来自既有 FFT 和自适应滤波，因此适合按 1 s 步进在线运行。
+PM-CHR 只增加每窗 top-k 谱峰排序、少量标量阈值和短队列状态，不需要参考心率、未来窗口或全局回看；主要计算量仍来自既有 FFT 和自适应滤波，因此在算法结构上具备按 1 s 步进在线化的条件。当前尚未完成目标 MCU 上的时延、RAM 和功耗实测，不能据此宣称已经满足具体硬件的实时部署要求。
 
 排查运动后异常时，优先检查：
 

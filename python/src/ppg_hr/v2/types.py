@@ -70,6 +70,8 @@ class V2RunConfig:
     post_motion_dual_reset_observability_periodicity_min: float = 0.5
     post_motion_dual_reset_observability_peak_competition_min: float = 1.3
     post_motion_dual_reset_observability_recovery_hits: int = 2
+    # Legacy research/replay knobs. PM-CHR ignores them even if an archived
+    # config explicitly sets them, so they cannot re-enter production control.
     post_motion_dual_reset_prior_invalidation_enable: bool = False
     post_motion_dual_reset_prior_invalidation_hits: int = 3
     post_motion_dual_reset_prior_invalidation_gap_bpm: float = 40.0

@@ -31,6 +31,8 @@ from .algorithm_presets import (
     v2_trace_rescue_candidates,
 )
 from .post_motion_dual_reset_runtime import (
+    LEGACY_DUAL_RESET_CANDIDATE,
+    POST_MOTION_CAUSAL_HANDOFF_RECOVERY,
     DualResetRuntimeWindow,
     FrozenDualResetConfig,
     apply_frozen_dual_reset,
@@ -2404,7 +2406,24 @@ def _recovery_should_trigger(
 def _dual_reset_runtime_config(cfg: V2RunConfig) -> FrozenDualResetConfig:
     """Translate explicit experiment knobs into the frozen runtime adapter."""
 
+    production_pm_chr = bool(
+        cfg.post_motion_dual_reset_experiment_mode == "a0"
+        and cfg.post_motion_minimal_handoff_enable
+        and cfg.post_motion_minimal_provisional_enable
+        and cfg.post_motion_minimal_relocation_mode == "controlled_reanchor"
+        and float(cfg.post_motion_dual_reset_gap_rescue_gap_bpm) == 18.0
+        and float(cfg.post_motion_dual_reset_observability_periodicity_min) == 0.5
+        and float(
+            cfg.post_motion_dual_reset_observability_peak_competition_min
+        ) == 1.3
+        and int(cfg.post_motion_dual_reset_observability_recovery_hits) == 2
+    )
     return FrozenDualResetConfig(
+        name=(
+            POST_MOTION_CAUSAL_HANDOFF_RECOVERY
+            if production_pm_chr
+            else LEGACY_DUAL_RESET_CANDIDATE
+        ),
         experiment_mode=str(cfg.post_motion_dual_reset_experiment_mode),
         minimal_handoff_enabled=bool(cfg.post_motion_minimal_handoff_enable),
         minimal_provisional_enabled=bool(
@@ -2413,6 +2432,7 @@ def _dual_reset_runtime_config(cfg: V2RunConfig) -> FrozenDualResetConfig:
         minimal_relocation_mode=str(cfg.post_motion_minimal_relocation_mode),
         post_switch_hold_actual_final=bool(
             cfg.post_motion_dual_reset_post_switch_hold_actual_final
+            and not cfg.post_motion_minimal_handoff_enable
         ),
         gap_rescue_gap_bpm=float(
             cfg.post_motion_dual_reset_gap_rescue_gap_bpm
@@ -2428,6 +2448,7 @@ def _dual_reset_runtime_config(cfg: V2RunConfig) -> FrozenDualResetConfig:
         ),
         prior_invalidation_enabled=bool(
             cfg.post_motion_dual_reset_prior_invalidation_enable
+            and not cfg.post_motion_minimal_handoff_enable
         ),
         prior_invalidation_hits_required=int(
             cfg.post_motion_dual_reset_prior_invalidation_hits
