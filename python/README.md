@@ -14,7 +14,7 @@ Python 实现，包含 v1（MATLAB 等价移植）与 v2（统一参考路径 + 
 - **参考信号组**：HF / CF（冷端比）/ ACC 三类参考信号可自由排序组合，统一级联自适应滤波路径。
 - **算法预设**：`dynamic_rest_bo` 为默认主算法；`lite` 固定静息、运动和恢复追踪参数；`trace_rescue` 运行固定候选状态，并用无监督轨迹诊断选择最终状态。
 - **运动段追踪保护**：源速率 IMU 划分最长运动段；运动段谱峰追踪包含连续性保护、低锁上跳重捕获和高频锁定逃逸。
-- **运动后动态回切**：运动结束后并行保留 adaptive 链路和 reset FFT 链路，通过稳定交汇或持续高差救援切回 reset FFT。
+- **运动后因果交接恢复（PM-CHR）**：运动结束后只用因果 PPG/历史证据评估交接目标，由单一写入器完成从 adaptive 到交接 reset 的不可逆交接；独立 reset 仅作对照。
 - **参数泛化评估**：按运动类型或个体组织实验，支持 `all_train`、`leave_one_group_out` 和跨个体复核。
 - **窗口诊断 GUI**：按静息、运动、运动后保护窗和运动后静息重捕获阶段显示真实算法路径，并在窗口 trace 中记录候选峰、追踪范围、惩罚、保护和切换原因。
 - **血氧计算页面**：使用 100 Hz 红光/红外光 PPG，分别以 Ut1、Ut2 独立恢复运动段波形并计算 SpO2，导出窗口结果、物理单位波形 CSV 和科研绘图 PNG
@@ -353,7 +353,8 @@ Delay search: adaptive, scanned=8, default=[-20,+20]
 
 v2 求解器（`v2/solver.py`）在 v1 的频谱处理、时延估计和自适应级联滤波基础上重构了流程编排。它的核心目标不是把每个窗口独立调到最低误差，而是在静息、运动和运动后阶段保持可解释、可诊断、可泛化的心率轨迹。
 完整机制说明见 [v2 Python 心率解算技术路线](../docs/v2-python-algorithm-technical-roadmap.md)
-和 [v2 心率算法阶段性说明](../docs/v2-heart-rate-algorithm-stage-summary.md)。
+、[v2 心率算法阶段性说明](../docs/v2-heart-rate-algorithm-stage-summary.md)
+和 [运动后因果交接恢复](../docs/v2-post-motion-resting-hr-policy.md)。
 
 ### 4.1 参考信号组
 
@@ -372,7 +373,7 @@ v2 引入三类参考信号，可通过 `reference_groups_order` 参数自由排
 - **算法预设**：`dynamic_rest_bo` 是默认主算法，保留静息段 BO；`lite` 固定静息、运动和恢复追踪参数，只搜索核心求解参数；`trace_rescue` 运行固定候选状态，并用无监督轨迹诊断选择最终状态。
 - **运动检测**：运动段由原始 100 Hz ACC + Gyro 联合判别，不受 `fs_target`、滤波器类型或 BO 参数影响。
 - **运动段追踪**：运动窗口使用方向性频谱追踪、连续性保护软惩罚、低锁上跳重捕获和高频锁定逃逸，避免真实峰被运动主频、谐波或错误历史轨迹长期遮蔽。
-- **运动后阶段**：运动结束后同时保留 adaptive 链路和 reset FFT 链路。Final 先沿用 adaptive，再通过稳定交汇或持续高差救援切回 reset FFT。
+- **运动后阶段**：PM-CHR 同时维护独立 reset 对照与交接 reset 目标；一次性 PPG 启动门、受控重锚和目标可消费证据通过后，由单一 switch adapter 快速或两窗确认交接。
 - **`analysis_scope`**：`"full"` 保留全信号；`"motion"` 裁剪至运动段前 30 s 到运动段结束，误差统计同步过滤。
 
 ### 4.3 与 v1 的主要区别
@@ -384,7 +385,7 @@ v2 引入三类参考信号，可通过 `reference_groups_order` 参数自由排
 | CF 通道 | 无 | Uc/(Ut-Uc) 冷端比 |
 | 算法预设 | 无 | `dynamic_rest_bo` / `lite` / `trace_rescue` |
 | 运动段保护 | 基础谱峰追踪 | 方向性追踪 + 低锁上跳 + 高频逃逸 |
-| 运动后阶段 | 无，运动结束直接回 FFT | adaptive 与 reset FFT 并行，动态回切 |
+| 运动后阶段 | 无，运动结束直接回 FFT | PM-CHR 因果证据驱动、单写入、不可逆交接 |
 | 贝叶斯优化 | 双轮（HF + ACC 独立优化） | 按算法预设收缩搜索空间 |
 | 延迟搜索 | 多层级自适应预扫描 | 固定 ±200ms |
 
@@ -645,7 +646,11 @@ python/
       plotting.py          # v2 出版级绘图
       report.py            # v2 报告读写
       spectrum_tracking.py # 窗口级谱峰追踪与诊断 trace
-      post_motion_dynamic_guard_policy.py # 运动后动态保护窗与 gap rescue
+      raw_fft_candidates.py # raw PPG top-k 频谱候选
+      post_motion_dual_reset.py # 独立/交接 reset tracker 与证据
+      post_motion_dual_reset_runtime.py # PM-CHR 运行时编排
+      post_motion_minimal_handoff.py # PM-CHR 单写入切换器
+      post_motion_dynamic_guard_policy.py # legacy 回切策略（兼容审计）
       spo2.py              # v2 红光/红外光 SpO2 解算与报告输出
       spo2_plotting.py     # v2 SpO2 趋势图与静息/运动切片 PNG
       qc.py                # v2 质量检测

@@ -2065,7 +2065,13 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
         "enabled": bool(cfg.post_motion_dual_reset_enable),
         "status": "disabled",
     }
-    if bool(cfg.post_motion_dual_reset_enable) and motion_segment is not None and HR.size:
+    if (
+        bool(cfg.post_motion_dual_reset_enable)
+        and cfg.analysis_scope == "full"
+        and bool(references)
+        and motion_segment is not None
+        and HR.size
+    ):
         baseline_final = np.where(HR[:, 5] > 0.5, HR[:, 3], HR[:, 2])
         runtime_windows: list[DualResetRuntimeWindow] = []
         for idx, row in enumerate(window_table):
@@ -2454,6 +2460,7 @@ def _apply_handoff_only_switch_boundary(
 
     if not (
         bool(cfg.post_motion_dual_reset_enable)
+        and cfg.analysis_scope == "full"
         and (
             bool(cfg.post_motion_dual_reset_handoff_only_switch)
             or bool(cfg.post_motion_minimal_handoff_enable)

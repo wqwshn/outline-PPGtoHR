@@ -23,12 +23,14 @@ from .post_motion_minimal_handoff import (
 )
 from .raw_fft_candidates import RawFftCandidateFrame
 
+POST_MOTION_CAUSAL_HANDOFF_RECOVERY = "post_motion_causal_handoff_recovery"
+
 
 @dataclass(frozen=True)
 class FrozenDualResetConfig:
-    """Mechanism constants frozen by the N4 HB24 confirmation."""
+    """Mechanism constants frozen by the HB/YZY PM-CHR confirmation."""
 
-    name: str = "controlled_reanchor_remote25_causal_bootstrap"
+    name: str = POST_MOTION_CAUSAL_HANDOFF_RECOVERY
     experiment_mode: str = "a0"
     mechanism: str = "trend_persistence"
     prior_half_life_s: float = 10.0
@@ -783,6 +785,7 @@ def _metadata(cfg: FrozenDualResetConfig, *, enabled: bool, reason: str) -> dict
         "enabled": bool(enabled),
         "status": reason,
         "candidate": cfg.name,
+        "policy_name": POST_MOTION_CAUSAL_HANDOFF_RECOVERY,
         "experiment_mode": cfg.experiment_mode,
         "switch_adapter": (
             "minimal_single_writer"

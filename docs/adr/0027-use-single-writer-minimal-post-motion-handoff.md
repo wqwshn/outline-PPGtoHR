@@ -1,6 +1,6 @@
 # 运动后交接采用单写入最小状态机
 
-Status: proposed
+Status: accepted; consolidated and amended by ADR-0030
 
 > ADR-0029 对本文“切换后不保持”的笼统排除作了有限修订：正式 handoff 已接管后，若新的可消费目标与上一已接受 Final 相差达到 hard-switch 边界，单一 switch adapter 保持上一值。它不是 legacy `post_switch_hold_actual_final`，也没有引入第二个 Final 写入者；本文其余决策保持不变。
 

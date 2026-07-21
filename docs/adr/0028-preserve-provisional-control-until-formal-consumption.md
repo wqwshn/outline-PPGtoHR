@@ -1,6 +1,6 @@
 # 保持 provisional 控制权直到正式目标实际可消费
 
-Status: accepted
+Status: accepted; incorporated into ADR-0030
 
 ## Context
 

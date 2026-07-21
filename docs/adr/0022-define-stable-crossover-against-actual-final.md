@@ -1,6 +1,6 @@
 # 稳定交汇必须相对实际 Final 判断
 
-Status: accepted
+Status: superseded by ADR-0030
 
 `stable_crossover` 被定义为已取得资格的交接 reset FFT 与当前实际 Final 的连续可达交汇，并且永远采用非硬切的正常过渡。内部 adaptive 轨迹与交接 reset 接近只能作为辅助诊断，不能单独触发稳定交汇；当实际 Final 与目标仍有较大距离时，系统继续等待或独立评估 `gap_rescue`。
 

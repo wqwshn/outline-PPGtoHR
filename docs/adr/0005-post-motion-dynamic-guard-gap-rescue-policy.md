@@ -1,6 +1,6 @@
 # Use dynamic guard and gap rescue for post-motion resting HR switching
 
-Status: accepted; proposed successor ADR-0027
+Status: superseded by ADR-0030
 
 The v2 algorithm will treat post-motion resting HR recovery as two independent chains, adaptive and reset FFT, then splice Final by a shared solver-stage policy rather than by a fixed post-motion delay. The normal switch path is `stable_crossover`: adaptive and reset FFT must remain close for consecutive windows and the transition must satisfy recovery-stage up/down tracking constraints. The exception path is `gap_rescue` (持续高差回切): if adaptive remains persistently much higher than a stable, non-low-locked reset FFT, Final may hard-switch to reset FFT because the adaptive history is treated as an erroneous motion-stage lock rather than a valid physiological trajectory.
 

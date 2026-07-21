@@ -184,28 +184,17 @@ JSON 顶层 `high_lock_escape` 记录本次求解使用的默认参数和 `trigg
 
 该机制当前不新增 BO 参数。默认值来自本轮 LYX 全批数据的 replay 与 solver A/B 验收，目标是先用可解释门控修复明确的高频锁定失效，同时保持原本表现较好的样本不退化。若后续批次发现新的误触发或漏触发，应优先分析窗口诊断字段，再决定是否调整默认门控，而不是把该机制直接放入黑盒搜索空间。
 
-## 运动后静息 FFT 重捕获
+## 运动后因果交接恢复（PM-CHR）
 
-运动后静息 FFT 重捕获是 v2 solver 的共享阶段机制，不属于 TraceRescue 私有逻辑。`dynamic_rest_bo`、`lite`、`trace_rescue` 都默认启用该机制，因此批量输出目录和文件名不再额外加入 `_post_motion_reacquire` 后缀；这既反映它是默认求解行为，也避免 Windows 长路径风险。
+PM-CHR 是 v2 solver 的共享默认机制，不属于某个算法预设。它在 `full` 求解、存在运动段且有自适应参考链路时启用：Final 先由 adaptive 承接，独立 reset FFT 只提供纯 PPG 对照，交接 reset 则使用 raw PPG 与切换前 Final 的因果弱先验产生目标。
 
-该机制把运动后的静息拆成两个阶段：
+运动后先用完整窗口、可靠性、PPG 周期性、峰竞争度和 raw top-1 连续性打开一次性启动门。交接候选稳定且 tracker 收敛后，目标才可消费；必要时受控重锚只迁移 tracker 状态，不直接改写 Final。正式目标较慢时可以有限因果暂接，但不允许目标外推。
 
-| 阶段 | `window_stage` | 主要目的 |
-| --- | --- | --- |
-| 运动后保护窗 | `post_motion_guard` | 保留 adaptive/final 路径，避免刚离开运动段时直接回到纯 FFT 导致心率陡降 |
-| 运动后静息 FFT 重捕获 | `post_motion_reacquire` | 当 adaptive/final 出现高心率漂移且 FFT 已回到合理主频时，切回 FFT 主导路径 |
+统一 switch adapter 是运动后唯一 Final 写入者：可消费目标与当前 Final 相差达到 `18 BPM` 时立即高差快速交接，小于 `18 BPM` 时连续 `2` 窗确认后交接。正式交接不可逆；后续目标身份变化达到 `18 BPM` 时保持上一已接受值，避免二次低频跳变。legacy dynamic guard 只保留审计，不能再消费独立 reset。
 
-默认保护窗长度是 `post_motion_guard_seconds=20.0`。该值只是当前 LYX 批次上的平衡点，不应视为生理常数；后续实验可继续调整或纳入搜索。保护窗结束后不会无条件切 FFT，因为离线 replay 证明“统一切 FFT”会救回 fuwo/tiaosheng 的高漂移失败样本，但会破坏 kaihe/bobi 中 FFT 低频误锁而 adaptive 正确的样本。
+HB24 与 YZY19 的 Lite 独立 BO `3×40` 中，平均运动后 60 s MAE 从 `7.869` 降至 `2.726 BPM`，E20 窗口从 `270` 降至 `43`，反向跳变为 0。当前仍需关注 HB `run2/xiezi2`、YZY `bobi1/run4`，以及 `time_bias` BO 与运动段误差的耦合；两个受试者也不足以证明跨人群泛化。
 
-当前触发条件是高漂移触发，而不是固定时间触发：
-
-1. adaptive/final HR 至少达到 `post_motion_reacquire_adaptive_min_bpm=115.0`。
-2. adaptive/final HR 比 FFT 高至少 `post_motion_reacquire_gap_bpm=25.0`。
-3. FFT 不能低于 `post_motion_reacquire_fft_min_bpm=55.0`，用于避免低频误锁。
-
-触发后，`used_adaptive` 从该窗口开始关闭，`final_hr_bpm` 回到 FFT 主导路径。动态后处理对 `post_motion_reacquire` 使用独立限幅参数：首个重捕获窗口允许最多 `70 BPM` 的快速下降，后续下降步长为 `10 BPM/window`，上升步长为 `2 BPM/window`。这套参数不同于普通恢复段和运动前静息段，避免坏的保护窗末端 adaptive 估计继续锚定运动后静息。
-
-报告输出中保留旧的 `window_kind` 字段用于兼容，同时新增 `window_stage` 暴露更细阶段：`pre_motion_rest`、`motion`、`post_motion_guard`、`post_motion_reacquire`、`rest`。JSON metadata 中的 `post_motion_reacquire.switch_idx` 记录实际进入重捕获的窗口索引；为 `null` 时表示该样本未触发切换。
+完整状态、参数、诊断字段和风险说明见 [v2 运动后因果交接恢复](v2-post-motion-resting-hr-policy.md)，决策记录见 [ADR-0030](adr/0030-adopt-post-motion-causal-handoff-recovery.md)。
 
 ## 当前结论
 

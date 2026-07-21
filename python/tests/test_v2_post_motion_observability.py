@@ -10,6 +10,7 @@ from ppg_hr.v2.post_motion_dual_reset_experiment import (
 from ppg_hr.v2.post_motion_dual_reset_runtime import (
     DualResetRuntimeWindow,
     FrozenDualResetConfig,
+    POST_MOTION_CAUSAL_HANDOFF_RECOVERY,
     apply_frozen_dual_reset,
 )
 from ppg_hr.v2.post_motion_observability_experiment import (
@@ -20,6 +21,17 @@ from ppg_hr.v2.post_motion_observability_experiment import (
 )
 from ppg_hr.v2.ppg_observability import measure_ppg_observability
 from ppg_hr.v2.raw_fft_candidates import RawFftCandidateFrame, extract_raw_fft_candidates
+
+
+def test_default_runtime_identifies_post_motion_causal_handoff_recovery() -> None:
+    result = apply_frozen_dual_reset(
+        (),
+        motion_end_s=0.0,
+        baseline_final_bpm=np.asarray([80.0]),
+    )
+
+    assert result.metadata["candidate"] == POST_MOTION_CAUSAL_HANDOFF_RECOVERY
+    assert result.metadata["policy_name"] == POST_MOTION_CAUSAL_HANDOFF_RECOVERY
 
 
 def _frame(*peaks: tuple[float, float]) -> RawFftCandidateFrame:

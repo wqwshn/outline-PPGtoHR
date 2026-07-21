@@ -54,16 +54,19 @@ class V2RunConfig:
     post_motion_dynamic_guard_gap_rescue_min_hits: int = 3
     post_motion_dynamic_guard_gap_rescue_fft_stable_windows: int = 3
     post_motion_dynamic_guard_gap_rescue_fft_stable_bpm: float = 6.0
-    post_motion_dual_reset_enable: bool = False
+    # PM-CHR production defaults. The legacy dynamic guard remains enabled above
+    # for compatibility diagnostics, but the single-writer handoff revokes its
+    # authority over Final whenever this policy is active.
+    post_motion_dual_reset_enable: bool = True
     post_motion_dual_reset_experiment_mode: Literal["a0", "a1", "a2"] = "a0"
     post_motion_dual_reset_handoff_only_switch: bool = False
-    post_motion_minimal_handoff_enable: bool = False
-    post_motion_minimal_provisional_enable: bool = False
+    post_motion_minimal_handoff_enable: bool = True
+    post_motion_minimal_provisional_enable: bool = True
     post_motion_minimal_relocation_mode: Literal[
         "none", "a2", "controlled_reanchor", "a2_reanchor"
-    ] = "none"
+    ] = "controlled_reanchor"
     post_motion_dual_reset_post_switch_hold_actual_final: bool = False
-    post_motion_dual_reset_gap_rescue_gap_bpm: float = 20.0
+    post_motion_dual_reset_gap_rescue_gap_bpm: float = 18.0
     post_motion_dual_reset_observability_periodicity_min: float = 0.5
     post_motion_dual_reset_observability_peak_competition_min: float = 1.3
     post_motion_dual_reset_observability_recovery_hits: int = 2

@@ -1,6 +1,6 @@
 # 拆分独立 reset FFT 与交接 reset FFT
 
-Status: accepted
+Status: accepted; incorporated into ADR-0030
 
 运动后重捕获不再由一条同时承担纯 FFT 对照和 Final 切换目标的 reset FFT 链路完成。系统维护共享 raw PPG 频谱证据但状态独立的两条 reset 链路：独立 reset FFT 不读取自适应或 Final 历史，作为主报告中的纯 PPG 对照；交接 reset FFT 允许在启动阶段使用切换前 Final 及其因果下降趋势作为衰减弱先验，并作为稳定交汇、持续高差回切和 Final 的唯一 reset 目标。连续纯 FFT 仅保留为离线诊断对照。
 

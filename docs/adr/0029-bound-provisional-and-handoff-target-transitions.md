@@ -1,6 +1,6 @@
 # 约束 provisional 与正式 handoff 的目标变化
 
-Status: accepted
+Status: accepted; incorporated into ADR-0030
 
 本文有限取代 ADR-0027 对 post-switch hold 的笼统排除：这里的保持由同一个 switch adapter 在目标身份不连续时执行，不是 legacy `post_switch_hold_actual_final`，也不增加 Final 写入者。
 

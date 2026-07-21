@@ -1,6 +1,6 @@
 # 拆分交接 reset 候选资格与切换目标就绪
 
-Status: accepted; diagnostic semantics retained and control consolidation proposed by ADR-0027
+Status: accepted; incorporated into ADR-0030
 
 交接 reset 不再使用单个 `qualified` 状态同时表示 raw 候选可信和公开 handoff 输出可被 Final 消费。系统分别维护“交接 reset 候选资格”和“交接 reset 切换目标就绪”：前者只认证 selected raw 候选轨迹的无参考 PPG 证据，后者还必须证明 handoff 输出已追上该候选、资格身份仍新鲜且当前窗口不是 held。候选身份远端变化或候选—输出明显分离时，旧的切换目标就绪必须撤销。
 

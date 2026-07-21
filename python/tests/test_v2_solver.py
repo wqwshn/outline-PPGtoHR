@@ -2110,6 +2110,9 @@ def test_handoff_only_switch_suppresses_legacy_dynamic_guard_consumption() -> No
         post_motion_dual_reset_enable=True,
         post_motion_dual_reset_handoff_only_switch=True,
         post_motion_dual_reset_experiment_mode="a2",
+        post_motion_minimal_handoff_enable=False,
+        post_motion_minimal_provisional_enable=False,
+        post_motion_minimal_relocation_mode="none",
     )
 
     mask, switch_idx, actual, suppressed = _apply_handoff_only_switch_boundary(
@@ -2165,6 +2168,9 @@ def test_dual_reset_runtime_config_uses_a2_loose_observability_platform() -> Non
         data_path=Path("sample.csv"),
         ref_path=Path("sample_ref.csv"),
         post_motion_dual_reset_experiment_mode="a2",
+        post_motion_minimal_handoff_enable=False,
+        post_motion_minimal_provisional_enable=False,
+        post_motion_minimal_relocation_mode="none",
         post_motion_dual_reset_observability_periodicity_min=0.4,
         post_motion_dual_reset_observability_peak_competition_min=1.1,
         post_motion_dual_reset_observability_recovery_hits=2,
