@@ -74,7 +74,30 @@ class RobustCenterEvidence:
 @dataclass(frozen=True)
 class RobustSelection:
     candidate_id: str
-    center_evidence: tuple[RobustCenterEvidence, ...]
+    primary_center_evidence: tuple[RobustCenterEvidence, ...]
+    diagnostic_center_evidence: tuple[
+        RobustCenterEvidence,
+        ...,
+    ]
+
+    @property
+    def center_evidence(self) -> tuple[
+        RobustCenterEvidence,
+        ...,
+    ]:
+        return (
+            *self.primary_center_evidence,
+            *self.diagnostic_center_evidence,
+        )
+
+
+def direct_neighbor_ids(
+    space: BOSearchSpace,
+    center_id: str,
+) -> tuple[str, ...]:
+    """返回一个中心在离散空间内的全部直接邻居。"""
+
+    return _direct_neighbor_ids(space, center_id)
 
 
 def build_robust_training_evidence(
@@ -265,9 +288,61 @@ def select_robust_center(
 ) -> RobustSelection:
     """只在搜索主带内、合格且实际完整复核的中心中固定排序。"""
 
-    complete: list[RobustCenterEvidence] = []
-    for center_id in bands.primary_candidate_ids:
-        if center_id not in plan.complete_primary_center_ids:
+    primary = _review_complete_centers(
+        space=space,
+        center_ids=bands.primary_candidate_ids,
+        allowed_complete_ids=frozenset(
+            plan.complete_primary_center_ids
+        ),
+        evidence_by_candidate_id=evidence_by_candidate_id,
+    )
+    diagnostic = _review_complete_centers(
+        space=space,
+        center_ids=bands.diagnostic_candidate_ids,
+        allowed_complete_ids=frozenset(
+            plan.complete_diagnostic_center_ids
+        ),
+        evidence_by_candidate_id=evidence_by_candidate_id,
+    )
+    if not primary:
+        raise RobustSelectionError(
+            "no_fully_reviewed_primary_center"
+        )
+
+    def final_key(
+        center: RobustCenterEvidence,
+    ) -> tuple[bool, float, int, float, float, str]:
+        return (
+            center.has_cliff,
+            -center.support_ratio,
+            -center.reviewed_neighbor_count,
+            center.worst_train_mae_bpm,
+            center.mean_train_mae_bpm,
+            center.candidate_id,
+        )
+
+    ordered_primary = tuple(sorted(primary, key=final_key))
+    ordered_diagnostic = tuple(sorted(diagnostic, key=final_key))
+    return RobustSelection(
+        candidate_id=ordered_primary[0].candidate_id,
+        primary_center_evidence=ordered_primary,
+        diagnostic_center_evidence=ordered_diagnostic,
+    )
+
+
+def _review_complete_centers(
+    *,
+    space: BOSearchSpace,
+    center_ids: tuple[str, ...],
+    allowed_complete_ids: frozenset[str],
+    evidence_by_candidate_id: Mapping[
+        str,
+        RobustTrainingEvidence,
+    ],
+) -> tuple[RobustCenterEvidence, ...]:
+    reviewed: list[RobustCenterEvidence] = []
+    for center_id in center_ids:
+        if center_id not in allowed_complete_ids:
             continue
         center = evidence_by_candidate_id.get(center_id)
         if center is None or not center.metric_valid or not center.eligible:
@@ -307,7 +382,7 @@ def select_robust_center(
                 for neighbor in typed_neighbors
             )
         )
-        complete.append(
+        reviewed.append(
             RobustCenterEvidence(
                 candidate_id=center_id,
                 direct_neighbor_ids=neighbor_ids,
@@ -323,27 +398,7 @@ def select_robust_center(
                 mean_train_mae_bpm=center.mean_train_mae_bpm,
             )
         )
-    if not complete:
-        raise RobustSelectionError(
-            "no_fully_reviewed_primary_center"
-        )
-    ordered = tuple(
-        sorted(
-            complete,
-            key=lambda center: (
-                center.has_cliff,
-                -center.support_ratio,
-                -center.reviewed_neighbor_count,
-                center.worst_train_mae_bpm,
-                center.mean_train_mae_bpm,
-                center.candidate_id,
-            ),
-        )
-    )
-    return RobustSelection(
-        candidate_id=ordered[0].candidate_id,
-        center_evidence=ordered,
-    )
+    return tuple(reviewed)
 
 
 def _direct_neighbor_ids(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -13,6 +14,8 @@ from ppg_hr.v2.bo_space_generalization import (
     SeedSearchBudget,
 )
 from ppg_hr.v2.phase2_kfold_robust import (
+    K1AuditIntegrityError,
+    K1DriverIdentityConflictError,
     K1FoldConfig,
     run_k1_fold_study,
 )
@@ -218,10 +221,31 @@ def test_k1_uses_worst_motion_constraints_and_frozen_neighborhood(
         row["stage"] for row in rows
     }
     assert {
+        "scene",
+        "fold",
+        "suggestion_index",
+        "unique_index",
         "constraint_train_0_bpm",
         "constraint_train_1_bpm",
+        "constraint_r1",
+        "constraint_r2",
+        "nonharm_delta_train_0_bpm",
+        "tpe_objective",
+        "cache_hit",
+        "cache_key",
         "worst_train_mae_bpm",
         "mean_train_mae_bpm",
+        "worst_train_mae",
+        "mean_train_mae",
+        "w_star_bpm",
+        "w_star",
+        "in_primary_band",
+        "in_diagnostic_band",
+        "center_candidate_id",
+        "is_direct_neighbor",
+        "support_neighbor",
+        "parameter_cliff",
+        "runtime_seconds",
     } <= set(rows[0])
     assert all(
         float(row["constraint_train_0_bpm"]) == pytest.approx(-1.0)
@@ -238,6 +262,17 @@ def test_k1_uses_worst_motion_constraints_and_frozen_neighborhood(
     neighborhood = receipt["evidence"]["neighborhood_evidence"]
     assert neighborhood["status"] == "complete"
     assert neighborhood["reviewed_neighbor_count"] > 0
+    neighborhood_hash_identity = next(
+        identity
+        for identity in receipt["evidence"]["study_identities"]
+        if "neighborhood:" in identity
+    )
+    assert len(neighborhood_hash_identity.rsplit(
+        "neighborhood:",
+        maxsplit=1,
+    )[1]) == 64
+    cache_before = result.cache_summary.read_text(encoding="utf-8")
+    history_before = result.candidate_history.read_bytes()
 
     repeat = run_k1_fold_study(
         config,
@@ -261,6 +296,27 @@ def test_k1_uses_worst_motion_constraints_and_frozen_neighborhood(
         result.selected_worst_train_mae_bpm
     )
     assert replay_calls == [result.selected_candidate_id]
+    assert repeat.cache_summary.read_text(encoding="utf-8") == cache_before
+    assert repeat.candidate_history.read_bytes() == history_before
+
+    with pytest.raises(K1DriverIdentityConflictError):
+        run_k1_fold_study(
+            replace(config, neighborhood_budget=29),
+            runtime=KFoldRuntime(
+                training_records=(
+                    _training_runtime(
+                        record=_record("xiezi-1", "a"),
+                        offset=0.0,
+                    ),
+                    _training_runtime(
+                        record=_record("xiezi-2", "b"),
+                        offset=0.5,
+                    ),
+                ),
+                heldout_record=heldout,
+                replay_heldout=replay,
+            ),
+        )
 
 
 def test_k1_fails_closed_before_heldout_when_all_candidates_unsafe(
@@ -321,3 +377,51 @@ def test_k1_fails_closed_before_heldout_when_all_candidates_unsafe(
     assert not config.output_dir.joinpath(
         "selection_receipt.json"
     ).exists()
+
+
+def test_k1_rejects_misaligned_neighborhood_audit_on_recovery(
+    tmp_path,
+) -> None:
+    config = _config(tmp_path)
+    heldout = _record("xiezi-3", "c")
+    runtime = KFoldRuntime(
+        training_records=(
+            _training_runtime(
+                record=_record("xiezi-1", "a"),
+                offset=0.0,
+            ),
+            _training_runtime(
+                record=_record("xiezi-2", "b"),
+                offset=0.5,
+            ),
+        ),
+        heldout_record=heldout,
+        replay_heldout=lambda _context: FrozenReplayOutcome.success(
+            metrics={"reliable_motion_final_mae_bpm": 4.5},
+            artifact_sha256s={
+                "hf": _sha("1"),
+                "reset_fft": _sha("2"),
+                "acc": _sha("3"),
+            },
+        ),
+    )
+    run_k1_fold_study(config, runtime=runtime)
+    for name in (
+        "selection_receipt.json",
+        "replay_receipt.json",
+        "k1_fold_manifest.json",
+    ):
+        config.output_dir.joinpath(name).unlink()
+    audit_path = config.output_dir.joinpath(
+        "trial_audit",
+        "neighborhood-000.json",
+    )
+    audit = json.loads(audit_path.read_text(encoding="utf-8"))
+    audit["candidate_id"] = "tampered-candidate"
+    audit_path.write_text(
+        json.dumps(audit, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(K1AuditIntegrityError):
+        run_k1_fold_study(config, runtime=runtime)

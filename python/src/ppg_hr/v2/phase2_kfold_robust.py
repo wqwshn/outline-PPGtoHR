@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from .bo_space_generalization import (
     METRIC_CONTRACT_VERSION,
     BOCandidate,
+    BOSearchSpace,
     CandidateSolveOutcome,
     ContentAddressedSolverCache,
     FormalMetricResult,
@@ -46,14 +50,19 @@ from .phase2_receipt import (
     SelectionEvidence,
     TrainingMetricEvidence,
     freeze_selection,
+    load_replay_receipt,
+    load_selection_receipt,
     replay_frozen_selection,
 )
 from .phase2_robust_selection import (
+    RobustBands,
     RobustNeighborhoodPlan,
+    RobustSelection,
     RobustSelectionError,
     RobustTrainingEvidence,
     build_robust_bands,
     build_robust_training_evidence,
+    direct_neighbor_ids,
     plan_robust_neighborhood,
     select_robust_center,
 )
@@ -62,6 +71,14 @@ from .types import V2RunConfig
 K1_FLOW_LABEL = "完整旧空间稳健选参流程"
 _OBJECTIVE_VERSION = "phase2_robust_worst_motion_v1"
 _CONSTRAINTS_VERSION = "phase2_nonharm_per_record_v1"
+
+
+class K1DriverIdentityConflictError(RuntimeError):
+    """输出目录中的折级配置身份与当前请求不同。"""
+
+
+class K1AuditIntegrityError(RuntimeError):
+    """不可变 K1 审计文件身份或内容不匹配。"""
 
 
 @dataclass(frozen=True)
@@ -154,6 +171,13 @@ def run_k1_fold_study(
         candidate.candidate_id: candidate
         for candidate in space.candidates
     }
+    driver_identity_path = output / "driver_identity.json"
+    driver_identity_hash = _freeze_driver_identity(
+        driver_identity_path,
+        config=config,
+        runtime=runtime,
+        space=space,
+    )
     cache = ContentAddressedSolverCache(output / "cache")
     trial_audit_dir = output / "trial_audit"
 
@@ -187,6 +211,7 @@ def run_k1_fold_study(
         RobustTrainingEvidence,
         tuple[CandidateSolveOutcome, CandidateSolveOutcome],
     ]:
+        started_at = perf_counter()
         outcomes: list[CandidateSolveOutcome] = []
         audit_outcomes: list[dict[str, Any]] = []
         for record_index, record in enumerate(
@@ -269,8 +294,14 @@ def run_k1_fold_study(
             {
                 **dict(logical_reference),
                 "candidate_id": candidate.candidate_id,
+                "candidate_identity": {
+                    "requested_params": candidate.requested_params,
+                    "actual_params": candidate.actual_params,
+                    "fixed_params": candidate.fixed_params,
+                },
                 "training_outcomes": audit_outcomes,
                 "robust_evidence": asdict(evidence),
+                "runtime_seconds": perf_counter() - started_at,
             },
         )
         return evidence, typed_outcomes
@@ -311,6 +342,8 @@ def run_k1_fold_study(
             "scene": config.scene,
             "fold": config.fold,
             "space_name": space.name,
+            "driver_identity_sha256": driver_identity_hash,
+            "neighborhood_budget": config.neighborhood_budget,
             "training_records": [
                 {
                     "identity": asdict(record.identity),
@@ -332,21 +365,44 @@ def run_k1_fold_study(
         budget=config.budget,
         parallel_lanes=config.parallel_lanes,
     )
+    completed = _load_completed_result(
+        output,
+        search_result=search_result,
+        expected_driver_identity_sha256=driver_identity_hash,
+    )
+    if completed is not None:
+        return completed
+
     search_evidence: dict[str, RobustTrainingEvidence] = {}
     for index, candidate_id in enumerate(
         search_result.global_candidate_ids
     ):
-        evidence, _ = evaluate_candidate(
-            candidates[candidate_id],
-            logical_reference={
-                "stage": "band_evidence",
-                "candidate_id": candidate_id,
-            },
-            audit_path=(
-                trial_audit_dir
-                / f"band-evidence-{index:03d}.json"
-            ),
+        audit_path = (
+            trial_audit_dir
+            / f"band-evidence-{index:03d}.json"
         )
+        if audit_path.is_file():
+            evidence = _training_evidence_from_audit(
+                read_json(audit_path),
+                expected_candidate=candidates[candidate_id],
+                expected_stage="band_evidence",
+                expected_index_name="band_index",
+                expected_index=index,
+                expected_record_ids=tuple(
+                    record.identity.record_id
+                    for record in runtime.training_records
+                ),
+            )
+        else:
+            evidence, _ = evaluate_candidate(
+                candidates[candidate_id],
+                logical_reference={
+                    "stage": "band_evidence",
+                    "band_index": index,
+                    "candidate_id": candidate_id,
+                },
+                audit_path=audit_path,
+            )
         search_evidence[candidate_id] = evidence
 
     history_path = output / "candidate_history.csv"
@@ -355,10 +411,14 @@ def run_k1_fold_study(
     except RobustSelectionError as exc:
         _write_candidate_history(
             history_path,
+            scene=config.scene,
+            fold=config.fold,
             search_result=search_result,
             candidates=candidates,
             trial_audit_dir=trial_audit_dir,
             neighborhood_rows=(),
+            space=space,
+            evidence_by_candidate_id=search_evidence,
         )
         _fail_closed(
             output,
@@ -385,7 +445,15 @@ def run_k1_fold_study(
         )
         if audit_path.is_file():
             evidence = _training_evidence_from_audit(
-                read_json(audit_path)
+                read_json(audit_path),
+                expected_candidate=candidates[candidate_id],
+                expected_stage="neighborhood",
+                expected_index_name="neighborhood_index",
+                expected_index=index,
+                expected_record_ids=tuple(
+                    record.identity.record_id
+                    for record in runtime.training_records
+                ),
             )
         else:
             evidence, _ = evaluate_candidate(
@@ -401,10 +469,14 @@ def run_k1_fold_study(
         neighborhood_rows.append(
             _history_row_from_audit(
                 arm="K1",
+                scene=config.scene,
+                fold=config.fold,
                 stage="neighborhood",
                 lane="neighborhood",
                 seed=-1,
                 trial_number=index,
+                suggestion_index=index + 1,
+                unique_index=index + 1,
                 candidate=candidates[candidate_id],
                 audit=read_json(audit_path),
                 is_duplicate=False,
@@ -420,10 +492,15 @@ def run_k1_fold_study(
     except RobustSelectionError as exc:
         _write_candidate_history(
             history_path,
+            scene=config.scene,
+            fold=config.fold,
             search_result=search_result,
             candidates=candidates,
             trial_audit_dir=trial_audit_dir,
             neighborhood_rows=neighborhood_rows,
+            space=space,
+            bands=bands,
+            evidence_by_candidate_id=all_evidence,
         )
         _fail_closed(
             output,
@@ -446,10 +523,16 @@ def run_k1_fold_study(
     selected_metrics = _formal_metrics(selected_outcomes)
     _write_candidate_history(
         history_path,
+        scene=config.scene,
+        fold=config.fold,
         search_result=search_result,
         candidates=candidates,
         trial_audit_dir=trial_audit_dir,
         neighborhood_rows=neighborhood_rows,
+        space=space,
+        bands=bands,
+        evidence_by_candidate_id=all_evidence,
+        selection=selection,
     )
     selected_center = next(
         center
@@ -464,6 +547,15 @@ def run_k1_fold_study(
             "bands": asdict(bands),
             "plan": asdict(plan),
             "selected_candidate_id": selection.candidate_id,
+            "primary_center_evidence": [
+                asdict(center)
+                for center in selection.primary_center_evidence
+            ],
+            "diagnostic_center_evidence": [
+                asdict(center)
+                for center
+                in selection.diagnostic_center_evidence
+            ],
             "center_evidence": [
                 asdict(center)
                 for center in selection.center_evidence
@@ -532,7 +624,8 @@ def run_k1_fold_study(
                 f"seed_42:{config_hash}",
                 f"seed_43:{config_hash}",
                 f"seed_44:{config_hash}",
-                f"fill:{config_hash}",
+                f"fill:{config_hash}|neighborhood:"
+                f"{file_sha256(neighborhood_path)}",
             ),
             budget=SearchBudgetEvidence(
                 lane_unique_budget=(
@@ -662,6 +755,7 @@ def run_k1_fold_study(
             "scene": config.scene,
             "fold": config.fold,
             "git_commit": config.git_commit,
+            "driver_identity_sha256": driver_identity_hash,
             "selected_candidate_id": (
                 selected_candidate.candidate_id
             ),
@@ -703,6 +797,201 @@ def run_k1_fold_study(
     )
 
 
+def _freeze_driver_identity(
+    path: Path,
+    *,
+    config: K1FoldConfig,
+    runtime: KFoldRuntime,
+    space: BOSearchSpace,
+) -> str:
+    identity = {
+        "arm": "K1",
+        "scene": config.scene,
+        "fold": config.fold,
+        "git_commit": config.git_commit,
+        "code_dirty": config.code_dirty,
+        "space_name": space.name,
+        "space_sha256": space_sha256(space.candidates),
+        "budget": asdict(config.budget),
+        "neighborhood_budget": config.neighborhood_budget,
+        "parallel_lanes": config.parallel_lanes,
+        "objective_version": _OBJECTIVE_VERSION,
+        "constraints_version": _CONSTRAINTS_VERSION,
+        "robust_rule_version": "phase2_robust_selection_v1",
+        "training_records": [
+            asdict(record.identity)
+            for record in runtime.training_records
+        ],
+        "heldout_record": asdict(runtime.heldout_record),
+    }
+    identity_sha256 = _mapping_sha256(identity)
+    payload = {
+        "schema_version": "phase2_k1_driver_identity_v1",
+        "identity_sha256": identity_sha256,
+        "identity": identity,
+    }
+    if path.is_file():
+        existing = read_json(path)
+        if existing != json_ready(payload):
+            raise K1DriverIdentityConflictError(
+                f"K1 输出目录已绑定其他折级配置: {path}"
+            )
+        return identity_sha256
+    atomic_write_json(path, payload)
+    return identity_sha256
+
+
+def _load_completed_result(
+    output: Path,
+    *,
+    search_result: SeedSearchResult,
+    expected_driver_identity_sha256: str,
+) -> K1FoldResult | None:
+    selection_path = output / "selection_receipt.json"
+    replay_path = output / "replay_receipt.json"
+    manifest_path = output / "k1_fold_manifest.json"
+    if not (
+        selection_path.is_file()
+        and replay_path.is_file()
+        and manifest_path.is_file()
+    ):
+        return None
+    required = {
+        "candidate_history": output / "candidate_history.csv",
+        "selected_params": output / "params.json",
+        "training_metrics": output / "training_metrics.csv",
+        "neighborhood_evidence": (
+            output / "neighborhood_evidence.json"
+        ),
+        "cache_summary": output / "cache_summary.json",
+        "failure_classification": (
+            output / "failure_classification.json"
+        ),
+    }
+    missing = [
+        name
+        for name, path in required.items()
+        if not path.is_file()
+    ]
+    if missing:
+        raise K1AuditIntegrityError(
+            "K1 终态产物不完整: " + ", ".join(missing)
+        )
+    selection = load_selection_receipt(selection_path)
+    replay = load_replay_receipt(replay_path)
+    manifest = read_json(manifest_path)
+    params = read_json(required["selected_params"])
+    neighborhood = read_json(
+        required["neighborhood_evidence"]
+    )
+    if (
+        manifest.get("driver_identity_sha256")
+        != expected_driver_identity_sha256
+        or manifest.get("selection_hash")
+        != selection.selection_hash
+        or replay.selection_hash != selection.selection_hash
+    ):
+        raise K1AuditIntegrityError(
+            "K1 终态回执、manifest 或 driver 身份不一致"
+        )
+    if (
+        selection.evidence.candidate_history_sha256
+        != file_sha256(required["candidate_history"])
+    ):
+        raise K1AuditIntegrityError(
+            "K1 终态 candidate_history 哈希不匹配"
+        )
+    neighborhood_identity = (
+        "neighborhood:"
+        f"{file_sha256(required['neighborhood_evidence'])}"
+    )
+    if not any(
+        neighborhood_identity in identity
+        for identity in selection.evidence.study_identities
+    ):
+        raise K1AuditIntegrityError(
+            "K1 选择回执未绑定完整邻域证据哈希"
+        )
+    selected_candidate_id = str(
+        params.get("candidate_id", "")
+    )
+    if (
+        selected_candidate_id
+        != selection.evidence.selected_candidate_id
+    ):
+        raise K1AuditIntegrityError(
+            "K1 params 与选择回执候选不一致"
+        )
+    plot_values = manifest.get("training_plots")
+    if (
+        not isinstance(plot_values, list)
+        or len(plot_values) != 2
+    ):
+        raise K1AuditIntegrityError(
+            "K1 manifest 缺少两张训练经典图"
+        )
+    training_plots = (
+        Path(str(plot_values[0])),
+        Path(str(plot_values[1])),
+    )
+    if any(not path.is_file() for path in training_plots):
+        raise K1AuditIntegrityError("K1 训练经典图不存在")
+    plan = neighborhood.get("plan")
+    if not isinstance(plan, Mapping):
+        raise K1AuditIntegrityError(
+            "K1 邻域证据缺少 plan"
+        )
+    neighborhood_candidates = plan.get(
+        "candidate_ids_to_evaluate"
+    )
+    if not isinstance(neighborhood_candidates, list):
+        raise K1AuditIntegrityError(
+            "K1 邻域候选列表无效"
+        )
+    return K1FoldResult(
+        arm="K1",
+        flow_label=K1_FLOW_LABEL,
+        selected_candidate_id=selected_candidate_id,
+        selected_worst_train_mae_bpm=float(
+            params["worst_train_mae_bpm"]
+        ),
+        selected_mean_train_mae_bpm=float(
+            params["mean_train_mae_bpm"]
+        ),
+        candidate_history=required["candidate_history"],
+        selected_params=required["selected_params"],
+        training_metrics=required["training_metrics"],
+        neighborhood_evidence=required[
+            "neighborhood_evidence"
+        ],
+        selection_receipt=selection_path,
+        replay_receipt=replay_path,
+        replay_status=replay.status,
+        training_plots=training_plots,
+        cache_summary=required["cache_summary"],
+        failure_classification=required[
+            "failure_classification"
+        ],
+        manifest=manifest_path,
+        neighborhood_candidate_count=len(
+            neighborhood_candidates
+        ),
+        search_result=search_result,
+    )
+
+
+def _mapping_sha256(payload: Mapping[str, Any]) -> str:
+    return hashlib.sha256(
+        json.dumps(
+            json_ready(payload),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    ).hexdigest()
+
+
 def _formal_metrics(
     outcomes: tuple[
         CandidateSolveOutcome,
@@ -720,11 +1009,54 @@ def _formal_metrics(
 
 def _training_evidence_from_audit(
     audit: Mapping[str, Any],
+    *,
+    expected_candidate: BOCandidate,
+    expected_stage: str,
+    expected_index_name: str,
+    expected_index: int,
+    expected_record_ids: tuple[str, ...],
 ) -> RobustTrainingEvidence:
+    expected_candidate_id = expected_candidate.candidate_id
+    if (
+        audit.get("candidate_id") != expected_candidate_id
+        or audit.get("stage") != expected_stage
+        or audit.get(expected_index_name) != expected_index
+    ):
+        raise K1AuditIntegrityError(
+            "K1 审计的候选、stage 或索引身份不匹配"
+        )
+    expected_identity = json_ready(
+        {
+            "requested_params": (
+                expected_candidate.requested_params
+            ),
+            "actual_params": expected_candidate.actual_params,
+            "fixed_params": expected_candidate.fixed_params,
+        }
+    )
+    if audit.get("candidate_identity") != expected_identity:
+        raise K1AuditIntegrityError(
+            "K1 审计的候选参数身份不匹配"
+        )
+    outcomes = audit.get("training_outcomes")
+    if not isinstance(outcomes, list) or tuple(
+        str(outcome.get("record_id", ""))
+        for outcome in outcomes
+        if isinstance(outcome, Mapping)
+    ) != expected_record_ids:
+        raise K1AuditIntegrityError(
+            "K1 审计的训练记录身份不匹配"
+        )
     payload = audit.get("robust_evidence")
     if not isinstance(payload, Mapping):
-        raise ValueError("K1 邻域审计缺少 robust_evidence")
+        raise K1AuditIntegrityError(
+            "K1 审计缺少 robust_evidence"
+        )
     candidate_id = str(payload.get("candidate_id", ""))
+    if candidate_id != expected_candidate_id:
+        raise K1AuditIntegrityError(
+            "K1 审计内外 candidate_id 不一致"
+        )
     if not bool(payload.get("metric_valid")):
         return build_robust_training_evidence(
             candidate_id=candidate_id,
@@ -740,7 +1072,9 @@ def _training_evidence_from_audit(
         or not isinstance(resets, list)
         or len(resets) != 2
     ):
-        raise ValueError("K1 邻域审计的训练指标不是两记录结构")
+        raise K1AuditIntegrityError(
+            "K1 审计的训练指标不是两记录结构"
+        )
     return build_robust_training_evidence(
         candidate_id=candidate_id,
         final_motion_mae_bpm=(
@@ -757,10 +1091,19 @@ def _training_evidence_from_audit(
 def _write_candidate_history(
     path: Path,
     *,
+    scene: str,
+    fold: int,
     search_result: SeedSearchResult,
     candidates: Mapping[str, BOCandidate],
     trial_audit_dir: Path,
     neighborhood_rows: Sequence[Mapping[str, Any]],
+    space: BOSearchSpace,
+    bands: RobustBands | None = None,
+    evidence_by_candidate_id: Mapping[
+        str,
+        RobustTrainingEvidence,
+    ] | None = None,
+    selection: RobustSelection | None = None,
 ) -> None:
     rows: list[dict[str, Any]] = []
     for trial in all_search_rows(search_result):
@@ -776,10 +1119,14 @@ def _write_candidate_history(
         rows.append(
             _history_row_from_audit(
                 arm="K1",
+                scene=scene,
+                fold=fold,
                 stage=trial.stage,
                 lane=trial.lane,
                 seed=trial.seed,
                 trial_number=trial.trial_number,
+                suggestion_index=trial.suggestion_index,
+                unique_index=trial.unique_index,
                 candidate=candidates[trial.candidate_id],
                 audit=read_json(
                     trial_audit_path(
@@ -791,16 +1138,29 @@ def _write_candidate_history(
             )
         )
     rows.extend(dict(row) for row in neighborhood_rows)
+    _annotate_robust_history(
+        rows,
+        space=space,
+        bands=bands,
+        evidence_by_candidate_id=(
+            evidence_by_candidate_id or {}
+        ),
+        selection=selection,
+    )
     write_csv(path, rows)
 
 
 def _history_row_from_audit(
     *,
     arm: str,
+    scene: str,
+    fold: int,
     stage: str,
     lane: str,
     seed: int,
     trial_number: int,
+    suggestion_index: int,
+    unique_index: int | None,
     candidate: BOCandidate,
     audit: Mapping[str, Any],
     is_duplicate: bool,
@@ -808,32 +1168,55 @@ def _history_row_from_audit(
     evidence = audit["robust_evidence"]
     row: dict[str, Any] = {
         "arm": arm,
+        "scene": scene,
+        "fold": fold,
         "stage": stage,
         "lane": lane,
         "seed": seed,
         "trial_number": trial_number,
+        "suggestion_index": suggestion_index,
+        "unique_index": unique_index,
         "candidate_id": candidate.candidate_id,
         "is_duplicate": is_duplicate,
         "objective": evidence["objective_bpm"],
+        "tpe_objective": evidence["objective_bpm"],
         "metric_valid": evidence["metric_valid"],
         "eligible": evidence["eligible"],
         "failure_reason": evidence["failure_reason"],
         "worst_train_mae_bpm": (
             evidence["worst_train_mae_bpm"]
         ),
+        "worst_train_mae": evidence["worst_train_mae_bpm"],
         "mean_train_mae_bpm": (
             evidence["mean_train_mae_bpm"]
         ),
+        "mean_train_mae": evidence["mean_train_mae_bpm"],
         "constraint_train_0_bpm": (
             evidence["constraints_bpm"][0]
         ),
+        "constraint_r1": evidence["constraints_bpm"][0],
         "constraint_train_1_bpm": (
             evidence["constraints_bpm"][1]
         ),
+        "constraint_r2": evidence["constraints_bpm"][1],
+        "nonharm_delta_train_0_bpm": (
+            evidence["constraints_bpm"][0] + 2.0
+        ),
+        "nonharm_delta_train_1_bpm": (
+            evidence["constraints_bpm"][1] + 2.0
+        ),
+        "runtime_seconds": audit.get("runtime_seconds", ""),
     }
-    for record_index, outcome in enumerate(
-        audit["training_outcomes"]
-    ):
+    training_outcomes = audit["training_outcomes"]
+    row["cache_hit"] = all(
+        bool(outcome["cache_hit"])
+        for outcome in training_outcomes
+    )
+    row["cache_key"] = "|".join(
+        str(outcome["cache_key"])
+        for outcome in training_outcomes
+    )
+    for record_index, outcome in enumerate(training_outcomes):
         row[f"train_{record_index}_record_id"] = outcome[
             "record_id"
         ]
@@ -865,6 +1248,117 @@ def _history_row_from_audit(
         row[f"actual_{key}"] = candidate.actual_params.get(key)
         row[f"fixed_{key}"] = candidate.fixed_params.get(key)
     return row
+
+
+def _annotate_robust_history(
+    rows: Sequence[dict[str, Any]],
+    *,
+    space: BOSearchSpace,
+    bands: RobustBands | None,
+    evidence_by_candidate_id: Mapping[
+        str,
+        RobustTrainingEvidence,
+    ],
+    selection: RobustSelection | None,
+) -> None:
+    selected_center_evidence = {
+        center.candidate_id: center
+        for center in (
+            selection.center_evidence
+            if selection is not None
+            else ()
+        )
+    }
+    primary_ids = (
+        frozenset(bands.primary_candidate_ids)
+        if bands is not None
+        else frozenset()
+    )
+    diagnostic_ids = (
+        frozenset(bands.diagnostic_candidate_ids)
+        if bands is not None
+        else frozenset()
+    )
+    center_ids = tuple(
+        (
+            *bands.primary_candidate_ids,
+            *bands.diagnostic_candidate_ids,
+        )
+        if bands is not None
+        else ()
+    )
+    neighbor_sets = {
+        center_id: frozenset(
+            direct_neighbor_ids(space, center_id)
+        )
+        for center_id in center_ids
+    }
+    for row in rows:
+        candidate_id = str(row["candidate_id"])
+        related_centers = tuple(
+            center_id
+            for center_id in center_ids
+            if candidate_id in neighbor_sets[center_id]
+        )
+        candidate_evidence = evidence_by_candidate_id.get(
+            candidate_id
+        )
+        supporting_centers: list[str] = []
+        cliff_centers: list[str] = []
+        for center_id in related_centers:
+            center = evidence_by_candidate_id.get(center_id)
+            if center is None or candidate_evidence is None:
+                continue
+            if (
+                candidate_evidence.metric_valid
+                and candidate_evidence.eligible
+                and candidate_evidence.worst_train_mae_bpm
+                <= center.worst_train_mae_bpm + 1.0
+            ):
+                supporting_centers.append(center_id)
+            if (
+                center.worst_train_mae_bpm <= 5.0
+                and candidate_evidence.metric_valid
+                and candidate_evidence.worst_train_mae_bpm
+                >= 10.0
+            ):
+                cliff_centers.append(center_id)
+        own_center = selected_center_evidence.get(candidate_id)
+        row.update(
+            {
+                "w_star_bpm": (
+                    bands.w_star_bpm
+                    if bands is not None
+                    else ""
+                ),
+                "w_star": (
+                    bands.w_star_bpm
+                    if bands is not None
+                    else ""
+                ),
+                "in_primary_band": candidate_id in primary_ids,
+                "in_diagnostic_band": (
+                    candidate_id in diagnostic_ids
+                ),
+                "center_candidate_id": (
+                    candidate_id
+                    if candidate_id
+                    in primary_ids | diagnostic_ids
+                    else "|".join(related_centers)
+                ),
+                "is_direct_neighbor": bool(related_centers),
+                "support_neighbor": bool(supporting_centers),
+                "support_center_ids": "|".join(
+                    supporting_centers
+                ),
+                "parameter_cliff": (
+                    own_center.has_cliff
+                    if own_center is not None
+                    else bool(cliff_centers)
+                ),
+                "cliff_center_ids": "|".join(cliff_centers),
+            }
+        )
 
 
 def _fail_closed(

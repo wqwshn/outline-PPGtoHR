@@ -447,6 +447,14 @@ def load_selection_receipt(path: Path | str) -> SelectionReceipt:
     )
 
 
+def load_replay_receipt(
+    path: Path | str,
+) -> FrozenReplayReceipt:
+    """读取并完整校验一个终态冻结回放回执。"""
+
+    return _load_replay_receipt(Path(path))
+
+
 def replay_frozen_selection(
     *,
     receipt_path: Path | str,

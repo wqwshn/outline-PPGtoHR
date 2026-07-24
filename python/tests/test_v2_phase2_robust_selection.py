@@ -179,6 +179,49 @@ def test_selection_uses_complete_neighbors_and_never_promotes_new_low() -> None:
     assert center_by_id["c-0-0"].has_cliff is False
 
 
+def test_complete_diagnostic_centers_keep_platform_shape_evidence() -> None:
+    space = _space()
+    search_evidence = {
+        "c-0-0": _evidence("c-0-0", worst=4.0),
+        "c-2-2": _evidence("c-2-2", worst=4.4),
+    }
+    bands = build_robust_bands(search_evidence.values())
+    plan = plan_robust_neighborhood(
+        space=space,
+        bands=bands,
+        reviewed_candidate_ids=frozenset(search_evidence),
+        max_new_candidates=10,
+    )
+    reviewed = dict(search_evidence)
+    reviewed.update(
+        _evidence_map(
+            [
+                ("c-0-1", 4.2),
+                ("c-1-0", 4.3),
+                ("c-1-2", 4.5),
+                ("c-2-1", 4.6),
+            ]
+        )
+    )
+
+    selection = select_robust_center(
+        space=space,
+        bands=bands,
+        plan=plan,
+        evidence_by_candidate_id=reviewed,
+    )
+
+    assert selection.candidate_id == "c-0-0"
+    assert [
+        center.candidate_id
+        for center in selection.diagnostic_center_evidence
+    ] == ["c-2-2"]
+    assert (
+        selection.diagnostic_center_evidence[0].support_ratio
+        == 1.0
+    )
+
+
 def test_no_safe_or_no_fully_reviewed_center_fails_closed() -> None:
     with pytest.raises(
         RobustSelectionError,
