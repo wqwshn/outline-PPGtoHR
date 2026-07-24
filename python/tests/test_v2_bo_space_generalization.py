@@ -466,6 +466,31 @@ def test_solver_cache_converts_metric_contract_error_to_completed_invalid(
     assert cache.audit_summary()["infrastructure_failure_count"] == 0
 
 
+def test_solver_cache_classifies_unknown_filter_as_method_identity_mismatch(
+    tmp_path,
+) -> None:
+    cache = ContentAddressedSolverCache(tmp_path / "cache")
+    identity = _cache_identity()
+
+    lookup = cache.get_or_solve(
+        identity,
+        lambda: (_ for _ in ()).throw(
+            FormalMetricContractError(
+                "invalid_adaptive_filter_identity",
+                "'bogus'",
+            )
+        ),
+    )
+
+    assert lookup.outcome.status == "invalid"
+    assert lookup.outcome.failure_reason == "method_identity_mismatch"
+
+
 def test_invalid_candidate_reason_must_use_frozen_failure_vocabulary() -> None:
     with pytest.raises(ValueError, match="failure_reason"):
         CandidateSolveOutcome.invalid("anything_goes")
+    with pytest.raises(ValueError, match="failure_reason"):
+        CandidateSolveOutcome(
+            status="invalid",
+            failure_reason="anything_goes",
+        )

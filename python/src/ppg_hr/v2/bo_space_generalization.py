@@ -42,6 +42,17 @@ _CANDIDATE_INVALID_FAILURE_REASONS = frozenset(
         "nonfinite_solver_output",
     }
 )
+_METHOD_IDENTITY_CONTRACT_REASONS = frozenset(
+    {
+        "invalid_method_identity",
+        "duplicate_method_identity",
+        "missing_expected_method_identity",
+        "invalid_expected_method_identity",
+        "missing_final_method_identity",
+        "missing_reset_fft_method_identity",
+        "invalid_adaptive_filter_identity",
+    }
+)
 
 _LEGACY_FULL_OPTIONS: tuple[tuple[str, tuple[int | float, ...]], ...] = (
     ("fs_target", (25, 50, 100)),
@@ -160,6 +171,25 @@ class CandidateSolveOutcome:
     formal_metrics: FormalMetricResult | None = None
     failure_reason: str = ""
     diagnostics: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.status == "valid":
+            if self.solver_result is None or self.formal_metrics is None:
+                raise ValueError(
+                    "valid 候选必须同时包含 solver_result 和 formal_metrics"
+                )
+            if self.failure_reason:
+                raise ValueError("valid 候选不能包含 failure_reason")
+            return
+        if self.status != "invalid":
+            raise ValueError(f"未知 CandidateSolveOutcome 状态: {self.status!r}")
+        if self.failure_reason not in _CANDIDATE_INVALID_FAILURE_REASONS:
+            raise ValueError(
+                "failure_reason 必须使用冻结候选失败分类，"
+                f"实际为 {self.failure_reason!r}"
+            )
+        if self.formal_metrics is not None:
+            raise ValueError("invalid 候选不能包含 formal_metrics")
 
     @classmethod
     def valid(
@@ -363,11 +393,7 @@ class ContentAddressedSolverCache:
         try:
             outcome = solve()
         except FormalMetricContractError as exc:
-            failure_reason = (
-                "method_identity_mismatch"
-                if "method" in exc.reason
-                else "metric_window_contract_failed"
-            )
+            failure_reason = _formal_metric_failure_category(exc.reason)
             outcome = CandidateSolveOutcome.invalid(
                 failure_reason,
                 diagnostics={
@@ -1009,10 +1035,6 @@ def _write_cached_outcome(
     entry: Path,
     outcome: CandidateSolveOutcome,
 ) -> None:
-    if outcome.status == "valid" and (
-        outcome.solver_result is None or outcome.formal_metrics is None
-    ):
-        raise ValueError("valid 候选必须同时包含 solver_result 和 formal_metrics")
     solver_payload: dict[str, Any] | None = None
     if outcome.solver_result is not None:
         solver_payload = {
@@ -1115,3 +1137,13 @@ def _json_ready(value: Any) -> Any:
     if value is None or isinstance(value, str | int | float | bool):
         return value
     raise TypeError(f"值无法进入缓存 JSON: {type(value).__name__}")
+
+
+def _formal_metric_failure_category(reason: str) -> str:
+    if (
+        reason in _METHOD_IDENTITY_CONTRACT_REASONS
+        or "method" in reason
+        or "adaptive_filter" in reason
+    ):
+        return "method_identity_mismatch"
+    return "metric_window_contract_failed"
