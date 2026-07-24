@@ -30,6 +30,7 @@ matplotlib.use("Agg", force=True)
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np
 import pandas as pd
+from matplotlib.lines import Line2D
 
 from .post_motion_reset_fft_reacquire import load_lite_report_config
 from .reference_groups import method_label
@@ -1120,14 +1121,16 @@ def _representative_selections(
     if not pivot.empty:
         difference = np.abs(pivot["independent_bo"] - pivot["shared_holdout"])
         sample, duration = difference.idxmax()
-        row = candidates[
-            (candidates["sample"] == sample)
-            & (candidates["smooth_duration_s"] == duration)
-        ].iloc[0]
-        add("anchor_disagreement", row)
+        for anchor_type in ANCHOR_TYPES:
+            row = candidates[
+                (candidates["sample"] == sample)
+                & (candidates["smooth_duration_s"] == duration)
+                & (candidates["anchor_type"] == anchor_type)
+            ].iloc[0]
+            add("anchor_disagreement", row)
     absolute = np.abs(candidates["delta_motion_final_mae_vs_1s_bpm"])
     add("near_neutral", candidates.loc[absolute.idxmin()])
-    return rows[:4]
+    return rows[:5]
 
 
 def _render_timeseries_grid(
@@ -1195,12 +1198,35 @@ def _render_timeseries_grid(
         ax.set_xlabel("Aligned time (s)")
     for ax in axes[:, 0]:
         ax.set_ylabel("Heart rate (BPM)")
-    handles, legend_labels = axes.flat[0].get_legend_handles_labels()
+    legend_handles = [
+        Line2D([0], [0], color=REFERENCE_COLOR, linewidth=1.4, label="Reference HR"),
+        Line2D(
+            [0],
+            [0],
+            color=BASELINE_COLOR,
+            linewidth=0.9,
+            linestyle="--",
+            label="reset FFT",
+        ),
+        Line2D(
+            [0],
+            [0],
+            color=CONTROL_COLOR,
+            linewidth=1.1,
+            label="Final (1 s control)",
+        ),
+        Line2D(
+            [0],
+            [0],
+            color=FINAL_COLOR,
+            linewidth=1.1,
+            label="Final (>1 s candidates)",
+        ),
+    ]
     fig.legend(
-        handles,
-        legend_labels,
+        handles=legend_handles,
         frameon=False,
-        ncol=3,
+        ncol=4,
         loc="upper center",
         bbox_to_anchor=(0.5, 0.945),
     )
@@ -1369,6 +1395,10 @@ def _write_review_report(
             "## 限制",
             "",
             "- 24 条记录均来自 LYX，同场景记录相关，不将其当作独立人群重复。",
+            "- 配对单位是同一条记录、同一套参数锚点；橙色粗线为 24 条记录中位数，"
+            "不报告把这些相关记录当作独立重复的显著性检验。",
+            "- 指标定义：在 time_bias=5 s 后与参考心率对齐，严格运动段仅使用"
+            " HR.is_motion>=0.5 的窗口；1 s 是无跨窗口平滑对照。",
             "- 本实验使用全部 LYX 数据做机制开发，不提供未见个体泛化证据。",
             "- 过渡强度和位置指标是辅助可解释性证据，不能替代逐条心率曲线审阅。",
         ]
