@@ -233,6 +233,13 @@ class SelectionEvidence:
         }
         if len(record_ids) != 3:
             raise ValueError("两条训练记录与留出记录必须互不相同")
+        data_hashes = {
+            self.training_records[0].data_sha256,
+            self.training_records[1].data_sha256,
+            self.heldout_record.data_sha256,
+        }
+        if len(data_hashes) != 3:
+            raise ValueError("训练记录与留出记录不得指向相同数据内容")
         _require_sha256(self.space_sha256, "space_sha256")
         if (
             type(self.study_identities) is not tuple
@@ -279,17 +286,9 @@ class ReplayIdentity:
     """测试回放必须精确匹配选择回执中预先冻结的留出记录。"""
 
     heldout_record: RecordIdentity
-    replay_config: Mapping[str, Any]
     reference_groups_order: tuple[str, ...] = ("HF", "ACC")
 
     def __post_init__(self) -> None:
-        if not isinstance(self.replay_config, Mapping) or not self.replay_config:
-            raise ValueError("replay_config 必须是非空对象")
-        object.__setattr__(
-            self,
-            "replay_config",
-            _freeze_json(self.replay_config),
-        )
         if self.reference_groups_order != ("HF", "ACC"):
             raise ValueError("冻结回放 reference group 顺序固定为 HF/ACC")
 
@@ -304,7 +303,6 @@ class FrozenReplayContext:
     actual_params: Mapping[str, Any]
     fixed_params: Mapping[str, Any]
     heldout_record: RecordIdentity
-    replay_config: Mapping[str, Any]
     reference_groups_order: tuple[str, ...]
 
     def __post_init__(self) -> None:
@@ -312,7 +310,6 @@ class FrozenReplayContext:
             "requested_params",
             "actual_params",
             "fixed_params",
-            "replay_config",
         ):
             object.__setattr__(self, name, _freeze_json(getattr(self, name)))
 
@@ -327,14 +324,12 @@ class FrozenReplayOutcome:
     def __post_init__(self) -> None:
         if self.status not in ("success", "invalid"):
             raise ValueError("回放回调只能返回 success 或 invalid")
-        if self.status == "success" and self.failure_reason:
-            raise ValueError("成功回放不得携带 failure_reason")
-        if self.status == "invalid" and not self.failure_reason:
-            raise ValueError("无效回放必须携带 failure_reason")
-        _require_finite_numbers(self.metrics)
-        for name, value in self.artifact_sha256s.items():
-            _require_nonempty_string(name, "artifact_name")
-            _require_sha256(value, f"artifact_sha256s[{name}]")
+        _validate_terminal_payload(
+            status=self.status,
+            metrics=self.metrics,
+            artifact_sha256s=self.artifact_sha256s,
+            failure_reason=self.failure_reason,
+        )
         object.__setattr__(self, "metrics", _freeze_json(self.metrics))
         object.__setattr__(
             self,
@@ -378,6 +373,12 @@ class FrozenReplayReceipt:
     failure_reason: str
 
     def __post_init__(self) -> None:
+        _validate_terminal_payload(
+            status=self.status,
+            metrics=self.metrics,
+            artifact_sha256s=self.artifact_sha256s,
+            failure_reason=self.failure_reason,
+        )
         object.__setattr__(self, "metrics", _freeze_json(self.metrics))
         object.__setattr__(
             self,
@@ -510,7 +511,6 @@ def _replay_frozen_selection_locked(
         actual_params=evidence.selected_actual_params,
         fixed_params=evidence.selected_fixed_params,
         heldout_record=evidence.heldout_record,
-        replay_config=replay_identity.replay_config,
         reference_groups_order=replay_identity.reference_groups_order,
     )
     try:
@@ -555,15 +555,20 @@ def _build_replay_receipt(
 ) -> FrozenReplayReceipt:
     if status not in ("success", "invalid", "infrastructure_failed"):
         raise ReceiptIntegrityError("未知回放回执状态")
-    if status == "success" and failure_reason:
-        raise ReceiptIntegrityError("成功回放不得携带 failure_reason")
-    if status != "success" and not failure_reason:
-        raise ReceiptIntegrityError("失败回放必须携带 failure_reason")
     if (
         status == "infrastructure_failed"
         and failure_reason not in _INFRASTRUCTURE_FAILURE_REASONS
     ):
         raise ReceiptIntegrityError("回放回执含未知基础设施失败原因")
+    try:
+        _validate_terminal_payload(
+            status=status,
+            metrics=metrics,
+            artifact_sha256s=artifact_sha256s,
+            failure_reason=failure_reason,
+        )
+    except ValueError as exc:
+        raise ReceiptIntegrityError("回放终态载荷不一致") from exc
     content = {
         **_replay_identity_payload(
             selection_hash=selection_hash,
@@ -959,7 +964,6 @@ def _replay_identity_only_payload(
         "heldout_record": _record_identity_payload(
             identity.heldout_record
         ),
-        "replay_config": _json_ready(identity.replay_config),
         "reference_groups_order": list(identity.reference_groups_order),
     }
 
@@ -969,14 +973,13 @@ def _replay_identity_from_payload(
 ) -> ReplayIdentity:
     _require_exact_keys(
         payload,
-        {"heldout_record", "replay_config", "reference_groups_order"},
+        {"heldout_record", "reference_groups_order"},
         "回放身份",
     )
     return ReplayIdentity(
         heldout_record=_record_identity_from_payload(
             _require_mapping(payload, "heldout_record")
         ),
-        replay_config=_require_mapping(payload, "replay_config"),
         reference_groups_order=_two_string_tuple(
             payload,
             "reference_groups_order",
@@ -1037,6 +1040,31 @@ def _require_finite_numbers(value: Any) -> None:
         return
     if isinstance(value, float) and not math.isfinite(value):
         raise ValueError("回执数值必须有限")
+
+
+def _validate_terminal_payload(
+    *,
+    status: ReplayReceiptStatus,
+    metrics: Mapping[str, Any],
+    artifact_sha256s: Mapping[str, str],
+    failure_reason: str,
+) -> None:
+    if status == "success":
+        if failure_reason:
+            raise ValueError("成功回放不得携带 failure_reason")
+        if not metrics:
+            raise ValueError("成功回放必须携带指标")
+        if set(artifact_sha256s) != {"hf", "reset_fft", "acc"}:
+            raise ValueError("成功回放必须包含 HF/reset FFT/ACC 产物")
+    else:
+        if not failure_reason:
+            raise ValueError("失败回放必须携带 failure_reason")
+        if metrics or artifact_sha256s:
+            raise ValueError("失败回放不得携带指标或产物")
+    _require_finite_numbers(metrics)
+    for name, value in artifact_sha256s.items():
+        _require_nonempty_string(name, "artifact_name")
+        _require_sha256(value, f"artifact_sha256s[{name}]")
 
 
 def _freeze_json(value: Any) -> Any:

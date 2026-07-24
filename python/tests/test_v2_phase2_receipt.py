@@ -92,7 +92,6 @@ def _selection_evidence() -> SelectionEvidence:
 def _replay_identity() -> ReplayIdentity:
     return ReplayIdentity(
         heldout_record=_selection_evidence().heldout_record,
-        replay_config={"analysis_scope": "full"},
         reference_groups_order=("HF", "ACC"),
     )
 
@@ -131,6 +130,9 @@ def test_training_selection_api_has_no_test_result_seam() -> None:
     assert "test_metrics" not in evidence_fields
     assert "test_result" not in evidence_fields
     assert not any(name.startswith("test") for name in freeze_parameters)
+    assert "replay_config" not in {
+        field.name for field in fields(ReplayIdentity)
+    }
 
 
 def test_selection_receipt_rejects_overwrite_and_tampering(tmp_path) -> None:
@@ -188,6 +190,17 @@ def test_selection_evidence_mappings_are_deeply_immutable() -> None:
 
     with pytest.raises(TypeError):
         evidence.selected_actual_params["fs_target"] = 100
+
+
+def test_selection_rejects_heldout_alias_with_different_id_same_data() -> None:
+    aliased = replace(
+        _selection_evidence().training_records[0],
+        record_id="different-name",
+        data_path="D:/alias/same-content.csv",
+    )
+
+    with pytest.raises(ValueError, match="相同数据内容"):
+        replace(_selection_evidence(), heldout_record=aliased)
 
 
 def test_concurrent_selection_freeze_keeps_one_complete_immutable_receipt(
@@ -360,6 +373,14 @@ def test_successful_or_declared_invalid_replay_is_immutable(tmp_path) -> None:
         replay=lambda _: pytest.fail("invalid replay is immutable"),
     )
     assert same_invalid == invalid
+
+    with pytest.raises(ValueError, match="失败回放不得"):
+        FrozenReplayOutcome(
+            status="invalid",
+            metrics={"hf_final_mae_bpm": 5.0},
+            artifact_sha256s={},
+            failure_reason="metric_contract_failed",
+        )
 
 
 def test_concurrent_replay_allows_only_one_solver_execution(tmp_path) -> None:
