@@ -18,6 +18,7 @@ from ppg_hr.v2.bo_space_generalization import (
     SearchAlreadyRunningError,
     SearchEvaluation,
     SearchExperimentIdentity,
+    SearchRequestContext,
     SeedSearchBudget,
     SolverCacheIdentity,
     StudyStateMismatchError,
@@ -546,7 +547,10 @@ def _fill_physical_space() -> BOSearchSpace:
     )
 
 
-def _deterministic_search_evaluation(candidate) -> SearchEvaluation:
+def _deterministic_search_evaluation(
+    candidate,
+    _context: SearchRequestContext,
+) -> SearchEvaluation:
     return SearchEvaluation(
         objective=float(candidate.coordinate[2] * 10 + candidate.coordinate[3]),
         metric_valid=True,
@@ -601,7 +605,9 @@ def test_independent_seed_lanes_and_fill_reach_global_unique_budget(
         space=space,
         output_dir=tmp_path / "search",
         experiment_identity=_search_experiment_identity(),
-        evaluate=lambda _: pytest.fail("completed studies must be resumed"),
+        evaluate=lambda _candidate, _context: pytest.fail(
+            "completed studies must be resumed"
+        ),
         budget=SeedSearchBudget(
             lane_seeds=(42, 43, 44),
             lane_unique_budget=1,
@@ -624,7 +630,10 @@ def test_seed_search_resume_completes_running_trial_before_new_ask(
     )
     interrupted_candidate_ids: list[str] = []
 
-    def interrupt_once(candidate) -> SearchEvaluation:
+    def interrupt_once(
+        candidate,
+        _context: SearchRequestContext,
+    ) -> SearchEvaluation:
         interrupted_candidate_ids.append(candidate.candidate_id)
         raise RuntimeError("simulated interruption")
 
@@ -754,10 +763,13 @@ def test_seed_search_exclusively_locks_output_directory(tmp_path) -> None:
         n_startup_trials=1,
     )
 
-    def blocking_evaluate(candidate) -> SearchEvaluation:
+    def blocking_evaluate(
+        candidate,
+        _context: SearchRequestContext,
+    ) -> SearchEvaluation:
         entered.set()
         assert release.wait(timeout=5)
-        return _deterministic_search_evaluation(candidate)
+        return _deterministic_search_evaluation(candidate, _context)
 
     with ThreadPoolExecutor(max_workers=1) as executor:
         running = executor.submit(
@@ -796,7 +808,9 @@ def test_seed_search_fails_before_new_ask_when_recovered_streak_hit_limit(
             space=_small_physical_space(),
             output_dir=tmp_path / "stalled",
             experiment_identity=_search_experiment_identity(),
-            evaluate=lambda _: pytest.fail("stalled resume must not evaluate"),
+            evaluate=lambda _candidate, _context: pytest.fail(
+                "stalled resume must not evaluate"
+            ),
             budget=SeedSearchBudget(
                 lane_seeds=(42,),
                 lane_unique_budget=2,
@@ -805,3 +819,48 @@ def test_seed_search_fails_before_new_ask_when_recovered_streak_hit_limit(
                 unique_stall_limit=3,
             ),
         )
+
+
+def test_seed_search_evaluator_receives_exact_lane_trial_context(
+    tmp_path,
+) -> None:
+    contexts: list[SearchRequestContext] = []
+
+    def evaluate(candidate, context: SearchRequestContext) -> SearchEvaluation:
+        contexts.append(context)
+        return _deterministic_search_evaluation(candidate, context)
+
+    result = run_seed_search(
+        space=_small_physical_space(),
+        output_dir=tmp_path / "context",
+        experiment_identity=_search_experiment_identity(),
+        evaluate=evaluate,
+        budget=SeedSearchBudget(
+            lane_seeds=(42,),
+            lane_unique_budget=2,
+            global_unique_budget=2,
+            n_startup_trials=1,
+        ),
+    )
+
+    expected = [
+        (
+            row.lane,
+            row.seed,
+            row.trial_number,
+            row.stage,
+            row.is_duplicate,
+        )
+        for row in result.lanes[0].history
+    ]
+    actual = [
+        (
+            context.lane,
+            context.seed,
+            context.trial_number,
+            context.stage,
+            context.is_duplicate,
+        )
+        for context in contexts
+    ]
+    assert actual == expected

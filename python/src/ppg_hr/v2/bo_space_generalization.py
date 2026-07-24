@@ -593,6 +593,19 @@ class SearchEvaluation:
 
 
 @dataclass(frozen=True)
+class SearchRequestContext:
+    """候选求解与缓存审计所绑定的精确逻辑 trial。"""
+
+    lane: str
+    seed: int
+    trial_number: int
+    stage: Literal["search", "fill"]
+    suggestion_index: int
+    unique_index: int | None
+    is_duplicate: bool
+
+
+@dataclass(frozen=True)
 class SearchExperimentIdentity:
     """禁止跨输入、代码或求解配置复用持久化搜索的冻结身份。"""
 
@@ -695,7 +708,10 @@ def run_seed_search(
     space: BOSearchSpace,
     output_dir: Path | str,
     experiment_identity: SearchExperimentIdentity,
-    evaluate: Callable[[BOCandidate], SearchEvaluation],
+    evaluate: Callable[
+        [BOCandidate, SearchRequestContext],
+        SearchEvaluation,
+    ],
     budget: SeedSearchBudget,
     parallel_lanes: bool = False,
 ) -> SeedSearchResult:
@@ -719,7 +735,10 @@ def _run_seed_search_locked(
     space: BOSearchSpace,
     output: Path,
     experiment_identity: SearchExperimentIdentity,
-    evaluate: Callable[[BOCandidate], SearchEvaluation],
+    evaluate: Callable[
+        [BOCandidate, SearchRequestContext],
+        SearchEvaluation,
+    ],
     budget: SeedSearchBudget,
     parallel_lanes: bool,
 ) -> SeedSearchResult:
@@ -860,7 +879,10 @@ def _run_seed_lane(
     unique_stall_limit: int,
     objective_version: str,
     constraints_version: str,
-    evaluate: Callable[[BOCandidate], SearchEvaluation],
+    evaluate: Callable[
+        [BOCandidate, SearchRequestContext],
+        SearchEvaluation,
+    ],
 ) -> SeedLaneResult:
     lane = f"seed_{seed}"
     study = _open_seed_study(
@@ -910,7 +932,18 @@ def _run_seed_lane(
             candidate_id=candidate.candidate_id,
             state_lock=state_lock,
         )
-        evaluation = evaluate(candidate)
+        evaluation = evaluate(
+            candidate,
+            SearchRequestContext(
+                lane=lane,
+                seed=seed,
+                trial_number=frozen.number,
+                stage="search",
+                suggestion_index=frozen.number + 1,
+                unique_index=unique_index,
+                is_duplicate=duplicate,
+            ),
+        )
         _finish_trial(
             study,
             trial=frozen,
@@ -958,7 +991,18 @@ def _run_seed_lane(
             candidate_id=candidate.candidate_id,
             state_lock=state_lock,
         )
-        evaluation = evaluate(candidate)
+        evaluation = evaluate(
+            candidate,
+            SearchRequestContext(
+                lane=lane,
+                seed=seed,
+                trial_number=trial.number,
+                stage="search",
+                suggestion_index=trial.number + 1,
+                unique_index=unique_index,
+                is_duplicate=duplicate,
+            ),
+        )
         _finish_trial(
             study,
             trial=trial,
@@ -1019,7 +1063,10 @@ def _run_fill_study(
     constraints_version: str,
     seed_union: tuple[str, ...],
     evaluation_by_candidate: dict[str, SearchEvaluation],
-    evaluate: Callable[[BOCandidate], SearchEvaluation],
+    evaluate: Callable[
+        [BOCandidate, SearchRequestContext],
+        SearchEvaluation,
+    ],
 ) -> tuple[SearchTrialRecord, ...]:
     if len(seed_union) >= global_unique_budget:
         return ()
@@ -1108,7 +1155,20 @@ def _run_fill_study(
         duplicate = candidate.candidate_id in global_seen
         evaluation = evaluation_by_candidate.get(candidate.candidate_id)
         if evaluation is None:
-            evaluation = evaluate(candidate)
+            evaluation = evaluate(
+                candidate,
+                SearchRequestContext(
+                    lane=lane,
+                    seed=seed,
+                    trial_number=frozen.number,
+                    stage="fill",
+                    suggestion_index=fill_suggestion_index,
+                    unique_index=(
+                        None if duplicate else len(global_seen) + 1
+                    ),
+                    is_duplicate=duplicate,
+                ),
+            )
             evaluation_by_candidate[candidate.candidate_id] = evaluation
         _write_running_trial_state(
             state_path,
@@ -1187,7 +1247,18 @@ def _run_fill_study(
             )
             evaluation = evaluation_by_candidate.get(candidate.candidate_id)
             if evaluation is None:
-                evaluation = evaluate(candidate)
+                evaluation = evaluate(
+                    candidate,
+                    SearchRequestContext(
+                        lane=lane,
+                        seed=seed,
+                        trial_number=trial.number,
+                        stage="fill",
+                        suggestion_index=fill_suggestion_index,
+                        unique_index=len(global_seen) + 1,
+                        is_duplicate=False,
+                    ),
+                )
                 evaluation_by_candidate[candidate.candidate_id] = evaluation
             _finish_trial(
                 study,
@@ -1231,7 +1302,20 @@ def _run_fill_study(
         duplicate = candidate.candidate_id in global_seen
         evaluation = evaluation_by_candidate.get(candidate.candidate_id)
         if evaluation is None:
-            evaluation = evaluate(candidate)
+            evaluation = evaluate(
+                candidate,
+                SearchRequestContext(
+                    lane=lane,
+                    seed=seed,
+                    trial_number=trial.number,
+                    stage="fill",
+                    suggestion_index=fill_suggestion_index,
+                    unique_index=(
+                        None if duplicate else len(global_seen) + 1
+                    ),
+                    is_duplicate=duplicate,
+                ),
+            )
             evaluation_by_candidate[candidate.candidate_id] = evaluation
         _write_running_trial_state(
             state_path,
