@@ -9,17 +9,19 @@ from __future__ import annotations
 import hashlib
 import itertools
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Literal
 
 import numpy as np
 
+from .reference_groups import method_label, normalise_reference_order
 from .solver import V2SolverResult
 
 SpaceName = Literal["legacy_full_v1", "legacy_reduced_v1", "physical_v1"]
 METRIC_CONTRACT_VERSION = "lyx_bo_formal_metric_v1"
+FORMAL_MIN_WINDOW_COUNT = 10
 
 _LEGACY_FULL_OPTIONS: tuple[tuple[str, tuple[int | float, ...]], ...] = (
     ("fs_target", (25, 50, 100)),
@@ -87,6 +89,8 @@ class FormalMetricResult:
     """同一组冻结窗口分母上的正式候选指标。"""
 
     metric_contract_version: str
+    final_method: str
+    reset_fft_method: str
     base_full_window_count: int
     base_motion_window_count: int
     classic_motion_window_count: int
@@ -151,7 +155,7 @@ def evaluate_formal_metrics(
     *,
     ref_data: np.ndarray,
     time_bias: float,
-    min_window_count: int = 10,
+    method_names: Sequence[str],
 ) -> FormalMetricResult:
     """按 ``lyx_bo_formal_metric_v1`` 重算一条候选的窗口级指标。
 
@@ -164,6 +168,10 @@ def evaluate_formal_metrics(
             "analysis_scope_not_full",
             "正式候选必须使用 analysis_scope=full",
         )
+    final_method, reset_fft_method = _resolve_formal_method_identity(
+        metadata=result.metadata,
+        method_names=method_names,
+    )
     hr = np.asarray(result.HR, dtype=float)
     if hr.ndim != 2 or hr.shape[1] < 5 or hr.shape[0] == 0:
         raise FormalMetricContractError(
@@ -184,9 +192,9 @@ def evaluate_formal_metrics(
     base_motion = base_full & motion
     classic_motion = overlap & motion
 
-    _require_window_count("base_full", base_full, min_window_count)
-    _require_window_count("base_motion", base_motion, min_window_count)
-    _require_window_count("classic_motion", classic_motion, min_window_count)
+    _require_window_count("base_full", base_full)
+    _require_window_count("base_motion", base_motion)
+    _require_window_count("classic_motion", classic_motion)
 
     final = hr[:, 3]
     reset_fft = hr[:, 2]
@@ -207,6 +215,8 @@ def evaluate_formal_metrics(
     classic_reset_finite = classic_motion & np.isfinite(reset_fft)
     return FormalMetricResult(
         metric_contract_version=METRIC_CONTRACT_VERSION,
+        final_method=final_method,
+        reset_fft_method=reset_fft_method,
         base_full_window_count=int(np.count_nonzero(base_full)),
         base_motion_window_count=int(np.count_nonzero(base_motion)),
         classic_motion_window_count=int(np.count_nonzero(classic_motion)),
@@ -388,6 +398,54 @@ def _joined_reliable_mask(
     return reliable
 
 
+def _resolve_formal_method_identity(
+    *,
+    metadata: Mapping[str, Any],
+    method_names: Sequence[str],
+) -> tuple[str, str]:
+    names = tuple(str(name).strip() for name in method_names)
+    if not names or any(not name for name in names):
+        raise FormalMetricContractError("invalid_method_identity")
+    if len(set(names)) != len(names):
+        raise FormalMetricContractError(
+            "duplicate_method_identity",
+            repr(names),
+        )
+    adaptive_filter = str(metadata.get("adaptive_filter", "")).strip()
+    raw_groups = metadata.get("reference_groups_order")
+    if not adaptive_filter or not isinstance(raw_groups, list | tuple):
+        raise FormalMetricContractError(
+            "missing_expected_method_identity",
+            "metadata 缺少 adaptive_filter/reference_groups_order",
+        )
+    try:
+        groups = normalise_reference_order(tuple(str(item) for item in raw_groups))
+        expected_final = method_label(adaptive_filter, groups)
+    except ValueError as exc:
+        raise FormalMetricContractError(
+            "invalid_expected_method_identity",
+            str(exc),
+        ) from exc
+    if expected_final not in names:
+        raise FormalMetricContractError(
+            "missing_final_method_identity",
+            f"expected={expected_final!r}, available={names!r}",
+        )
+    reset_fft_method = (
+        "reset FFT"
+        if "reset FFT" in names
+        else "FFT"
+        if "FFT" in names
+        else ""
+    )
+    if not reset_fft_method:
+        raise FormalMetricContractError(
+            "missing_reset_fft_method_identity",
+            f"available={names!r}",
+        )
+    return expected_final, reset_fft_method
+
+
 def _interpolate_raw_reference(
     ref_data: np.ndarray,
     aligned_times: np.ndarray,
@@ -428,13 +486,12 @@ def _interpolate_raw_reference(
 def _require_window_count(
     scope: str,
     mask: np.ndarray,
-    minimum: int,
 ) -> None:
     count = int(np.count_nonzero(mask))
-    if count < int(minimum):
+    if count < FORMAL_MIN_WINDOW_COUNT:
         raise FormalMetricContractError(
             f"insufficient_{scope}_windows",
-            f"minimum={minimum}, actual={count}",
+            f"minimum={FORMAL_MIN_WINDOW_COUNT}, actual={count}",
         )
 
 

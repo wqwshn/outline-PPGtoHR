@@ -137,7 +137,11 @@ def _formal_metric_fixture(
         V2SolverResult(
             HR=hr,
             err_stats={},
-            metadata={"analysis_scope": "full"},
+            metadata={
+                "analysis_scope": "full",
+                "adaptive_filter": "lms",
+                "reference_groups_order": ["HF"],
+            },
             window_table=window_table,
         ),
         ref_data,
@@ -151,6 +155,7 @@ def test_formal_metrics_use_raw_reference_and_frozen_common_masks() -> None:
         result,
         ref_data=ref_data,
         time_bias=5.0,
+        method_names=("reset FFT", "LMS+H"),
     )
 
     assert metrics.metric_contract_version == "lyx_bo_formal_metric_v1"
@@ -176,7 +181,52 @@ def test_formal_metrics_fail_when_window_rows_do_not_join_exactly() -> None:
         FormalMetricContractError,
         match="center_s",
     ):
-        evaluate_formal_metrics(result, ref_data=ref_data, time_bias=5.0)
+        evaluate_formal_metrics(
+            result,
+            ref_data=ref_data,
+            time_bias=5.0,
+            method_names=("LMS+H", "reset FFT"),
+        )
+
+
+@pytest.mark.parametrize(
+    "method_names",
+    [
+        ("reset FFT",),
+        ("reset FFT", "LMS+A"),
+        ("continuous FFT", "LMS+H"),
+        ("reset FFT", "LMS+H", "LMS+H"),
+    ],
+)
+def test_formal_metrics_fail_closed_on_missing_or_wrong_method_identity(
+    method_names: tuple[str, ...],
+) -> None:
+    result, ref_data = _formal_metric_fixture()
+
+    with pytest.raises(
+        FormalMetricContractError,
+        match="method",
+    ):
+        evaluate_formal_metrics(
+            result,
+            ref_data=ref_data,
+            time_bias=5.0,
+            method_names=method_names,
+        )
+
+
+def test_formal_metrics_accept_fft_compatibility_identity() -> None:
+    result, ref_data = _formal_metric_fixture()
+
+    metrics = evaluate_formal_metrics(
+        result,
+        ref_data=ref_data,
+        time_bias=5.0,
+        method_names=("LMS+H", "FFT"),
+    )
+
+    assert metrics.final_method == "LMS+H"
+    assert metrics.reset_fft_method == "FFT"
 
 
 @pytest.mark.parametrize(
@@ -205,6 +255,11 @@ def test_formal_metrics_fail_closed_on_invalid_denominators(
         result.HR[0, 2] = np.nan
 
     with pytest.raises(FormalMetricContractError) as error:
-        evaluate_formal_metrics(result, ref_data=ref_data, time_bias=5.0)
+        evaluate_formal_metrics(
+            result,
+            ref_data=ref_data,
+            time_bias=5.0,
+            method_names=("reset FFT", "LMS+H"),
+        )
 
     assert error.value.reason == reason
