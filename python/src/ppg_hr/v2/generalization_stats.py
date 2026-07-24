@@ -13,6 +13,7 @@ from typing import Any, Iterable
 import numpy as np
 
 from .output_paths import prepare_output_dir, safe_output_path
+from .reference_groups import method_label
 from .solver import solve_v2
 from .types import V2RunConfig
 
@@ -146,6 +147,8 @@ def _write_analysis_tables(output_dir: Path, records: list[Any]) -> None:
                 "motion_type": row["motion_type"],
                 "evaluation_mode": row["evaluation_mode"],
                 "fold_id": row["fold_id"],
+                "hf_source_method": str(row["final"].get("source_method", "")),
+                "fft_source_method": str(row["fft"].get("source_method", "")),
                 "klms_hf": final,
                 "klms_acc": acc,
                 "klms_fft": fft,
@@ -154,6 +157,7 @@ def _write_analysis_tables(output_dir: Path, records: list[Any]) -> None:
         rows.append(_average_row(rows))
         _write_dict_csv(safe_output_path(output_dir, file_name), rows, [
             "data_file", "motion_type", "evaluation_mode", "fold_id",
+            "hf_source_method", "fft_source_method",
             "klms_hf", "klms_acc", "klms_fft", "klms_hf_vs_acc_delta",
         ])
 
@@ -172,21 +176,75 @@ def _analysis_row(record: Any) -> dict[str, Any]:
     }
 
 
-def _metrics_from_error_csv(record: Any) -> tuple[dict[str, float], dict[str, float]]:
-    fallback_final = _metric_bundle(_num(getattr(record, "final_aae_bpm", math.nan)))
-    fallback_fft = _metric_bundle(_num(getattr(record, "fft_aae_bpm", math.nan)))
+def _metrics_from_error_csv(record: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+    fallback_final = _metric_bundle(
+        _num(getattr(record, "final_aae_bpm", math.nan)),
+        source_method="summary:final_aae_bpm",
+    )
+    fallback_fft = _metric_bundle(
+        _num(getattr(record, "fft_aae_bpm", math.nan)),
+        source_method="summary:fft_aae_bpm",
+    )
     path = Path(str(getattr(record, "error_csv", "")))
     if not path.is_file():
         return fallback_final, fallback_fft
     try:
         with path.open("r", encoding="utf-8-sig", newline="") as fh:
             method_rows = {str(row.get("method", "")).strip(): row for row in csv.DictReader(fh)}
-        fft = _metrics_from_error_row(method_rows.get("FFT", {})) if "FFT" in method_rows else fallback_fft
-        final_key = next((key for key in method_rows if key != "FFT"), "")
-        final = _metrics_from_error_row(method_rows.get(final_key, {})) if final_key else fallback_final
+        fft_key = next(
+            (candidate for candidate in ("reset FFT", "FFT") if candidate in method_rows),
+            "",
+        )
+        final_key = _expected_final_method(record)
+        fft = (
+            _metrics_from_error_row(method_rows[fft_key], source_method=fft_key)
+            if fft_key
+            else fallback_fft
+        )
+        final = (
+            _metrics_from_error_row(
+                method_rows[final_key],
+                source_method=final_key,
+            )
+            if final_key in method_rows
+            else fallback_final
+        )
         return final, fft
     except Exception:
         return fallback_final, fallback_fft
+
+
+def _expected_final_method(record: Any) -> str:
+    adaptive_filter = str(getattr(record, "adaptive_filter", "")).strip()
+    reference_key = str(getattr(record, "reference_order_key", "")).strip()
+    report_path = Path(str(getattr(record, "report_path", "")))
+    payload: dict[str, Any] = {}
+    if report_path.is_file() and (not adaptive_filter or not reference_key):
+        try:
+            payload = json.loads(report_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError):
+            payload = {}
+    if not adaptive_filter:
+        adaptive_filter = str(payload.get("adaptive_filter", "")).strip()
+    if reference_key:
+        groups = tuple(
+            part.strip().upper()
+            for part in reference_key.split("+")
+            if part.strip() and part.strip().upper() != "FFT"
+        )
+    else:
+        raw_groups = payload.get("reference_groups_order", ())
+        groups = (
+            tuple(str(part).strip().upper() for part in raw_groups)
+            if isinstance(raw_groups, list | tuple)
+            else ()
+        )
+    if not adaptive_filter or not groups:
+        return ""
+    try:
+        return method_label(adaptive_filter, groups)
+    except ValueError:
+        return ""
 
 
 def _acc_replay_metrics(record: Any) -> dict[str, float]:
@@ -247,8 +305,13 @@ def _metrics_from_hr(hr: np.ndarray, *, column: int) -> dict[str, float]:
     }
 
 
-def _metrics_from_error_row(row: dict[str, Any]) -> dict[str, float]:
+def _metrics_from_error_row(
+    row: dict[str, Any],
+    *,
+    source_method: str,
+) -> dict[str, Any]:
     return {
+        "source_method": source_method,
         "total_aae": _num(row.get("total_aae")),
         "rest_aae": _num(row.get("rest_aae")),
         "motion_aae": _num(row.get("motion_aae")),
@@ -258,8 +321,13 @@ def _metrics_from_error_row(row: dict[str, Any]) -> dict[str, float]:
     }
 
 
-def _metric_bundle(aae: float) -> dict[str, float]:
+def _metric_bundle(
+    aae: float,
+    *,
+    source_method: str = "",
+) -> dict[str, Any]:
     return {
+        "source_method": source_method,
         "total_aae": aae,
         "rest_aae": math.nan,
         "motion_aae": aae,
@@ -269,7 +337,7 @@ def _metric_bundle(aae: float) -> dict[str, float]:
     }
 
 
-def _empty_metrics() -> dict[str, float]:
+def _empty_metrics() -> dict[str, Any]:
     return _metric_bundle(math.nan)
 
 
@@ -302,6 +370,7 @@ def _write_markdown(path: Path, records: list[Any]) -> None:
         "",
         f"- 统计样本数：{len(_test_records(records))}",
         "- HF/FFT 指标优先来自每条记录的 error CSV；缺失时回退到 summary 指标。",
+        "- 每张分析表显式记录 HF Final 与 FFT 的来源方法名，不按 CSV 行顺序猜测。",
         "- ACC 指标通过读取参数报告 best_params，并将 reference_groups_order 改为 ACC 后重放得到。",
         "",
     ]
