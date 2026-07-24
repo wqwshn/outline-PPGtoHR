@@ -22,6 +22,16 @@ from .solver import V2SolverResult
 SpaceName = Literal["legacy_full_v1", "legacy_reduced_v1", "physical_v1"]
 METRIC_CONTRACT_VERSION = "lyx_bo_formal_metric_v1"
 FORMAL_MIN_WINDOW_COUNT = 10
+_FORMAL_ADAPTIVE_FILTERS = frozenset(
+    {
+        "lms",
+        "noncausal_lms",
+        "rff_lms",
+        "klms",
+        "as_lms",
+        "volterra",
+    }
+)
 
 _LEGACY_FULL_OPTIONS: tuple[tuple[str, tuple[int | float, ...]], ...] = (
     ("fs_target", (25, 50, 100)),
@@ -411,12 +421,17 @@ def _resolve_formal_method_identity(
             "duplicate_method_identity",
             repr(names),
         )
-    adaptive_filter = str(metadata.get("adaptive_filter", "")).strip()
+    adaptive_filter = str(metadata.get("adaptive_filter", "")).strip().lower()
     raw_groups = metadata.get("reference_groups_order")
     if not adaptive_filter or not isinstance(raw_groups, list | tuple):
         raise FormalMetricContractError(
             "missing_expected_method_identity",
             "metadata 缺少 adaptive_filter/reference_groups_order",
+        )
+    if adaptive_filter not in _FORMAL_ADAPTIVE_FILTERS:
+        raise FormalMetricContractError(
+            "invalid_adaptive_filter_identity",
+            repr(adaptive_filter),
         )
     try:
         groups = normalise_reference_order(tuple(str(item) for item in raw_groups))

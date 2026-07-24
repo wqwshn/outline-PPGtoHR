@@ -229,6 +229,22 @@ def test_formal_metrics_accept_fft_compatibility_identity() -> None:
     assert metrics.reset_fft_method == "FFT"
 
 
+def test_formal_metrics_reject_unknown_adaptive_filter_identity() -> None:
+    result, ref_data = _formal_metric_fixture()
+    result.metadata["adaptive_filter"] = "bogus"
+
+    with pytest.raises(
+        FormalMetricContractError,
+        match="adaptive_filter",
+    ):
+        evaluate_formal_metrics(
+            result,
+            ref_data=ref_data,
+            time_bias=5.0,
+            method_names=("LMS+H", "reset FFT"),
+        )
+
+
 @pytest.mark.parametrize(
     ("mutation", "reason"),
     [
