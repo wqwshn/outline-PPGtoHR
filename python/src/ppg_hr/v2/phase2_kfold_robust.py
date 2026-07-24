@@ -383,15 +383,20 @@ def run_k1_fold_study(
             trial_audit_dir
             / f"neighborhood-{index:03d}.json"
         )
-        evidence, _ = evaluate_candidate(
-            candidates[candidate_id],
-            logical_reference={
-                "stage": "neighborhood",
-                "neighborhood_index": index,
-                "candidate_id": candidate_id,
-            },
-            audit_path=audit_path,
-        )
+        if audit_path.is_file():
+            evidence = _training_evidence_from_audit(
+                read_json(audit_path)
+            )
+        else:
+            evidence, _ = evaluate_candidate(
+                candidates[candidate_id],
+                logical_reference={
+                    "stage": "neighborhood",
+                    "neighborhood_index": index,
+                    "candidate_id": candidate_id,
+                },
+                audit_path=audit_path,
+            )
         all_evidence[candidate_id] = evidence
         neighborhood_rows.append(
             _history_row_from_audit(
@@ -711,6 +716,42 @@ def _formal_metrics(
     if metrics[0] is None or metrics[1] is None:
         raise RuntimeError("K1 最终候选缺少两条训练指标")
     return metrics[0], metrics[1]
+
+
+def _training_evidence_from_audit(
+    audit: Mapping[str, Any],
+) -> RobustTrainingEvidence:
+    payload = audit.get("robust_evidence")
+    if not isinstance(payload, Mapping):
+        raise ValueError("K1 邻域审计缺少 robust_evidence")
+    candidate_id = str(payload.get("candidate_id", ""))
+    if not bool(payload.get("metric_valid")):
+        return build_robust_training_evidence(
+            candidate_id=candidate_id,
+            final_motion_mae_bpm=None,
+            reset_motion_mae_bpm=None,
+            failure_reason=str(payload.get("failure_reason", "")),
+        )
+    finals = payload.get("final_motion_mae_bpm")
+    resets = payload.get("reset_motion_mae_bpm")
+    if (
+        not isinstance(finals, list)
+        or len(finals) != 2
+        or not isinstance(resets, list)
+        or len(resets) != 2
+    ):
+        raise ValueError("K1 邻域审计的训练指标不是两记录结构")
+    return build_robust_training_evidence(
+        candidate_id=candidate_id,
+        final_motion_mae_bpm=(
+            float(finals[0]),
+            float(finals[1]),
+        ),
+        reset_motion_mae_bpm=(
+            float(resets[0]),
+            float(resets[1]),
+        ),
+    )
 
 
 def _write_candidate_history(

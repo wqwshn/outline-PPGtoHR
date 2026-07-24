@@ -239,6 +239,29 @@ def test_k1_uses_worst_motion_constraints_and_frozen_neighborhood(
     assert neighborhood["status"] == "complete"
     assert neighborhood["reviewed_neighbor_count"] > 0
 
+    repeat = run_k1_fold_study(
+        config,
+        runtime=KFoldRuntime(
+            training_records=(
+                _training_runtime(
+                    record=_record("xiezi-1", "a"),
+                    offset=0.0,
+                ),
+                _training_runtime(
+                    record=_record("xiezi-2", "b"),
+                    offset=0.5,
+                ),
+            ),
+            heldout_record=heldout,
+            replay_heldout=replay,
+        ),
+    )
+    assert repeat.selected_candidate_id == result.selected_candidate_id
+    assert repeat.selected_worst_train_mae_bpm == pytest.approx(
+        result.selected_worst_train_mae_bpm
+    )
+    assert replay_calls == [result.selected_candidate_id]
+
 
 def test_k1_fails_closed_before_heldout_when_all_candidates_unsafe(
     tmp_path,
