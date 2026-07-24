@@ -1154,23 +1154,19 @@ def _run_fill_study(
         )
         fill_suggestion_index += 1
         duplicate = candidate.candidate_id in global_seen
-        evaluation = evaluation_by_candidate.get(candidate.candidate_id)
-        if evaluation is None:
-            evaluation = evaluate(
-                candidate,
-                SearchRequestContext(
-                    lane=lane,
-                    seed=seed,
-                    trial_number=frozen.number,
-                    stage="fill",
-                    suggestion_index=fill_suggestion_index,
-                    unique_index=(
-                        None if duplicate else len(global_seen) + 1
-                    ),
-                    is_duplicate=duplicate,
-                ),
-            )
-            evaluation_by_candidate[candidate.candidate_id] = evaluation
+        evaluation = evaluate(
+            candidate,
+            SearchRequestContext(
+                lane=lane,
+                seed=seed,
+                trial_number=frozen.number,
+                stage="fill",
+                suggestion_index=fill_suggestion_index,
+                unique_index=(None if duplicate else len(global_seen) + 1),
+                is_duplicate=duplicate,
+            ),
+        )
+        evaluation_by_candidate[candidate.candidate_id] = evaluation
         _write_running_trial_state(
             state_path,
             config_hash=config_hash,
@@ -1301,23 +1297,19 @@ def _run_fill_study(
         )
         fill_suggestion_index += 1
         duplicate = candidate.candidate_id in global_seen
-        evaluation = evaluation_by_candidate.get(candidate.candidate_id)
-        if evaluation is None:
-            evaluation = evaluate(
-                candidate,
-                SearchRequestContext(
-                    lane=lane,
-                    seed=seed,
-                    trial_number=trial.number,
-                    stage="fill",
-                    suggestion_index=fill_suggestion_index,
-                    unique_index=(
-                        None if duplicate else len(global_seen) + 1
-                    ),
-                    is_duplicate=duplicate,
-                ),
-            )
-            evaluation_by_candidate[candidate.candidate_id] = evaluation
+        evaluation = evaluate(
+            candidate,
+            SearchRequestContext(
+                lane=lane,
+                seed=seed,
+                trial_number=trial.number,
+                stage="fill",
+                suggestion_index=fill_suggestion_index,
+                unique_index=(None if duplicate else len(global_seen) + 1),
+                is_duplicate=duplicate,
+            ),
+        )
+        evaluation_by_candidate[candidate.candidate_id] = evaluation
         _write_running_trial_state(
             state_path,
             config_hash=config_hash,
@@ -2379,6 +2371,11 @@ def _cache_json_ready(value: Any) -> Any:
     """Encode optional non-finite diagnostics without weakening identity JSON."""
 
     if isinstance(value, Mapping):
+        if _CACHE_NONFINITE_FLOAT_KEY in value:
+            raise ValueError(
+                "diagnostic mapping contains reserved cache marker: "
+                f"{_CACHE_NONFINITE_FLOAT_KEY}"
+            )
         return {
             str(key): _cache_json_ready(item)
             for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))

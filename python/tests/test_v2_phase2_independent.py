@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
+import pytest
 
+import ppg_hr.v2.phase2_independent as phase2_independent
 from ppg_hr.v2.bo_space_generalization import (
     CandidateSolveOutcome,
     FormalMetricResult,
@@ -181,6 +184,18 @@ def test_independent_study_writes_dual_baseline_history_and_classic_plots(
     assert "base_motion_window_sha256" in legacy_history
     assert "requested_fs_target" in legacy_history
     assert "actual_fs_target" in legacy_history
+    legacy_stability = json.loads(
+        result.legacy.seed_stability.read_text(encoding="utf-8")
+    )
+    assert all(lane["best_so_far"] for lane in legacy_stability["lanes"])
+    assert "cross_lane_overlap_count" in legacy_stability
+    assert "pairwise_lane_overlap_counts" in legacy_stability
+    assert "seed_best_parameter_differences" in legacy_stability
+    assert legacy_stability["cache_statistics"]["logical_request_count"] > 0
+    assert (
+        legacy_stability["cache_statistics"]["physical_solve_count"]
+        == result.legacy.cache_summary["physical_solve_count"]
+    )
 
 
 def test_independent_study_reuses_cache_and_is_numerically_repeatable(
@@ -215,3 +230,21 @@ def test_independent_study_keeps_fill_out_of_seed_stability(tmp_path) -> None:
         }
         assert set(arm.search_result.seed_stability_candidate_ids) == seed_union
         assert all(row.stage == "fill" for row in arm.search_result.fill_history)
+
+
+def test_classic_plot_method_validation_requires_acc_curve(tmp_path) -> None:
+    incomplete = tmp_path / "incomplete-error.csv"
+    incomplete.write_text(
+        "method,mae_bpm\nreset FFT,2.0\nLMS+H,3.0\n",
+        encoding="utf-8-sig",
+    )
+
+    with pytest.raises(ValueError, match=r"LMS\+A"):
+        phase2_independent._validate_classic_plot_methods(incomplete)
+
+    complete = tmp_path / "complete-error.csv"
+    complete.write_text(
+        "method,mae_bpm\nreset FFT,2.0\nLMS+H,3.0\nLMS+A,4.0\n",
+        encoding="utf-8-sig",
+    )
+    phase2_independent._validate_classic_plot_methods(complete)

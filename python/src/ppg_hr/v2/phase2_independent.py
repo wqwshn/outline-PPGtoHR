@@ -24,6 +24,7 @@ from .bo_space_generalization import (
     SearchEvaluation,
     SearchExperimentIdentity,
     SearchRequestContext,
+    SearchTrialRecord,
     SeedSearchBudget,
     SeedSearchResult,
     SolverCacheIdentity,
@@ -291,15 +292,20 @@ def _run_arm(
         candidates=candidates,
         audit_dir=trial_audit_dir,
     )
+    cache_summary = _arm_cache_summary(cache, arm)
     stability_path = arm_dir / "seed_stability.json"
-    _write_seed_stability(stability_path, search_result)
+    _write_seed_stability(
+        stability_path,
+        search_result,
+        candidates=candidates,
+        cache_statistics=cache_summary,
+    )
     classic_plot = runtime.render_selected(
         arm,
         selected_candidate,
         selected_outcome,
         arm_dir,
     )
-    cache_summary = _arm_cache_summary(cache, arm)
     _atomic_write_json(arm_dir / "cache_summary.json", cache_summary)
     return IndependentArmResult(
         arm=arm,
@@ -417,13 +423,46 @@ def _write_candidate_history(
 def _write_seed_stability(
     path: Path,
     result: SeedSearchResult,
+    *,
+    candidates: Mapping[str, BOCandidate],
+    cache_statistics: Mapping[str, Any],
 ) -> None:
     lanes = []
+    best_by_seed: dict[int, SearchTrialRecord] = {}
+    lane_candidate_ids: dict[int, set[str]] = {}
     for lane in result.lanes:
         best = min(
             lane.history,
-            key=lambda row: (row.objective, row.candidate_id),
+            key=lambda row: (
+                not row.eligible,
+                row.objective,
+                row.candidate_id,
+            ),
         )
+        best_by_seed[lane.seed] = best
+        lane_candidate_ids[lane.seed] = set(lane.unique_candidate_ids)
+        best_so_far = []
+        incumbent: SearchTrialRecord | None = None
+        for row in lane.history:
+            if incumbent is None or (
+                not row.eligible,
+                row.objective,
+                row.candidate_id,
+            ) < (
+                not incumbent.eligible,
+                incumbent.objective,
+                incumbent.candidate_id,
+            ):
+                incumbent = row
+            best_so_far.append(
+                {
+                    "trial_number": row.trial_number,
+                    "suggestion_index": row.suggestion_index,
+                    "candidate_id": incumbent.candidate_id,
+                    "objective": incumbent.objective,
+                    "eligible": incumbent.eligible,
+                }
+            )
         lanes.append(
             {
                 "seed": lane.seed,
@@ -434,12 +473,99 @@ def _write_seed_stability(
                 ),
                 "best_candidate_id": best.candidate_id,
                 "best_objective": best.objective,
+                "best_requested_params": candidates[
+                    best.candidate_id
+                ].requested_params,
+                "best_actual_params": candidates[
+                    best.candidate_id
+                ].actual_params,
+                "best_so_far": best_so_far,
             }
         )
+    pairwise_overlaps = []
+    best_parameter_differences = []
+    seeds = sorted(lane_candidate_ids)
+    for left_index, left_seed in enumerate(seeds):
+        for right_seed in seeds[left_index + 1 :]:
+            overlap = sorted(
+                lane_candidate_ids[left_seed]
+                & lane_candidate_ids[right_seed]
+            )
+            pairwise_overlaps.append(
+                {
+                    "left_seed": left_seed,
+                    "right_seed": right_seed,
+                    "overlap_count": len(overlap),
+                    "candidate_ids": overlap,
+                }
+            )
+            left_candidate = candidates[
+                best_by_seed[left_seed].candidate_id
+            ]
+            right_candidate = candidates[
+                best_by_seed[right_seed].candidate_id
+            ]
+            requested_keys = sorted(
+                set(left_candidate.requested_params)
+                | set(right_candidate.requested_params)
+            )
+            actual_keys = sorted(
+                set(left_candidate.actual_params)
+                | set(right_candidate.actual_params)
+            )
+            best_parameter_differences.append(
+                {
+                    "left_seed": left_seed,
+                    "right_seed": right_seed,
+                    "left_candidate_id": left_candidate.candidate_id,
+                    "right_candidate_id": right_candidate.candidate_id,
+                    "differing_requested_params": [
+                        key
+                        for key in requested_keys
+                        if left_candidate.requested_params.get(key)
+                        != right_candidate.requested_params.get(key)
+                    ],
+                    "differing_actual_params": [
+                        key
+                        for key in actual_keys
+                        if left_candidate.actual_params.get(key)
+                        != right_candidate.actual_params.get(key)
+                    ],
+                }
+            )
+    candidate_lane_counts: dict[str, int] = {}
+    for candidate_ids in lane_candidate_ids.values():
+        for candidate_id in candidate_ids:
+            candidate_lane_counts[candidate_id] = (
+                candidate_lane_counts.get(candidate_id, 0) + 1
+            )
+    cache_counts = {
+        key: cache_statistics[key]
+        for key in (
+            "logical_request_count",
+            "physical_solve_count",
+            "cache_hit_count",
+            "reservation_conflict_count",
+            "infrastructure_failure_count",
+        )
+    }
     _atomic_write_json(
         path,
         {
             "lanes": lanes,
+            "cross_lane_overlap_count": sum(
+                count > 1 for count in candidate_lane_counts.values()
+            ),
+            "cross_lane_overlap_candidate_ids": sorted(
+                candidate_id
+                for candidate_id, count in candidate_lane_counts.items()
+                if count > 1
+            ),
+            "pairwise_lane_overlap_counts": pairwise_overlaps,
+            "seed_best_parameter_differences": (
+                best_parameter_differences
+            ),
+            "cache_statistics": cache_counts,
             "seed_stability_candidate_ids": (
                 result.seed_stability_candidate_ids
             ),
@@ -655,6 +781,7 @@ def _build_default_runtime(
             csv_dir=output_dir / "csv",
             comparison_groups=(("ACC",),),
         )
+        _validate_classic_plot_methods(rendered.error_csv)
         return rendered.figure_png
 
     historical_render = render_v2_report(
@@ -663,6 +790,7 @@ def _build_default_runtime(
         csv_dir=Path(config.output_dir) / "historical_anchor" / "csv",
         comparison_groups=(("ACC",),),
     )
+    _validate_classic_plot_methods(historical_render.error_csv)
     return IndependentRecordRuntime(
         sample_id=dataset.sample_stem,
         data_sha256=_file_sha256(base.data_path),
@@ -684,6 +812,20 @@ def _method_names_from_error_csv(path: Path) -> tuple[str, ...]:
     if not names or any(not name for name in names):
         raise ValueError(f"历史 error CSV 缺少方法身份: {path}")
     return names
+
+
+def _validate_classic_plot_methods(path: Path) -> None:
+    names = set(_method_names_from_error_csv(path))
+    required = {
+        "reset FFT",
+        method_label("lms", ("HF",)),
+        method_label("lms", ("ACC",)),
+    }
+    missing = sorted(required - names)
+    if missing:
+        raise ValueError(
+            "经典心率图缺少必需方法曲线: " + ", ".join(missing)
+        )
 
 
 def _trial_audit_path(

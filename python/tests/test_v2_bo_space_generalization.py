@@ -484,6 +484,30 @@ def test_solver_cache_round_trips_nonfinite_optional_diagnostics_as_strict_json(
     )
 
 
+def test_solver_cache_rejects_reserved_nonfinite_marker_key(tmp_path) -> None:
+    cache = ContentAddressedSolverCache(tmp_path / "cache")
+    identity = _cache_identity()
+    solver_result, ref_data = _formal_metric_fixture()
+    solver_result.metadata[
+        "__ppg_hr_cache_nonfinite_float_v1__"
+    ] = "legitimate_diagnostic"
+    formal_metrics = evaluate_formal_metrics(
+        solver_result,
+        ref_data=ref_data,
+        time_bias=5.0,
+        method_names=("LMS+H", "reset FFT"),
+    )
+
+    with pytest.raises(ValueError, match="reserved cache marker"):
+        cache.get_or_solve(
+            identity,
+            lambda: CandidateSolveOutcome.valid(
+                solver_result,
+                formal_metrics,
+            ),
+        )
+
+
 def test_solver_cache_keeps_infrastructure_failure_separate(
     tmp_path,
 ) -> None:
@@ -918,4 +942,55 @@ def test_seed_search_evaluator_receives_exact_lane_trial_context(
         )
         for context in contexts
     ]
+    assert actual == expected
+
+
+def test_seed_search_evaluates_every_fill_trial_including_duplicates(
+    tmp_path,
+) -> None:
+    contexts: list[SearchRequestContext] = []
+
+    def evaluate(candidate, context: SearchRequestContext) -> SearchEvaluation:
+        contexts.append(context)
+        return _deterministic_search_evaluation(candidate, context)
+
+    result = run_seed_search(
+        space=_fill_physical_space(),
+        output_dir=tmp_path / "fill_context",
+        experiment_identity=_search_experiment_identity(),
+        evaluate=evaluate,
+        budget=SeedSearchBudget(
+            lane_seeds=(42, 43, 44),
+            lane_unique_budget=1,
+            global_unique_budget=8,
+            n_startup_trials=1,
+        ),
+    )
+
+    assert any(row.is_duplicate for row in result.fill_history)
+    expected = {
+        (
+            row.lane,
+            row.seed,
+            row.trial_number,
+            row.stage,
+            row.suggestion_index,
+            row.is_duplicate,
+        )
+        for row in (
+            *(row for lane in result.lanes for row in lane.history),
+            *result.fill_history,
+        )
+    }
+    actual = {
+        (
+            context.lane,
+            context.seed,
+            context.trial_number,
+            context.stage,
+            context.suggestion_index,
+            context.is_duplicate,
+        )
+        for context in contexts
+    }
     assert actual == expected
