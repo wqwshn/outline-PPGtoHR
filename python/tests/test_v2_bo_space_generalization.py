@@ -1,11 +1,20 @@
 from __future__ import annotations
 
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+
 import numpy as np
 import pytest
 
 from ppg_hr.v2.bo_space_generalization import (
+    CachedInfrastructureError,
+    CandidateSolveOutcome,
+    ContentAddressedSolverCache,
     FormalMetricContractError,
+    SolverCacheIdentity,
     build_bo_search_space,
+    build_solver_cache_key,
     evaluate_formal_metrics,
 )
 from ppg_hr.v2.solver import V2SolverResult
@@ -279,3 +288,141 @@ def test_formal_metrics_fail_closed_on_invalid_denominators(
         )
 
     assert error.value.reason == reason
+
+
+def _cache_identity() -> SolverCacheIdentity:
+    candidate = build_bo_search_space("physical_v1").candidates[0]
+    return SolverCacheIdentity(
+        data_sha256="d" * 64,
+        reference_sha256="r" * 64,
+        git_commit="8d998eb",
+        run_config={"analysis_scope": "full", "time_bias": 5.0},
+        candidate=candidate,
+        reference_groups_order=("HF",),
+    )
+
+
+def test_solver_cache_key_contains_frozen_metric_identity() -> None:
+    identity = _cache_identity()
+    first = build_solver_cache_key(identity)
+    reordered = build_solver_cache_key(
+        SolverCacheIdentity(
+            data_sha256=identity.data_sha256,
+            reference_sha256=identity.reference_sha256,
+            git_commit=identity.git_commit,
+            run_config={"time_bias": 5.0, "analysis_scope": "full"},
+            candidate=identity.candidate,
+            reference_groups_order=("HF",),
+        )
+    )
+
+    assert first.key == reordered.key
+    assert first.payload["metric_contract_version"] == "lyx_bo_formal_metric_v1"
+    assert first.payload["candidate_id"] == identity.candidate.candidate_id
+    assert first.payload["requested_params"] == dict(
+        identity.candidate.requested_params
+    )
+    assert first.payload["actual_params"] == dict(identity.candidate.actual_params)
+
+
+def test_atomic_solver_cache_performs_one_physical_solve_for_parallel_requests(
+    tmp_path,
+) -> None:
+    cache = ContentAddressedSolverCache(tmp_path / "cache")
+    identity = _cache_identity()
+    call_count = 0
+    call_lock = threading.Lock()
+
+    def compute() -> CandidateSolveOutcome:
+        nonlocal call_count
+        with call_lock:
+            call_count += 1
+        time.sleep(0.1)
+        return CandidateSolveOutcome.invalid(
+            "metric_window_contract_failed",
+            diagnostics={"source": "test"},
+        )
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        lookups = list(
+            executor.map(
+                lambda _: cache.get_or_solve(
+                    identity,
+                    compute,
+                    wait_timeout_s=3.0,
+                    poll_interval_s=0.01,
+                ),
+                range(4),
+            )
+        )
+
+    assert call_count == 1
+    assert sum(not lookup.cache_hit for lookup in lookups) == 1
+    assert sum(lookup.physical_solve_performed for lookup in lookups) == 1
+    assert {lookup.outcome.status for lookup in lookups} == {"invalid"}
+    assert {lookup.outcome.failure_reason for lookup in lookups} == {
+        "metric_window_contract_failed"
+    }
+    cache_key = build_solver_cache_key(identity).key
+    assert cache.entry_state(cache_key) == "complete"
+    assert cache.entry_audit(cache_key)["outcome_status"] == "invalid"
+    assert (
+        cache.entry_audit(cache_key)["failure_reason"]
+        == "metric_window_contract_failed"
+    )
+
+
+def test_solver_cache_round_trips_valid_solver_and_formal_metrics(tmp_path) -> None:
+    cache = ContentAddressedSolverCache(tmp_path / "cache")
+    identity = _cache_identity()
+    solver_result, ref_data = _formal_metric_fixture()
+    formal_metrics = evaluate_formal_metrics(
+        solver_result,
+        ref_data=ref_data,
+        time_bias=5.0,
+        method_names=("LMS+H", "reset FFT"),
+    )
+
+    first = cache.get_or_solve(
+        identity,
+        lambda: CandidateSolveOutcome.valid(
+            solver_result,
+            formal_metrics,
+            diagnostics={"runtime_seconds": 1.25},
+        ),
+    )
+    second = cache.get_or_solve(
+        identity,
+        lambda: pytest.fail("complete cache entry must be reused"),
+    )
+
+    assert first.cache_hit is False
+    assert second.cache_hit is True
+    assert second.outcome.status == "valid"
+    assert second.outcome.formal_metrics == formal_metrics
+    assert second.outcome.solver_result is not None
+    np.testing.assert_array_equal(second.outcome.solver_result.HR, solver_result.HR)
+    assert second.outcome.solver_result.window_table == solver_result.window_table
+    assert second.outcome.diagnostics["runtime_seconds"] == 1.25
+
+
+def test_solver_cache_keeps_infrastructure_failure_separate(
+    tmp_path,
+) -> None:
+    cache = ContentAddressedSolverCache(tmp_path / "cache")
+    identity = _cache_identity()
+
+    def broken_compute() -> CandidateSolveOutcome:
+        raise OSError("worker lost")
+
+    with pytest.raises(OSError, match="worker lost"):
+        cache.get_or_solve(identity, broken_compute)
+
+    cache_key = build_solver_cache_key(identity).key
+    assert cache.entry_state(cache_key) == "failed"
+    assert cache.entry_audit(cache_key)["failure_class"] == "infrastructure_failure"
+    with pytest.raises(CachedInfrastructureError, match="worker lost"):
+        cache.get_or_solve(
+            identity,
+            lambda: pytest.fail("failed cache entry must not recompute silently"),
+        )

@@ -9,8 +9,11 @@ from __future__ import annotations
 import hashlib
 import itertools
 import json
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+import os
+import uuid
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Literal
 
@@ -119,6 +122,262 @@ class FormalMetricResult:
     reliable_motion_reset_fft_mae_bpm: float
     classic_motion_final_mae_bpm: float
     classic_motion_reset_fft_mae_bpm: float
+
+
+@dataclass(frozen=True)
+class SolverCacheIdentity:
+    """足以唯一识别一次候选物理求解的输入事实。"""
+
+    data_sha256: str
+    reference_sha256: str
+    git_commit: str
+    run_config: Mapping[str, Any]
+    candidate: BOCandidate
+    reference_groups_order: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class SolverCacheKey:
+    """内容寻址键及其可审计规范化载荷。"""
+
+    key: str
+    payload: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
+class CandidateSolveOutcome:
+    """一次物理求解及正式指标评价的可缓存结果。"""
+
+    status: Literal["valid", "invalid"]
+    solver_result: V2SolverResult | None = None
+    formal_metrics: FormalMetricResult | None = None
+    failure_reason: str = ""
+    diagnostics: Mapping[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def valid(
+        cls,
+        solver_result: V2SolverResult,
+        formal_metrics: FormalMetricResult,
+        *,
+        diagnostics: Mapping[str, Any] | None = None,
+    ) -> CandidateSolveOutcome:
+        return cls(
+            status="valid",
+            solver_result=solver_result,
+            formal_metrics=formal_metrics,
+            diagnostics=MappingProxyType(dict(diagnostics or {})),
+        )
+
+    @classmethod
+    def invalid(
+        cls,
+        failure_reason: str,
+        *,
+        solver_result: V2SolverResult | None = None,
+        diagnostics: Mapping[str, Any] | None = None,
+    ) -> CandidateSolveOutcome:
+        reason = str(failure_reason).strip()
+        if not reason:
+            raise ValueError("无效候选必须提供 failure_reason")
+        return cls(
+            status="invalid",
+            solver_result=solver_result,
+            failure_reason=reason,
+            diagnostics=MappingProxyType(dict(diagnostics or {})),
+        )
+
+
+@dataclass(frozen=True)
+class SolverCacheLookup:
+    """一次逻辑候选对内容寻址缓存的读取结果。"""
+
+    cache_key: str
+    cache_hit: bool
+    physical_solve_performed: bool
+    outcome: CandidateSolveOutcome
+
+
+class CachedInfrastructureError(RuntimeError):
+    """缓存中已有明确的基础设施失败。"""
+
+
+class CacheReservationConflictError(TimeoutError):
+    """等待另一个 worker 的候选预占超时。"""
+
+
+class ContentAddressedSolverCache:
+    """使用原子目录预占的本地确定性候选求解缓存。"""
+
+    def __init__(self, root: Path | str) -> None:
+        self.root = Path(root)
+
+    def entry_state(
+        self,
+        cache_key: str,
+    ) -> Literal["missing", "reserved", "complete", "failed"]:
+        entry = self._entry_path(cache_key)
+        if not entry.is_dir():
+            return "missing"
+        if (entry / "complete.json").is_file():
+            return "complete"
+        if (entry / "failed.json").is_file():
+            return "failed"
+        return "reserved"
+
+    def entry_audit(self, cache_key: str) -> Mapping[str, Any]:
+        """返回不包含大型数值数组的缓存状态审计。"""
+
+        entry = self._entry_path(cache_key)
+        state = self.entry_state(cache_key)
+        audit: dict[str, Any] = {
+            "cache_key": cache_key,
+            "state": state,
+        }
+        reservation_path = entry / "reservation.json"
+        if reservation_path.is_file():
+            reservation = _read_json(reservation_path)
+            audit["pid"] = reservation.get("pid")
+            audit["identity"] = reservation.get("identity")
+        if state == "failed":
+            audit.update(_read_json(entry / "failed.json"))
+        elif state == "complete":
+            outcome = _read_json(entry / "outcome.json")
+            audit["outcome_status"] = outcome.get("status")
+            audit["failure_reason"] = outcome.get("failure_reason", "")
+            audit["diagnostics"] = outcome.get("diagnostics", {})
+        return MappingProxyType(audit)
+
+    def get_or_solve(
+        self,
+        identity: SolverCacheIdentity,
+        solve: Callable[[], CandidateSolveOutcome],
+        *,
+        wait_timeout_s: float = 60.0,
+        poll_interval_s: float = 0.05,
+    ) -> SolverCacheLookup:
+        cache_key = build_solver_cache_key(identity)
+        self.root.mkdir(parents=True, exist_ok=True)
+        entry = self._entry_path(cache_key.key)
+        try:
+            entry.mkdir()
+        except FileExistsError:
+            return self._wait_for_existing(
+                cache_key.key,
+                wait_timeout_s=wait_timeout_s,
+                poll_interval_s=poll_interval_s,
+            )
+
+        _atomic_write_json(
+            entry / "reservation.json",
+            {
+                "cache_key": cache_key.key,
+                "pid": os.getpid(),
+                "identity": cache_key.payload,
+            },
+        )
+        try:
+            outcome = solve()
+            if not isinstance(outcome, CandidateSolveOutcome):
+                raise TypeError("solve 必须返回 CandidateSolveOutcome")
+            _write_cached_outcome(entry, outcome)
+            _atomic_write_json(
+                entry / "complete.json",
+                {
+                    "cache_key": cache_key.key,
+                    "status": outcome.status,
+                },
+            )
+        except BaseException as exc:
+            _atomic_write_json(
+                entry / "failed.json",
+                {
+                    "cache_key": cache_key.key,
+                    "failure_class": "infrastructure_failure",
+                    "exception_type": type(exc).__name__,
+                    "message": str(exc),
+                },
+            )
+            raise
+        return SolverCacheLookup(
+            cache_key=cache_key.key,
+            cache_hit=False,
+            physical_solve_performed=True,
+            outcome=outcome,
+        )
+
+    def _wait_for_existing(
+        self,
+        cache_key: str,
+        *,
+        wait_timeout_s: float,
+        poll_interval_s: float,
+    ) -> SolverCacheLookup:
+        import time
+
+        deadline = time.monotonic() + max(0.0, float(wait_timeout_s))
+        while True:
+            state = self.entry_state(cache_key)
+            if state == "complete":
+                return SolverCacheLookup(
+                    cache_key=cache_key,
+                    cache_hit=True,
+                    physical_solve_performed=False,
+                    outcome=_read_cached_outcome(self._entry_path(cache_key)),
+                )
+            if state == "failed":
+                failure = _read_json(self._entry_path(cache_key) / "failed.json")
+                raise CachedInfrastructureError(
+                    str(failure.get("message", "cached infrastructure failure"))
+                )
+            if state == "missing":
+                raise CacheReservationConflictError(
+                    f"缓存预占在等待期间消失: {cache_key}"
+                )
+            if time.monotonic() >= deadline:
+                raise CacheReservationConflictError(
+                    f"等待缓存预占超时: {cache_key}"
+                )
+            time.sleep(max(0.001, float(poll_interval_s)))
+
+    def _entry_path(self, cache_key: str) -> Path:
+        if (
+            len(cache_key) != 64
+            or any(character not in "0123456789abcdef" for character in cache_key)
+        ):
+            raise ValueError("cache_key 必须是 64 位小写 SHA-256")
+        return self.root / cache_key
+
+
+def build_solver_cache_key(identity: SolverCacheIdentity) -> SolverCacheKey:
+    """由冻结输入事实构造稳定 SHA-256 求解缓存键。"""
+
+    payload = {
+        "data_sha256": str(identity.data_sha256),
+        "reference_sha256": str(identity.reference_sha256),
+        "git_commit": str(identity.git_commit),
+        "run_config": _json_ready(identity.run_config),
+        "candidate_id": identity.candidate.candidate_id,
+        "space_name": identity.candidate.space_name,
+        "requested_params": _json_ready(identity.candidate.requested_params),
+        "actual_params": _json_ready(identity.candidate.actual_params),
+        "fixed_params": _json_ready(identity.candidate.fixed_params),
+        "reference_groups_order": [
+            str(group) for group in identity.reference_groups_order
+        ],
+        "metric_contract_version": METRIC_CONTRACT_VERSION,
+    }
+    canonical = json.dumps(
+        payload,
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+    return SolverCacheKey(
+        key=hashlib.sha256(canonical).hexdigest(),
+        payload=MappingProxyType(payload),
+    )
 
 
 def build_bo_search_space(name: SpaceName) -> BOSearchSpace:
@@ -549,3 +808,115 @@ def _mae(
             )
         )
     )
+
+
+def _write_cached_outcome(
+    entry: Path,
+    outcome: CandidateSolveOutcome,
+) -> None:
+    if outcome.status == "valid" and (
+        outcome.solver_result is None or outcome.formal_metrics is None
+    ):
+        raise ValueError("valid 候选必须同时包含 solver_result 和 formal_metrics")
+    solver_payload: dict[str, Any] | None = None
+    if outcome.solver_result is not None:
+        solver_payload = {
+            "err_stats": _json_ready(outcome.solver_result.err_stats),
+            "metadata": _json_ready(outcome.solver_result.metadata),
+            "window_table": _json_ready(outcome.solver_result.window_table),
+        }
+        temp_npz = entry / f"solver_result.{uuid.uuid4().hex}.tmp"
+        with temp_npz.open("wb") as handle:
+            np.savez_compressed(
+                handle,
+                HR=np.asarray(outcome.solver_result.HR, dtype=float),
+            )
+        os.replace(temp_npz, entry / "solver_result.npz")
+    _atomic_write_json(
+        entry / "outcome.json",
+        {
+            "status": outcome.status,
+            "failure_reason": outcome.failure_reason,
+            "diagnostics": _json_ready(outcome.diagnostics),
+            "formal_metrics": (
+                _json_ready(asdict(outcome.formal_metrics))
+                if outcome.formal_metrics is not None
+                else None
+            ),
+            "solver_result": solver_payload,
+        },
+    )
+
+
+def _read_cached_outcome(entry: Path) -> CandidateSolveOutcome:
+    payload = _read_json(entry / "outcome.json")
+    formal_payload = payload.get("formal_metrics")
+    formal_metrics = (
+        FormalMetricResult(**formal_payload)
+        if isinstance(formal_payload, dict)
+        else None
+    )
+    solver_payload = payload.get("solver_result")
+    solver_result: V2SolverResult | None = None
+    if isinstance(solver_payload, dict):
+        with np.load(entry / "solver_result.npz", allow_pickle=False) as arrays:
+            hr = np.asarray(arrays["HR"], dtype=float)
+        solver_result = V2SolverResult(
+            HR=hr,
+            err_stats=dict(solver_payload.get("err_stats", {})),
+            metadata=dict(solver_payload.get("metadata", {})),
+            window_table=list(solver_payload.get("window_table", [])),
+        )
+    status = str(payload.get("status", ""))
+    if status not in {"valid", "invalid"}:
+        raise ValueError(f"缓存 outcome 状态非法: {status!r}")
+    return CandidateSolveOutcome(
+        status=status,
+        solver_result=solver_result,
+        formal_metrics=formal_metrics,
+        failure_reason=str(payload.get("failure_reason", "")),
+        diagnostics=MappingProxyType(dict(payload.get("diagnostics", {}))),
+    )
+
+
+def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    temp.write_text(
+        json.dumps(
+            _json_ready(payload),
+            ensure_ascii=False,
+            sort_keys=True,
+            indent=2,
+            allow_nan=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    os.replace(temp, path)
+
+
+def _read_json(path: Path) -> dict[str, Any]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"缓存 JSON 顶层必须是对象: {path}")
+    return payload
+
+
+def _json_ready(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {
+            str(key): _json_ready(item)
+            for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
+        }
+    if isinstance(value, tuple | list):
+        return [_json_ready(item) for item in value]
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, np.integer | np.floating | np.bool_):
+        return value.item()
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    raise TypeError(f"值无法进入缓存 JSON: {type(value).__name__}")
