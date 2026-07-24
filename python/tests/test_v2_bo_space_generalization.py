@@ -14,9 +14,12 @@ from ppg_hr.v2.bo_space_generalization import (
     ContentAddressedSolverCache,
     FormalMetricContractError,
     InfrastructureSolveError,
+    SearchAlreadyRunningError,
     SearchEvaluation,
+    SearchExperimentIdentity,
     SeedSearchBudget,
     SolverCacheIdentity,
+    StudyStateMismatchError,
     build_bo_search_space,
     build_solver_cache_key,
     evaluate_formal_metrics,
@@ -549,6 +552,19 @@ def _deterministic_search_evaluation(candidate) -> SearchEvaluation:
     )
 
 
+def _search_experiment_identity(
+    *,
+    git_commit: str = "test-commit",
+) -> SearchExperimentIdentity:
+    return SearchExperimentIdentity(
+        input_sha256s=("data-sha",),
+        reference_sha256s=("reference-sha",),
+        git_commit=git_commit,
+        run_config={"reference_groups_order": ["HF"]},
+        evaluation_version="test-evaluation-v1",
+    )
+
+
 def test_independent_seed_lanes_and_fill_reach_global_unique_budget(
     tmp_path,
 ) -> None:
@@ -556,6 +572,7 @@ def test_independent_seed_lanes_and_fill_reach_global_unique_budget(
     result = run_seed_search(
         space=space,
         output_dir=tmp_path / "search",
+        experiment_identity=_search_experiment_identity(),
         evaluate=_deterministic_search_evaluation,
         budget=SeedSearchBudget(
             lane_seeds=(42, 43, 44),
@@ -581,6 +598,7 @@ def test_independent_seed_lanes_and_fill_reach_global_unique_budget(
     second = run_seed_search(
         space=space,
         output_dir=tmp_path / "search",
+        experiment_identity=_search_experiment_identity(),
         evaluate=lambda _: pytest.fail("completed studies must be resumed"),
         budget=SeedSearchBudget(
             lane_seeds=(42, 43, 44),
@@ -612,6 +630,7 @@ def test_seed_search_resume_completes_running_trial_before_new_ask(
         run_seed_search(
             space=space,
             output_dir=tmp_path / "resumed",
+            experiment_identity=_search_experiment_identity(),
             evaluate=interrupt_once,
             budget=budget,
         )
@@ -619,12 +638,14 @@ def test_seed_search_resume_completes_running_trial_before_new_ask(
     resumed = run_seed_search(
         space=space,
         output_dir=tmp_path / "resumed",
+        experiment_identity=_search_experiment_identity(),
         evaluate=_deterministic_search_evaluation,
         budget=budget,
     )
     uninterrupted = run_seed_search(
         space=space,
         output_dir=tmp_path / "uninterrupted",
+        experiment_identity=_search_experiment_identity(),
         evaluate=_deterministic_search_evaluation,
         budget=budget,
     )
@@ -646,6 +667,7 @@ def test_seed_lane_parallelism_does_not_change_histories_or_fill(tmp_path) -> No
     serial = run_seed_search(
         space=space,
         output_dir=tmp_path / "serial",
+        experiment_identity=_search_experiment_identity(),
         evaluate=_deterministic_search_evaluation,
         budget=budget,
         parallel_lanes=False,
@@ -653,6 +675,7 @@ def test_seed_lane_parallelism_does_not_change_histories_or_fill(tmp_path) -> No
     parallel = run_seed_search(
         space=space,
         output_dir=tmp_path / "parallel",
+        experiment_identity=_search_experiment_identity(),
         evaluate=_deterministic_search_evaluation,
         budget=budget,
         parallel_lanes=True,
@@ -661,3 +684,96 @@ def test_seed_lane_parallelism_does_not_change_histories_or_fill(tmp_path) -> No
     assert parallel.lanes == serial.lanes
     assert parallel.fill_history == serial.fill_history
     assert parallel.global_candidate_ids == serial.global_candidate_ids
+
+
+def test_seed_search_fully_enumerates_space_smaller_than_requested_budget(
+    tmp_path,
+) -> None:
+    space = _small_physical_space()
+
+    result = run_seed_search(
+        space=space,
+        output_dir=tmp_path / "enumerated",
+        experiment_identity=_search_experiment_identity(),
+        evaluate=_deterministic_search_evaluation,
+        budget=SeedSearchBudget(
+            lane_seeds=(42,),
+            lane_unique_budget=2,
+            global_unique_budget=6,
+            n_startup_trials=1,
+        ),
+    )
+
+    assert len(result.global_candidate_ids) == len(space.candidates) == 4
+    assert result.requested_global_unique_budget == 6
+    assert result.effective_global_unique_budget == 4
+    assert result.space_exhausted is True
+    assert all(not row.is_duplicate for row in result.fill_history)
+
+
+def test_seed_search_rejects_reusing_output_for_different_experiment_identity(
+    tmp_path,
+) -> None:
+    output = tmp_path / "identity"
+    budget = SeedSearchBudget(
+        lane_seeds=(42,),
+        lane_unique_budget=1,
+        global_unique_budget=1,
+        n_startup_trials=1,
+    )
+    run_seed_search(
+        space=_small_physical_space(),
+        output_dir=output,
+        experiment_identity=_search_experiment_identity(),
+        evaluate=_deterministic_search_evaluation,
+        budget=budget,
+    )
+
+    with pytest.raises(StudyStateMismatchError, match="实验身份"):
+        run_seed_search(
+            space=_small_physical_space(),
+            output_dir=output,
+            experiment_identity=_search_experiment_identity(
+                git_commit="different-commit"
+            ),
+            evaluate=_deterministic_search_evaluation,
+            budget=budget,
+        )
+
+
+def test_seed_search_exclusively_locks_output_directory(tmp_path) -> None:
+    entered = threading.Event()
+    release = threading.Event()
+    output = tmp_path / "locked"
+    budget = SeedSearchBudget(
+        lane_seeds=(42,),
+        lane_unique_budget=1,
+        global_unique_budget=1,
+        n_startup_trials=1,
+    )
+
+    def blocking_evaluate(candidate) -> SearchEvaluation:
+        entered.set()
+        assert release.wait(timeout=5)
+        return _deterministic_search_evaluation(candidate)
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        running = executor.submit(
+            run_seed_search,
+            space=_small_physical_space(),
+            output_dir=output,
+            experiment_identity=_search_experiment_identity(),
+            evaluate=blocking_evaluate,
+            budget=budget,
+        )
+        assert entered.wait(timeout=5)
+        with pytest.raises(SearchAlreadyRunningError):
+            run_seed_search(
+                space=_small_physical_space(),
+                output_dir=output,
+                experiment_identity=_search_experiment_identity(),
+                evaluate=_deterministic_search_evaluation,
+                budget=budget,
+            )
+        release.set()
+        running.result(timeout=10)

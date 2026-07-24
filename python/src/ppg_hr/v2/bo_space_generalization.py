@@ -13,8 +13,9 @@ import math
 import os
 import threading
 import uuid
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from types import MappingProxyType
@@ -592,6 +593,23 @@ class SearchEvaluation:
 
 
 @dataclass(frozen=True)
+class SearchExperimentIdentity:
+    """禁止跨输入、代码或求解配置复用持久化搜索的冻结身份。"""
+
+    input_sha256s: tuple[str, ...]
+    reference_sha256s: tuple[str, ...]
+    git_commit: str
+    run_config: Mapping[str, Any]
+    evaluation_version: str
+
+    def __post_init__(self) -> None:
+        if not self.input_sha256s or not self.reference_sha256s:
+            raise ValueError("搜索身份必须包含输入与参考文件 SHA-256")
+        if not self.git_commit or not self.evaluation_version:
+            raise ValueError("搜索身份必须包含 commit 与评价版本")
+
+
+@dataclass(frozen=True)
 class SeedSearchBudget:
     """独立 seed lane 与确定性 fill 的不重复候选预算。"""
 
@@ -651,6 +669,9 @@ class SeedSearchResult:
     fill_history: tuple[SearchTrialRecord, ...]
     global_candidate_ids: tuple[str, ...]
     seed_stability_candidate_ids: tuple[str, ...]
+    requested_global_unique_budget: int
+    effective_global_unique_budget: int
+    space_exhausted: bool
 
     @property
     def fill_unique_candidate_count(self) -> int:
@@ -665,23 +686,66 @@ class UniqueBudgetStalledError(RuntimeError):
     """离散空间未耗尽但连续建议无法补足不同候选。"""
 
 
+class SearchAlreadyRunningError(RuntimeError):
+    """同一输出目录已有另一个搜索驱动器持有独占锁。"""
+
+
 def run_seed_search(
     *,
     space: BOSearchSpace,
     output_dir: Path | str,
+    experiment_identity: SearchExperimentIdentity,
     evaluate: Callable[[BOCandidate], SearchEvaluation],
     budget: SeedSearchBudget,
     parallel_lanes: bool = False,
 ) -> SeedSearchResult:
     """运行独立 seed lane，并以独立 fill 补足全局不同候选。"""
 
-    _validate_seed_search(space, budget)
     output = Path(output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+    with _exclusive_search_directory(output / ".driver.lock"):
+        return _run_seed_search_locked(
+            space=space,
+            output=output,
+            experiment_identity=experiment_identity,
+            evaluate=evaluate,
+            budget=budget,
+            parallel_lanes=parallel_lanes,
+        )
+
+
+def _run_seed_search_locked(
+    *,
+    space: BOSearchSpace,
+    output: Path,
+    experiment_identity: SearchExperimentIdentity,
+    evaluate: Callable[[BOCandidate], SearchEvaluation],
+    budget: SeedSearchBudget,
+    parallel_lanes: bool,
+) -> SeedSearchResult:
+    _validate_seed_search(space, budget)
     studies_dir = output / "studies"
     studies_dir.mkdir(parents=True, exist_ok=True)
-    config_hash = _seed_search_config_hash(space, budget)
+    config_hash = _seed_search_config_hash(
+        space,
+        budget,
+        experiment_identity,
+    )
     state_path = output / "driver_state.json"
+    _ensure_search_identity(
+        output / "search_identity.json",
+        config_hash=config_hash,
+        experiment_identity=experiment_identity,
+    )
+    _read_driver_state(state_path, config_hash=config_hash)
     state_lock = threading.Lock()
+    effective_global_budget = min(
+        budget.global_unique_budget,
+        len(space.candidates),
+    )
+    enumerate_entire_space = (
+        effective_global_budget < budget.global_unique_budget
+    )
 
     def run_lane(seed: int) -> SeedLaneResult:
         return _run_seed_lane(
@@ -729,7 +793,8 @@ def run_seed_search(
         state_lock=state_lock,
         config_hash=config_hash,
         seed=budget.fill_seed,
-        global_unique_budget=budget.global_unique_budget,
+        global_unique_budget=effective_global_budget,
+        enumerate_entire_space=enumerate_entire_space,
         n_startup_trials=budget.n_startup_trials,
         unique_stall_limit=budget.unique_stall_limit,
         objective_version=budget.objective_version,
@@ -755,6 +820,9 @@ def run_seed_search(
         fill_history=fill_history,
         global_candidate_ids=global_candidate_ids,
         seed_stability_candidate_ids=seed_union,
+        requested_global_unique_budget=budget.global_unique_budget,
+        effective_global_unique_budget=effective_global_budget,
+        space_exhausted=enumerate_entire_space,
     )
     _atomic_write_json(
         state_path,
@@ -770,6 +838,9 @@ def run_seed_search(
                 result.fill_unique_candidate_count
             ),
             "global_candidate_ids": global_candidate_ids,
+            "requested_global_unique_budget": budget.global_unique_budget,
+            "effective_global_unique_budget": effective_global_budget,
+            "space_exhausted": enumerate_entire_space,
             "unresolved_trials": [],
         },
     )
@@ -809,7 +880,7 @@ def _run_seed_lane(
     seen = {
         row.candidate_id for row in completed if not row.is_duplicate
     }
-    duplicate_streak = 0
+    duplicate_streak = _trailing_duplicate_count(completed)
 
     running = sorted(
         study.get_trials(
@@ -838,7 +909,7 @@ def _run_seed_lane(
         evaluation = evaluate(candidate)
         _finish_trial(
             study,
-            trial_number=frozen.number,
+            trial=frozen,
             candidate=candidate,
             evaluation=evaluation,
             lane=lane,
@@ -855,8 +926,15 @@ def _run_seed_lane(
             trial_number=frozen.number,
             state_lock=state_lock,
         )
-        if not duplicate:
+        if duplicate:
+            duplicate_streak += 1
+            if duplicate_streak >= unique_stall_limit:
+                raise UniqueBudgetStalledError(
+                    f"{lane} 连续 {duplicate_streak} 次未产生新候选"
+                )
+        else:
             seen.add(candidate.candidate_id)
+            duplicate_streak = 0
 
     while len(seen) < unique_budget:
         trial = study.ask(fixed_distributions=distributions)
@@ -879,7 +957,7 @@ def _run_seed_lane(
         evaluation = evaluate(candidate)
         _finish_trial(
             study,
-            trial_number=trial.number,
+            trial=trial,
             candidate=candidate,
             evaluation=evaluation,
             lane=lane,
@@ -930,6 +1008,7 @@ def _run_fill_study(
     config_hash: str,
     seed: int,
     global_unique_budget: int,
+    enumerate_entire_space: bool,
     n_startup_trials: int,
     unique_stall_limit: int,
     objective_version: str,
@@ -962,7 +1041,7 @@ def _run_fill_study(
         for trial in study.get_trials(deepcopy=False)
         if trial.user_attrs.get("stage") == "fill_import"
     }
-    for candidate_id in seed_union:
+    for import_index, candidate_id in enumerate(seed_union, start=1):
         if candidate_id in imported:
             continue
         candidate = candidate_by_id[candidate_id]
@@ -972,13 +1051,19 @@ def _run_fill_study(
                 params=_trial_params(candidate, space),
                 distributions=distributions,
                 value=float(evaluation.objective),
+                system_attrs={
+                    "constraints": [
+                        float(value)
+                        for value in evaluation.constraints
+                    ]
+                },
                 user_attrs=_trial_user_attrs(
                     candidate=candidate,
                     evaluation=evaluation,
                     lane=lane,
                     seed=seed,
                     stage="fill_import",
-                    suggestion_index=0,
+                    suggestion_index=import_index,
                     unique_index=None,
                     is_duplicate=False,
                 ),
@@ -994,7 +1079,7 @@ def _run_fill_study(
         ),
     }
     fill_suggestion_index = len(history)
-    duplicate_streak = 0
+    duplicate_streak = _trailing_duplicate_count(history)
     running = sorted(
         study.get_trials(
             deepcopy=False,
@@ -1025,7 +1110,7 @@ def _run_fill_study(
         )
         _finish_trial(
             study,
-            trial_number=frozen.number,
+            trial=frozen,
             candidate=candidate,
             evaluation=evaluation,
             lane=lane,
@@ -1042,8 +1127,87 @@ def _run_fill_study(
             trial_number=frozen.number,
             state_lock=state_lock,
         )
-        if not duplicate:
+        if duplicate:
+            duplicate_streak += 1
+            if duplicate_streak >= unique_stall_limit:
+                raise UniqueBudgetStalledError(
+                    f"fill 连续 {duplicate_streak} 次未产生新候选"
+                )
+        else:
             global_seen.add(candidate.candidate_id)
+            duplicate_streak = 0
+
+    if enumerate_entire_space:
+        remaining = sorted(
+            (
+                candidate
+                for candidate in space.candidates
+                if candidate.candidate_id not in global_seen
+            ),
+            key=lambda candidate: candidate.candidate_id,
+        )
+        for candidate in remaining:
+            study.enqueue_trial(
+                _trial_params(candidate, space),
+                user_attrs={
+                    "fill_selection": "full_enumeration_candidate_id_order"
+                },
+                skip_if_exists=True,
+            )
+            trial = study.ask(fixed_distributions=distributions)
+            suggested = _candidate_from_trial(
+                trial,
+                space=space,
+                candidate_by_coordinate=candidate_by_coordinate,
+            )
+            if suggested.candidate_id != candidate.candidate_id:
+                raise StudyStateMismatchError(
+                    "全枚举 fill 的队列候选顺序不一致"
+                )
+            fill_suggestion_index += 1
+            _write_running_trial_state(
+                state_path,
+                config_hash=config_hash,
+                lane=lane,
+                stage="fill",
+                trial_number=trial.number,
+                candidate_id=candidate.candidate_id,
+                state_lock=state_lock,
+            )
+            evaluation = evaluation_by_candidate.get(candidate.candidate_id)
+            if evaluation is None:
+                evaluation = evaluate(candidate)
+                evaluation_by_candidate[candidate.candidate_id] = evaluation
+            _finish_trial(
+                study,
+                trial=trial,
+                candidate=candidate,
+                evaluation=evaluation,
+                lane=lane,
+                seed=seed,
+                stage="fill",
+                suggestion_index=fill_suggestion_index,
+                unique_index=len(global_seen) + 1,
+                is_duplicate=False,
+            )
+            _clear_running_trial_state(
+                state_path,
+                config_hash=config_hash,
+                lane=lane,
+                trial_number=trial.number,
+                state_lock=state_lock,
+            )
+            global_seen.add(candidate.candidate_id)
+        if len(global_seen) != global_unique_budget:
+            raise StudyStateMismatchError(
+                "全枚举 fill 完成后候选数与离散空间大小不一致"
+            )
+        return _study_history(
+            study,
+            lane=lane,
+            seed=seed,
+            stage="fill",
+        )
 
     while len(global_seen) < global_unique_budget:
         trial = study.ask(fixed_distributions=distributions)
@@ -1069,7 +1233,7 @@ def _run_fill_study(
         )
         _finish_trial(
             study,
-            trial_number=trial.number,
+            trial=trial,
             candidate=candidate,
             evaluation=evaluation,
             lane=lane,
@@ -1141,7 +1305,7 @@ def _open_seed_study(
 def _finish_trial(
     study: optuna.study.Study,
     *,
-    trial_number: int,
+    trial: optuna.trial.Trial | optuna.trial.FrozenTrial,
     candidate: BOCandidate,
     evaluation: SearchEvaluation,
     lane: str,
@@ -1151,10 +1315,7 @@ def _finish_trial(
     unique_index: int | None,
     is_duplicate: bool,
 ) -> None:
-    trial_id = study._storage.get_trial_id_from_study_id_trial_number(
-        study._study_id,
-        int(trial_number),
-    )
+    live_trial = _as_live_trial(study, trial)
     for key, value in _trial_user_attrs(
         candidate=candidate,
         evaluation=evaluation,
@@ -1165,8 +1326,23 @@ def _finish_trial(
         unique_index=unique_index,
         is_duplicate=is_duplicate,
     ).items():
-        study._storage.set_trial_user_attr(trial_id, key, value)
-    study.tell(int(trial_number), float(evaluation.objective))
+        live_trial.set_user_attr(key, value)
+    study.tell(live_trial, float(evaluation.objective))
+
+
+def _as_live_trial(
+    study: optuna.study.Study,
+    trial: optuna.trial.Trial | optuna.trial.FrozenTrial,
+) -> optuna.trial.Trial:
+    if isinstance(trial, optuna.trial.Trial):
+        return trial
+    trial_id = getattr(trial, "_trial_id", None)
+    if not isinstance(trial_id, int):
+        raise StudyStateMismatchError(
+            "当前 Optuna 版本无法恢复 RUNNING trial；"
+            f"version={optuna.__version__}"
+        )
+    return optuna.trial.Trial(study, trial_id)
 
 
 def _trial_user_attrs(
@@ -1315,14 +1491,23 @@ def _evaluations_from_lanes(
     return evaluations
 
 
+def _trailing_duplicate_count(
+    history: Sequence[SearchTrialRecord],
+) -> int:
+    count = 0
+    for row in reversed(history):
+        if not row.is_duplicate:
+            break
+        count += 1
+    return count
+
+
 def _validate_seed_search(
     space: BOSearchSpace,
     budget: SeedSearchBudget,
 ) -> None:
     if budget.lane_unique_budget > len(space.candidates):
         raise ValueError("lane_unique_budget 超过离散空间大小")
-    if budget.global_unique_budget > len(space.candidates):
-        raise ValueError("global_unique_budget 超过离散空间大小")
     candidate_by_coordinate = {
         candidate.coordinate: candidate for candidate in space.candidates
     }
@@ -1339,6 +1524,7 @@ def _validate_seed_search(
 def _seed_search_config_hash(
     space: BOSearchSpace,
     budget: SeedSearchBudget,
+    experiment_identity: SearchExperimentIdentity,
 ) -> str:
     payload = {
         "space_name": space.name,
@@ -1348,6 +1534,13 @@ def _seed_search_config_hash(
             candidate.candidate_id for candidate in space.candidates
         ],
         "budget": asdict(budget),
+        "experiment_identity": {
+            "input_sha256s": experiment_identity.input_sha256s,
+            "reference_sha256s": experiment_identity.reference_sha256s,
+            "git_commit": experiment_identity.git_commit,
+            "run_config": _json_ready(experiment_identity.run_config),
+            "evaluation_version": experiment_identity.evaluation_version,
+        },
         "metric_contract_version": METRIC_CONTRACT_VERSION,
     }
     return hashlib.sha256(
@@ -1359,6 +1552,75 @@ def _seed_search_config_hash(
             allow_nan=False,
         ).encode("utf-8")
     ).hexdigest()
+
+
+def _ensure_search_identity(
+    path: Path,
+    *,
+    config_hash: str,
+    experiment_identity: SearchExperimentIdentity,
+) -> None:
+    expected = {
+        "config_hash": config_hash,
+        "experiment_identity": {
+            "input_sha256s": experiment_identity.input_sha256s,
+            "reference_sha256s": experiment_identity.reference_sha256s,
+            "git_commit": experiment_identity.git_commit,
+            "run_config": _json_ready(experiment_identity.run_config),
+            "evaluation_version": experiment_identity.evaluation_version,
+        },
+        "metric_contract_version": METRIC_CONTRACT_VERSION,
+    }
+    if path.exists():
+        actual = _read_json(path)
+        if actual != _json_ready(expected):
+            raise StudyStateMismatchError(
+                "search_identity.json 与当前冻结实验身份不一致"
+            )
+        return
+    _atomic_write_json(path, expected)
+
+
+@contextmanager
+def _exclusive_search_directory(lock_path: Path) -> Iterator[None]:
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = lock_path.open("a+b")
+    try:
+        handle.seek(0, os.SEEK_END)
+        if handle.tell() == 0:
+            handle.write(b"\0")
+            handle.flush()
+        handle.seek(0)
+        try:
+            if os.name == "nt":
+                import msvcrt
+
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(
+                    handle.fileno(),
+                    fcntl.LOCK_EX | fcntl.LOCK_NB,
+                )
+        except OSError as exc:
+            raise SearchAlreadyRunningError(
+                f"搜索输出目录正在使用: {lock_path.parent}"
+            ) from exc
+        try:
+            yield
+        finally:
+            handle.seek(0)
+            if os.name == "nt":
+                import msvcrt
+
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    finally:
+        handle.close()
 
 
 def _write_running_trial_state(
