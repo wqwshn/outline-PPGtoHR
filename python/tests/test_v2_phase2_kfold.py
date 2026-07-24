@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 import ppg_hr.v2.phase2_kfold as phase2_kfold
+import ppg_hr.v2.phase2_kfold_runtime as phase2_kfold_runtime
 from ppg_hr.v2.bo_space_generalization import (
     CandidateSolveOutcome,
     FormalMetricResult,
@@ -319,7 +320,11 @@ def test_default_k0_runtime_defers_loading_heldout_data_until_replay(
         loaded_data_paths.append(Path(data_path))
         return object()
 
-    monkeypatch.setattr(phase2_kfold, "load_v2_dataset", load_dataset)
+    monkeypatch.setattr(
+        phase2_kfold_runtime,
+        "load_v2_dataset",
+        load_dataset,
+    )
     runtime = build_k0_default_runtime(
         base_config=V2RunConfig(
             data_path=records[0].data_path,
