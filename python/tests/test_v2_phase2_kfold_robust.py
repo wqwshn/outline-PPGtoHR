@@ -221,6 +221,11 @@ def test_k1_uses_worst_motion_constraints_and_frozen_neighborhood(
         row["stage"] for row in rows
     }
     assert {
+        row["lane"]
+        for row in rows
+        if row["stage"] == "neighborhood"
+    } == {"enumeration"}
+    assert {
         "scene",
         "fold",
         "suggestion_index",

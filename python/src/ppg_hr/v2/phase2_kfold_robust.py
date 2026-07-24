@@ -472,7 +472,7 @@ def run_k1_fold_study(
                 scene=config.scene,
                 fold=config.fold,
                 stage="neighborhood",
-                lane="neighborhood",
+                lane="enumeration",
                 seed=-1,
                 trial_number=index,
                 suggestion_index=index + 1,
