@@ -1253,3 +1253,25 @@ def test_atomic_json_temp_name_does_not_repeat_long_target_name(
     assert json.loads(target.read_text(encoding="utf-8")) == {
         "status": "ok"
     }
+
+
+@pytest.mark.skipif(phase2_bo.os.name != "nt", reason="Windows only")
+def test_solver_cache_uses_extended_path_for_hashed_children(
+    tmp_path,
+) -> None:
+    root = tmp_path
+    while len(str(root)) < 220:
+        root = root / "long-cache-segment"
+    cache = ContentAddressedSolverCache(root)
+    lock_path = (
+        cache.root
+        / "_claim_locks"
+        / ("a" * 64 + ".lock")
+    )
+
+    assert str(cache.root).startswith("\\\\?\\")
+    assert len(str(lock_path)) > 260
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+b"):
+        pass
+    assert lock_path.is_file()

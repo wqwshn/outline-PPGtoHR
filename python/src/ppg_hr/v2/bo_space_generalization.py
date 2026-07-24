@@ -331,7 +331,7 @@ class ContentAddressedSolverCache:
     """使用原子目录预占的本地确定性候选求解缓存。"""
 
     def __init__(self, root: Path | str) -> None:
-        self.root = Path(root)
+        self.root = _windows_extended_path(Path(root))
 
     def entry_state(
         self,
@@ -2503,6 +2503,16 @@ def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
         if temp.exists():
             with suppress(OSError):
                 temp.unlink()
+
+
+def _windows_extended_path(path: Path) -> Path:
+    resolved = path.resolve()
+    text = str(resolved)
+    if os.name != "nt" or text.startswith("\\\\?\\"):
+        return resolved
+    if text.startswith("\\\\"):
+        return Path("\\\\?\\UNC\\" + text.removeprefix("\\\\"))
+    return Path("\\\\?\\" + text)
 
 
 def _read_json(path: Path) -> dict[str, Any]:
