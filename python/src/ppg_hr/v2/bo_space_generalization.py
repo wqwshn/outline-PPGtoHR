@@ -15,9 +15,10 @@ import threading
 import uuid
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from time import sleep
 from types import MappingProxyType
 from typing import Any, Literal
 
@@ -1310,13 +1311,6 @@ def _run_fill_study(
     }
     fill_suggestion_index = len(history)
     duplicate_streak = _trailing_duplicate_count(history)
-    if (
-        len(global_seen) < global_unique_budget
-        and duplicate_streak >= unique_stall_limit
-    ):
-        raise UniqueBudgetStalledError(
-            f"fill 连续 {duplicate_streak} 次未产生新候选"
-        )
     running = sorted(
         study.get_trials(
             deepcopy=False,
@@ -1375,15 +1369,15 @@ def _run_fill_study(
         )
         if duplicate:
             duplicate_streak += 1
-            if duplicate_streak >= unique_stall_limit:
-                raise UniqueBudgetStalledError(
-                    f"fill 连续 {duplicate_streak} 次未产生新候选"
-                )
         else:
             global_seen.add(candidate.candidate_id)
             duplicate_streak = 0
 
-    if enumerate_entire_space:
+    def complete_with_deterministic_unseen(
+        *,
+        selection_reason: str,
+    ) -> tuple[SearchTrialRecord, ...]:
+        nonlocal fill_suggestion_index
         remaining = sorted(
             (
                 candidate
@@ -1391,12 +1385,12 @@ def _run_fill_study(
                 if candidate.candidate_id not in global_seen
             ),
             key=lambda candidate: candidate.candidate_id,
-        )
+        )[: global_unique_budget - len(global_seen)]
         for candidate in remaining:
             study.enqueue_trial(
                 _trial_params(candidate, space),
                 user_attrs={
-                    "fill_selection": "full_enumeration_candidate_id_order"
+                    "fill_selection": selection_reason,
                 },
                 skip_if_exists=True,
             )
@@ -1408,7 +1402,7 @@ def _run_fill_study(
             )
             if suggested.candidate_id != candidate.candidate_id:
                 raise StudyStateMismatchError(
-                    "全枚举 fill 的队列候选顺序不一致"
+                    "确定性 fill 的队列候选顺序不一致"
                 )
             fill_suggestion_index += 1
             _write_running_trial_state(
@@ -1457,7 +1451,7 @@ def _run_fill_study(
             global_seen.add(candidate.candidate_id)
         if len(global_seen) != global_unique_budget:
             raise StudyStateMismatchError(
-                "全枚举 fill 完成后候选数与离散空间大小不一致"
+                "确定性 fill 完成后候选数与目标唯一预算不一致"
             )
         return _study_history(
             study,
@@ -1466,7 +1460,15 @@ def _run_fill_study(
             stage="fill",
         )
 
-    while len(global_seen) < global_unique_budget:
+    if enumerate_entire_space:
+        return complete_with_deterministic_unseen(
+            selection_reason="full_enumeration_candidate_id_order",
+        )
+
+    while (
+        len(global_seen) < global_unique_budget
+        and duplicate_streak < unique_stall_limit
+    ):
         trial = study.ask(fixed_distributions=distributions)
         candidate = _candidate_from_trial(
             trial,
@@ -1518,13 +1520,16 @@ def _run_fill_study(
         )
         if duplicate:
             duplicate_streak += 1
-            if duplicate_streak >= unique_stall_limit:
-                raise UniqueBudgetStalledError(
-                    f"fill 连续 {duplicate_streak} 次未产生新候选"
-                )
         else:
             global_seen.add(candidate.candidate_id)
             duplicate_streak = 0
+
+    if len(global_seen) < global_unique_budget:
+        return complete_with_deterministic_unseen(
+            selection_reason=(
+                "tpe_duplicate_stall_fallback_candidate_id_order"
+            ),
+        )
     return _study_history(study, lane=lane, seed=seed, stage="fill")
 
 
@@ -2484,7 +2489,20 @@ def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
         + "\n",
         encoding="utf-8",
     )
-    os.replace(temp, path)
+    retry_delays_seconds = (0.01, 0.05, 0.10, 0.25, 0.50)
+    try:
+        for delay_seconds in (*retry_delays_seconds, None):
+            try:
+                os.replace(temp, path)
+                return
+            except PermissionError:
+                if delay_seconds is None:
+                    raise
+                sleep(delay_seconds)
+    finally:
+        if temp.exists():
+            with suppress(OSError):
+                temp.unlink()
 
 
 def _read_json(path: Path) -> dict[str, Any]:

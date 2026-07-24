@@ -862,6 +862,49 @@ def test_independent_seed_lanes_and_fill_reach_global_unique_budget(
     assert second == result
 
 
+def test_fill_switches_to_deterministic_unseen_candidates_after_stall(
+    tmp_path,
+) -> None:
+    space = _fill_physical_space()
+    budget = SeedSearchBudget(
+        lane_seeds=(42, 43, 44),
+        lane_unique_budget=1,
+        global_unique_budget=8,
+        n_startup_trials=1,
+        unique_stall_limit=1,
+    )
+
+    first = run_seed_search(
+        space=space,
+        output_dir=tmp_path / "first",
+        experiment_identity=_search_experiment_identity(),
+        evaluate=_deterministic_search_evaluation,
+        budget=budget,
+    )
+    second = run_seed_search(
+        space=space,
+        output_dir=tmp_path / "second",
+        experiment_identity=_search_experiment_identity(),
+        evaluate=_deterministic_search_evaluation,
+        budget=budget,
+    )
+
+    assert len(first.global_candidate_ids) == 8
+    assert first.global_candidate_ids == second.global_candidate_ids
+    assert first.fill_history == second.fill_history
+    assert any(row.is_duplicate for row in first.fill_history)
+    assert sum(not row.is_duplicate for row in first.fill_history) == (
+        8
+        - len(
+            {
+                candidate_id
+                for lane in first.lanes
+                for candidate_id in lane.unique_candidate_ids
+            }
+        )
+    )
+
+
 def test_seed_search_resume_completes_running_trial_before_new_ask(
     tmp_path,
 ) -> None:
@@ -1159,3 +1202,29 @@ def test_seed_search_evaluates_every_fill_trial_including_duplicates(
         for context in contexts
     }
     assert actual == expected
+
+
+def test_atomic_json_write_retries_transient_windows_replace_denial(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    target = tmp_path / "state.json"
+    original_replace = phase2_bo.os.replace
+    calls = 0
+
+    def transient_replace(source, destination) -> None:
+        nonlocal calls
+        calls += 1
+        if calls < 3:
+            raise PermissionError(5, "simulated transient denial")
+        original_replace(source, destination)
+
+    monkeypatch.setattr(phase2_bo.os, "replace", transient_replace)
+
+    phase2_bo._atomic_write_json(target, {"stage": "search"})
+
+    assert calls == 3
+    assert json.loads(target.read_text(encoding="utf-8")) == {
+        "stage": "search"
+    }
+    assert not list(tmp_path.glob("*.tmp"))
