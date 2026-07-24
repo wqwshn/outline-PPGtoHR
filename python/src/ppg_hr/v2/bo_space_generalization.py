@@ -881,6 +881,10 @@ def _run_seed_lane(
         row.candidate_id for row in completed if not row.is_duplicate
     }
     duplicate_streak = _trailing_duplicate_count(completed)
+    if len(seen) < unique_budget and duplicate_streak >= unique_stall_limit:
+        raise UniqueBudgetStalledError(
+            f"{lane} 连续 {duplicate_streak} 次未产生新候选"
+        )
 
     running = sorted(
         study.get_trials(
@@ -1080,6 +1084,13 @@ def _run_fill_study(
     }
     fill_suggestion_index = len(history)
     duplicate_streak = _trailing_duplicate_count(history)
+    if (
+        len(global_seen) < global_unique_budget
+        and duplicate_streak >= unique_stall_limit
+    ):
+        raise UniqueBudgetStalledError(
+            f"fill 连续 {duplicate_streak} 次未产生新候选"
+        )
     running = sorted(
         study.get_trials(
             deepcopy=False,

@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import pytest
 
+import ppg_hr.v2.bo_space_generalization as phase2_bo
 from ppg_hr.v2.bo_space_generalization import (
     BOSearchSpace,
     CachedInfrastructureError,
@@ -20,6 +21,7 @@ from ppg_hr.v2.bo_space_generalization import (
     SeedSearchBudget,
     SolverCacheIdentity,
     StudyStateMismatchError,
+    UniqueBudgetStalledError,
     build_bo_search_space,
     build_solver_cache_key,
     evaluate_formal_metrics,
@@ -777,3 +779,29 @@ def test_seed_search_exclusively_locks_output_directory(tmp_path) -> None:
             )
         release.set()
         running.result(timeout=10)
+
+
+def test_seed_search_fails_before_new_ask_when_recovered_streak_hit_limit(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        phase2_bo,
+        "_trailing_duplicate_count",
+        lambda _: 3,
+    )
+
+    with pytest.raises(UniqueBudgetStalledError, match="连续 3 次"):
+        run_seed_search(
+            space=_small_physical_space(),
+            output_dir=tmp_path / "stalled",
+            experiment_identity=_search_experiment_identity(),
+            evaluate=lambda _: pytest.fail("stalled resume must not evaluate"),
+            budget=SeedSearchBudget(
+                lane_seeds=(42,),
+                lane_unique_budget=2,
+                global_unique_budget=2,
+                n_startup_trials=1,
+                unique_stall_limit=3,
+            ),
+        )
