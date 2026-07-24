@@ -7,7 +7,10 @@ import hashlib
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
+from time import perf_counter
 from typing import Any, Literal
+
+import numpy as np
 
 from .bo_space_generalization import (
     BOCandidate,
@@ -23,7 +26,7 @@ from .plotting import render_v2_report
 from .preprocess import load_v2_dataset
 from .reference_groups import method_label
 from .report import save_v2_report
-from .solver import solve_v2
+from .solver import V2SolverResult, solve_v2
 from .types import V2RunConfig
 
 FoldArm = Literal["K0", "K1", "K2", "K3"]
@@ -167,7 +170,9 @@ def build_default_kfold_runtime(
                 record_config,
                 **dict(candidate.actual_params),
             )
+            started_at = perf_counter()
             result = solve_v2(candidate_config)
+            solver_runtime_seconds = perf_counter() - started_at
             metrics = evaluate_formal_metrics(
                 result,
                 ref_data=dataset.ref_data,
@@ -177,7 +182,15 @@ def build_default_kfold_runtime(
                     method_label("lms", ("HF",)),
                 ),
             )
-            return CandidateSolveOutcome.valid(result, metrics)
+            return CandidateSolveOutcome.valid(
+                result,
+                metrics,
+                diagnostics=_solver_diagnostics(
+                    result,
+                    max_order=candidate_config.max_order,
+                    solver_runtime_seconds=solver_runtime_seconds,
+                ),
+            )
 
         def render_selected(
             candidate: BOCandidate,
@@ -218,6 +231,7 @@ def build_default_kfold_runtime(
                     view_role="training",
                     view_record_id=record_id,
                     actual_params=candidate.actual_params,
+                    requested_params=candidate.requested_params,
                 ),
             )
             return ClassicPlotArtifact(
@@ -296,6 +310,7 @@ def build_default_kfold_runtime(
                 view_role="test",
                 view_record_id=heldout_record.record_id,
                 actual_params=context.actual_params,
+                requested_params=context.requested_params,
             ),
         )
         ClassicPlotArtifact(
@@ -331,6 +346,7 @@ def kfold_plot_title(
     view_role: str,
     view_record_id: str,
     actual_params: Mapping[str, Any],
+    requested_params: Mapping[str, Any] | None = None,
 ) -> str:
     if view_role not in {"training", "test"}:
         raise ValueError(
@@ -345,6 +361,14 @@ def kfold_plot_title(
             return f"{raw:g}"
         return str(raw)
 
+    requested = requested_params or {}
+    physical_summary = ""
+    if "memory_ms" in requested:
+        physical_summary = (
+            f", memory={requested['memory_ms']}ms, "
+            f"exclusion={requested['exclusion_half_width_bpm']}BPM"
+        )
+
     return (
         f"{arm} | train: {' + '.join(training_record_ids)} | "
         f"test: {heldout_record_id} | "
@@ -355,6 +379,7 @@ def kfold_plot_title(
         f"smooth={value('smooth_win_len')}, "
         f"width={value('spec_penalty_width')}Hz, "
         f"bias={value('time_bias')}s"
+        f"{physical_summary}"
     )
 
 
@@ -398,6 +423,51 @@ def _method_names_from_error_csv(path: Path) -> tuple[str, ...]:
             f"K-fold 经典图 error CSV 缺少方法身份: {path}"
         )
     return names
+
+
+def _solver_diagnostics(
+    result: V2SolverResult,
+    *,
+    max_order: int,
+    solver_runtime_seconds: float,
+) -> Mapping[str, Any]:
+    stages = [
+        stage
+        for window in result.window_table
+        for stage in window.get("adaptive_stages", ())
+        if isinstance(stage, Mapping)
+    ]
+    orders = [
+        int(stage["M"])
+        for stage in stages
+        if isinstance(stage.get("M"), (int, float))
+        and np.isfinite(float(stage["M"]))
+    ]
+    delays = [
+        int(stage["delay_samples"])
+        for stage in stages
+        if isinstance(stage.get("delay_samples"), (int, float))
+        and np.isfinite(float(stage["delay_samples"]))
+    ]
+    hit_count = sum(order >= int(max_order) for order in orders)
+    return {
+        "solver_runtime_seconds": float(solver_runtime_seconds),
+        "lms_stage_count": len(stages),
+        "lms_delay_derived_order_min": min(orders) if orders else None,
+        "lms_delay_derived_order_max": max(orders) if orders else None,
+        "lms_delay_derived_order_mean": (
+            float(np.mean(orders)) if orders else None
+        ),
+        "lms_configured_max_order": int(max_order),
+        "lms_max_order_hit": bool(hit_count),
+        "lms_max_order_hit_count": int(hit_count),
+        "lms_delay_samples_min": min(delays) if delays else None,
+        "lms_delay_samples_max": max(delays) if delays else None,
+        "nonfinite_hr_value_count": int(
+            np.size(result.HR)
+            - np.count_nonzero(np.isfinite(result.HR))
+        ),
+    }
 
 
 def _run_config_mapping(config: V2RunConfig) -> dict[str, Any]:

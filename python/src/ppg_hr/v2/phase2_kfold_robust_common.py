@@ -85,6 +85,7 @@ def evaluate_training_candidate(
                 ),
                 "status": lookup.outcome.status,
                 "failure_reason": lookup.outcome.failure_reason,
+                "diagnostics": lookup.outcome.diagnostics,
                 "formal_metrics": (
                     asdict(lookup.outcome.formal_metrics)
                     if lookup.outcome.formal_metrics is not None
@@ -462,6 +463,8 @@ def history_row_from_audit(
             {},
         ).items():
             row[f"train_{record_index}_{key}"] = value
+        for key, value in outcome.get("diagnostics", {}).items():
+            row[f"diagnostic_train_{record_index}_{key}"] = value
     parameter_keys = sorted(
         {
             *candidate.requested_params,

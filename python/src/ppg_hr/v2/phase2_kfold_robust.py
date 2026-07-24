@@ -1,4 +1,4 @@
-"""Phase2 K1 完整旧空间稳健共享选参折驱动。"""
+"""Phase2 K1/K3 稳健共享选参折驱动。"""
 
 from __future__ import annotations
 
@@ -75,6 +75,7 @@ from .phase2_robust_selection import (
 from .types import V2RunConfig
 
 K1_FLOW_LABEL = "完整旧空间稳健选参流程"
+K3_FLOW_LABEL = "新物理四维空间稳健选参流程"
 _OBJECTIVE_VERSION = "phase2_robust_worst_motion_v1"
 _CONSTRAINTS_VERSION = "phase2_nonharm_per_record_v1"
 
@@ -83,7 +84,40 @@ class K1DriverIdentityConflictError(RuntimeError):
     """输出目录中的折级配置身份与当前请求不同。"""
 
 
+class K3DriverIdentityConflictError(RuntimeError):
+    """输出目录中的物理空间折级配置与当前请求不同。"""
+
+
 K1AuditIntegrityError = RobustFoldAuditIntegrityError
+K3AuditIntegrityError = RobustFoldAuditIntegrityError
+
+
+@dataclass(frozen=True)
+class _RobustFoldVariant:
+    arm: str
+    flow_label: str
+    space_name: str
+    manifest_name: str
+    driver_schema_version: str
+    identity_error: type[RuntimeError]
+
+
+_K1_VARIANT = _RobustFoldVariant(
+    arm="K1",
+    flow_label=K1_FLOW_LABEL,
+    space_name="legacy_full_v1",
+    manifest_name="k1_fold_manifest.json",
+    driver_schema_version="phase2_k1_driver_identity_v1",
+    identity_error=K1DriverIdentityConflictError,
+)
+_K3_VARIANT = _RobustFoldVariant(
+    arm="K3",
+    flow_label=K3_FLOW_LABEL,
+    space_name="physical_v1",
+    manifest_name="k3_fold_manifest.json",
+    driver_schema_version="phase2_k3_driver_identity_v1",
+    identity_error=K3DriverIdentityConflictError,
+)
 
 
 @dataclass(frozen=True)
@@ -104,21 +138,50 @@ class K1FoldConfig:
     code_dirty: bool = False
 
     def __post_init__(self) -> None:
-        if not self.scene or not self.git_commit:
-            raise ValueError("K1 必须冻结 scene 和 git_commit")
-        if type(self.fold) is not int or self.fold < 0:
-            raise ValueError("fold 必须是非负整数")
-        if self.budget.lane_seeds != (42, 43, 44):
-            raise ValueError("K1 固定使用 seed 42/43/44")
-        if self.budget.objective_version != _OBJECTIVE_VERSION:
-            raise ValueError("K1 objective_version 不匹配")
-        if self.budget.constraints_version != _CONSTRAINTS_VERSION:
-            raise ValueError("K1 constraints_version 不匹配")
-        if (
-            type(self.neighborhood_budget) is not int
-            or not 0 <= self.neighborhood_budget <= 30
-        ):
-            raise ValueError("K1 邻域预算必须位于 [0, 30]")
+        _validate_robust_fold_config(self, arm="K1")
+
+
+@dataclass(frozen=True)
+class K3FoldConfig:
+    output_dir: Path
+    scene: str
+    fold: int
+    git_commit: str
+    budget: SeedSearchBudget = SeedSearchBudget(
+        lane_unique_budget=40,
+        global_unique_budget=120,
+        n_startup_trials=10,
+        objective_version=_OBJECTIVE_VERSION,
+        constraints_version=_CONSTRAINTS_VERSION,
+    )
+    neighborhood_budget: int = 30
+    parallel_lanes: bool = False
+    code_dirty: bool = False
+
+    def __post_init__(self) -> None:
+        _validate_robust_fold_config(self, arm="K3")
+
+
+def _validate_robust_fold_config(
+    config: K1FoldConfig | K3FoldConfig,
+    *,
+    arm: str,
+) -> None:
+    if not config.scene or not config.git_commit:
+        raise ValueError(f"{arm} 必须冻结 scene 和 git_commit")
+    if type(config.fold) is not int or config.fold < 0:
+        raise ValueError("fold 必须是非负整数")
+    if config.budget.lane_seeds != (42, 43, 44):
+        raise ValueError(f"{arm} 固定使用 seed 42/43/44")
+    if config.budget.objective_version != _OBJECTIVE_VERSION:
+        raise ValueError(f"{arm} objective_version 不匹配")
+    if config.budget.constraints_version != _CONSTRAINTS_VERSION:
+        raise ValueError(f"{arm} constraints_version 不匹配")
+    if (
+        type(config.neighborhood_budget) is not int
+        or not 0 <= config.neighborhood_budget <= 30
+    ):
+        raise ValueError(f"{arm} 邻域预算必须位于 [0, 30]")
 
 
 @dataclass(frozen=True)
@@ -143,6 +206,9 @@ class K1FoldResult:
     search_result: SeedSearchResult
 
 
+K3FoldResult = K1FoldResult
+
+
 def build_k1_default_runtime(
     *,
     base_config: V2RunConfig,
@@ -162,6 +228,25 @@ def build_k1_default_runtime(
     )
 
 
+def build_k3_default_runtime(
+    *,
+    base_config: V2RunConfig,
+    training_records: tuple[
+        KFoldRecordInput,
+        KFoldRecordInput,
+    ],
+    heldout_record: KFoldRecordInput,
+    output_dir: Path | str,
+) -> KFoldRuntime:
+    return build_default_kfold_runtime(
+        arm="K3",
+        base_config=base_config,
+        training_records=training_records,
+        heldout_record=heldout_record,
+        output_dir=output_dir,
+    )
+
+
 def run_k1_fold_study(
     config: K1FoldConfig,
     *,
@@ -169,9 +254,36 @@ def run_k1_fold_study(
 ) -> K1FoldResult:
     """运行 K1：稳健目标、逐记录约束、完整邻域、冻结回放。"""
 
+    return _run_robust_fold_study(
+        config,
+        runtime=runtime,
+        variant=_K1_VARIANT,
+    )
+
+
+def run_k3_fold_study(
+    config: K3FoldConfig,
+    *,
+    runtime: KFoldRuntime,
+) -> K3FoldResult:
+    """运行 K3：物理四维空间上的稳健共享选参和冻结回放。"""
+
+    return _run_robust_fold_study(
+        config,
+        runtime=runtime,
+        variant=_K3_VARIANT,
+    )
+
+
+def _run_robust_fold_study(
+    config: K1FoldConfig | K3FoldConfig,
+    *,
+    runtime: KFoldRuntime,
+    variant: _RobustFoldVariant,
+) -> K1FoldResult:
     output = Path(config.output_dir).resolve()
     output.mkdir(parents=True, exist_ok=True)
-    space = build_bo_search_space("legacy_full_v1")
+    space = build_bo_search_space(variant.space_name)
     candidates = {
         candidate.candidate_id: candidate
         for candidate in space.candidates
@@ -182,6 +294,7 @@ def run_k1_fold_study(
         config=config,
         runtime=runtime,
         space=space,
+        variant=variant,
     )
     cache = ContentAddressedSolverCache(output / "cache")
     trial_audit_dir = output / "trial_audit"
@@ -196,7 +309,7 @@ def run_k1_fold_study(
             git_commit=config.git_commit,
             run_config={
                 **json_ready(record.run_config),
-                "arm": "K1",
+                "arm": variant.arm,
                 "scene": config.scene,
                 "fold": config.fold,
                 "space_name": space.name,
@@ -221,7 +334,7 @@ def run_k1_fold_study(
             candidate=candidate,
             training_records=runtime.training_records,
             cache_identity=cache_identity,
-            arm="K1",
+            arm=variant.arm,
             scene=config.scene,
             fold=config.fold,
             logical_reference=logical_reference,
@@ -259,8 +372,8 @@ def run_k1_fold_study(
         ),
         git_commit=config.git_commit,
         run_config={
-            "arm": "K1",
-            "flow_label": K1_FLOW_LABEL,
+            "arm": variant.arm,
+            "flow_label": variant.flow_label,
             "scene": config.scene,
             "fold": config.fold,
             "space_name": space.name,
@@ -291,6 +404,7 @@ def run_k1_fold_study(
         output,
         search_result=search_result,
         expected_driver_identity_sha256=driver_identity_hash,
+        variant=variant,
     )
     if completed is not None:
         return completed
@@ -314,7 +428,7 @@ def run_k1_fold_study(
                     record.identity.record_id
                     for record in runtime.training_records
                 ),
-                arm="K1",
+                arm=variant.arm,
             )
         else:
             evidence, _ = evaluate_candidate(
@@ -342,12 +456,14 @@ def run_k1_fold_study(
             neighborhood_rows=(),
             space=space,
             evidence_by_candidate_id=search_evidence,
+            variant=variant,
         )
         _fail_closed(
             output,
             reason=exc.reason,
             search_result=search_result,
             candidate_history=history_path,
+            variant=variant,
         )
         raise RuntimeError(exc.reason) from exc
 
@@ -377,7 +493,7 @@ def run_k1_fold_study(
                     record.identity.record_id
                     for record in runtime.training_records
                 ),
-                arm="K1",
+                arm=variant.arm,
             )
         else:
             evidence, _ = evaluate_candidate(
@@ -392,7 +508,7 @@ def run_k1_fold_study(
         all_evidence[candidate_id] = evidence
         neighborhood_rows.append(
             history_row_from_audit(
-                arm="K1",
+                arm=variant.arm,
                 scene=config.scene,
                 fold=config.fold,
                 stage="neighborhood",
@@ -425,6 +541,7 @@ def run_k1_fold_study(
             space=space,
             bands=bands,
             evidence_by_candidate_id=all_evidence,
+            variant=variant,
         )
         _fail_closed(
             output,
@@ -432,6 +549,7 @@ def run_k1_fold_study(
             search_result=search_result,
             candidate_history=history_path,
             plan=plan,
+            variant=variant,
         )
         raise RuntimeError(exc.reason) from exc
 
@@ -446,7 +564,24 @@ def run_k1_fold_study(
     )
     selected_metrics = formal_metrics(
         selected_outcomes,
-        arm="K1",
+        arm=variant.arm,
+    )
+    selected_diagnostics = (
+        {
+            "training_records": [
+                {
+                    "record_id": record.identity.record_id,
+                    **dict(outcome.diagnostics),
+                }
+                for record, outcome in zip(
+                    runtime.training_records,
+                    selected_outcomes,
+                    strict=True,
+                )
+            ]
+        }
+        if variant.arm == "K3"
+        else {}
     )
     _write_candidate_history(
         history_path,
@@ -460,6 +595,7 @@ def run_k1_fold_study(
         bands=bands,
         evidence_by_candidate_id=all_evidence,
         selection=selection,
+        variant=variant,
     )
     selected_center = next(
         center
@@ -470,7 +606,7 @@ def run_k1_fold_study(
     atomic_write_json(
         neighborhood_path,
         {
-            "arm": "K1",
+            "arm": variant.arm,
             "bands": asdict(bands),
             "plan": asdict(plan),
             "selected_candidate_id": selection.candidate_id,
@@ -490,29 +626,29 @@ def run_k1_fold_study(
         },
     )
     params_path = output / "params.json"
-    atomic_write_json(
-        params_path,
-        {
-            "arm": "K1",
-            "flow_label": K1_FLOW_LABEL,
-            "candidate_id": selected_candidate.candidate_id,
-            "requested_params": selected_candidate.requested_params,
-            "actual_params": selected_candidate.actual_params,
-            "fixed_params": selected_candidate.fixed_params,
-            "worst_train_mae_bpm": (
-                selected_evidence.worst_train_mae_bpm
-            ),
-            "mean_train_mae_bpm": (
-                selected_evidence.mean_train_mae_bpm
-            ),
-        },
-    )
+    params_payload = {
+        "arm": variant.arm,
+        "flow_label": variant.flow_label,
+        "candidate_id": selected_candidate.candidate_id,
+        "requested_params": selected_candidate.requested_params,
+        "actual_params": selected_candidate.actual_params,
+        "fixed_params": selected_candidate.fixed_params,
+        "worst_train_mae_bpm": (
+            selected_evidence.worst_train_mae_bpm
+        ),
+        "mean_train_mae_bpm": (
+            selected_evidence.mean_train_mae_bpm
+        ),
+    }
+    if selected_diagnostics:
+        params_payload["selected_diagnostics"] = selected_diagnostics
+    atomic_write_json(params_path, params_payload)
     training_metrics_path = output / "training_metrics.csv"
     write_csv(
         training_metrics_path,
         [
             {
-                "arm": "K1",
+                "arm": variant.arm,
                 "record_id": record.identity.record_id,
                 **asdict(metric),
             }
@@ -532,9 +668,10 @@ def run_k1_fold_study(
         selection_receipt_path,
         SelectionEvidence(
             experiment_name=(
-                f"{config.scene}-fold-{config.fold}-k1"
+                f"{config.scene}-fold-{config.fold}-"
+                f"{variant.arm.lower()}"
             ),
-            arm="K1",
+            arm=variant.arm,
             scene=config.scene,
             fold=config.fold,
             code_commit=config.git_commit,
@@ -612,6 +749,7 @@ def run_k1_fold_study(
             ),
             candidate_history_sha256=file_sha256(history_path),
             evidence_level="development_reuse_pilot",
+            selected_diagnostics=selected_diagnostics,
         ),
     )
     training_plots = tuple(
@@ -672,13 +810,49 @@ def run_k1_fold_study(
             ),
         },
     )
-    manifest_path = output / "k1_fold_manifest.json"
+    manifest_path = output / variant.manifest_name
     atomic_write_json(
         manifest_path,
         {
-            "arm": "K1",
-            "flow_label": K1_FLOW_LABEL,
+            "arm": variant.arm,
+            "flow_label": variant.flow_label,
             "causal_claim_allowed": False,
+            "comparison_scope": "operational_workflow_only",
+            "space_candidate_count": len(space.candidates),
+            "global_search_candidate_count": len(
+                search_result.global_candidate_ids
+            ),
+            "neighborhood_candidate_count": len(
+                plan.candidate_ids_to_evaluate
+            ),
+            "reviewed_unique_candidate_count": len(all_evidence),
+            "coverage_ratio": (
+                len(all_evidence) / len(space.candidates)
+            ),
+            **(
+                {
+                    "k2_k3_comparison_context": {
+                        "k2_space_candidate_count": 108,
+                        "k2_max_reviewed_candidate_count": 108,
+                        "k2_max_coverage_ratio": 1.0,
+                        "k2_neighborhood_geometry": (
+                            "all_direct_neighbors_already_enumerated"
+                        ),
+                        "k3_space_candidate_count": 300,
+                        "k3_max_global_search_candidate_count": 120,
+                        "k3_max_neighborhood_candidate_count": 30,
+                        "k3_max_reviewed_candidate_count": 150,
+                        "k3_max_coverage_ratio": 0.5,
+                        "k3_neighborhood_geometry": (
+                            "budgeted_direct_neighbors_primary_band_first_"
+                            "then_diagnostic_band_if_budget_remains"
+                        ),
+                        "single_factor_causal_attribution_allowed": False,
+                    }
+                }
+                if variant.arm == "K3"
+                else {}
+            ),
             "scene": config.scene,
             "fold": config.fold,
             "git_commit": config.git_commit,
@@ -712,8 +886,8 @@ def run_k1_fold_study(
         },
     )
     return K1FoldResult(
-        arm="K1",
-        flow_label=K1_FLOW_LABEL,
+        arm=variant.arm,
+        flow_label=variant.flow_label,
         selected_candidate_id=selected_candidate.candidate_id,
         selected_worst_train_mae_bpm=(
             selected_evidence.worst_train_mae_bpm
@@ -742,12 +916,13 @@ def run_k1_fold_study(
 def _freeze_driver_identity(
     path: Path,
     *,
-    config: K1FoldConfig,
+    config: K1FoldConfig | K3FoldConfig,
     runtime: KFoldRuntime,
     space: BOSearchSpace,
+    variant: _RobustFoldVariant,
 ) -> str:
     identity = {
-        "arm": "K1",
+        "arm": variant.arm,
         "scene": config.scene,
         "fold": config.fold,
         "git_commit": config.git_commit,
@@ -768,15 +943,15 @@ def _freeze_driver_identity(
     }
     identity_sha256 = _mapping_sha256(identity)
     payload = {
-        "schema_version": "phase2_k1_driver_identity_v1",
+        "schema_version": variant.driver_schema_version,
         "identity_sha256": identity_sha256,
         "identity": identity,
     }
     if path.is_file():
         existing = read_json(path)
         if existing != json_ready(payload):
-            raise K1DriverIdentityConflictError(
-                f"K1 输出目录已绑定其他折级配置: {path}"
+            raise variant.identity_error(
+                f"{variant.arm} 输出目录已绑定其他折级配置: {path}"
             )
         return identity_sha256
     atomic_write_json(path, payload)
@@ -788,10 +963,11 @@ def _load_completed_result(
     *,
     search_result: SeedSearchResult,
     expected_driver_identity_sha256: str,
+    variant: _RobustFoldVariant,
 ) -> K1FoldResult | None:
     selection_path = output / "selection_receipt.json"
     replay_path = output / "replay_receipt.json"
-    manifest_path = output / "k1_fold_manifest.json"
+    manifest_path = output / variant.manifest_name
     if not (
         selection_path.is_file()
         and replay_path.is_file()
@@ -816,8 +992,8 @@ def _load_completed_result(
         if not path.is_file()
     ]
     if missing:
-        raise K1AuditIntegrityError(
-            "K1 终态产物不完整: " + ", ".join(missing)
+        raise RobustFoldAuditIntegrityError(
+            f"{variant.arm} 终态产物不完整: " + ", ".join(missing)
         )
     selection = load_selection_receipt(selection_path)
     replay = load_replay_receipt(replay_path)
@@ -833,15 +1009,15 @@ def _load_completed_result(
         != selection.selection_hash
         or replay.selection_hash != selection.selection_hash
     ):
-        raise K1AuditIntegrityError(
-            "K1 终态回执、manifest 或 driver 身份不一致"
+        raise RobustFoldAuditIntegrityError(
+            f"{variant.arm} 终态回执、manifest 或 driver 身份不一致"
         )
     if (
         selection.evidence.candidate_history_sha256
         != file_sha256(required["candidate_history"])
     ):
-        raise K1AuditIntegrityError(
-            "K1 终态 candidate_history 哈希不匹配"
+        raise RobustFoldAuditIntegrityError(
+            f"{variant.arm} 终态 candidate_history 哈希不匹配"
         )
     neighborhood_identity = (
         "neighborhood:"
@@ -851,8 +1027,8 @@ def _load_completed_result(
         neighborhood_identity in identity
         for identity in selection.evidence.study_identities
     ):
-        raise K1AuditIntegrityError(
-            "K1 选择回执未绑定完整邻域证据哈希"
+        raise RobustFoldAuditIntegrityError(
+            f"{variant.arm} 选择回执未绑定完整邻域证据哈希"
         )
     selected_candidate_id = str(
         params.get("candidate_id", "")
@@ -861,12 +1037,12 @@ def _load_completed_result(
         selected_candidate_id
         != selection.evidence.selected_candidate_id
     ):
-        raise K1AuditIntegrityError(
-            "K1 params 与选择回执候选不一致"
+        raise RobustFoldAuditIntegrityError(
+            f"{variant.arm} params 与选择回执候选不一致"
         )
     expected_params = {
-        "arm": "K1",
-        "flow_label": K1_FLOW_LABEL,
+        "arm": variant.arm,
+        "flow_label": variant.flow_label,
         "candidate_id": selection.evidence.selected_candidate_id,
         "requested_params": (
             selection.evidence.selected_requested_params
@@ -880,31 +1056,37 @@ def _load_completed_result(
             selection.evidence.training_metrics.mean_train_mae_bpm
         ),
     }
+    if selection.evidence.selected_diagnostics:
+        expected_params["selected_diagnostics"] = (
+            selection.evidence.selected_diagnostics
+        )
     if params != json_ready(expected_params):
-        raise K1AuditIntegrityError(
-            "K1 params 参数或训练汇总与选择回执不一致"
+        raise RobustFoldAuditIntegrityError(
+            f"{variant.arm} params 参数或训练汇总与选择回执不一致"
         )
     if (
         manifest.get("selected_candidate_id")
         != selection.evidence.selected_candidate_id
     ):
-        raise K1AuditIntegrityError(
-            "K1 manifest 与选择回执候选不一致"
+        raise RobustFoldAuditIntegrityError(
+            f"{variant.arm} manifest 与选择回执候选不一致"
         )
     plot_values = manifest.get("training_plots")
     if (
         not isinstance(plot_values, list)
         or len(plot_values) != 2
     ):
-        raise K1AuditIntegrityError(
-            "K1 manifest 缺少两张训练经典图"
+        raise RobustFoldAuditIntegrityError(
+            f"{variant.arm} manifest 缺少两张训练经典图"
         )
     training_plots = (
         Path(str(plot_values[0])),
         Path(str(plot_values[1])),
     )
     if any(not path.is_file() for path in training_plots):
-        raise K1AuditIntegrityError("K1 训练经典图不存在")
+        raise RobustFoldAuditIntegrityError(
+            f"{variant.arm} 训练经典图不存在"
+        )
     validate_terminal_artifact_manifest(
         manifest,
         required={
@@ -913,25 +1095,25 @@ def _load_completed_result(
             "replay_receipt": replay_path,
         },
         training_plots=training_plots,
-        arm="K1",
+        arm=variant.arm,
     )
     plan = neighborhood.get("plan")
     if not isinstance(plan, Mapping):
-        raise K1AuditIntegrityError(
-            "K1 邻域证据缺少 plan"
+        raise RobustFoldAuditIntegrityError(
+            f"{variant.arm} 邻域证据缺少 plan"
         )
     neighborhood_candidates = plan.get(
         "candidate_ids_to_evaluate"
     )
     if not isinstance(neighborhood_candidates, list):
-        raise K1AuditIntegrityError(
-            "K1 邻域候选列表无效"
+        raise RobustFoldAuditIntegrityError(
+            f"{variant.arm} 邻域候选列表无效"
         )
     if replay.status == "infrastructure_failed":
         return None
     return K1FoldResult(
-        arm="K1",
-        flow_label=K1_FLOW_LABEL,
+        arm=variant.arm,
+        flow_label=variant.flow_label,
         selected_candidate_id=selected_candidate_id,
         selected_worst_train_mae_bpm=float(
             params["worst_train_mae_bpm"]
@@ -990,6 +1172,7 @@ def _write_candidate_history(
         RobustTrainingEvidence,
     ] | None = None,
     selection: RobustSelection | None = None,
+    variant: _RobustFoldVariant,
 ) -> None:
     rows: list[dict[str, Any]] = []
     for trial in all_search_rows(search_result):
@@ -1004,7 +1187,7 @@ def _write_candidate_history(
         )
         rows.append(
             history_row_from_audit(
-                arm="K1",
+                arm=variant.arm,
                 scene=scene,
                 fold=fold,
                 stage=trial.stage,
@@ -1044,6 +1227,7 @@ def _fail_closed(
     search_result: SeedSearchResult,
     candidate_history: Path,
     plan: RobustNeighborhoodPlan | None = None,
+    variant: _RobustFoldVariant,
 ) -> None:
     atomic_write_json(
         output / "failure_classification.json",
@@ -1066,10 +1250,10 @@ def _fail_closed(
         },
     )
     atomic_write_json(
-        output / "k1_fold_manifest.json",
+        output / variant.manifest_name,
         {
-            "arm": "K1",
-            "flow_label": K1_FLOW_LABEL,
+            "arm": variant.arm,
+            "flow_label": variant.flow_label,
             "status": "failed_closed",
             "failure_reason": reason,
             "candidate_history": str(candidate_history),

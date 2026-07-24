@@ -9,7 +9,7 @@ import os
 import uuid
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Literal
@@ -200,6 +200,7 @@ class SelectionEvidence:
     neighborhood_evidence: NeighborhoodEvidence
     candidate_history_sha256: str
     evidence_level: EvidenceLevel = "development_reuse_pilot"
+    selected_diagnostics: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         for name, value in (
@@ -282,6 +283,13 @@ class SelectionEvidence:
             if not isinstance(value, Mapping) or not value:
                 raise ValueError(f"{field_name} 必须是非空对象")
             object.__setattr__(self, field_name, _freeze_json(value))
+        if not isinstance(self.selected_diagnostics, Mapping):
+            raise ValueError("selected_diagnostics 必须是对象")
+        object.__setattr__(
+            self,
+            "selected_diagnostics",
+            _freeze_json(self.selected_diagnostics),
+        )
 
 
 @dataclass(frozen=True)
@@ -684,7 +692,7 @@ def _selection_receipt_payload(
 def _selection_evidence_payload(
     evidence: SelectionEvidence,
 ) -> dict[str, Any]:
-    return {
+    payload = {
         "experiment_name": evidence.experiment_name,
         "arm": evidence.arm,
         "scene": evidence.scene,
@@ -759,12 +767,17 @@ def _selection_evidence_payload(
         "candidate_history_sha256": evidence.candidate_history_sha256,
         "evidence_level": evidence.evidence_level,
     }
+    if evidence.selected_diagnostics:
+        payload["selected_diagnostics"] = _json_ready(
+            evidence.selected_diagnostics
+        )
+    return payload
 
 
 def _selection_evidence_from_payload(
     payload: Mapping[str, Any],
 ) -> SelectionEvidence:
-    _require_exact_keys(
+    _require_keys_with_optional(
         payload,
         {
             "experiment_name",
@@ -789,7 +802,8 @@ def _selection_evidence_from_payload(
             "candidate_history_sha256",
             "evidence_level",
         },
-        "选择证据",
+        optional={"selected_diagnostics"},
+        label="选择证据",
     )
     records = _require_sequence(payload, "training_records")
     if len(records) != 2:
@@ -858,6 +872,11 @@ def _selection_evidence_from_payload(
         selected_fixed_params=_require_mapping(
             payload,
             "selected_fixed_params",
+        ),
+        selected_diagnostics=(
+            _require_mapping(payload, "selected_diagnostics")
+            if "selected_diagnostics" in payload
+            else {}
         ),
         training_metrics=TrainingMetricEvidence(
             eligible=_require_bool(metrics, "eligible"),
@@ -1117,6 +1136,22 @@ def _require_exact_keys(
         raise ReceiptIntegrityError(
             f"{label} 字段不匹配: missing={sorted(expected - actual)}, "
             f"unknown={sorted(actual - expected)}"
+        )
+
+
+def _require_keys_with_optional(
+    payload: Mapping[str, Any],
+    required: set[str],
+    *,
+    optional: set[str],
+    label: str,
+) -> None:
+    actual = set(payload)
+    allowed = required | optional
+    if not required <= actual or not actual <= allowed:
+        raise ReceiptIntegrityError(
+            f"{label} 字段不匹配: missing={sorted(required - actual)}, "
+            f"unknown={sorted(actual - allowed)}"
         )
 
 
