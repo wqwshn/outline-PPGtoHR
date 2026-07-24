@@ -433,6 +433,27 @@ def _validate_kfold_smokes(
         }
         if heldout_id in training_ids or len(training_ids) != 2:
             raise ValueError(f"{arm} 测试记录进入训练")
+        cache_summary = _read_json(root / "cache_summary.json")
+        cache_events = cache_summary.get("events")
+        if not isinstance(cache_events, list) or not cache_events:
+            raise ValueError(f"{arm} 缓存事件缺失")
+        cached_record_ids = {
+            logical_reference.get("record_id")
+            for event in cache_events
+            if isinstance(event, dict)
+            and isinstance(
+                logical_reference := event.get("logical_reference"),
+                dict,
+            )
+            and logical_reference.get("record_id") is not None
+        }
+        if cached_record_ids != training_ids:
+            raise ValueError(
+                f"{arm} 缓存记录不等于冻结训练集: "
+                f"{sorted(cached_record_ids)} != {sorted(training_ids)}"
+            )
+        if heldout_id in cached_record_ids:
+            raise ValueError(f"{arm} 留出记录在冻结前进入求解缓存")
         pngs = sorted(root.rglob("*.png"))
         if len(pngs) != 3:
             raise ValueError(f"{arm} 应有 3 张经典图，实际 {len(pngs)}")
@@ -445,6 +466,8 @@ def _validate_kfold_smokes(
             "replay_receipt_mtime_ns": replay_path.stat().st_mtime_ns,
             "heldout_record_id": heldout_id,
             "training_record_ids": sorted(training_ids),
+            "cache_training_record_ids": sorted(cached_record_ids),
+            "heldout_cache_event_count": 0,
             "test_isolation_verified": True,
             "classic_png_count": len(pngs),
         }

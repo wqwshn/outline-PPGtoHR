@@ -113,10 +113,18 @@ def _kfold_smoke(tmp_path: Path, arm: str) -> Path:
         "candidate_history.csv",
         "params.json",
         "training_metrics.csv",
-        "cache_summary.json",
         "failure_classification.json",
     ):
         (root / name).write_text("{}", encoding="utf-8")
+    _write_json(
+        root / "cache_summary.json",
+        {
+            "events": [
+                {"logical_reference": {"record_id": "run1"}},
+                {"logical_reference": {"record_id": "run2"}},
+            ]
+        },
+    )
     for index in range(3):
         (root / f"plot-{index}.png").write_bytes(b"png")
     return root
