@@ -50,6 +50,9 @@ class IndependentStudyConfig:
     historical_error_csv: Path
     output_dir: Path
     git_commit: str
+    expected_data_path: Path | None = None
+    expected_reference_path: Path | None = None
+    scene: str = ""
     legacy_budget: SeedSearchBudget = SeedSearchBudget()
     physical_budget: SeedSearchBudget = SeedSearchBudget(
         objective_version="phase2_independent_physical_v1"
@@ -292,6 +295,7 @@ def _run_arm(
     _write_candidate_history(
         history_path,
         arm=arm,
+        scene=config.scene or _scene_from_sample_id(runtime.sample_id),
         search_result=search_result,
         candidates=candidates,
         audit_dir=trial_audit_dir,
@@ -365,6 +369,7 @@ def _write_candidate_history(
     path: Path,
     *,
     arm: str,
+    scene: str,
     search_result: SeedSearchResult,
     candidates: Mapping[str, BOCandidate],
     audit_dir: Path,
@@ -401,6 +406,8 @@ def _write_candidate_history(
         diagnostics = audit.get("diagnostics", {})
         output = {
             "arm": arm,
+            "scene": scene,
+            "fold": "independent",
             "lane": row.lane,
             "seed": row.seed,
             "trial_number": row.trial_number,
@@ -415,6 +422,7 @@ def _write_candidate_history(
             "metric_valid": row.metric_valid,
             "eligible": row.eligible,
             "failure_reason": row.failure_reason,
+            "stage": row.stage,
             **metrics,
             **{
                 f"diagnostic_{key}": value
@@ -725,6 +733,26 @@ def _build_default_runtime(
     error_csv = Path(config.historical_error_csv).resolve()
     payload = load_v2_report(report_path)
     base = load_lite_report_config(payload)
+    if (
+        config.expected_data_path is not None
+        and Path(base.data_path).resolve()
+        != Path(config.expected_data_path).resolve()
+    ):
+        raise ValueError(
+            "历史报告 data_path 与 preflight 冻结路径不一致: "
+            f"{Path(base.data_path).resolve()} != "
+            f"{Path(config.expected_data_path).resolve()}"
+        )
+    if (
+        config.expected_reference_path is not None
+        and Path(base.ref_path).resolve()
+        != Path(config.expected_reference_path).resolve()
+    ):
+        raise ValueError(
+            "历史报告 ref_path 与 preflight 冻结路径不一致: "
+            f"{Path(base.ref_path).resolve()} != "
+            f"{Path(config.expected_reference_path).resolve()}"
+        )
     base = replace(
         base,
         analysis_scope="full",
@@ -831,6 +859,11 @@ def _method_names_from_error_csv(path: Path) -> tuple[str, ...]:
     if not names or any(not name for name in names):
         raise ValueError(f"历史 error CSV 缺少方法身份: {path}")
     return names
+
+
+def _scene_from_sample_id(sample_id: str) -> str:
+    prefix = str(sample_id).split("_", maxsplit=1)[0]
+    return prefix.rstrip("0123456789") or prefix
 
 
 def _validate_classic_plot_methods(path: Path) -> None:

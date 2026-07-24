@@ -32,8 +32,6 @@ FoldArm = Literal["K0", "K1", "K2", "K3"]
 _REQUIRED_CLASSIC_METHODS = frozenset(
     {"reset FFT", "LMS+H", "LMS+A"}
 )
-# 兼容既有测试与审计入口；新代码统一调用公共实现。
-_solver_diagnostics = collect_solver_diagnostics
 
 
 @dataclass(frozen=True)

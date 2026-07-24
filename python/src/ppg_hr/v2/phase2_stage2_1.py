@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import subprocess
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -61,6 +62,7 @@ class Stage21AcceptanceDecision:
 class Stage21BatchConfig:
     formal_root: Path
     git_commit: str
+    repo_root: Path = Path(".")
     expected_record_count: int = _FORMAL_RECORD_COUNT
     parallel_lanes: bool = False
     legacy_budget: SeedSearchBudget = SeedSearchBudget()
@@ -266,6 +268,10 @@ def run_stage2_1_batch(config: Stage21BatchConfig) -> Stage21BatchResult:
     """顺序执行 24 条双空间独立 BO，并可按记录回执恢复。"""
 
     root = Path(config.formal_root).resolve()
+    _validate_actual_git_state(
+        Path(config.repo_root).resolve(),
+        expected_git_commit=config.git_commit,
+    )
     preflight_path = root / "preflight.json"
     records = load_frozen_independent_records(
         preflight_path,
@@ -306,6 +312,9 @@ def run_stage2_1_batch(config: Stage21BatchConfig) -> Stage21BatchResult:
                         historical_error_csv=record.historical_error_csv,
                         output_dir=record_dir,
                         git_commit=config.git_commit,
+                        expected_data_path=record.data_path,
+                        expected_reference_path=record.reference_path,
+                        scene=record.scene,
                         legacy_budget=config.legacy_budget,
                         physical_budget=config.physical_budget,
                         parallel_lanes=config.parallel_lanes,
@@ -332,6 +341,7 @@ def run_stage2_1_batch(config: Stage21BatchConfig) -> Stage21BatchResult:
                 ],
                 "failure_type": type(exc).__name__,
                 "failure_message": str(exc),
+                "failure_classification": _classify_stage2_1_exception(exc),
                 "stage2_2_authorized": False,
                 "evidence_level": EVIDENCE_LEVEL,
                 "confirmatory_claim_allowed": False,
@@ -359,6 +369,11 @@ def run_stage2_1_batch(config: Stage21BatchConfig) -> Stage21BatchResult:
             "stage2_1_passed": decision.passed,
             "stage2_2_authorized": decision.stage2_2_authorized,
             "failed_gate_count": decision.failed_gate_count,
+            "failure_classification": (
+                ""
+                if decision.passed
+                else "independent_nonregression_failed"
+            ),
             "gates": [asdict(gate) for gate in decision.gates],
             "evidence_level": EVIDENCE_LEVEL,
             "confirmatory_claim_allowed": False,
@@ -384,9 +399,17 @@ def run_stage2_1_batch(config: Stage21BatchConfig) -> Stage21BatchResult:
                 config.physical_budget.global_unique_budget
             ),
             "seeds": list(config.legacy_budget.lane_seeds),
-            "outputs": {key: str(path) for key, path in paths.items()},
-            "decision": str(decision_path),
+            "outputs": {
+                key: _artifact_identity(path)
+                for key, path in paths.items()
+            },
+            "decision": _artifact_identity(decision_path),
             "stage2_2_authorized": decision.stage2_2_authorized,
+            "failure_classification": (
+                ""
+                if decision.passed
+                else "independent_nonregression_failed"
+            ),
             "evidence_level": EVIDENCE_LEVEL,
             "confirmatory_claim_allowed": False,
             "data_reuse_reason": DATA_REUSE_REASON,
@@ -400,8 +423,13 @@ def run_stage2_1_batch(config: Stage21BatchConfig) -> Stage21BatchResult:
                 else "stage_2_1_failed"
             ),
             "status": "passed" if decision.passed else "failed",
-            "stage2_1_result": str(decision_path),
+            "stage2_1_result": _artifact_identity(decision_path),
             "stage2_2_authorized": decision.stage2_2_authorized,
+            "failure_classification": (
+                ""
+                if decision.passed
+                else "independent_nonregression_failed"
+            ),
         }
     )
     atomic_write_json(run_manifest_path, run_manifest)
@@ -428,6 +456,40 @@ def _preflight_git_commit(payload: Mapping[str, Any]) -> str:
         ):
             return str(check["details"].get("head", ""))
     return ""
+
+
+def _validate_actual_git_state(
+    repo_root: Path,
+    *,
+    expected_git_commit: str,
+) -> None:
+    head = _git_output(repo_root, "rev-parse", "HEAD").strip()
+    if head != expected_git_commit:
+        raise ValueError(
+            "实际 HEAD 与正式运行 commit 不一致: "
+            f"{head!r} != {expected_git_commit!r}"
+        )
+    status = _git_output(
+        repo_root,
+        "status",
+        "--porcelain",
+        "--untracked-files=all",
+    )
+    if status.strip():
+        raise ValueError("正式运行要求干净工作树: " + status.strip())
+
+
+def _git_output(repo_root: Path, *args: str) -> str:
+    completed = subprocess.run(
+        ("git", *args),
+        cwd=repo_root,
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    return completed.stdout
 
 
 def _validate_metric_rows(rows: Sequence[Mapping[str, object]]) -> None:
@@ -498,6 +560,23 @@ def _validate_formal_budgets(config: Stage21BatchConfig) -> None:
             raise ValueError(f"{name} n_startup_trials 必须为 10")
         if budget.fill_seed != 20260724:
             raise ValueError(f"{name} fill seed 必须为 20260724")
+
+
+def _classify_stage2_1_exception(exc: Exception) -> str:
+    text = f"{type(exc).__name__}: {exc}".lower()
+    if "method" in text and ("identity" in text or "方法" in text):
+        return "method_identity_mismatch"
+    if "unique_budget_stalled" in text:
+        return "unique_budget_stalled"
+    if "search_space_exhausted" in text:
+        return "search_space_exhausted"
+    if "reservation" in text or ("cache" in text and "conflict" in text):
+        return "cache_reservation_conflict"
+    if "metric" in text or "window" in text or "窗口" in text:
+        return "metric_window_contract_failed"
+    if "study" in text or "trial" in text:
+        return "study_state_mismatch"
+    return "infrastructure_failure"
 
 
 def _build_record_receipt(
@@ -574,6 +653,7 @@ def _build_record_receipt(
                 record.historical_error_csv
             ),
         },
+        "artifacts": _record_artifact_identities(result),
         "record_metric": row,
         "method_identity_audit": method_rows,
         "metric_mask_audit": mask_rows,
@@ -613,6 +693,18 @@ def _load_completed_record_receipt(
     }
     if dict(expected_hashes) != current:
         return None
+    artifacts = payload.get("artifacts")
+    if not isinstance(artifacts, Mapping) or not artifacts:
+        return None
+    for identity in artifacts.values():
+        if not isinstance(identity, Mapping):
+            return None
+        artifact_path = Path(str(identity.get("path", "")))
+        if (
+            not artifact_path.is_file()
+            or file_sha256(artifact_path) != identity.get("sha256")
+        ):
+            return None
     metric = payload.get("record_metric")
     if not isinstance(metric, Mapping):
         return None
@@ -620,6 +712,53 @@ def _load_completed_record_receipt(
         if not Path(str(metric.get(key, ""))).is_file():
             return None
     return payload
+
+
+def _record_artifact_identities(
+    result: IndependentStudyResult,
+) -> dict[str, dict[str, Any]]:
+    files = {
+        "historical_plot": result.historical_plot,
+        "comparison_table": result.comparison_table,
+        "acceptance_preview": result.acceptance_preview,
+        "study_manifest": (
+            result.comparison_table.parent / "independent_study_manifest.json"
+        ),
+    }
+    for prefix, arm in (
+        ("legacy", result.legacy),
+        ("physical", result.physical),
+    ):
+        arm_dir = arm.candidate_history.parent
+        files.update(
+            {
+                f"{prefix}_candidate_history": arm.candidate_history,
+                f"{prefix}_seed_stability": arm.seed_stability,
+                f"{prefix}_classic_plot": arm.classic_plot,
+                f"{prefix}_selected_candidate": (
+                    arm_dir / "selected_candidate.json"
+                ),
+                f"{prefix}_cache_summary": arm_dir / "cache_summary.json",
+            }
+        )
+    identities: dict[str, dict[str, Any]] = {}
+    for name, path in files.items():
+        resolved = Path(path).resolve()
+        if not resolved.is_file():
+            raise ValueError(f"记录终态产物不存在: {resolved}")
+        identities[name] = _artifact_identity(resolved)
+    return identities
+
+
+def _artifact_identity(path: Path) -> dict[str, Any]:
+    resolved = Path(path).resolve()
+    if not resolved.is_file():
+        raise ValueError(f"终态产物不存在: {resolved}")
+    return {
+        "path": str(resolved),
+        "size_bytes": resolved.stat().st_size,
+        "sha256": file_sha256(resolved),
+    }
 
 
 def _method_identity_rows(
@@ -903,6 +1042,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--formal-root", type=Path, required=True)
     parser.add_argument("--git-commit", required=True)
+    parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     parser.add_argument(
         "--parallel-lanes",
         action="store_true",
@@ -917,6 +1057,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         Stage21BatchConfig(
             formal_root=args.formal_root,
             git_commit=args.git_commit,
+            repo_root=args.repo_root,
             parallel_lanes=bool(args.parallel_lanes),
         )
     )

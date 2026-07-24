@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -186,6 +187,9 @@ def test_independent_study_writes_dual_baseline_history_and_classic_plots(
 
     legacy_history = result.legacy.candidate_history.read_text(encoding="utf-8")
     assert "seed_42" in legacy_history
+    assert "scene" in legacy_history
+    assert "fold" in legacy_history
+    assert "stage" in legacy_history
     assert "cache_hit" in legacy_history
     assert "base_motion_window_sha256" in legacy_history
     assert "diagnostic_solver_runtime_seconds" in legacy_history
@@ -261,3 +265,41 @@ def test_classic_plot_method_validation_requires_acc_curve(tmp_path) -> None:
         encoding="utf-8-sig",
     )
     phase2_independent._validate_classic_plot_methods(complete)
+
+
+def test_default_runtime_rejects_report_paths_outside_frozen_inputs(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    report = tmp_path / "historical.json"
+    report.write_text("{}", encoding="utf-8")
+    error = tmp_path / "historical-error.csv"
+    error.write_text("method\nLMS+H\n", encoding="utf-8")
+    report_data = tmp_path / "report-data.csv"
+    report_ref = tmp_path / "report-ref.csv"
+    frozen_data = tmp_path / "frozen-data.csv"
+    frozen_ref = tmp_path / "frozen-ref.csv"
+    monkeypatch.setattr(
+        phase2_independent,
+        "load_v2_report",
+        lambda _path: {},
+    )
+    monkeypatch.setattr(
+        phase2_independent,
+        "load_lite_report_config",
+        lambda _payload: SimpleNamespace(
+            data_path=report_data,
+            ref_path=report_ref,
+        ),
+    )
+    config = IndependentStudyConfig(
+        historical_report_path=report,
+        historical_error_csv=error,
+        output_dir=tmp_path / "out",
+        git_commit="commit",
+        expected_data_path=frozen_data,
+        expected_reference_path=frozen_ref,
+    )
+
+    with pytest.raises(ValueError, match="preflight 冻结路径"):
+        phase2_independent._build_default_runtime(config)

@@ -26,6 +26,28 @@ Python 实现，包含 v1（MATLAB 等价移植）与 v2（统一参考路径 + 
 - 统一命令行入口 `python -m ppg_hr {solve|optimise|view|inspect-defaults}`
 - **浅色桌面 GUI** (PySide6)：`ppg-hr-gui` 一键打开，支持 v1/v2 版本切换，覆盖求解 / 优化 / 批量全流程 / 结果分析 / MATLAB 对照五个页面
 
+### LYX BO Phase2 正式独立验收
+
+`ppg_hr.v2.phase2_stage2_1` 是研究用总控入口，不属于日常 `ppg-hr`
+CLI。它只接受已经通过的 Stage 2.0 preflight，并对冻结的 24 条记录依次运行
+同代码完整旧空间和新物理空间；每条记录、每个空间固定使用 seed
+`42/43/44`，形成 150 个全局不同候选。示例：
+
+```powershell
+$env:PYTHONPATH='python/src'
+conda run -n ppg-hr python -m ppg_hr.v2.phase2_stage2_1 `
+  --formal-root <formal-result-root> `
+  --git-commit <clean-head-sha>
+```
+
+运行状态保存在 `<formal-result-root>/s21/progress.json`。每条记录完成后写入
+输入哈希绑定的 `record_receipt.json`，同一提交和同一输入可从记录边界恢复。
+最终输出逐记录双基线指标、场景汇总、seed 稳定性、方法/掩码/缓存/LMS
+诊断审计，以及旧空间和新物理空间各自包含 ACC 的 600 dpi 经典心率 PNG。
+硬门槛分别在“历史经典口径”“同代码旧空间可靠口径”“同代码旧空间经典口径”
+执行；任何一项失败都会把 `stage2_2_authorized` 保持为 `false`，不得用后续
+K 折结果抵偿。全部结果均属于 `development_reuse_pilot`，不能作确认性结论。
+
 数值上已经按 MATLAB 金标 `.mat` 快照逐函数对齐，最近一次端到端核对结果（详见
 [与 MATLAB 的端到端对照](#与-matlab-的端到端对照)）：HF 融合 / ACC 融合的总
 AAE 与 MATLAB 偏差均 ≤ 0.07 BPM。

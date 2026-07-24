@@ -32,6 +32,7 @@ from ppg_hr.v2.phase2_receipt import (
     RecordIdentity,
     ReplayInfrastructureError,
 )
+from ppg_hr.v2.phase2_solver_diagnostics import collect_solver_diagnostics
 from ppg_hr.v2.solver import V2SolverResult
 
 
@@ -116,7 +117,7 @@ def test_kfold_runtime_reports_lms_order_cap_and_numeric_diagnostics() -> None:
     ]
     result.HR[0, 1] = np.nan
 
-    diagnostics = kfold_runtime._solver_diagnostics(
+    diagnostics = collect_solver_diagnostics(
         result,
         max_order=8,
         solver_runtime_seconds=0.25,

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
 import pytest
 
+import ppg_hr.v2.phase2_stage2_1 as stage2_1
 from ppg_hr.v2.phase2_stage2_1 import (
+    FrozenIndependentRecord,
     Stage21GateResult,
     evaluate_stage2_1_acceptance,
     load_frozen_independent_records,
@@ -250,3 +253,106 @@ def test_load_frozen_independent_records_rejects_commit_or_count_mismatch(
             expected_git_commit="frozen",
             expected_record_count=24,
         )
+
+
+def test_actual_git_state_rejects_wrong_head_and_dirty_tree(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        stage2_1,
+        "_git_output",
+        lambda _root, *args: (
+            "actual\n" if args == ("rev-parse", "HEAD") else ""
+        ),
+    )
+    with pytest.raises(ValueError, match="实际 HEAD"):
+        stage2_1._validate_actual_git_state(
+            tmp_path,
+            expected_git_commit="expected",
+        )
+
+    monkeypatch.setattr(
+        stage2_1,
+        "_git_output",
+        lambda _root, *args: (
+            "expected\n"
+            if args == ("rev-parse", "HEAD")
+            else " M tracked.py\n"
+        ),
+    )
+    with pytest.raises(ValueError, match="干净工作树"):
+        stage2_1._validate_actual_git_state(
+            tmp_path,
+            expected_git_commit="expected",
+        )
+
+
+def test_completed_record_receipt_binds_core_artifact_hashes(
+    tmp_path: Path,
+) -> None:
+    def digest(path: Path) -> str:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+
+    inputs = {}
+    for name in ("data", "reference", "historical_report", "historical_error_csv"):
+        path = tmp_path / name
+        path.write_text(name, encoding="utf-8")
+        inputs[name] = path
+    plots = {}
+    for name in ("historical_plot", "legacy_plot", "physical_plot"):
+        path = tmp_path / f"{name}.png"
+        path.write_bytes(name.encode())
+        plots[name] = path
+    core = tmp_path / "candidate_history.csv"
+    core.write_text("candidate_id\nc1\n", encoding="utf-8")
+    record = FrozenIndependentRecord(
+        sample_id="run1",
+        scene="run",
+        data_path=inputs["data"],
+        reference_path=inputs["reference"],
+        historical_report_path=inputs["historical_report"],
+        historical_error_csv=inputs["historical_error_csv"],
+    )
+    receipt = tmp_path / "record_receipt.json"
+    receipt.write_text(
+        json.dumps(
+            {
+                "status": "complete",
+                "sample_id": "run1",
+                "scene": "run",
+                "git_commit": "commit",
+                "input_sha256": {
+                    name: digest(path) for name, path in inputs.items()
+                },
+                "artifacts": {
+                    "candidate_history": {
+                        "path": str(core),
+                        "sha256": digest(core),
+                    }
+                },
+                "record_metric": {
+                    name: str(path) for name, path in plots.items()
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert (
+        stage2_1._load_completed_record_receipt(
+            receipt,
+            record=record,
+            git_commit="commit",
+        )
+        is not None
+    )
+    core.write_text("candidate_id\nchanged\n", encoding="utf-8")
+    assert (
+        stage2_1._load_completed_record_receipt(
+            receipt,
+            record=record,
+            git_commit="commit",
+        )
+        is None
+    )
