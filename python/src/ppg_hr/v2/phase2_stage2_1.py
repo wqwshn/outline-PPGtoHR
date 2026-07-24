@@ -284,20 +284,43 @@ def evaluate_stage2_1_acceptance(
 
 
 def run_stage2_1_batch(config: Stage21BatchConfig) -> Stage21BatchResult:
+    """统一失败关闭边界；启动、运行、聚合和终态写入均受保护。"""
+
+    root = Path(config.formal_root).resolve()
+    output = root / "s21"
+    output.mkdir(parents=True, exist_ok=True)
+    try:
+        return _run_stage2_1_batch_inner(config)
+    except Exception as exc:
+        _ensure_stage2_1_failure_closed(
+            root=root,
+            output=output,
+            git_commit=config.git_commit,
+            exc=exc,
+        )
+        raise
+
+
+def _run_stage2_1_batch_inner(
+    config: Stage21BatchConfig,
+) -> Stage21BatchResult:
     """顺序执行 24 条双空间独立 BO，并可按记录回执恢复。"""
 
     root = Path(config.formal_root).resolve()
-    _validate_actual_git_state(
-        Path(config.repo_root).resolve(),
-        expected_git_commit=config.git_commit,
-    )
     preflight_path = root / "preflight.json"
-    records = load_frozen_independent_records(
-        preflight_path,
-        expected_git_commit=config.git_commit,
-        expected_record_count=config.expected_record_count,
-    )
-    _validate_formal_budgets(config)
+    try:
+        _validate_actual_git_state(
+            Path(config.repo_root).resolve(),
+            expected_git_commit=config.git_commit,
+        )
+        records = load_frozen_independent_records(
+            preflight_path,
+            expected_git_commit=config.git_commit,
+            expected_record_count=config.expected_record_count,
+        )
+        _validate_formal_budgets(config)
+    except ValueError as exc:
+        raise Stage21AuditError("preflight_failed", str(exc)) from exc
     # 正式根目录在 Windows 上已经较深；缩短层级，记录身份由回执保存。
     output = root / "s21"
     output.mkdir(parents=True, exist_ok=True)
@@ -460,6 +483,61 @@ def run_stage2_1_batch(config: Stage21BatchConfig) -> Stage21BatchResult:
         scene_summary=paths["independent_scene_summary"],
         manifest=manifest_path,
     )
+
+
+def _ensure_stage2_1_failure_closed(
+    *,
+    root: Path,
+    output: Path,
+    git_commit: str,
+    exc: Exception,
+) -> None:
+    failure_path = output / "stage2_1_failed.json"
+    existing_failure = (
+        read_json(failure_path) if failure_path.is_file() else {}
+    )
+    current_failure_already_written = (
+        existing_failure.get("git_commit") == git_commit
+        and existing_failure.get("failure_type") == type(exc).__name__
+        and existing_failure.get("failure_message") == str(exc)
+    )
+    if not current_failure_already_written:
+        atomic_write_json(
+            failure_path,
+            {
+                "schema_version": "phase2_stage2_1_failure_v1",
+                "status": "failed",
+                "git_commit": git_commit,
+                "completed_record_ids": [],
+                "failure_type": type(exc).__name__,
+                "failure_message": str(exc),
+                "failure_classification": _classify_stage2_1_exception(exc),
+                "stage2_2_authorized": False,
+                "evidence_level": EVIDENCE_LEVEL,
+                "confirmatory_claim_allowed": False,
+            },
+        )
+    run_manifest_path = root / "run_manifest.json"
+    if run_manifest_path.is_file():
+        run_manifest = read_json(run_manifest_path)
+    else:
+        run_manifest = {
+            "schema_version": "phase2_run_manifest_v1",
+            "git_commit": git_commit,
+            "evidence_level": EVIDENCE_LEVEL,
+            "confirmatory_claim_allowed": False,
+        }
+    failure = read_json(failure_path)
+    run_manifest.update(
+        {
+            "current_stage": "stage_2_1_failed",
+            "status": "failed",
+            "stage2_2_authorized": False,
+            "stage2_1_failure": _artifact_identity(failure_path),
+            "failure_classification": failure["failure_classification"],
+        }
+    )
+    atomic_write_json(run_manifest_path, run_manifest)
 
 
 def _preflight_git_commit(payload: Mapping[str, Any]) -> str:

@@ -368,6 +368,51 @@ def test_failure_classification_does_not_guess_infrastructure_from_text() -> Non
         )
         == "study_state_mismatch"
     )
+
+
+def test_batch_fail_closes_startup_and_terminal_errors(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    formal_root = tmp_path / "formal"
+    formal_root.mkdir()
+    (formal_root / "run_manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "phase2_run_manifest_v1",
+                "status": "preflight_passed",
+                "stage2_2_authorized": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fail(_config):
+        raise stage2_1.Stage21AuditError(
+            "preflight_failed",
+            "冻结输入错误",
+        )
+
+    monkeypatch.setattr(stage2_1, "_run_stage2_1_batch_inner", fail)
+    with pytest.raises(stage2_1.Stage21AuditError, match="冻结输入错误"):
+        stage2_1.run_stage2_1_batch(
+            stage2_1.Stage21BatchConfig(
+                formal_root=formal_root,
+                git_commit="commit",
+            )
+        )
+
+    failure = json.loads(
+        (formal_root / "s21" / "stage2_1_failed.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    manifest = json.loads(
+        (formal_root / "run_manifest.json").read_text(encoding="utf-8")
+    )
+    assert failure["failure_classification"] == "preflight_failed"
+    assert manifest["current_stage"] == "stage_2_1_failed"
+    assert manifest["stage2_2_authorized"] is False
     assert (
         stage2_1._classify_stage2_1_exception(
             stage2_1.IndependentMethodIdentityMismatchError(
