@@ -2477,7 +2477,7 @@ def _read_cached_outcome(entry: Path) -> CandidateSolveOutcome:
 
 def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    temp = path.with_name(f".{uuid.uuid4().hex}.tmp")
     temp.write_text(
         json.dumps(
             _json_ready(payload),

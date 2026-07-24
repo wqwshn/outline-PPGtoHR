@@ -1228,3 +1228,28 @@ def test_atomic_json_write_retries_transient_windows_replace_denial(
         "stage": "search"
     }
     assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_atomic_json_temp_name_does_not_repeat_long_target_name(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    target = tmp_path / ("search_identity_" + "x" * 80 + ".json")
+    observed_sources = []
+    original_replace = phase2_bo.os.replace
+
+    def observe_replace(source, destination) -> None:
+        observed_sources.append(source)
+        original_replace(source, destination)
+
+    monkeypatch.setattr(phase2_bo.os, "replace", observe_replace)
+
+    phase2_bo._atomic_write_json(target, {"status": "ok"})
+
+    assert len(observed_sources) == 1
+    temp_name = observed_sources[0].name
+    assert target.name not in temp_name
+    assert len(temp_name) == len(".") + 32 + len(".tmp")
+    assert json.loads(target.read_text(encoding="utf-8")) == {
+        "status": "ok"
+    }
