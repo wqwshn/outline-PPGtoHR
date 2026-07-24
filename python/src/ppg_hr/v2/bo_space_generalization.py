@@ -9,15 +9,19 @@ from __future__ import annotations
 import hashlib
 import itertools
 import json
+import math
 import os
+import threading
 import uuid
 from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Literal
 
 import numpy as np
+import optuna
 
 from .reference_groups import method_label, normalise_reference_order
 from .solver import V2SolverResult
@@ -568,6 +572,880 @@ class ContentAddressedSolverCache:
         ):
             raise ValueError("cache_key 必须是 64 位小写 SHA-256")
         return self.root / cache_key
+
+
+@dataclass(frozen=True)
+class SearchEvaluation:
+    """一个候选反馈给 Optuna 及最终排序的冻结数值。"""
+
+    objective: float
+    constraints: tuple[float, ...] = ()
+    metric_valid: bool = True
+    eligible: bool = True
+    failure_reason: str = ""
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(float(self.objective)):
+            raise ValueError("SearchEvaluation.objective 必须有限")
+        if any(not math.isfinite(float(value)) for value in self.constraints):
+            raise ValueError("SearchEvaluation.constraints 必须全部有限")
+
+
+@dataclass(frozen=True)
+class SeedSearchBudget:
+    """独立 seed lane 与确定性 fill 的不重复候选预算。"""
+
+    lane_seeds: tuple[int, ...] = (42, 43, 44)
+    lane_unique_budget: int = 50
+    global_unique_budget: int = 150
+    n_startup_trials: int = 10
+    fill_seed: int = 20260724
+    unique_stall_limit: int = 200
+    objective_version: str = "phase2_independent_full_final_v1"
+    constraints_version: str = "none_v1"
+
+    def __post_init__(self) -> None:
+        if not self.lane_seeds or len(set(self.lane_seeds)) != len(
+            self.lane_seeds
+        ):
+            raise ValueError("lane_seeds 必须非空且不重复")
+        if self.lane_unique_budget <= 0 or self.global_unique_budget <= 0:
+            raise ValueError("候选预算必须为正整数")
+        if self.n_startup_trials <= 0 or self.unique_stall_limit <= 0:
+            raise ValueError("startup 与 stall 预算必须为正整数")
+
+
+@dataclass(frozen=True)
+class SearchTrialRecord:
+    """一个逻辑 Optuna trial 的稳定审计行。"""
+
+    lane: str
+    seed: int
+    trial_number: int
+    suggestion_index: int
+    unique_index: int | None
+    candidate_id: str
+    is_duplicate: bool
+    objective: float
+    constraints: tuple[float, ...]
+    metric_valid: bool
+    eligible: bool
+    failure_reason: str
+    stage: Literal["search", "fill"]
+
+
+@dataclass(frozen=True)
+class SeedLaneResult:
+    seed: int
+    history: tuple[SearchTrialRecord, ...]
+    unique_candidate_ids: tuple[str, ...]
+
+    @property
+    def unique_candidate_count(self) -> int:
+        return len(self.unique_candidate_ids)
+
+
+@dataclass(frozen=True)
+class SeedSearchResult:
+    lanes: tuple[SeedLaneResult, ...]
+    fill_history: tuple[SearchTrialRecord, ...]
+    global_candidate_ids: tuple[str, ...]
+    seed_stability_candidate_ids: tuple[str, ...]
+
+    @property
+    def fill_unique_candidate_count(self) -> int:
+        return sum(not row.is_duplicate for row in self.fill_history)
+
+
+class StudyStateMismatchError(RuntimeError):
+    """持久化 study 与当前冻结驱动配置不一致。"""
+
+
+class UniqueBudgetStalledError(RuntimeError):
+    """离散空间未耗尽但连续建议无法补足不同候选。"""
+
+
+def run_seed_search(
+    *,
+    space: BOSearchSpace,
+    output_dir: Path | str,
+    evaluate: Callable[[BOCandidate], SearchEvaluation],
+    budget: SeedSearchBudget,
+    parallel_lanes: bool = False,
+) -> SeedSearchResult:
+    """运行独立 seed lane，并以独立 fill 补足全局不同候选。"""
+
+    _validate_seed_search(space, budget)
+    output = Path(output_dir)
+    studies_dir = output / "studies"
+    studies_dir.mkdir(parents=True, exist_ok=True)
+    config_hash = _seed_search_config_hash(space, budget)
+    state_path = output / "driver_state.json"
+    state_lock = threading.Lock()
+
+    def run_lane(seed: int) -> SeedLaneResult:
+        return _run_seed_lane(
+            space=space,
+            studies_dir=studies_dir,
+            state_path=state_path,
+            state_lock=state_lock,
+            config_hash=config_hash,
+            seed=seed,
+            unique_budget=budget.lane_unique_budget,
+            n_startup_trials=budget.n_startup_trials,
+            unique_stall_limit=budget.unique_stall_limit,
+            objective_version=budget.objective_version,
+            constraints_version=budget.constraints_version,
+            evaluate=evaluate,
+        )
+
+    if parallel_lanes and len(budget.lane_seeds) > 1:
+        with ThreadPoolExecutor(max_workers=len(budget.lane_seeds)) as executor:
+            futures = {
+                seed: executor.submit(run_lane, seed)
+                for seed in budget.lane_seeds
+            }
+            lane_by_seed = {
+                seed: future.result() for seed, future in futures.items()
+            }
+        lanes = tuple(lane_by_seed[seed] for seed in budget.lane_seeds)
+    else:
+        lanes = tuple(run_lane(seed) for seed in budget.lane_seeds)
+
+    evaluation_by_candidate = _evaluations_from_lanes(lanes)
+    seed_union = tuple(
+        sorted(
+            {
+                candidate_id
+                for lane in lanes
+                for candidate_id in lane.unique_candidate_ids
+            }
+        )
+    )
+    fill_history = _run_fill_study(
+        space=space,
+        studies_dir=studies_dir,
+        state_path=state_path,
+        state_lock=state_lock,
+        config_hash=config_hash,
+        seed=budget.fill_seed,
+        global_unique_budget=budget.global_unique_budget,
+        n_startup_trials=budget.n_startup_trials,
+        unique_stall_limit=budget.unique_stall_limit,
+        objective_version=budget.objective_version,
+        constraints_version=budget.constraints_version,
+        seed_union=seed_union,
+        evaluation_by_candidate=evaluation_by_candidate,
+        evaluate=evaluate,
+    )
+    global_candidate_ids = tuple(
+        sorted(
+            {
+                *seed_union,
+                *(
+                    row.candidate_id
+                    for row in fill_history
+                    if not row.is_duplicate
+                ),
+            }
+        )
+    )
+    result = SeedSearchResult(
+        lanes=lanes,
+        fill_history=fill_history,
+        global_candidate_ids=global_candidate_ids,
+        seed_stability_candidate_ids=seed_union,
+    )
+    _atomic_write_json(
+        state_path,
+        {
+            "config_hash": config_hash,
+            "stage": "complete",
+            "lane_unique_counts": {
+                f"seed_{lane.seed}": lane.unique_candidate_count
+                for lane in lanes
+            },
+            "seed_union_candidate_ids": seed_union,
+            "fill_unique_candidate_count": (
+                result.fill_unique_candidate_count
+            ),
+            "global_candidate_ids": global_candidate_ids,
+            "unresolved_trials": [],
+        },
+    )
+    return result
+
+
+def _run_seed_lane(
+    *,
+    space: BOSearchSpace,
+    studies_dir: Path,
+    state_path: Path,
+    state_lock: threading.Lock,
+    config_hash: str,
+    seed: int,
+    unique_budget: int,
+    n_startup_trials: int,
+    unique_stall_limit: int,
+    objective_version: str,
+    constraints_version: str,
+    evaluate: Callable[[BOCandidate], SearchEvaluation],
+) -> SeedLaneResult:
+    lane = f"seed_{seed}"
+    study = _open_seed_study(
+        path=studies_dir / f"{lane}.sqlite3",
+        name=f"phase2_{config_hash}_{lane}",
+        seed=seed,
+        n_startup_trials=n_startup_trials,
+        config_hash=config_hash,
+        objective_version=objective_version,
+        constraints_version=constraints_version,
+    )
+    distributions = _coordinate_distributions(space)
+    candidate_by_coordinate = {
+        candidate.coordinate: candidate for candidate in space.candidates
+    }
+    completed = _study_history(study, lane=lane, seed=seed, stage="search")
+    seen = {
+        row.candidate_id for row in completed if not row.is_duplicate
+    }
+    duplicate_streak = 0
+
+    running = sorted(
+        study.get_trials(
+            deepcopy=False,
+            states=(optuna.trial.TrialState.RUNNING,),
+        ),
+        key=lambda trial: trial.number,
+    )
+    for frozen in running:
+        candidate = _candidate_from_trial(
+            frozen,
+            space=space,
+            candidate_by_coordinate=candidate_by_coordinate,
+        )
+        duplicate = candidate.candidate_id in seen
+        unique_index = None if duplicate else len(seen) + 1
+        _write_running_trial_state(
+            state_path,
+            config_hash=config_hash,
+            lane=lane,
+            stage="search",
+            trial_number=frozen.number,
+            candidate_id=candidate.candidate_id,
+            state_lock=state_lock,
+        )
+        evaluation = evaluate(candidate)
+        _finish_trial(
+            study,
+            trial_number=frozen.number,
+            candidate=candidate,
+            evaluation=evaluation,
+            lane=lane,
+            seed=seed,
+            stage="search",
+            suggestion_index=frozen.number + 1,
+            unique_index=unique_index,
+            is_duplicate=duplicate,
+        )
+        _clear_running_trial_state(
+            state_path,
+            config_hash=config_hash,
+            lane=lane,
+            trial_number=frozen.number,
+            state_lock=state_lock,
+        )
+        if not duplicate:
+            seen.add(candidate.candidate_id)
+
+    while len(seen) < unique_budget:
+        trial = study.ask(fixed_distributions=distributions)
+        candidate = _candidate_from_trial(
+            trial,
+            space=space,
+            candidate_by_coordinate=candidate_by_coordinate,
+        )
+        duplicate = candidate.candidate_id in seen
+        unique_index = None if duplicate else len(seen) + 1
+        _write_running_trial_state(
+            state_path,
+            config_hash=config_hash,
+            lane=lane,
+            stage="search",
+            trial_number=trial.number,
+            candidate_id=candidate.candidate_id,
+            state_lock=state_lock,
+        )
+        evaluation = evaluate(candidate)
+        _finish_trial(
+            study,
+            trial_number=trial.number,
+            candidate=candidate,
+            evaluation=evaluation,
+            lane=lane,
+            seed=seed,
+            stage="search",
+            suggestion_index=trial.number + 1,
+            unique_index=unique_index,
+            is_duplicate=duplicate,
+        )
+        _clear_running_trial_state(
+            state_path,
+            config_hash=config_hash,
+            lane=lane,
+            trial_number=trial.number,
+            state_lock=state_lock,
+        )
+        if duplicate:
+            duplicate_streak += 1
+            if duplicate_streak >= unique_stall_limit:
+                raise UniqueBudgetStalledError(
+                    f"{lane} 连续 {duplicate_streak} 次未产生新候选"
+                )
+        else:
+            seen.add(candidate.candidate_id)
+            duplicate_streak = 0
+    history = _study_history(study, lane=lane, seed=seed, stage="search")
+    return SeedLaneResult(
+        seed=seed,
+        history=history,
+        unique_candidate_ids=tuple(
+            sorted(
+                {
+                    row.candidate_id
+                    for row in history
+                    if not row.is_duplicate
+                }
+            )
+        ),
+    )
+
+
+def _run_fill_study(
+    *,
+    space: BOSearchSpace,
+    studies_dir: Path,
+    state_path: Path,
+    state_lock: threading.Lock,
+    config_hash: str,
+    seed: int,
+    global_unique_budget: int,
+    n_startup_trials: int,
+    unique_stall_limit: int,
+    objective_version: str,
+    constraints_version: str,
+    seed_union: tuple[str, ...],
+    evaluation_by_candidate: dict[str, SearchEvaluation],
+    evaluate: Callable[[BOCandidate], SearchEvaluation],
+) -> tuple[SearchTrialRecord, ...]:
+    if len(seed_union) >= global_unique_budget:
+        return ()
+    lane = "fill"
+    study = _open_seed_study(
+        path=studies_dir / "fill.sqlite3",
+        name=f"phase2_{config_hash}_fill",
+        seed=seed,
+        n_startup_trials=n_startup_trials,
+        config_hash=config_hash,
+        objective_version=objective_version,
+        constraints_version=constraints_version,
+    )
+    distributions = _coordinate_distributions(space)
+    candidate_by_id = {
+        candidate.candidate_id: candidate for candidate in space.candidates
+    }
+    candidate_by_coordinate = {
+        candidate.coordinate: candidate for candidate in space.candidates
+    }
+    imported = {
+        str(trial.user_attrs.get("candidate_id", ""))
+        for trial in study.get_trials(deepcopy=False)
+        if trial.user_attrs.get("stage") == "fill_import"
+    }
+    for candidate_id in seed_union:
+        if candidate_id in imported:
+            continue
+        candidate = candidate_by_id[candidate_id]
+        evaluation = evaluation_by_candidate[candidate_id]
+        study.add_trial(
+            optuna.trial.create_trial(
+                params=_trial_params(candidate, space),
+                distributions=distributions,
+                value=float(evaluation.objective),
+                user_attrs=_trial_user_attrs(
+                    candidate=candidate,
+                    evaluation=evaluation,
+                    lane=lane,
+                    seed=seed,
+                    stage="fill_import",
+                    suggestion_index=0,
+                    unique_index=None,
+                    is_duplicate=False,
+                ),
+            )
+        )
+    history = list(_study_history(study, lane=lane, seed=seed, stage="fill"))
+    global_seen = {
+        *seed_union,
+        *(
+            row.candidate_id
+            for row in history
+            if not row.is_duplicate
+        ),
+    }
+    fill_suggestion_index = len(history)
+    duplicate_streak = 0
+    running = sorted(
+        study.get_trials(
+            deepcopy=False,
+            states=(optuna.trial.TrialState.RUNNING,),
+        ),
+        key=lambda trial: trial.number,
+    )
+    for frozen in running:
+        candidate = _candidate_from_trial(
+            frozen,
+            space=space,
+            candidate_by_coordinate=candidate_by_coordinate,
+        )
+        fill_suggestion_index += 1
+        duplicate = candidate.candidate_id in global_seen
+        evaluation = evaluation_by_candidate.get(candidate.candidate_id)
+        if evaluation is None:
+            evaluation = evaluate(candidate)
+            evaluation_by_candidate[candidate.candidate_id] = evaluation
+        _write_running_trial_state(
+            state_path,
+            config_hash=config_hash,
+            lane=lane,
+            stage="fill",
+            trial_number=frozen.number,
+            candidate_id=candidate.candidate_id,
+            state_lock=state_lock,
+        )
+        _finish_trial(
+            study,
+            trial_number=frozen.number,
+            candidate=candidate,
+            evaluation=evaluation,
+            lane=lane,
+            seed=seed,
+            stage="fill",
+            suggestion_index=fill_suggestion_index,
+            unique_index=(None if duplicate else len(global_seen) + 1),
+            is_duplicate=duplicate,
+        )
+        _clear_running_trial_state(
+            state_path,
+            config_hash=config_hash,
+            lane=lane,
+            trial_number=frozen.number,
+            state_lock=state_lock,
+        )
+        if not duplicate:
+            global_seen.add(candidate.candidate_id)
+
+    while len(global_seen) < global_unique_budget:
+        trial = study.ask(fixed_distributions=distributions)
+        candidate = _candidate_from_trial(
+            trial,
+            space=space,
+            candidate_by_coordinate=candidate_by_coordinate,
+        )
+        fill_suggestion_index += 1
+        duplicate = candidate.candidate_id in global_seen
+        evaluation = evaluation_by_candidate.get(candidate.candidate_id)
+        if evaluation is None:
+            evaluation = evaluate(candidate)
+            evaluation_by_candidate[candidate.candidate_id] = evaluation
+        _write_running_trial_state(
+            state_path,
+            config_hash=config_hash,
+            lane=lane,
+            stage="fill",
+            trial_number=trial.number,
+            candidate_id=candidate.candidate_id,
+            state_lock=state_lock,
+        )
+        _finish_trial(
+            study,
+            trial_number=trial.number,
+            candidate=candidate,
+            evaluation=evaluation,
+            lane=lane,
+            seed=seed,
+            stage="fill",
+            suggestion_index=fill_suggestion_index,
+            unique_index=(None if duplicate else len(global_seen) + 1),
+            is_duplicate=duplicate,
+        )
+        _clear_running_trial_state(
+            state_path,
+            config_hash=config_hash,
+            lane=lane,
+            trial_number=trial.number,
+            state_lock=state_lock,
+        )
+        if duplicate:
+            duplicate_streak += 1
+            if duplicate_streak >= unique_stall_limit:
+                raise UniqueBudgetStalledError(
+                    f"fill 连续 {duplicate_streak} 次未产生新候选"
+                )
+        else:
+            global_seen.add(candidate.candidate_id)
+            duplicate_streak = 0
+    return _study_history(study, lane=lane, seed=seed, stage="fill")
+
+
+def _open_seed_study(
+    *,
+    path: Path,
+    name: str,
+    seed: int,
+    n_startup_trials: int,
+    config_hash: str,
+    objective_version: str,
+    constraints_version: str,
+) -> optuna.study.Study:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    sampler = optuna.samplers.TPESampler(
+        seed=int(seed),
+        n_startup_trials=int(n_startup_trials),
+        constraints_func=_optuna_constraints,
+    )
+    study = optuna.create_study(
+        study_name=name,
+        storage=f"sqlite:///{path.resolve().as_posix()}",
+        load_if_exists=True,
+        direction="minimize",
+        sampler=sampler,
+    )
+    expected_attrs = {
+        "driver_config_hash": config_hash,
+        "sampler_seed": int(seed),
+        "n_startup_trials": int(n_startup_trials),
+        "objective_version": objective_version,
+        "constraints_version": constraints_version,
+    }
+    for key, expected in expected_attrs.items():
+        actual = study.user_attrs.get(key)
+        if actual is not None and actual != expected:
+            raise StudyStateMismatchError(
+                f"study {name} 的 {key} 不匹配: {actual!r} != {expected!r}"
+            )
+        study.set_user_attr(key, expected)
+    return study
+
+
+def _finish_trial(
+    study: optuna.study.Study,
+    *,
+    trial_number: int,
+    candidate: BOCandidate,
+    evaluation: SearchEvaluation,
+    lane: str,
+    seed: int,
+    stage: Literal["search", "fill"],
+    suggestion_index: int,
+    unique_index: int | None,
+    is_duplicate: bool,
+) -> None:
+    trial_id = study._storage.get_trial_id_from_study_id_trial_number(
+        study._study_id,
+        int(trial_number),
+    )
+    for key, value in _trial_user_attrs(
+        candidate=candidate,
+        evaluation=evaluation,
+        lane=lane,
+        seed=seed,
+        stage=stage,
+        suggestion_index=suggestion_index,
+        unique_index=unique_index,
+        is_duplicate=is_duplicate,
+    ).items():
+        study._storage.set_trial_user_attr(trial_id, key, value)
+    study.tell(int(trial_number), float(evaluation.objective))
+
+
+def _trial_user_attrs(
+    *,
+    candidate: BOCandidate,
+    evaluation: SearchEvaluation,
+    lane: str,
+    seed: int,
+    stage: str,
+    suggestion_index: int,
+    unique_index: int | None,
+    is_duplicate: bool,
+) -> dict[str, Any]:
+    return {
+        "candidate_id": candidate.candidate_id,
+        "requested_params": _json_ready(candidate.requested_params),
+        "actual_params": _json_ready(candidate.actual_params),
+        "lane": lane,
+        "seed": int(seed),
+        "stage": stage,
+        "suggestion_index": int(suggestion_index),
+        "unique_index": unique_index,
+        "is_duplicate": bool(is_duplicate),
+        "constraints": [float(value) for value in evaluation.constraints],
+        "metric_valid": bool(evaluation.metric_valid),
+        "eligible": bool(evaluation.eligible),
+        "failure_reason": str(evaluation.failure_reason),
+    }
+
+
+def _study_history(
+    study: optuna.study.Study,
+    *,
+    lane: str,
+    seed: int,
+    stage: Literal["search", "fill"],
+) -> tuple[SearchTrialRecord, ...]:
+    rows: list[SearchTrialRecord] = []
+    for trial in study.get_trials(
+        deepcopy=False,
+        states=(optuna.trial.TrialState.COMPLETE,),
+    ):
+        if trial.user_attrs.get("stage") != stage:
+            continue
+        rows.append(
+            SearchTrialRecord(
+                lane=lane,
+                seed=int(seed),
+                trial_number=int(trial.number),
+                suggestion_index=int(trial.user_attrs["suggestion_index"]),
+                unique_index=(
+                    int(trial.user_attrs["unique_index"])
+                    if trial.user_attrs.get("unique_index") is not None
+                    else None
+                ),
+                candidate_id=str(trial.user_attrs["candidate_id"]),
+                is_duplicate=bool(trial.user_attrs["is_duplicate"]),
+                objective=float(trial.value),
+                constraints=tuple(
+                    float(value)
+                    for value in trial.user_attrs.get("constraints", ())
+                ),
+                metric_valid=bool(trial.user_attrs["metric_valid"]),
+                eligible=bool(trial.user_attrs["eligible"]),
+                failure_reason=str(
+                    trial.user_attrs.get("failure_reason", "")
+                ),
+                stage=stage,
+            )
+        )
+    return tuple(sorted(rows, key=lambda row: row.trial_number))
+
+
+def _candidate_from_trial(
+    trial: optuna.trial.Trial | optuna.trial.FrozenTrial,
+    *,
+    space: BOSearchSpace,
+    candidate_by_coordinate: Mapping[tuple[int, ...], BOCandidate],
+) -> BOCandidate:
+    try:
+        coordinate = tuple(
+            int(trial.params[name]) for name in space.parameter_names
+        )
+    except KeyError as exc:
+        raise StudyStateMismatchError(
+            f"trial {trial.number} 缺少已冻结参数 {exc.args[0]!r}"
+        ) from exc
+    candidate = candidate_by_coordinate.get(coordinate)
+    if candidate is None:
+        raise StudyStateMismatchError(
+            f"trial {trial.number} 坐标不在冻结空间: {coordinate}"
+        )
+    return candidate
+
+
+def _coordinate_distributions(
+    space: BOSearchSpace,
+) -> dict[str, optuna.distributions.IntDistribution]:
+    return {
+        name: optuna.distributions.IntDistribution(
+            low=0,
+            high=len(space.option_values[axis]) - 1,
+        )
+        for axis, name in enumerate(space.parameter_names)
+    }
+
+
+def _trial_params(
+    candidate: BOCandidate,
+    space: BOSearchSpace,
+) -> dict[str, int]:
+    return {
+        name: int(candidate.coordinate[axis])
+        for axis, name in enumerate(space.parameter_names)
+    }
+
+
+def _optuna_constraints(
+    trial: optuna.trial.FrozenTrial,
+) -> tuple[float, ...]:
+    return tuple(
+        float(value)
+        for value in trial.user_attrs.get("constraints", ())
+    )
+
+
+def _evaluations_from_lanes(
+    lanes: Sequence[SeedLaneResult],
+) -> dict[str, SearchEvaluation]:
+    evaluations: dict[str, SearchEvaluation] = {}
+    for lane in lanes:
+        for row in lane.history:
+            evaluation = SearchEvaluation(
+                objective=row.objective,
+                constraints=row.constraints,
+                metric_valid=row.metric_valid,
+                eligible=row.eligible,
+                failure_reason=row.failure_reason,
+            )
+            previous = evaluations.get(row.candidate_id)
+            if previous is not None and previous != evaluation:
+                raise StudyStateMismatchError(
+                    f"候选 {row.candidate_id} 在 seed lane 间结果不一致"
+                )
+            evaluations[row.candidate_id] = evaluation
+    return evaluations
+
+
+def _validate_seed_search(
+    space: BOSearchSpace,
+    budget: SeedSearchBudget,
+) -> None:
+    if budget.lane_unique_budget > len(space.candidates):
+        raise ValueError("lane_unique_budget 超过离散空间大小")
+    if budget.global_unique_budget > len(space.candidates):
+        raise ValueError("global_unique_budget 超过离散空间大小")
+    candidate_by_coordinate = {
+        candidate.coordinate: candidate for candidate in space.candidates
+    }
+    if len(candidate_by_coordinate) != len(space.candidates):
+        raise ValueError("冻结空间包含重复候选坐标")
+    for coordinate in candidate_by_coordinate:
+        if len(coordinate) != len(space.parameter_names):
+            raise ValueError("候选坐标维数与参数名不一致")
+        for axis, option_idx in enumerate(coordinate):
+            if not 0 <= int(option_idx) < len(space.option_values[axis]):
+                raise ValueError(f"候选坐标越界: {coordinate}")
+
+
+def _seed_search_config_hash(
+    space: BOSearchSpace,
+    budget: SeedSearchBudget,
+) -> str:
+    payload = {
+        "space_name": space.name,
+        "parameter_names": space.parameter_names,
+        "option_values": space.option_values,
+        "candidate_ids": [
+            candidate.candidate_id for candidate in space.candidates
+        ],
+        "budget": asdict(budget),
+        "metric_contract_version": METRIC_CONTRACT_VERSION,
+    }
+    return hashlib.sha256(
+        json.dumps(
+            _json_ready(payload),
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def _write_running_trial_state(
+    state_path: Path,
+    *,
+    config_hash: str,
+    lane: str,
+    stage: Literal["search", "fill"],
+    trial_number: int,
+    candidate_id: str,
+    state_lock: threading.Lock,
+) -> None:
+    unresolved = {
+        "lane": lane,
+        "trial_number": int(trial_number),
+        "candidate_id": candidate_id,
+    }
+    with state_lock:
+        payload = _read_driver_state(state_path, config_hash=config_hash)
+        current = [
+            item
+            for item in payload.get("unresolved_trials", [])
+            if not (
+                item.get("lane") == lane
+                and int(item.get("trial_number", -1)) == trial_number
+            )
+        ]
+        current.append(unresolved)
+        _atomic_write_json(
+            state_path,
+            {
+                **payload,
+                "config_hash": config_hash,
+                "stage": stage,
+                "unresolved_trials": sorted(
+                    current,
+                    key=lambda item: (
+                        str(item["lane"]),
+                        int(item["trial_number"]),
+                    ),
+                ),
+            },
+        )
+
+
+def _clear_running_trial_state(
+    state_path: Path,
+    *,
+    config_hash: str,
+    lane: str,
+    trial_number: int,
+    state_lock: threading.Lock,
+) -> None:
+    with state_lock:
+        payload = _read_driver_state(state_path, config_hash=config_hash)
+        unresolved = [
+            item
+            for item in payload.get("unresolved_trials", [])
+            if not (
+                item.get("lane") == lane
+                and int(item.get("trial_number", -1)) == trial_number
+            )
+        ]
+        _atomic_write_json(
+            state_path,
+            {
+                **payload,
+                "config_hash": config_hash,
+                "unresolved_trials": unresolved,
+            },
+        )
+
+
+def _read_driver_state(
+    state_path: Path,
+    *,
+    config_hash: str,
+) -> dict[str, Any]:
+    if not state_path.exists():
+        return {}
+    payload = json.loads(state_path.read_text(encoding="utf-8"))
+    actual_hash = payload.get("config_hash")
+    if actual_hash not in (None, config_hash):
+        raise StudyStateMismatchError(
+            "driver_state.json 与当前搜索配置不一致"
+        )
+    return dict(payload)
 
 
 def build_solver_cache_key(identity: SolverCacheIdentity) -> SolverCacheKey:

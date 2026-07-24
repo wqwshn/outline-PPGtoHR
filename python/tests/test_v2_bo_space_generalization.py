@@ -8,15 +8,19 @@ import numpy as np
 import pytest
 
 from ppg_hr.v2.bo_space_generalization import (
+    BOSearchSpace,
     CachedInfrastructureError,
     CandidateSolveOutcome,
     ContentAddressedSolverCache,
     FormalMetricContractError,
     InfrastructureSolveError,
+    SearchEvaluation,
+    SeedSearchBudget,
     SolverCacheIdentity,
     build_bo_search_space,
     build_solver_cache_key,
     evaluate_formal_metrics,
+    run_seed_search,
 )
 from ppg_hr.v2.solver import V2SolverResult
 
@@ -494,3 +498,166 @@ def test_invalid_candidate_reason_must_use_frozen_failure_vocabulary() -> None:
             status="invalid",
             failure_reason="anything_goes",
         )
+
+
+def _small_physical_space() -> BOSearchSpace:
+    base = build_bo_search_space("physical_v1")
+    selected = tuple(
+        candidate
+        for candidate in base.candidates
+        if candidate.coordinate[0] == 0
+        and candidate.coordinate[1] == 0
+        and candidate.coordinate[2] in {0, 1}
+        and candidate.coordinate[3] in {0, 1}
+    )
+    return BOSearchSpace(
+        name="physical_v1",
+        parameter_names=base.parameter_names,
+        option_values=((25,), (40,), (0.006, 0.008), (3, 6)),
+        candidates=selected,
+    )
+
+
+def _fill_physical_space() -> BOSearchSpace:
+    base = build_bo_search_space("physical_v1")
+    selected = tuple(
+        candidate
+        for candidate in base.candidates
+        if candidate.coordinate[0] == 0
+        and candidate.coordinate[1] == 0
+        and candidate.coordinate[2] in {0, 1, 2, 3}
+        and candidate.coordinate[3] in {0, 1, 2, 3}
+    )
+    return BOSearchSpace(
+        name="physical_v1",
+        parameter_names=base.parameter_names,
+        option_values=(
+            (25,),
+            (40,),
+            (0.006, 0.008, 0.010, 0.012),
+            (3, 6, 12, 18),
+        ),
+        candidates=selected,
+    )
+
+
+def _deterministic_search_evaluation(candidate) -> SearchEvaluation:
+    return SearchEvaluation(
+        objective=float(candidate.coordinate[2] * 10 + candidate.coordinate[3]),
+        metric_valid=True,
+        eligible=True,
+    )
+
+
+def test_independent_seed_lanes_and_fill_reach_global_unique_budget(
+    tmp_path,
+) -> None:
+    space = _fill_physical_space()
+    result = run_seed_search(
+        space=space,
+        output_dir=tmp_path / "search",
+        evaluate=_deterministic_search_evaluation,
+        budget=SeedSearchBudget(
+            lane_seeds=(42, 43, 44),
+            lane_unique_budget=1,
+            global_unique_budget=4,
+            n_startup_trials=10,
+        ),
+    )
+
+    assert [lane.seed for lane in result.lanes] == [42, 43, 44]
+    assert [lane.unique_candidate_count for lane in result.lanes] == [1, 1, 1]
+    assert all(len(lane.history) >= 1 for lane in result.lanes)
+    assert len(result.global_candidate_ids) == 4
+    lane_union = {
+        candidate_id
+        for lane in result.lanes
+        for candidate_id in lane.unique_candidate_ids
+    }
+    assert result.fill_unique_candidate_count == 4 - len(lane_union)
+    assert all(row.stage == "fill" for row in result.fill_history)
+    assert set(result.seed_stability_candidate_ids) == lane_union
+
+    second = run_seed_search(
+        space=space,
+        output_dir=tmp_path / "search",
+        evaluate=lambda _: pytest.fail("completed studies must be resumed"),
+        budget=SeedSearchBudget(
+            lane_seeds=(42, 43, 44),
+            lane_unique_budget=1,
+            global_unique_budget=4,
+            n_startup_trials=10,
+        ),
+    )
+    assert second == result
+
+
+def test_seed_search_resume_completes_running_trial_before_new_ask(
+    tmp_path,
+) -> None:
+    space = _small_physical_space()
+    budget = SeedSearchBudget(
+        lane_seeds=(42,),
+        lane_unique_budget=2,
+        global_unique_budget=2,
+        n_startup_trials=1,
+    )
+    interrupted_candidate_ids: list[str] = []
+
+    def interrupt_once(candidate) -> SearchEvaluation:
+        interrupted_candidate_ids.append(candidate.candidate_id)
+        raise RuntimeError("simulated interruption")
+
+    with pytest.raises(RuntimeError, match="simulated interruption"):
+        run_seed_search(
+            space=space,
+            output_dir=tmp_path / "resumed",
+            evaluate=interrupt_once,
+            budget=budget,
+        )
+
+    resumed = run_seed_search(
+        space=space,
+        output_dir=tmp_path / "resumed",
+        evaluate=_deterministic_search_evaluation,
+        budget=budget,
+    )
+    uninterrupted = run_seed_search(
+        space=space,
+        output_dir=tmp_path / "uninterrupted",
+        evaluate=_deterministic_search_evaluation,
+        budget=budget,
+    )
+
+    assert resumed.lanes[0].history == uninterrupted.lanes[0].history
+    assert resumed.global_candidate_ids == uninterrupted.global_candidate_ids
+    assert resumed.lanes[0].history[0].candidate_id == interrupted_candidate_ids[0]
+
+
+def test_seed_lane_parallelism_does_not_change_histories_or_fill(tmp_path) -> None:
+    space = _small_physical_space()
+    budget = SeedSearchBudget(
+        lane_seeds=(42, 43, 44),
+        lane_unique_budget=2,
+        global_unique_budget=4,
+        n_startup_trials=10,
+    )
+
+    serial = run_seed_search(
+        space=space,
+        output_dir=tmp_path / "serial",
+        evaluate=_deterministic_search_evaluation,
+        budget=budget,
+        parallel_lanes=False,
+    )
+    parallel = run_seed_search(
+        space=space,
+        output_dir=tmp_path / "parallel",
+        evaluate=_deterministic_search_evaluation,
+        budget=budget,
+        parallel_lanes=True,
+    )
+
+    assert parallel.lanes == serial.lanes
+    assert parallel.fill_history == serial.fill_history
+    assert parallel.global_candidate_ids == serial.global_candidate_ids
