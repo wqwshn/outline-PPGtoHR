@@ -2,12 +2,6 @@
 
 from __future__ import annotations
 
-import csv
-import hashlib
-import json
-import math
-import os
-import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -29,6 +23,33 @@ from .bo_space_generalization import (
     SolverCacheIdentity,
     build_bo_search_space,
     run_seed_search,
+)
+from .phase2_experiment_io import (
+    all_search_rows as _all_search_rows,
+)
+from .phase2_experiment_io import (
+    atomic_write_json as _atomic_write_json,
+)
+from .phase2_experiment_io import (
+    cache_summary as _cache_summary,
+)
+from .phase2_experiment_io import (
+    file_sha256 as _file_sha256,
+)
+from .phase2_experiment_io import (
+    json_ready as _json_ready,
+)
+from .phase2_experiment_io import (
+    read_json as _read_json,
+)
+from .phase2_experiment_io import (
+    space_sha256 as _space_sha256,
+)
+from .phase2_experiment_io import (
+    trial_audit_path as _trial_audit_path,
+)
+from .phase2_experiment_io import (
+    write_csv as _write_csv,
 )
 from .phase2_kfold_runtime import (
     ClassicPlotArtifact as _ClassicPlotArtifact,
@@ -681,130 +702,3 @@ def _write_training_metrics(
             for record, metric in zip(records, metrics, strict=True)
         ],
     )
-
-
-def _all_search_rows(result: SeedSearchResult) -> tuple[Any, ...]:
-    return (
-        *(row for lane in result.lanes for row in lane.history),
-        *result.fill_history,
-    )
-
-
-def _cache_summary(cache: ContentAddressedSolverCache) -> dict[str, Any]:
-    summary = cache.audit_summary()
-    return {
-        key: summary[key]
-        for key in (
-            "logical_request_count",
-            "physical_solve_count",
-            "cache_hit_count",
-            "reservation_conflict_count",
-            "infrastructure_failure_count",
-            "events",
-        )
-    }
-
-
-def _trial_audit_path(
-    root: Path,
-    context: SearchRequestContext,
-) -> Path:
-    return root / f"{context.lane}-{context.trial_number}.json"
-
-
-def _space_sha256(candidates: Sequence[BOCandidate]) -> str:
-    payload = [
-        {
-            "candidate_id": candidate.candidate_id,
-            "requested_params": candidate.requested_params,
-            "actual_params": candidate.actual_params,
-            "fixed_params": candidate.fixed_params,
-        }
-        for candidate in candidates
-    ]
-    return hashlib.sha256(
-        json.dumps(
-            _json_ready(payload),
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-            allow_nan=False,
-        ).encode("utf-8")
-    ).hexdigest()
-
-
-def _file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _write_csv(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
-    if not rows:
-        raise ValueError(f"不能写入空 CSV: {path}")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = list(
-        dict.fromkeys(
-            key
-            for row in rows
-            for key in row
-        )
-    )
-    temp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
-    with temp.open("w", encoding="utf-8-sig", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(_json_ready(row) for row in rows)
-    os.replace(temp, path)
-
-
-def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
-    temp.write_text(
-        json.dumps(
-            _json_ready(payload),
-            ensure_ascii=False,
-            sort_keys=True,
-            indent=2,
-            allow_nan=False,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    os.replace(temp, path)
-
-
-def _read_json(path: Path) -> dict[str, Any]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ValueError(f"JSON 根节点必须是对象: {path}")
-    return payload
-
-
-def _json_ready(value: Any) -> Any:
-    if isinstance(value, Mapping):
-        return {
-            str(key): _json_ready(nested)
-            for key, nested in sorted(
-                value.items(),
-                key=lambda item: str(item[0]),
-            )
-        }
-    if isinstance(value, (tuple, list)):
-        return [_json_ready(item) for item in value]
-    if isinstance(value, Path):
-        return str(value)
-    if isinstance(value, np.ndarray):
-        return _json_ready(value.tolist())
-    if isinstance(value, np.integer | np.floating | np.bool_):
-        return _json_ready(value.item())
-    if isinstance(value, float):
-        if not math.isfinite(value):
-            raise ValueError("K0 审计产物不得包含非有限数")
-        return value
-    if value is None or isinstance(value, (str, int, bool)):
-        return value
-    raise TypeError(f"不支持的 K0 审计类型: {type(value).__name__}")
