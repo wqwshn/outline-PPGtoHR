@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -427,6 +428,60 @@ def test_solver_cache_round_trips_valid_solver_and_formal_metrics(tmp_path) -> N
     np.testing.assert_array_equal(second.outcome.solver_result.HR, solver_result.HR)
     assert second.outcome.solver_result.window_table == solver_result.window_table
     assert second.outcome.diagnostics["runtime_seconds"] == 1.25
+
+
+def test_solver_cache_round_trips_nonfinite_optional_diagnostics_as_strict_json(
+    tmp_path,
+) -> None:
+    cache = ContentAddressedSolverCache(tmp_path / "cache")
+    identity = _cache_identity()
+    solver_result, ref_data = _formal_metric_fixture()
+    solver_result.err_stats["optional_nan"] = np.nan
+    solver_result.metadata["optional_positive_infinity"] = np.inf
+    solver_result.window_table[0]["optional_negative_infinity"] = -np.inf
+    formal_metrics = evaluate_formal_metrics(
+        solver_result,
+        ref_data=ref_data,
+        time_bias=5.0,
+        method_names=("LMS+H", "reset FFT"),
+    )
+
+    first = cache.get_or_solve(
+        identity,
+        lambda: CandidateSolveOutcome.valid(
+            solver_result,
+            formal_metrics,
+            diagnostics={"optional_nan": np.nan},
+        ),
+    )
+    second = cache.get_or_solve(
+        identity,
+        lambda: pytest.fail("complete cache entry must be reused"),
+    )
+
+    assert first.cache_hit is False
+    assert second.cache_hit is True
+    assert second.outcome.solver_result is not None
+    assert np.isnan(second.outcome.solver_result.err_stats["optional_nan"])
+    assert np.isposinf(
+        second.outcome.solver_result.metadata["optional_positive_infinity"]
+    )
+    assert np.isneginf(
+        second.outcome.solver_result.window_table[0][
+            "optional_negative_infinity"
+        ]
+    )
+    assert np.isnan(second.outcome.diagnostics["optional_nan"])
+    cache_key = build_solver_cache_key(identity).key
+    outcome_json = (tmp_path / "cache" / cache_key / "outcome.json").read_text(
+        encoding="utf-8"
+    )
+    json.loads(
+        outcome_json,
+        parse_constant=lambda value: pytest.fail(
+            f"cache JSON contains non-standard numeric token: {value}"
+        ),
+    )
 
 
 def test_solver_cache_keeps_infrastructure_failure_separate(

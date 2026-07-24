@@ -47,6 +47,7 @@ _CANDIDATE_INVALID_FAILURE_REASONS = frozenset(
         "nonfinite_solver_output",
     }
 )
+_CACHE_NONFINITE_FLOAT_KEY = "__ppg_hr_cache_nonfinite_float_v1__"
 _METHOD_IDENTITY_CONTRACT_REASONS = frozenset(
     {
         "invalid_method_identity",
@@ -291,7 +292,7 @@ class ContentAddressedSolverCache:
         if state == "failed":
             audit.update(_read_json(entry / "failed.json"))
         elif state == "complete":
-            outcome = _read_json(entry / "outcome.json")
+            outcome = _cache_json_restore(_read_json(entry / "outcome.json"))
             audit["outcome_status"] = outcome.get("status")
             audit["failure_reason"] = outcome.get("failure_reason", "")
             audit["diagnostics"] = outcome.get("diagnostics", {})
@@ -2273,9 +2274,9 @@ def _write_cached_outcome(
     solver_payload: dict[str, Any] | None = None
     if outcome.solver_result is not None:
         solver_payload = {
-            "err_stats": _json_ready(outcome.solver_result.err_stats),
-            "metadata": _json_ready(outcome.solver_result.metadata),
-            "window_table": _json_ready(outcome.solver_result.window_table),
+            "err_stats": _cache_json_ready(outcome.solver_result.err_stats),
+            "metadata": _cache_json_ready(outcome.solver_result.metadata),
+            "window_table": _cache_json_ready(outcome.solver_result.window_table),
         }
         temp_npz = entry / f"solver_result.{uuid.uuid4().hex}.tmp"
         with temp_npz.open("wb") as handle:
@@ -2289,7 +2290,7 @@ def _write_cached_outcome(
         {
             "status": outcome.status,
             "failure_reason": outcome.failure_reason,
-            "diagnostics": _json_ready(outcome.diagnostics),
+            "diagnostics": _cache_json_ready(outcome.diagnostics),
             "formal_metrics": (
                 _json_ready(asdict(outcome.formal_metrics))
                 if outcome.formal_metrics is not None
@@ -2301,7 +2302,7 @@ def _write_cached_outcome(
 
 
 def _read_cached_outcome(entry: Path) -> CandidateSolveOutcome:
-    payload = _read_json(entry / "outcome.json")
+    payload = _cache_json_restore(_read_json(entry / "outcome.json"))
     formal_payload = payload.get("formal_metrics")
     formal_metrics = (
         FormalMetricResult(**formal_payload)
@@ -2372,6 +2373,60 @@ def _json_ready(value: Any) -> Any:
     if value is None or isinstance(value, str | int | float | bool):
         return value
     raise TypeError(f"值无法进入缓存 JSON: {type(value).__name__}")
+
+
+def _cache_json_ready(value: Any) -> Any:
+    """Encode optional non-finite diagnostics without weakening identity JSON."""
+
+    if isinstance(value, Mapping):
+        return {
+            str(key): _cache_json_ready(item)
+            for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
+        }
+    if isinstance(value, tuple | list):
+        return [_cache_json_ready(item) for item in value]
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, np.ndarray):
+        return _cache_json_ready(value.tolist())
+    if isinstance(value, np.integer | np.floating | np.bool_):
+        return _cache_json_ready(value.item())
+    if isinstance(value, float) and not math.isfinite(value):
+        if math.isnan(value):
+            label = "nan"
+        elif value > 0:
+            label = "positive_infinity"
+        else:
+            label = "negative_infinity"
+        return {_CACHE_NONFINITE_FLOAT_KEY: label}
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    raise TypeError(
+        "value cannot enter candidate-outcome cache JSON: "
+        f"{type(value).__name__}"
+    )
+
+
+def _cache_json_restore(value: Any) -> Any:
+    """Restore cache-only tagged non-finite diagnostics."""
+
+    if isinstance(value, list):
+        return [_cache_json_restore(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+    if set(value) == {_CACHE_NONFINITE_FLOAT_KEY}:
+        label = value[_CACHE_NONFINITE_FLOAT_KEY]
+        if label == "nan":
+            return float("nan")
+        if label == "positive_infinity":
+            return float("inf")
+        if label == "negative_infinity":
+            return float("-inf")
+        raise ValueError(f"unknown cached non-finite float label: {label!r}")
+    return {
+        str(key): _cache_json_restore(item)
+        for key, item in value.items()
+    }
 
 
 def _formal_metric_failure_category(reason: str) -> str:

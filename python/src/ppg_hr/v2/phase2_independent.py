@@ -104,21 +104,22 @@ def run_independent_bo_study(
 ) -> IndependentStudyResult:
     """完成历史锚点、同代码完整旧空间和新物理空间的单记录闭环。"""
 
-    output = Path(config.output_dir)
+    output = Path(config.output_dir).resolve()
     output.mkdir(parents=True, exist_ok=True)
-    active_runtime = runtime or _build_default_runtime(config)
+    normalized_config = replace(config, output_dir=output)
+    active_runtime = runtime or _build_default_runtime(normalized_config)
     legacy = _run_arm(
         arm="legacy_same_code",
         space_name="legacy_full_v1",
         budget=config.legacy_budget,
-        config=config,
+        config=normalized_config,
         runtime=active_runtime,
     )
     physical = _run_arm(
         arm="physical_new",
         space_name="physical_v1",
         budget=config.physical_budget,
-        config=config,
+        config=normalized_config,
         runtime=active_runtime,
     )
     comparison = _comparison_values(
