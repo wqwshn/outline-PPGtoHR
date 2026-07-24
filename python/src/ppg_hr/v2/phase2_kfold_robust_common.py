@@ -2,18 +2,26 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from .bo_space_generalization import (
     BOCandidate,
     BOSearchSpace,
     CandidateSolveOutcome,
+    ContentAddressedSolverCache,
     FormalMetricResult,
+    SolverCacheIdentity,
 )
-from .phase2_experiment_io import file_sha256, json_ready
+from .phase2_experiment_io import (
+    atomic_write_json,
+    file_sha256,
+    json_ready,
+)
+from .phase2_kfold_runtime import KFoldTrainingRecordRuntime
 from .phase2_robust_selection import (
     RobustBands,
     RobustSelection,
@@ -25,6 +33,121 @@ from .phase2_robust_selection import (
 
 class RobustFoldAuditIntegrityError(RuntimeError):
     """稳健 K 折不可变证据的身份或内容不匹配。"""
+
+
+def evaluate_training_candidate(
+    *,
+    cache: ContentAddressedSolverCache,
+    candidate: BOCandidate,
+    training_records: tuple[
+        KFoldTrainingRecordRuntime,
+        KFoldTrainingRecordRuntime,
+    ],
+    cache_identity: Callable[
+        [KFoldTrainingRecordRuntime, BOCandidate],
+        SolverCacheIdentity,
+    ],
+    arm: str,
+    scene: str,
+    fold: int,
+    logical_reference: Mapping[str, Any],
+    audit_path: Path,
+) -> tuple[
+    RobustTrainingEvidence,
+    tuple[CandidateSolveOutcome, CandidateSolveOutcome],
+]:
+    started_at = perf_counter()
+    outcomes: list[CandidateSolveOutcome] = []
+    audit_outcomes: list[dict[str, Any]] = []
+    for record_index, record in enumerate(training_records):
+        lookup = cache.get_or_solve(
+            cache_identity(record, candidate),
+            lambda record=record, candidate=candidate: (
+                record.solve_candidate(candidate)
+            ),
+            logical_reference={
+                "arm": arm,
+                "scene": scene,
+                "fold": fold,
+                "record_id": record.identity.record_id,
+                "record_index": record_index,
+                **logical_reference,
+            },
+        )
+        outcomes.append(lookup.outcome)
+        audit_outcomes.append(
+            {
+                "record_id": record.identity.record_id,
+                "cache_key": lookup.cache_key,
+                "cache_hit": lookup.cache_hit,
+                "physical_solve_performed": (
+                    lookup.physical_solve_performed
+                ),
+                "status": lookup.outcome.status,
+                "failure_reason": lookup.outcome.failure_reason,
+                "formal_metrics": (
+                    asdict(lookup.outcome.formal_metrics)
+                    if lookup.outcome.formal_metrics is not None
+                    else {}
+                ),
+            }
+        )
+    typed_outcomes = (outcomes[0], outcomes[1])
+    if any(
+        outcome.status != "valid"
+        or outcome.formal_metrics is None
+        for outcome in typed_outcomes
+    ):
+        reason = next(
+            (
+                outcome.failure_reason
+                for outcome in typed_outcomes
+                if outcome.status != "valid"
+            ),
+            "metric_window_contract_failed",
+        )
+        evidence = build_robust_training_evidence(
+            candidate_id=candidate.candidate_id,
+            final_motion_mae_bpm=None,
+            reset_motion_mae_bpm=None,
+            failure_reason=reason,
+        )
+    else:
+        metrics = (
+            typed_outcomes[0].formal_metrics,
+            typed_outcomes[1].formal_metrics,
+        )
+        if metrics[0] is None or metrics[1] is None:
+            raise AssertionError(
+                f"有效 {arm} outcome 缺少正式指标"
+            )
+        evidence = build_robust_training_evidence(
+            candidate_id=candidate.candidate_id,
+            final_motion_mae_bpm=(
+                metrics[0].reliable_motion_final_mae_bpm,
+                metrics[1].reliable_motion_final_mae_bpm,
+            ),
+            reset_motion_mae_bpm=(
+                metrics[0].reliable_motion_reset_fft_mae_bpm,
+                metrics[1].reliable_motion_reset_fft_mae_bpm,
+            ),
+        )
+    atomic_write_json(
+        audit_path,
+        {
+            **dict(logical_reference),
+            "candidate_id": candidate.candidate_id,
+            "candidate_identity": {
+                "requested_params": candidate.requested_params,
+                "actual_params": candidate.actual_params,
+                "fixed_params": candidate.fixed_params,
+            },
+            "training_outcomes": audit_outcomes,
+            "robust_evidence": asdict(evidence),
+            "runtime_seconds": perf_counter() - started_at,
+        },
+    )
+    return evidence, typed_outcomes
 
 
 def terminal_artifact_manifest(

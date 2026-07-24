@@ -190,7 +190,7 @@ class SelectionEvidence:
     space_name: str
     space_sha256: str
     metric_contract_version: str
-    study_identities: tuple[str, str, str, str]
+    study_identities: tuple[str, ...]
     budget: SearchBudgetEvidence
     selected_candidate_id: str
     selected_requested_params: Mapping[str, Any]
@@ -241,12 +241,22 @@ class SelectionEvidence:
         if len(data_hashes) != 3:
             raise ValueError("训练记录与留出记录不得指向相同数据内容")
         _require_sha256(self.space_sha256, "space_sha256")
+        expected_study_count = 1 if self.arm == "K2" else 4
         if (
             type(self.study_identities) is not tuple
-            or len(self.study_identities) != 4
-            or any(not value for value in self.study_identities)
+            or len(self.study_identities) != expected_study_count
+            or any(
+                type(value) is not str or not value
+                for value in self.study_identities
+            )
         ):
-            raise ValueError("必须包含三个 seed lane 与 fill 的 study 身份")
+            if self.arm == "K2":
+                raise ValueError(
+                    "K2 必须包含一个完整枚举证据身份"
+                )
+            raise ValueError(
+                "必须包含三个 seed lane 与 fill 的 study 身份"
+            )
         if not isinstance(self.budget, SearchBudgetEvidence):
             raise ValueError("budget 必须是 SearchBudgetEvidence")
         if not isinstance(self.training_metrics, TrainingMetricEvidence):
@@ -807,7 +817,7 @@ def _selection_evidence_from_payload(
             payload,
             "metric_contract_version",
         ),
-        study_identities=_four_string_tuple(
+        study_identities=_nonempty_string_tuple(
             payload,
             "study_identities",
         ),
@@ -1199,6 +1209,21 @@ def _four_string_tuple(
 ) -> tuple[str, str, str, str]:
     values = _string_list(payload, key, expected_length=4)
     return (values[0], values[1], values[2], values[3])
+
+
+def _nonempty_string_tuple(
+    payload: Mapping[str, Any],
+    key: str,
+) -> tuple[str, ...]:
+    values = _require_sequence(payload, key)
+    if not values or any(
+        type(value) is not str or not value
+        for value in values
+    ):
+        raise ReceiptIntegrityError(
+            f"{key} 必须是非空字符串数组"
+        )
+    return tuple(values)
 
 
 def _two_string_tuple(
