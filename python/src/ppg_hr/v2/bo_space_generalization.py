@@ -256,6 +256,76 @@ class InfrastructureSolveError(RuntimeError):
     """调用方已确认的求解基础设施故障。"""
 
 
+def _process_is_demonstrably_dead(pid: Any) -> bool:
+    """仅在本机明确报告进程不存在时返回真。"""
+
+    if not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0:
+        return False
+    if pid == os.getpid():
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return True
+    except PermissionError:
+        return False
+    except OSError as exc:
+        # Windows 对不存在的 PID 返回 ERROR_INVALID_PARAMETER。
+        return getattr(exc, "winerror", None) == 87
+    return False
+
+
+@contextmanager
+def _try_exclusive_file_lock(
+    lock_path: Path,
+    *,
+    blocking: bool = False,
+) -> Iterator[bool]:
+    """尝试持有一个由操作系统随进程退出自动释放的文件锁。"""
+
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = lock_path.open("a+b")
+    acquired = False
+    try:
+        handle.seek(0, os.SEEK_END)
+        if handle.tell() == 0:
+            handle.write(b"\0")
+            handle.flush()
+        handle.seek(0)
+        try:
+            if os.name == "nt":
+                import msvcrt
+
+                mode = msvcrt.LK_LOCK if blocking else msvcrt.LK_NBLCK
+                msvcrt.locking(handle.fileno(), mode, 1)
+            else:
+                import fcntl
+
+                operation = fcntl.LOCK_EX
+                if not blocking:
+                    operation |= fcntl.LOCK_NB
+                fcntl.flock(
+                    handle.fileno(),
+                    operation,
+                )
+            acquired = True
+        except OSError:
+            pass
+        yield acquired
+    finally:
+        if acquired:
+            handle.seek(0)
+            if os.name == "nt":
+                import msvcrt
+
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        handle.close()
+
+
 class ContentAddressedSolverCache:
     """使用原子目录预占的本地确定性候选求解缓存。"""
 
@@ -313,7 +383,11 @@ class ContentAddressedSolverCache:
         )
         return MappingProxyType(
             {
-                "logical_request_count": len(events),
+                "logical_request_count": sum(
+                    event.get("event_type")
+                    != "abandoned_reservation_recovered"
+                    for event in events
+                ),
                 "physical_solve_count": sum(
                     bool(event.get("physical_solve_performed"))
                     for event in events
@@ -333,6 +407,11 @@ class ContentAddressedSolverCache:
                     event.get("event_type") == "unclassified_error"
                     for event in events
                 ),
+                "abandoned_reservation_recovery_count": sum(
+                    event.get("event_type")
+                    == "abandoned_reservation_recovered"
+                    for event in events
+                ),
                 "events": events,
             }
         )
@@ -349,12 +428,23 @@ class ContentAddressedSolverCache:
         cache_key = build_solver_cache_key(identity)
         self.root.mkdir(parents=True, exist_ok=True)
         entry = self._entry_path(cache_key.key)
-        try:
-            entry.mkdir()
-        except FileExistsError:
+        reservation = {
+            "cache_key": cache_key.key,
+            "pid": os.getpid(),
+            "identity": cache_key.payload,
+        }
+        while True:
+            if self._try_claim_entry(
+                cache_key.key,
+                reservation=reservation,
+                logical_reference=logical_reference,
+            ):
+                break
             try:
                 lookup = self._wait_for_existing(
                     cache_key.key,
+                    logical_reference=logical_reference,
+                    reservation=reservation,
                     wait_timeout_s=wait_timeout_s,
                     poll_interval_s=poll_interval_s,
                 )
@@ -377,6 +467,8 @@ class ContentAddressedSolverCache:
                     message=str(exc),
                 )
                 raise
+            if lookup is None:
+                break
             self._record_event(
                 cache_key=cache_key.key,
                 event_type="lookup_complete",
@@ -388,14 +480,6 @@ class ContentAddressedSolverCache:
             )
             return lookup
 
-        _atomic_write_json(
-            entry / "reservation.json",
-            {
-                "cache_key": cache_key.key,
-                "pid": os.getpid(),
-                "identity": cache_key.payload,
-            },
-        )
         try:
             outcome = solve()
         except FormalMetricContractError as exc:
@@ -437,13 +521,10 @@ class ContentAddressedSolverCache:
         try:
             if not isinstance(outcome, CandidateSolveOutcome):
                 raise TypeError("solve 必须返回 CandidateSolveOutcome")
-            _write_cached_outcome(entry, outcome)
-            _atomic_write_json(
-                entry / "complete.json",
-                {
-                    "cache_key": cache_key.key,
-                    "status": outcome.status,
-                },
+            self._publish_completed_outcome(
+                entry,
+                cache_key=cache_key.key,
+                outcome=outcome,
             )
         except OSError as exc:
             wrapped = InfrastructureSolveError(str(exc))
@@ -496,15 +577,43 @@ class ContentAddressedSolverCache:
         cache_key: str,
         exc: InfrastructureSolveError,
     ) -> None:
-        _atomic_write_json(
-            entry / "failed.json",
-            {
-                "cache_key": cache_key,
-                "failure_class": "infrastructure_failure",
-                "exception_type": type(exc).__name__,
-                "message": str(exc),
-            },
-        )
+        with _try_exclusive_file_lock(
+            self._claim_lock_path(cache_key),
+            blocking=True,
+        ) as acquired:
+            if not acquired:
+                raise AssertionError("阻塞缓存锁必须成功获取")
+            _atomic_write_json(
+                entry / "failed.json",
+                {
+                    "cache_key": cache_key,
+                    "failure_class": "infrastructure_failure",
+                    "exception_type": type(exc).__name__,
+                    "message": str(exc),
+                },
+            )
+
+    def _publish_completed_outcome(
+        self,
+        entry: Path,
+        *,
+        cache_key: str,
+        outcome: CandidateSolveOutcome,
+    ) -> None:
+        with _try_exclusive_file_lock(
+            self._claim_lock_path(cache_key),
+            blocking=True,
+        ) as acquired:
+            if not acquired:
+                raise AssertionError("阻塞缓存锁必须成功获取")
+            _write_cached_outcome(entry, outcome)
+            _atomic_write_json(
+                entry / "complete.json",
+                {
+                    "cache_key": cache_key,
+                    "status": outcome.status,
+                },
+            )
 
     def _record_event(
         self,
@@ -537,13 +646,21 @@ class ContentAddressedSolverCache:
         self,
         cache_key: str,
         *,
+        logical_reference: Mapping[str, Any] | None,
+        reservation: Mapping[str, Any],
         wait_timeout_s: float,
         poll_interval_s: float,
-    ) -> SolverCacheLookup:
+    ) -> SolverCacheLookup | None:
         import time
 
         deadline = time.monotonic() + max(0.0, float(wait_timeout_s))
         while True:
+            if self._try_claim_entry(
+                cache_key,
+                reservation=reservation,
+                logical_reference=logical_reference,
+            ):
+                return None
             state = self.entry_state(cache_key)
             if state == "complete":
                 return SolverCacheLookup(
@@ -557,15 +674,76 @@ class ContentAddressedSolverCache:
                 raise CachedInfrastructureError(
                     str(failure.get("message", "cached infrastructure failure"))
                 )
-            if state == "missing":
-                raise CacheReservationConflictError(
-                    f"缓存预占在等待期间消失: {cache_key}"
-                )
             if time.monotonic() >= deadline:
                 raise CacheReservationConflictError(
                     f"等待缓存预占超时: {cache_key}"
                 )
             time.sleep(max(0.001, float(poll_interval_s)))
+
+    def _try_claim_entry(
+        self,
+        cache_key: str,
+        *,
+        reservation: Mapping[str, Any],
+        logical_reference: Mapping[str, Any] | None,
+    ) -> bool:
+        claim_lock = self._claim_lock_path(cache_key)
+        with _try_exclusive_file_lock(claim_lock) as acquired:
+            if not acquired:
+                return False
+            entry = self._entry_path(cache_key)
+            state = self.entry_state(cache_key)
+            recovery_reason = ""
+            owner_pid: Any = None
+            abandoned: Path | None = None
+            if state == "reserved":
+                reservation_path = entry / "reservation.json"
+                if not reservation_path.is_file():
+                    recovery_reason = "missing_reservation"
+                else:
+                    try:
+                        existing = _read_json(reservation_path)
+                    except (OSError, ValueError, json.JSONDecodeError):
+                        return False
+                    if existing.get("cache_key") != cache_key:
+                        return False
+                    owner_pid = existing.get("pid")
+                    if not _process_is_demonstrably_dead(owner_pid):
+                        return False
+                    recovery_reason = "dead_owner"
+                abandoned_root = self.root / "_abandoned_reservations"
+                abandoned_root.mkdir(parents=True, exist_ok=True)
+                abandoned = (
+                    abandoned_root / f"{cache_key}.{uuid.uuid4().hex}"
+                )
+                try:
+                    entry.rename(abandoned)
+                except OSError:
+                    return False
+            elif state != "missing":
+                return False
+
+            try:
+                entry.mkdir()
+                _atomic_write_json(entry / "reservation.json", reservation)
+            except FileExistsError:
+                return False
+            if abandoned is not None:
+                self._record_event(
+                    cache_key=cache_key,
+                    event_type="abandoned_reservation_recovered",
+                    logical_reference=logical_reference,
+                    cache_hit=False,
+                    physical_solve_performed=False,
+                    abandoned_entry=str(abandoned.relative_to(self.root)),
+                    owner_pid=owner_pid,
+                    recovery_reason=recovery_reason,
+                )
+            return True
+
+    def _claim_lock_path(self, cache_key: str) -> Path:
+        self._entry_path(cache_key)
+        return self.root / "_claim_locks" / f"{cache_key}.lock"
 
     def _entry_path(self, cache_key: str) -> Path:
         if (
@@ -1671,44 +1849,12 @@ def _ensure_search_identity(
 
 @contextmanager
 def _exclusive_search_directory(lock_path: Path) -> Iterator[None]:
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    handle = lock_path.open("a+b")
-    try:
-        handle.seek(0, os.SEEK_END)
-        if handle.tell() == 0:
-            handle.write(b"\0")
-            handle.flush()
-        handle.seek(0)
-        try:
-            if os.name == "nt":
-                import msvcrt
-
-                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
-            else:
-                import fcntl
-
-                fcntl.flock(
-                    handle.fileno(),
-                    fcntl.LOCK_EX | fcntl.LOCK_NB,
-                )
-        except OSError as exc:
+    with _try_exclusive_file_lock(lock_path) as acquired:
+        if not acquired:
             raise SearchAlreadyRunningError(
                 f"搜索输出目录正在使用: {lock_path.parent}"
-            ) from exc
-        try:
-            yield
-        finally:
-            handle.seek(0)
-            if os.name == "nt":
-                import msvcrt
-
-                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
-            else:
-                import fcntl
-
-                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-    finally:
-        handle.close()
+            )
+        yield
 
 
 def _write_running_trial_state(

@@ -7,7 +7,6 @@ import json
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from time import perf_counter
 from typing import Any
 
 from .bo_space_generalization import (
@@ -39,6 +38,7 @@ from .phase2_experiment_io import (
 from .phase2_kfold_robust_common import (
     RobustFoldAuditIntegrityError,
     annotate_robust_history,
+    evaluate_training_candidate,
     formal_metrics,
     history_row_from_audit,
     terminal_artifact_manifest,
@@ -69,7 +69,6 @@ from .phase2_robust_selection import (
     RobustSelectionError,
     RobustTrainingEvidence,
     build_robust_bands,
-    build_robust_training_evidence,
     plan_robust_neighborhood,
     select_robust_center,
 )
@@ -217,100 +216,17 @@ def run_k1_fold_study(
         RobustTrainingEvidence,
         tuple[CandidateSolveOutcome, CandidateSolveOutcome],
     ]:
-        started_at = perf_counter()
-        outcomes: list[CandidateSolveOutcome] = []
-        audit_outcomes: list[dict[str, Any]] = []
-        for record_index, record in enumerate(
-            runtime.training_records
-        ):
-            lookup = cache.get_or_solve(
-                cache_identity(record, candidate),
-                lambda record=record, candidate=candidate: (
-                    record.solve_candidate(candidate)
-                ),
-                logical_reference={
-                    "arm": "K1",
-                    "scene": config.scene,
-                    "fold": config.fold,
-                    "record_id": record.identity.record_id,
-                    "record_index": record_index,
-                    **logical_reference,
-                },
-            )
-            outcomes.append(lookup.outcome)
-            audit_outcomes.append(
-                {
-                    "record_id": record.identity.record_id,
-                    "cache_key": lookup.cache_key,
-                    "cache_hit": lookup.cache_hit,
-                    "physical_solve_performed": (
-                        lookup.physical_solve_performed
-                    ),
-                    "status": lookup.outcome.status,
-                    "failure_reason": (
-                        lookup.outcome.failure_reason
-                    ),
-                    "formal_metrics": (
-                        asdict(lookup.outcome.formal_metrics)
-                        if lookup.outcome.formal_metrics is not None
-                        else {}
-                    ),
-                }
-            )
-        typed_outcomes = (outcomes[0], outcomes[1])
-        if any(
-            outcome.status != "valid"
-            or outcome.formal_metrics is None
-            for outcome in typed_outcomes
-        ):
-            reason = next(
-                (
-                    outcome.failure_reason
-                    for outcome in typed_outcomes
-                    if outcome.status != "valid"
-                ),
-                "metric_window_contract_failed",
-            )
-            evidence = build_robust_training_evidence(
-                candidate_id=candidate.candidate_id,
-                final_motion_mae_bpm=None,
-                reset_motion_mae_bpm=None,
-                failure_reason=reason,
-            )
-        else:
-            metrics = (
-                typed_outcomes[0].formal_metrics,
-                typed_outcomes[1].formal_metrics,
-            )
-            if metrics[0] is None or metrics[1] is None:
-                raise AssertionError("有效 K1 outcome 缺少正式指标")
-            evidence = build_robust_training_evidence(
-                candidate_id=candidate.candidate_id,
-                final_motion_mae_bpm=(
-                    metrics[0].reliable_motion_final_mae_bpm,
-                    metrics[1].reliable_motion_final_mae_bpm,
-                ),
-                reset_motion_mae_bpm=(
-                    metrics[0].reliable_motion_reset_fft_mae_bpm,
-                    metrics[1].reliable_motion_reset_fft_mae_bpm,
-                ),
-            )
-        atomic_write_json(
-            audit_path,
-            {
-                **dict(logical_reference),
-                "candidate_id": candidate.candidate_id,
-                "candidate_identity": {
-                    "requested_params": candidate.requested_params,
-                    "actual_params": candidate.actual_params,
-                    "fixed_params": candidate.fixed_params,
-                },
-                "training_outcomes": audit_outcomes,
-                "robust_evidence": asdict(evidence),
-                "runtime_seconds": perf_counter() - started_at,
-            },
+        return evaluate_training_candidate(
+            cache=cache,
+            candidate=candidate,
+            training_records=runtime.training_records,
+            cache_identity=cache_identity,
+            arm="K1",
+            scene=config.scene,
+            fold=config.fold,
+            logical_reference=logical_reference,
+            audit_path=audit_path,
         )
-        return evidence, typed_outcomes
 
     def evaluate_search(
         candidate: BOCandidate,

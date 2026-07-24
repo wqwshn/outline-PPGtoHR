@@ -396,6 +396,171 @@ def test_atomic_solver_cache_performs_one_physical_solve_for_parallel_requests(
     }
 
 
+def test_solver_cache_recovers_reservation_owned_by_dead_process(tmp_path) -> None:
+    cache = ContentAddressedSolverCache(tmp_path / "cache")
+    identity = _cache_identity()
+    cache_key = build_solver_cache_key(identity)
+    entry = tmp_path / "cache" / cache_key.key
+    entry.mkdir(parents=True)
+    (entry / "reservation.json").write_text(
+        json.dumps(
+            {
+                "cache_key": cache_key.key,
+                "pid": 2_147_483_647,
+                "identity": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    lookup = cache.get_or_solve(
+        identity,
+        lambda: CandidateSolveOutcome.invalid(
+            "metric_window_contract_failed",
+            diagnostics={"source": "recovered"},
+        ),
+        wait_timeout_s=0.0,
+    )
+
+    assert lookup.cache_hit is False
+    assert lookup.physical_solve_performed is True
+    assert cache.entry_state(cache_key.key) == "complete"
+    abandoned = list((tmp_path / "cache" / "_abandoned_reservations").iterdir())
+    assert len(abandoned) == 1
+    assert (abandoned[0] / "reservation.json").is_file()
+    summary = cache.audit_summary()
+    assert summary["logical_request_count"] == 1
+    assert summary["abandoned_reservation_recovery_count"] == 1
+
+
+def test_solver_cache_does_not_take_over_live_process_reservation(
+    tmp_path,
+) -> None:
+    cache = ContentAddressedSolverCache(tmp_path / "cache")
+    identity = _cache_identity()
+    cache_key = build_solver_cache_key(identity)
+    entry = tmp_path / "cache" / cache_key.key
+    entry.mkdir(parents=True)
+    (entry / "reservation.json").write_text(
+        json.dumps(
+            {
+                "cache_key": cache_key.key,
+                "pid": phase2_bo.os.getpid(),
+                "identity": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(phase2_bo.CacheReservationConflictError):
+        cache.get_or_solve(
+            identity,
+            lambda: pytest.fail("live reservation must not be taken over"),
+            wait_timeout_s=0.0,
+        )
+
+
+def test_solver_cache_parallel_recovery_still_performs_one_physical_solve(
+    tmp_path,
+) -> None:
+    cache = ContentAddressedSolverCache(tmp_path / "cache")
+    identity = _cache_identity()
+    cache_key = build_solver_cache_key(identity)
+    entry = tmp_path / "cache" / cache_key.key
+    entry.mkdir(parents=True)
+    (entry / "reservation.json").write_text(
+        json.dumps(
+            {
+                "cache_key": cache_key.key,
+                "pid": 2_147_483_647,
+                "identity": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    call_count = 0
+    call_lock = threading.Lock()
+
+    def compute() -> CandidateSolveOutcome:
+        nonlocal call_count
+        with call_lock:
+            call_count += 1
+        time.sleep(0.1)
+        return CandidateSolveOutcome.invalid("metric_window_contract_failed")
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        lookups = list(
+            executor.map(
+                lambda _: cache.get_or_solve(
+                    identity,
+                    compute,
+                    wait_timeout_s=3.0,
+                    poll_interval_s=0.01,
+                ),
+                range(4),
+            )
+        )
+
+    assert call_count == 1
+    assert sum(lookup.physical_solve_performed for lookup in lookups) == 1
+    assert sum(lookup.cache_hit for lookup in lookups) == 3
+    summary = cache.audit_summary()
+    assert summary["logical_request_count"] == 4
+    assert summary["abandoned_reservation_recovery_count"] == 1
+
+
+def test_solver_cache_recovers_empty_entry_left_during_claim(tmp_path) -> None:
+    cache = ContentAddressedSolverCache(tmp_path / "cache")
+    identity = _cache_identity()
+    cache_key = build_solver_cache_key(identity)
+    entry = tmp_path / "cache" / cache_key.key
+    entry.mkdir(parents=True)
+
+    lookup = cache.get_or_solve(
+        identity,
+        lambda: CandidateSolveOutcome.invalid(
+            "metric_window_contract_failed",
+            diagnostics={"source": "empty_entry_recovered"},
+        ),
+        wait_timeout_s=0.0,
+    )
+
+    assert lookup.physical_solve_performed is True
+    assert cache.entry_state(cache_key.key) == "complete"
+    abandoned = list((tmp_path / "cache" / "_abandoned_reservations").iterdir())
+    assert len(abandoned) == 1
+    assert list(abandoned[0].iterdir()) == []
+
+
+def test_solver_cache_terminal_publication_uses_per_key_claim_lock(
+    tmp_path,
+) -> None:
+    cache = ContentAddressedSolverCache(tmp_path / "cache")
+    identity = _cache_identity()
+    cache_key = build_solver_cache_key(identity)
+    entry = tmp_path / "cache" / cache_key.key
+    entry.mkdir(parents=True)
+    outcome = CandidateSolveOutcome.invalid("metric_window_contract_failed")
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        with phase2_bo._try_exclusive_file_lock(
+            cache._claim_lock_path(cache_key.key),
+            blocking=True,
+        ) as acquired:
+            assert acquired is True
+            publication = executor.submit(
+                cache._publish_completed_outcome,
+                entry,
+                cache_key=cache_key.key,
+                outcome=outcome,
+            )
+            time.sleep(0.1)
+            assert publication.done() is False
+
+        publication.result(timeout=3.0)
+    assert cache.entry_state(cache_key.key) == "complete"
+
+
 def test_solver_cache_round_trips_valid_solver_and_formal_metrics(tmp_path) -> None:
     cache = ContentAddressedSolverCache(tmp_path / "cache")
     identity = _cache_identity()
