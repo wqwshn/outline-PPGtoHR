@@ -7,7 +7,6 @@ import hashlib
 import json
 import math
 import os
-import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
@@ -32,6 +31,7 @@ from .bo_space_generalization import (
     evaluate_formal_metrics,
     run_seed_search,
 )
+from .phase2_experiment_io import atomic_temp_path
 from .plotting import render_v2_report
 from .post_motion_reset_fft_reacquire import load_lite_report_config
 from .preprocess import load_v2_dataset
@@ -855,7 +855,7 @@ def _write_csv(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
             for key in row
         )
     )
-    temp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    temp = atomic_temp_path(path)
     with temp.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
         writer.writeheader()
@@ -865,7 +865,7 @@ def _write_csv(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
 
 def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    temp = atomic_temp_path(path)
     temp.write_text(
         json.dumps(
             _json_ready(payload),

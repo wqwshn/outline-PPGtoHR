@@ -6,13 +6,14 @@ import hashlib
 import json
 import math
 import os
-import uuid
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Literal
+
+from .phase2_experiment_io import atomic_temp_path
 
 SELECTION_RECEIPT_SCHEMA_VERSION = "phase2_selection_receipt_v1"
 REPLAY_RECEIPT_SCHEMA_VERSION = "phase2_frozen_replay_receipt_v1"
@@ -1355,7 +1356,7 @@ def _json_ready(value: Any) -> Any:
 
 def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    temp = atomic_temp_path(path)
     temp.write_text(
         json.dumps(
             _json_ready(payload),
@@ -1372,7 +1373,7 @@ def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
 
 def _atomic_create_json(path: Path, payload: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    temp = atomic_temp_path(path)
     try:
         temp.write_text(
             json.dumps(

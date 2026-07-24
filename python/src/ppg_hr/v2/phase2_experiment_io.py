@@ -95,9 +95,7 @@ def write_csv(
     fieldnames = list(
         dict.fromkeys(key for row in rows for key in row)
     )
-    temp = path.with_name(
-        f".{path.name}.{uuid.uuid4().hex}.tmp"
-    )
+    temp = atomic_temp_path(path)
     with temp.open(
         "w",
         encoding="utf-8-sig",
@@ -117,9 +115,7 @@ def atomic_write_json(
     payload: Mapping[str, Any],
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_name(
-        f".{path.name}.{uuid.uuid4().hex}.tmp"
-    )
+    temp = atomic_temp_path(path)
     temp.write_text(
         json.dumps(
             json_ready(payload),
@@ -132,6 +128,10 @@ def atomic_write_json(
         encoding="utf-8",
     )
     os.replace(temp, path)
+
+
+def atomic_temp_path(path: Path) -> Path:
+    return path.with_name(f".{uuid.uuid4().hex}.tmp")
 
 
 def read_json(path: Path) -> dict[str, Any]:
