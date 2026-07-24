@@ -35,6 +35,13 @@ _FORMAL_ADAPTIVE_FILTERS = frozenset(
         "volterra",
     }
 )
+_CANDIDATE_INVALID_FAILURE_REASONS = frozenset(
+    {
+        "method_identity_mismatch",
+        "metric_window_contract_failed",
+        "nonfinite_solver_output",
+    }
+)
 
 _LEGACY_FULL_OPTIONS: tuple[tuple[str, tuple[int | float, ...]], ...] = (
     ("fs_target", (25, 50, 100)),
@@ -178,8 +185,11 @@ class CandidateSolveOutcome:
         diagnostics: Mapping[str, Any] | None = None,
     ) -> CandidateSolveOutcome:
         reason = str(failure_reason).strip()
-        if not reason:
-            raise ValueError("无效候选必须提供 failure_reason")
+        if reason not in _CANDIDATE_INVALID_FAILURE_REASONS:
+            raise ValueError(
+                "failure_reason 必须使用冻结候选失败分类，"
+                f"实际为 {reason!r}"
+            )
         return cls(
             status="invalid",
             solver_result=solver_result,
@@ -204,6 +214,10 @@ class CachedInfrastructureError(RuntimeError):
 
 class CacheReservationConflictError(TimeoutError):
     """等待另一个 worker 的候选预占超时。"""
+
+
+class InfrastructureSolveError(RuntimeError):
+    """调用方已确认的求解基础设施故障。"""
 
 
 class ContentAddressedSolverCache:
@@ -248,11 +262,51 @@ class ContentAddressedSolverCache:
             audit["diagnostics"] = outcome.get("diagnostics", {})
         return MappingProxyType(audit)
 
+    def audit_summary(self) -> Mapping[str, Any]:
+        """汇总物理求解、命中、冲突和失败，并保留逻辑引用。"""
+
+        event_dir = self.root / "_audit_events"
+        events = (
+            [
+                _read_json(path)
+                for path in sorted(event_dir.glob("*.json"))
+                if path.is_file()
+            ]
+            if event_dir.is_dir()
+            else []
+        )
+        return MappingProxyType(
+            {
+                "logical_request_count": len(events),
+                "physical_solve_count": sum(
+                    bool(event.get("physical_solve_performed"))
+                    for event in events
+                ),
+                "cache_hit_count": sum(
+                    bool(event.get("cache_hit")) for event in events
+                ),
+                "reservation_conflict_count": sum(
+                    event.get("event_type") == "reservation_conflict"
+                    for event in events
+                ),
+                "infrastructure_failure_count": sum(
+                    event.get("event_type") == "infrastructure_failure"
+                    for event in events
+                ),
+                "unclassified_error_count": sum(
+                    event.get("event_type") == "unclassified_error"
+                    for event in events
+                ),
+                "events": events,
+            }
+        )
+
     def get_or_solve(
         self,
         identity: SolverCacheIdentity,
         solve: Callable[[], CandidateSolveOutcome],
         *,
+        logical_reference: Mapping[str, Any] | None = None,
         wait_timeout_s: float = 60.0,
         poll_interval_s: float = 0.05,
     ) -> SolverCacheLookup:
@@ -262,11 +316,41 @@ class ContentAddressedSolverCache:
         try:
             entry.mkdir()
         except FileExistsError:
-            return self._wait_for_existing(
-                cache_key.key,
-                wait_timeout_s=wait_timeout_s,
-                poll_interval_s=poll_interval_s,
+            try:
+                lookup = self._wait_for_existing(
+                    cache_key.key,
+                    wait_timeout_s=wait_timeout_s,
+                    poll_interval_s=poll_interval_s,
+                )
+            except CacheReservationConflictError:
+                self._record_event(
+                    cache_key=cache_key.key,
+                    event_type="reservation_conflict",
+                    logical_reference=logical_reference,
+                    cache_hit=False,
+                    physical_solve_performed=False,
+                )
+                raise
+            except CachedInfrastructureError as exc:
+                self._record_event(
+                    cache_key=cache_key.key,
+                    event_type="infrastructure_failure",
+                    logical_reference=logical_reference,
+                    cache_hit=True,
+                    physical_solve_performed=False,
+                    message=str(exc),
+                )
+                raise
+            self._record_event(
+                cache_key=cache_key.key,
+                event_type="lookup_complete",
+                logical_reference=logical_reference,
+                cache_hit=True,
+                physical_solve_performed=False,
+                outcome_status=lookup.outcome.status,
+                failure_reason=lookup.outcome.failure_reason,
             )
+            return lookup
 
         _atomic_write_json(
             entry / "reservation.json",
@@ -278,6 +362,47 @@ class ContentAddressedSolverCache:
         )
         try:
             outcome = solve()
+        except FormalMetricContractError as exc:
+            failure_reason = (
+                "method_identity_mismatch"
+                if "method" in exc.reason
+                else "metric_window_contract_failed"
+            )
+            outcome = CandidateSolveOutcome.invalid(
+                failure_reason,
+                diagnostics={
+                    "formal_metric_contract_reason": exc.reason,
+                    "formal_metric_contract_message": str(exc),
+                },
+            )
+        except InfrastructureSolveError as exc:
+            self._write_infrastructure_failure(
+                entry,
+                cache_key=cache_key.key,
+                exc=exc,
+            )
+            self._record_event(
+                cache_key=cache_key.key,
+                event_type="infrastructure_failure",
+                logical_reference=logical_reference,
+                cache_hit=False,
+                physical_solve_performed=True,
+                message=str(exc),
+            )
+            raise
+        except Exception as exc:
+            self._record_event(
+                cache_key=cache_key.key,
+                event_type="unclassified_error",
+                logical_reference=logical_reference,
+                cache_hit=False,
+                physical_solve_performed=True,
+                message=str(exc),
+                exception_type=type(exc).__name__,
+            )
+            raise
+
+        try:
             if not isinstance(outcome, CandidateSolveOutcome):
                 raise TypeError("solve 必须返回 CandidateSolveOutcome")
             _write_cached_outcome(entry, outcome)
@@ -288,22 +413,92 @@ class ContentAddressedSolverCache:
                     "status": outcome.status,
                 },
             )
-        except BaseException as exc:
-            _atomic_write_json(
-                entry / "failed.json",
-                {
-                    "cache_key": cache_key.key,
-                    "failure_class": "infrastructure_failure",
-                    "exception_type": type(exc).__name__,
-                    "message": str(exc),
-                },
+        except OSError as exc:
+            wrapped = InfrastructureSolveError(str(exc))
+            self._write_infrastructure_failure(
+                entry,
+                cache_key=cache_key.key,
+                exc=wrapped,
+            )
+            self._record_event(
+                cache_key=cache_key.key,
+                event_type="infrastructure_failure",
+                logical_reference=logical_reference,
+                cache_hit=False,
+                physical_solve_performed=True,
+                message=str(exc),
+            )
+            raise wrapped from exc
+        except Exception as exc:
+            self._record_event(
+                cache_key=cache_key.key,
+                event_type="unclassified_error",
+                logical_reference=logical_reference,
+                cache_hit=False,
+                physical_solve_performed=True,
+                message=str(exc),
+                exception_type=type(exc).__name__,
             )
             raise
-        return SolverCacheLookup(
+        lookup = SolverCacheLookup(
             cache_key=cache_key.key,
             cache_hit=False,
             physical_solve_performed=True,
             outcome=outcome,
+        )
+        self._record_event(
+            cache_key=cache_key.key,
+            event_type="lookup_complete",
+            logical_reference=logical_reference,
+            cache_hit=False,
+            physical_solve_performed=True,
+            outcome_status=outcome.status,
+            failure_reason=outcome.failure_reason,
+        )
+        return lookup
+
+    def _write_infrastructure_failure(
+        self,
+        entry: Path,
+        *,
+        cache_key: str,
+        exc: InfrastructureSolveError,
+    ) -> None:
+        _atomic_write_json(
+            entry / "failed.json",
+            {
+                "cache_key": cache_key,
+                "failure_class": "infrastructure_failure",
+                "exception_type": type(exc).__name__,
+                "message": str(exc),
+            },
+        )
+
+    def _record_event(
+        self,
+        *,
+        cache_key: str,
+        event_type: str,
+        logical_reference: Mapping[str, Any] | None,
+        cache_hit: bool,
+        physical_solve_performed: bool,
+        **details: Any,
+    ) -> None:
+        event_dir = self.root / "_audit_events"
+        event_id = uuid.uuid4().hex
+        _atomic_write_json(
+            event_dir / f"{event_id}.json",
+            {
+                "event_id": event_id,
+                "event_type": event_type,
+                "cache_key": cache_key,
+                "logical_reference": _json_ready(logical_reference or {}),
+                "cache_hit": bool(cache_hit),
+                "physical_solve_performed": bool(
+                    physical_solve_performed
+                ),
+                **_json_ready(details),
+            },
         )
 
     def _wait_for_existing(

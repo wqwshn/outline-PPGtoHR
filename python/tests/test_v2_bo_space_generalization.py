@@ -12,6 +12,7 @@ from ppg_hr.v2.bo_space_generalization import (
     CandidateSolveOutcome,
     ContentAddressedSolverCache,
     FormalMetricContractError,
+    InfrastructureSolveError,
     SolverCacheIdentity,
     build_bo_search_space,
     build_solver_cache_key,
@@ -349,6 +350,7 @@ def test_atomic_solver_cache_performs_one_physical_solve_for_parallel_requests(
                 lambda _: cache.get_or_solve(
                     identity,
                     compute,
+                    logical_reference={"study": "seed_42", "trial": _},
                     wait_timeout_s=3.0,
                     poll_interval_s=0.01,
                 ),
@@ -370,6 +372,17 @@ def test_atomic_solver_cache_performs_one_physical_solve_for_parallel_requests(
         cache.entry_audit(cache_key)["failure_reason"]
         == "metric_window_contract_failed"
     )
+    summary = cache.audit_summary()
+    assert summary["logical_request_count"] == 4
+    assert summary["physical_solve_count"] == 1
+    assert summary["cache_hit_count"] == 3
+    assert summary["reservation_conflict_count"] == 0
+    assert {row["logical_reference"]["trial"] for row in summary["events"]} == {
+        0,
+        1,
+        2,
+        3,
+    }
 
 
 def test_solver_cache_round_trips_valid_solver_and_formal_metrics(tmp_path) -> None:
@@ -413,9 +426,9 @@ def test_solver_cache_keeps_infrastructure_failure_separate(
     identity = _cache_identity()
 
     def broken_compute() -> CandidateSolveOutcome:
-        raise OSError("worker lost")
+        raise InfrastructureSolveError("worker lost")
 
-    with pytest.raises(OSError, match="worker lost"):
+    with pytest.raises(InfrastructureSolveError, match="worker lost"):
         cache.get_or_solve(identity, broken_compute)
 
     cache_key = build_solver_cache_key(identity).key
@@ -426,3 +439,33 @@ def test_solver_cache_keeps_infrastructure_failure_separate(
             identity,
             lambda: pytest.fail("failed cache entry must not recompute silently"),
         )
+
+
+def test_solver_cache_converts_metric_contract_error_to_completed_invalid(
+    tmp_path,
+) -> None:
+    cache = ContentAddressedSolverCache(tmp_path / "cache")
+    identity = _cache_identity()
+
+    def invalid_metrics() -> CandidateSolveOutcome:
+        raise FormalMetricContractError(
+            "nonfinite_final_on_base_full",
+            "expected=10, finite=9",
+        )
+
+    lookup = cache.get_or_solve(
+        identity,
+        invalid_metrics,
+        logical_reference={"study": "seed_43", "trial": 7},
+    )
+
+    assert lookup.outcome.status == "invalid"
+    assert lookup.outcome.failure_reason == "metric_window_contract_failed"
+    cache_key = build_solver_cache_key(identity).key
+    assert cache.entry_state(cache_key) == "complete"
+    assert cache.audit_summary()["infrastructure_failure_count"] == 0
+
+
+def test_invalid_candidate_reason_must_use_frozen_failure_vocabulary() -> None:
+    with pytest.raises(ValueError, match="failure_reason"):
+        CandidateSolveOutcome.invalid("anything_goes")
