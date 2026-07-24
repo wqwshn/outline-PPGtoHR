@@ -27,6 +27,7 @@ build/
 dist/
 .pytest_cache/
 .pytest_tmp/
+pytest_tmp_*/
 pytest_run_*/
 .mypy_cache/
 .ruff_cache/
