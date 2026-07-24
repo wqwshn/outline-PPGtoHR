@@ -11,7 +11,16 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
-from .bo_space_generalization import SeedSearchBudget
+from .bo_space_generalization import (
+    CachedInfrastructureError,
+    CacheReservationConflictError,
+    FormalMetricContractError,
+    InfrastructureSolveError,
+    SearchAlreadyRunningError,
+    SeedSearchBudget,
+    StudyStateMismatchError,
+    UniqueBudgetStalledError,
+)
 from .phase2_experiment_io import (
     atomic_write_json,
     file_sha256,
@@ -19,6 +28,8 @@ from .phase2_experiment_io import (
     write_csv,
 )
 from .phase2_independent import (
+    IndependentInputIdentityMismatchError,
+    IndependentMethodIdentityMismatchError,
     IndependentStudyConfig,
     IndependentStudyResult,
     run_independent_bo_study,
@@ -28,6 +39,14 @@ EVIDENCE_LEVEL = "development_reuse_pilot"
 DATA_REUSE_REASON = "space_and_smoothing_mechanism_development"
 _RECORD_CHECK_NAME = "frozen_lyx_record_identities"
 _FORMAL_RECORD_COUNT = 24
+
+
+class Stage21AuditError(RuntimeError):
+    """带冻结失败分类的 Stage 2.1 审计错误。"""
+
+    def __init__(self, failure_classification: str, message: str) -> None:
+        super().__init__(message)
+        self.failure_classification = failure_classification
 
 
 @dataclass(frozen=True)
@@ -563,20 +582,34 @@ def _validate_formal_budgets(config: Stage21BatchConfig) -> None:
 
 
 def _classify_stage2_1_exception(exc: Exception) -> str:
-    text = f"{type(exc).__name__}: {exc}".lower()
-    if "method" in text and ("identity" in text or "方法" in text):
+    if isinstance(exc, Stage21AuditError):
+        return exc.failure_classification
+    if isinstance(exc, IndependentMethodIdentityMismatchError):
         return "method_identity_mismatch"
-    if "unique_budget_stalled" in text:
-        return "unique_budget_stalled"
-    if "search_space_exhausted" in text:
-        return "search_space_exhausted"
-    if "reservation" in text or ("cache" in text and "conflict" in text):
-        return "cache_reservation_conflict"
-    if "metric" in text or "window" in text or "窗口" in text:
+    if isinstance(exc, IndependentInputIdentityMismatchError):
+        return "preflight_failed"
+    if isinstance(exc, FormalMetricContractError):
         return "metric_window_contract_failed"
-    if "study" in text or "trial" in text:
+    if isinstance(exc, UniqueBudgetStalledError):
+        return "unique_budget_stalled"
+    if isinstance(exc, CacheReservationConflictError):
+        return "cache_reservation_conflict"
+    if isinstance(
+        exc,
+        (StudyStateMismatchError, SearchAlreadyRunningError),
+    ):
         return "study_state_mismatch"
-    return "infrastructure_failure"
+    if isinstance(
+        exc,
+        (
+            InfrastructureSolveError,
+            CachedInfrastructureError,
+            OSError,
+            subprocess.SubprocessError,
+        ),
+    ):
+        return "infrastructure_failure"
+    return "study_state_mismatch"
 
 
 def _build_record_receipt(
@@ -587,16 +620,24 @@ def _build_record_receipt(
     receipt_path: Path,
 ) -> dict[str, Any]:
     if result.sample_id != record.sample_id:
-        raise ValueError(
+        raise Stage21AuditError(
+            "study_state_mismatch",
             f"记录身份错配: {result.sample_id!r} != {record.sample_id!r}"
         )
     for arm in (result.legacy, result.physical):
         if len(arm.search_result.global_candidate_ids) != 150:
-            raise ValueError(f"{record.sample_id}/{arm.arm} 未达到 150 个唯一候选")
+            raise Stage21AuditError(
+                "study_state_mismatch",
+                f"{record.sample_id}/{arm.arm} 未达到 150 个唯一候选",
+            )
         lane_counts = [lane.unique_candidate_count for lane in arm.search_result.lanes]
         if lane_counts != [50, 50, 50]:
-            raise ValueError(
-                f"{record.sample_id}/{arm.arm} seed lane 唯一数错误: {lane_counts}"
+            raise Stage21AuditError(
+                "study_state_mismatch",
+                (
+                    f"{record.sample_id}/{arm.arm} seed lane "
+                    f"唯一数错误: {lane_counts}"
+                ),
             )
 
     comparison = dict(result.comparison)
@@ -638,6 +679,7 @@ def _build_record_receipt(
     stability_rows, overlap_rows = _seed_stability_rows(record, result)
     cache_rows = _cache_rows(record, result)
     diagnostic_rows = _diagnostic_rows(record, result)
+    parameter_rows = _selected_parameter_rows(record, result)
     return {
         "schema_version": "phase2_stage2_1_record_receipt_v1",
         "status": "complete",
@@ -653,7 +695,10 @@ def _build_record_receipt(
                 record.historical_error_csv
             ),
         },
-        "artifacts": _record_artifact_identities(result),
+        "artifacts": _record_artifact_identities(
+            result,
+            receipt_path=receipt_path,
+        ),
         "record_metric": row,
         "method_identity_audit": method_rows,
         "metric_mask_audit": mask_rows,
@@ -661,6 +706,7 @@ def _build_record_receipt(
         "seed_lane_overlap": overlap_rows,
         "solver_cache_audit": cache_rows,
         "lms_diagnostics": diagnostic_rows,
+        "selected_parameters": parameter_rows,
         "evidence_level": EVIDENCE_LEVEL,
         "confirmatory_claim_allowed": False,
     }
@@ -716,36 +762,31 @@ def _load_completed_record_receipt(
 
 def _record_artifact_identities(
     result: IndependentStudyResult,
+    *,
+    receipt_path: Path,
 ) -> dict[str, dict[str, Any]]:
+    record_root = result.comparison_table.parent.resolve()
+    excluded = Path(receipt_path).resolve()
     files = {
-        "historical_plot": result.historical_plot,
-        "comparison_table": result.comparison_table,
-        "acceptance_preview": result.acceptance_preview,
-        "study_manifest": (
-            result.comparison_table.parent / "independent_study_manifest.json"
-        ),
+        path.relative_to(record_root).as_posix(): path
+        for path in record_root.rglob("*")
+        if path.is_file()
+        and path.resolve() != excluded
+        and not path.name.startswith(".")
     }
-    for prefix, arm in (
-        ("legacy", result.legacy),
-        ("physical", result.physical),
-    ):
-        arm_dir = arm.candidate_history.parent
-        files.update(
-            {
-                f"{prefix}_candidate_history": arm.candidate_history,
-                f"{prefix}_seed_stability": arm.seed_stability,
-                f"{prefix}_classic_plot": arm.classic_plot,
-                f"{prefix}_selected_candidate": (
-                    arm_dir / "selected_candidate.json"
-                ),
-                f"{prefix}_cache_summary": arm_dir / "cache_summary.json",
-            }
+    if not files:
+        raise Stage21AuditError(
+            "study_state_mismatch",
+            f"记录终态产物为空: {record_root}",
         )
     identities: dict[str, dict[str, Any]] = {}
     for name, path in files.items():
         resolved = Path(path).resolve()
         if not resolved.is_file():
-            raise ValueError(f"记录终态产物不存在: {resolved}")
+            raise Stage21AuditError(
+                "study_state_mismatch",
+                f"记录终态产物不存在: {resolved}",
+            )
         identities[name] = _artifact_identity(resolved)
     return identities
 
@@ -771,6 +812,16 @@ def _method_identity_rows(
         ("legacy_same_code", result.legacy.selected_metrics),
         ("physical_new", result.physical.selected_metrics),
     ):
+        passed = (
+            metrics.final_method == "LMS+H"
+            and metrics.reset_fft_method == "reset FFT"
+        )
+        if not passed:
+            raise IndependentMethodIdentityMismatchError(
+                f"{record.sample_id}/{arm} 方法身份错误: "
+                f"final={metrics.final_method!r}, "
+                f"reset={metrics.reset_fft_method!r}"
+            )
         rows.append(
             {
                 "sample_id": record.sample_id,
@@ -779,8 +830,7 @@ def _method_identity_rows(
                 "final_method": metrics.final_method,
                 "reset_fft_method": metrics.reset_fft_method,
                 "metric_contract_version": metrics.metric_contract_version,
-                "passed": metrics.final_method == "LMS+H"
-                and metrics.reset_fft_method == "reset FFT",
+                "passed": True,
             }
         )
     return rows
@@ -904,6 +954,42 @@ def _diagnostic_rows(
     return rows
 
 
+def _selected_parameter_rows(
+    record: FrozenIndependentRecord,
+    result: IndependentStudyResult,
+) -> list[dict[str, Any]]:
+    rows = []
+    for arm_result in (result.legacy, result.physical):
+        selected = read_json(
+            arm_result.candidate_history.parent / "selected_candidate.json"
+        )
+        row = {
+            "sample_id": record.sample_id,
+            "scene": record.scene,
+            "arm": arm_result.arm,
+            "candidate_id": arm_result.selected_candidate_id,
+        }
+        for group in ("requested_params", "actual_params", "fixed_params"):
+            values = selected.get(group)
+            if not isinstance(values, Mapping):
+                raise Stage21AuditError(
+                    "study_state_mismatch",
+                    (
+                        f"{record.sample_id}/{arm_result.arm} "
+                        f"缺少 {group}"
+                    ),
+                )
+            prefix = group.removesuffix("_params")
+            row.update(
+                {
+                    f"{prefix}_{key}": value
+                    for key, value in values.items()
+                }
+            )
+        rows.append(row)
+    return rows
+
+
 def _write_progress(
     output: Path,
     config: Stage21BatchConfig,
@@ -974,6 +1060,11 @@ def _write_aggregate_outputs(
             row
             for receipt in receipts
             for row in receipt["lms_diagnostics"]
+        ],
+        "independent_selected_parameters": [
+            row
+            for receipt in receipts
+            for row in receipt["selected_parameters"]
         ],
     }
     record_rows = tables["independent_record_metrics"]

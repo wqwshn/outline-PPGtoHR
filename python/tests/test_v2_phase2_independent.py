@@ -303,3 +303,13 @@ def test_default_runtime_rejects_report_paths_outside_frozen_inputs(
 
     with pytest.raises(ValueError, match="preflight 冻结路径"):
         phase2_independent._build_default_runtime(config)
+
+
+def test_historical_method_identity_requires_exact_reset_fft_name() -> None:
+    with pytest.raises(
+        phase2_independent.IndependentMethodIdentityMismatchError,
+        match="reset FFT",
+    ):
+        phase2_independent._validate_historical_method_names(
+            ("FFT", "LMS+H", "LMS+A")
+        )

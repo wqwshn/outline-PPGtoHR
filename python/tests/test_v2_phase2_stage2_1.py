@@ -356,3 +356,27 @@ def test_completed_record_receipt_binds_core_artifact_hashes(
         )
         is None
     )
+
+
+def test_failure_classification_does_not_guess_infrastructure_from_text() -> None:
+    assert (
+        stage2_1._classify_stage2_1_exception(
+            stage2_1.Stage21AuditError(
+                "study_state_mismatch",
+                "记录身份错配",
+            )
+        )
+        == "study_state_mismatch"
+    )
+    assert (
+        stage2_1._classify_stage2_1_exception(
+            stage2_1.IndependentMethodIdentityMismatchError(
+                "经典心率图缺少必需方法曲线"
+            )
+        )
+        == "method_identity_mismatch"
+    )
+    assert (
+        stage2_1._classify_stage2_1_exception(ValueError("未知算法错误"))
+        == "study_state_mismatch"
+    )

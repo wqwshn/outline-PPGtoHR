@@ -44,6 +44,14 @@ from .solver import V2SolverResult, solve_v2
 _INVALID_OBJECTIVE = 1e9
 
 
+class IndependentInputIdentityMismatchError(ValueError):
+    """历史报告输入与 preflight 冻结身份不一致。"""
+
+
+class IndependentMethodIdentityMismatchError(ValueError):
+    """正式比较所需的方法名不精确或不完整。"""
+
+
 @dataclass(frozen=True)
 class IndependentStudyConfig:
     historical_report_path: Path
@@ -738,7 +746,7 @@ def _build_default_runtime(
         and Path(base.data_path).resolve()
         != Path(config.expected_data_path).resolve()
     ):
-        raise ValueError(
+        raise IndependentInputIdentityMismatchError(
             "历史报告 data_path 与 preflight 冻结路径不一致: "
             f"{Path(base.data_path).resolve()} != "
             f"{Path(config.expected_data_path).resolve()}"
@@ -748,7 +756,7 @@ def _build_default_runtime(
         and Path(base.ref_path).resolve()
         != Path(config.expected_reference_path).resolve()
     ):
-        raise ValueError(
+        raise IndependentInputIdentityMismatchError(
             "历史报告 ref_path 与 preflight 冻结路径不一致: "
             f"{Path(base.ref_path).resolve()} != "
             f"{Path(config.expected_reference_path).resolve()}"
@@ -772,6 +780,7 @@ def _build_default_runtime(
         window_table=list(payload.get("window_table", [])),
     )
     method_names = _method_names_from_error_csv(error_csv)
+    _validate_historical_method_names(method_names)
     historical_metrics = evaluate_formal_metrics(
         historical_result,
         ref_data=dataset.ref_data,
@@ -857,8 +866,19 @@ def _method_names_from_error_csv(path: Path) -> tuple[str, ...]:
         rows = list(csv.DictReader(handle))
     names = tuple(str(row.get("method", "")).strip() for row in rows)
     if not names or any(not name for name in names):
-        raise ValueError(f"历史 error CSV 缺少方法身份: {path}")
+        raise IndependentMethodIdentityMismatchError(
+            f"历史 error CSV 缺少方法身份: {path}"
+        )
     return names
+
+
+def _validate_historical_method_names(names: Sequence[str]) -> None:
+    required = {"reset FFT", method_label("lms", ("HF",))}
+    missing = sorted(required - set(names))
+    if missing:
+        raise IndependentMethodIdentityMismatchError(
+            "历史 error CSV 缺少精确方法身份: " + ", ".join(missing)
+        )
 
 
 def _scene_from_sample_id(sample_id: str) -> str:
@@ -875,7 +895,7 @@ def _validate_classic_plot_methods(path: Path) -> None:
     }
     missing = sorted(required - names)
     if missing:
-        raise ValueError(
+        raise IndependentMethodIdentityMismatchError(
             "经典心率图缺少必需方法曲线: " + ", ".join(missing)
         )
 
