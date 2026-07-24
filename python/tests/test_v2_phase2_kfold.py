@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+import ppg_hr.v2.phase2_kfold as phase2_kfold
 from ppg_hr.v2.bo_space_generalization import (
     CandidateSolveOutcome,
     FormalMetricResult,
@@ -16,7 +17,9 @@ from ppg_hr.v2.phase2_kfold import (
     ClassicPlotArtifact,
     K0FoldConfig,
     K0FoldRuntime,
+    K0RecordInput,
     K0TrainingRecordRuntime,
+    build_k0_default_runtime,
     run_k0_fold_study,
 )
 from ppg_hr.v2.phase2_receipt import (
@@ -24,6 +27,7 @@ from ppg_hr.v2.phase2_receipt import (
     RecordIdentity,
 )
 from ppg_hr.v2.solver import V2SolverResult
+from ppg_hr.v2.types import V2RunConfig
 
 
 def _sha(character: str) -> str:
@@ -259,3 +263,45 @@ def test_classic_plot_artifact_rejects_missing_acc_curve(tmp_path) -> None:
             figure_png=figure,
             method_names=("reset FFT", "LMS+H"),
         )
+
+
+def test_default_k0_runtime_defers_loading_heldout_data_until_replay(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    records = []
+    for index in range(3):
+        data_path = tmp_path / f"record-{index}.csv"
+        reference_path = tmp_path / f"record-{index}-ref.csv"
+        data_path.write_text(f"data-{index}", encoding="utf-8")
+        reference_path.write_text(f"ref-{index}", encoding="utf-8")
+        records.append(
+            K0RecordInput(
+                record_id=f"xiezi-{index + 1}",
+                data_path=data_path,
+                reference_path=reference_path,
+            )
+        )
+    loaded_data_paths: list[Path] = []
+
+    def load_dataset(data_path, _reference_path, *, fs_origin):
+        assert fs_origin == 100
+        loaded_data_paths.append(Path(data_path))
+        return object()
+
+    monkeypatch.setattr(phase2_kfold, "load_v2_dataset", load_dataset)
+    runtime = build_k0_default_runtime(
+        base_config=V2RunConfig(
+            data_path=records[0].data_path,
+            ref_path=records[0].reference_path,
+        ),
+        training_records=(records[0], records[1]),
+        heldout_record=records[2],
+        output_dir=tmp_path / "default-runtime",
+    )
+
+    assert loaded_data_paths == [
+        records[0].data_path,
+        records[1].data_path,
+    ]
+    assert runtime.heldout_record.record_id == "xiezi-3"
