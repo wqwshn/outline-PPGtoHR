@@ -27,6 +27,7 @@ from ppg_hr.v2.phase2_kfold_runtime import (
 from ppg_hr.v2.phase2_receipt import (
     FrozenReplayOutcome,
     RecordIdentity,
+    ReplayInfrastructureError,
 )
 from ppg_hr.v2.solver import V2SolverResult
 
@@ -260,6 +261,20 @@ def test_k1_uses_worst_motion_constraints_and_frozen_neighborhood(
     receipt = json.loads(
         result.selection_receipt.read_text(encoding="utf-8")
     )
+    manifest = json.loads(
+        result.manifest.read_text(encoding="utf-8")
+    )
+    assert {
+        "candidate_history",
+        "selected_params",
+        "training_metrics",
+        "neighborhood_evidence",
+        "selection_receipt",
+        "replay_receipt",
+        "cache_summary",
+        "failure_classification",
+    } == set(manifest["artifacts"]["files"])
+    assert len(manifest["artifacts"]["training_plots"]) == 2
     training = receipt["evidence"]["training_metrics"]
     assert training["worst_train_mae_bpm"] >= (
         training["mean_train_mae_bpm"]
@@ -322,6 +337,107 @@ def test_k1_uses_worst_motion_constraints_and_frozen_neighborhood(
                 replay_heldout=replay,
             ),
         )
+
+
+def test_k1_retries_only_infrastructure_failed_terminal_replay(
+    tmp_path,
+) -> None:
+    config = _config(tmp_path)
+    heldout = _record("xiezi-3", "c")
+    replay_attempts = 0
+
+    def replay(_context) -> FrozenReplayOutcome:
+        nonlocal replay_attempts
+        replay_attempts += 1
+        if replay_attempts == 1:
+            raise ReplayInfrastructureError("solver_timeout")
+        return FrozenReplayOutcome.success(
+            metrics={"reliable_motion_final_mae_bpm": 4.5},
+            artifact_sha256s={
+                "hf": _sha("1"),
+                "reset_fft": _sha("2"),
+                "acc": _sha("3"),
+            },
+        )
+
+    runtime = KFoldRuntime(
+        training_records=(
+            _training_runtime(
+                record=_record("xiezi-1", "a"),
+                offset=0.0,
+            ),
+            _training_runtime(
+                record=_record("xiezi-2", "b"),
+                offset=0.5,
+            ),
+        ),
+        heldout_record=heldout,
+        replay_heldout=replay,
+    )
+    first = run_k1_fold_study(config, runtime=runtime)
+    selection_hash = json.loads(
+        first.selection_receipt.read_text(encoding="utf-8")
+    )["selection_hash"]
+    assert first.replay_status == "infrastructure_failed"
+
+    recovered = run_k1_fold_study(config, runtime=runtime)
+
+    assert recovered.replay_status == "success"
+    assert replay_attempts == 2
+    assert json.loads(
+        recovered.selection_receipt.read_text(encoding="utf-8")
+    )["selection_hash"] == selection_hash
+
+
+def test_k1_completed_recovery_rejects_tampered_terminal_artifacts(
+    tmp_path,
+) -> None:
+    config = _config(tmp_path)
+    runtime = KFoldRuntime(
+        training_records=(
+            _training_runtime(
+                record=_record("xiezi-1", "a"),
+                offset=0.0,
+            ),
+            _training_runtime(
+                record=_record("xiezi-2", "b"),
+                offset=0.5,
+            ),
+        ),
+        heldout_record=_record("xiezi-3", "c"),
+        replay_heldout=lambda _context: FrozenReplayOutcome.success(
+            metrics={"reliable_motion_final_mae_bpm": 4.5},
+            artifact_sha256s={
+                "hf": _sha("1"),
+                "reset_fft": _sha("2"),
+                "acc": _sha("3"),
+            },
+        ),
+    )
+    result = run_k1_fold_study(config, runtime=runtime)
+    params_before = result.selected_params.read_text(encoding="utf-8")
+    params = json.loads(params_before)
+    params["actual_params"]["fs_target"] = 25
+    result.selected_params.write_text(
+        json.dumps(params, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(K1AuditIntegrityError):
+        run_k1_fold_study(config, runtime=runtime)
+
+    result.selected_params.write_text(
+        params_before,
+        encoding="utf-8",
+    )
+    with result.training_metrics.open(
+        "a",
+        encoding="utf-8",
+    ) as handle:
+        handle.write("\ntruncated")
+
+    with pytest.raises(K1AuditIntegrityError):
+        run_k1_fold_study(config, runtime=runtime)
 
 
 def test_k1_fails_closed_before_heldout_when_all_candidates_unsafe(
@@ -429,4 +545,56 @@ def test_k1_rejects_misaligned_neighborhood_audit_on_recovery(
     )
 
     with pytest.raises(K1AuditIntegrityError):
+        run_k1_fold_study(config, runtime=runtime)
+
+
+def test_k1_rejects_audit_metrics_that_conflict_with_outcomes(
+    tmp_path,
+) -> None:
+    config = _config(tmp_path)
+    runtime = KFoldRuntime(
+        training_records=(
+            _training_runtime(
+                record=_record("xiezi-1", "a"),
+                offset=0.0,
+            ),
+            _training_runtime(
+                record=_record("xiezi-2", "b"),
+                offset=0.5,
+            ),
+        ),
+        heldout_record=_record("xiezi-3", "c"),
+        replay_heldout=lambda _context: FrozenReplayOutcome.success(
+            metrics={"reliable_motion_final_mae_bpm": 4.5},
+            artifact_sha256s={
+                "hf": _sha("1"),
+                "reset_fft": _sha("2"),
+                "acc": _sha("3"),
+            },
+        ),
+    )
+    run_k1_fold_study(config, runtime=runtime)
+    for name in (
+        "selection_receipt.json",
+        "replay_receipt.json",
+        "k1_fold_manifest.json",
+    ):
+        config.output_dir.joinpath(name).unlink()
+    audit_path = config.output_dir.joinpath(
+        "trial_audit",
+        "band-evidence-000.json",
+    )
+    audit = json.loads(audit_path.read_text(encoding="utf-8"))
+    audit["training_outcomes"][0]["formal_metrics"][
+        "reliable_motion_final_mae_bpm"
+    ] += 1.0
+    audit_path.write_text(
+        json.dumps(audit, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        K1AuditIntegrityError,
+        match="robust_evidence",
+    ):
         run_k1_fold_study(config, runtime=runtime)

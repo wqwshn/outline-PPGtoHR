@@ -765,6 +765,21 @@ def run_k1_fold_study(
             "selection_receipt": str(selection_receipt_path),
             "replay_receipt": str(replay_receipt_path),
             "training_plots": training_plots,
+            "artifacts": _terminal_artifact_manifest(
+                required={
+                    "candidate_history": history_path,
+                    "selected_params": params_path,
+                    "training_metrics": training_metrics_path,
+                    "neighborhood_evidence": neighborhood_path,
+                    "selection_receipt": selection_receipt_path,
+                    "replay_receipt": replay_receipt_path,
+                    "cache_summary": cache_summary_path,
+                    "failure_classification": (
+                        failure_classification_path
+                    ),
+                },
+                training_plots=training_plots,
+            ),
             "evidence_level": "development_reuse_pilot",
             "confirmatory_claim_allowed": False,
         },
@@ -922,6 +937,33 @@ def _load_completed_result(
         raise K1AuditIntegrityError(
             "K1 params 与选择回执候选不一致"
         )
+    expected_params = {
+        "arm": "K1",
+        "flow_label": K1_FLOW_LABEL,
+        "candidate_id": selection.evidence.selected_candidate_id,
+        "requested_params": (
+            selection.evidence.selected_requested_params
+        ),
+        "actual_params": selection.evidence.selected_actual_params,
+        "fixed_params": selection.evidence.selected_fixed_params,
+        "worst_train_mae_bpm": (
+            selection.evidence.training_metrics.worst_train_mae_bpm
+        ),
+        "mean_train_mae_bpm": (
+            selection.evidence.training_metrics.mean_train_mae_bpm
+        ),
+    }
+    if params != json_ready(expected_params):
+        raise K1AuditIntegrityError(
+            "K1 params 参数或训练汇总与选择回执不一致"
+        )
+    if (
+        manifest.get("selected_candidate_id")
+        != selection.evidence.selected_candidate_id
+    ):
+        raise K1AuditIntegrityError(
+            "K1 manifest 与选择回执候选不一致"
+        )
     plot_values = manifest.get("training_plots")
     if (
         not isinstance(plot_values, list)
@@ -936,6 +978,15 @@ def _load_completed_result(
     )
     if any(not path.is_file() for path in training_plots):
         raise K1AuditIntegrityError("K1 训练经典图不存在")
+    _validate_terminal_artifact_manifest(
+        manifest,
+        required={
+            **required,
+            "selection_receipt": selection_path,
+            "replay_receipt": replay_path,
+        },
+        training_plots=training_plots,
+    )
     plan = neighborhood.get("plan")
     if not isinstance(plan, Mapping):
         raise K1AuditIntegrityError(
@@ -948,6 +999,8 @@ def _load_completed_result(
         raise K1AuditIntegrityError(
             "K1 邻域候选列表无效"
         )
+    if replay.status == "infrastructure_failed":
+        return None
     return K1FoldResult(
         arm="K1",
         flow_label=K1_FLOW_LABEL,
@@ -990,6 +1043,84 @@ def _mapping_sha256(payload: Mapping[str, Any]) -> str:
             allow_nan=False,
         ).encode("utf-8")
     ).hexdigest()
+
+
+def _terminal_artifact_manifest(
+    *,
+    required: Mapping[str, Path],
+    training_plots: Sequence[Path],
+) -> dict[str, Any]:
+    return {
+        "files": {
+            name: {
+                "path": str(path),
+                "sha256": file_sha256(path),
+            }
+            for name, path in sorted(required.items())
+        },
+        "training_plots": [
+            {
+                "path": str(path),
+                "sha256": file_sha256(path),
+            }
+            for path in training_plots
+        ],
+    }
+
+
+def _validate_terminal_artifact_manifest(
+    manifest: Mapping[str, Any],
+    *,
+    required: Mapping[str, Path],
+    training_plots: Sequence[Path],
+) -> None:
+    artifacts = manifest.get("artifacts")
+    if not isinstance(artifacts, Mapping):
+        raise K1AuditIntegrityError(
+            "K1 manifest 缺少终态产物哈希"
+        )
+    files = artifacts.get("files")
+    plot_entries = artifacts.get("training_plots")
+    if not isinstance(files, Mapping):
+        raise K1AuditIntegrityError(
+            "K1 manifest 终态文件清单无效"
+        )
+    expected_names = set(required)
+    if set(files) != expected_names:
+        raise K1AuditIntegrityError(
+            "K1 manifest 终态文件集合不匹配"
+        )
+    for name, path in required.items():
+        entry = files.get(name)
+        if (
+            not isinstance(entry, Mapping)
+            or Path(str(entry.get("path", ""))).resolve()
+            != path.resolve()
+            or entry.get("sha256") != file_sha256(path)
+        ):
+            raise K1AuditIntegrityError(
+                f"K1 终态产物身份或哈希不匹配: {name}"
+            )
+    if (
+        not isinstance(plot_entries, list)
+        or len(plot_entries) != len(training_plots)
+    ):
+        raise K1AuditIntegrityError(
+            "K1 manifest 训练图哈希清单无效"
+        )
+    for index, (entry, path) in enumerate(
+        zip(plot_entries, training_plots, strict=True)
+    ):
+        if (
+            not isinstance(entry, Mapping)
+            or Path(str(entry.get("path", ""))).resolve()
+            != path.resolve()
+            or entry.get("sha256") != file_sha256(path)
+        ):
+            raise K1AuditIntegrityError(
+                "K1 训练图身份或哈希不匹配: "
+                f"index={index}"
+            )
 
 
 def _formal_metrics(
@@ -1039,11 +1170,19 @@ def _training_evidence_from_audit(
             "K1 审计的候选参数身份不匹配"
         )
     outcomes = audit.get("training_outcomes")
-    if not isinstance(outcomes, list) or tuple(
-        str(outcome.get("record_id", ""))
-        for outcome in outcomes
-        if isinstance(outcome, Mapping)
-    ) != expected_record_ids:
+    if (
+        not isinstance(outcomes, list)
+        or len(outcomes) != 2
+        or not all(
+            isinstance(outcome, Mapping)
+            for outcome in outcomes
+        )
+        or tuple(
+            str(outcome.get("record_id", ""))
+            for outcome in outcomes
+        )
+        != expected_record_ids
+    ):
         raise K1AuditIntegrityError(
             "K1 审计的训练记录身份不匹配"
         )
@@ -1057,35 +1196,57 @@ def _training_evidence_from_audit(
         raise K1AuditIntegrityError(
             "K1 审计内外 candidate_id 不一致"
         )
-    if not bool(payload.get("metric_valid")):
-        return build_robust_training_evidence(
-            candidate_id=candidate_id,
-            final_motion_mae_bpm=None,
-            reset_motion_mae_bpm=None,
-            failure_reason=str(payload.get("failure_reason", "")),
-        )
-    finals = payload.get("final_motion_mae_bpm")
-    resets = payload.get("reset_motion_mae_bpm")
-    if (
-        not isinstance(finals, list)
-        or len(finals) != 2
-        or not isinstance(resets, list)
-        or len(resets) != 2
-    ):
-        raise K1AuditIntegrityError(
-            "K1 审计的训练指标不是两记录结构"
-        )
-    return build_robust_training_evidence(
-        candidate_id=candidate_id,
-        final_motion_mae_bpm=(
-            float(finals[0]),
-            float(finals[1]),
-        ),
-        reset_motion_mae_bpm=(
-            float(resets[0]),
-            float(resets[1]),
-        ),
+    typed_outcomes = tuple(outcomes)
+    statuses = tuple(
+        str(outcome.get("status", ""))
+        for outcome in typed_outcomes
     )
+    if any(status not in {"valid", "invalid"} for status in statuses):
+        raise K1AuditIntegrityError(
+            "K1 审计包含未知训练 outcome 状态"
+        )
+    try:
+        if statuses == ("valid", "valid"):
+            formal_metrics = tuple(
+                FormalMetricResult(
+                    **dict(outcome.get("formal_metrics", {}))
+                )
+                for outcome in typed_outcomes
+            )
+            derived = build_robust_training_evidence(
+                candidate_id=candidate_id,
+                final_motion_mae_bpm=tuple(
+                    metric.reliable_motion_final_mae_bpm
+                    for metric in formal_metrics
+                ),
+                reset_motion_mae_bpm=tuple(
+                    metric.reliable_motion_reset_fft_mae_bpm
+                    for metric in formal_metrics
+                ),
+            )
+        else:
+            invalid_index = statuses.index("invalid")
+            reason = str(
+                typed_outcomes[invalid_index].get(
+                    "failure_reason",
+                    "",
+                )
+            )
+            derived = build_robust_training_evidence(
+                candidate_id=candidate_id,
+                final_motion_mae_bpm=None,
+                reset_motion_mae_bpm=None,
+                failure_reason=reason,
+            )
+    except (TypeError, ValueError) as exc:
+        raise K1AuditIntegrityError(
+            "K1 审计的训练 outcome 指标无效"
+        ) from exc
+    if json_ready(asdict(derived)) != json_ready(payload):
+        raise K1AuditIntegrityError(
+            "K1 审计的 robust_evidence 与训练 outcome 不一致"
+        )
+    return derived
 
 
 def _write_candidate_history(
