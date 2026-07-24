@@ -18,6 +18,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Iterable, Sequence
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -269,6 +270,7 @@ def run_smoothing_mechanism_experiment(
     durations_s: Iterable[int] = DEFAULT_SMOOTH_DURATIONS_S,
     expected_record_count: int = 24,
     sample_names: Iterable[str] | None = None,
+    workers: int = 1,
 ) -> dict[str, Path]:
     """运行双锚点平滑实验并生成待人工审核的完整证据包。"""
 
@@ -291,6 +293,8 @@ def run_smoothing_mechanism_experiment(
         anchors = [anchor for anchor in anchors if anchor.sample in requested]
         if not anchors:
             raise ValueError("样本过滤后没有可运行的参数锚点")
+    if workers <= 0:
+        raise ValueError("workers 必须是正整数")
     _write_anchor_manifest(output / "anchor_manifest.csv", anchors)
     identity_rows = audit_method_identity(anchors)
     _write_rows(output / "method_identity_audit.csv", identity_rows)
@@ -300,56 +304,40 @@ def run_smoothing_mechanism_experiment(
     run_rows: list[dict[str, Any]] = []
     trajectory_rows: list[dict[str, Any]] = []
     total = len(anchors) * len(durations)
-    for index, anchor in enumerate(anchors, start=0):
-        payload = _load_json(anchor.report_path)
-        for duration in durations:
-            ordinal = index * len(durations) + durations.index(duration) + 1
+    tasks = [(anchor, duration) for anchor in anchors for duration in durations]
+    if workers == 1:
+        completed = (
+            (anchor, duration, _solve_anchor_duration(anchor, duration))
+            for anchor, duration in tasks
+        )
+        for ordinal, (anchor, duration, result_pair) in enumerate(completed, start=1):
             print(
                 f"[{ordinal:03d}/{total}] {anchor.anchor_type} "
                 f"{anchor.sample} smooth={duration}s",
                 flush=True,
             )
-            cfg = load_lite_report_config(payload)
-            if not math.isclose(float(cfg.window_step_seconds), 1.0, abs_tol=1e-9):
-                raise ValueError(
-                    f"{anchor.sample} 的窗口步长不是 1 s，不能把 smooth_win_len 解释为秒"
+            run_row, trajectories = result_pair
+            run_rows.append(run_row)
+            trajectory_rows.extend(trajectories)
+    else:
+        with ProcessPoolExecutor(max_workers=workers) as executor:
+            futures = {
+                executor.submit(_solve_anchor_duration, anchor, duration): (
+                    anchor,
+                    duration,
                 )
-            cfg = replace(
-                cfg,
-                smooth_win_len=int(duration),
-                time_bias=5.0,
-                lms_mu_min=1e-6,
-            )
-            started = time.perf_counter()
-            result = solve_v2(cfg)
-            runtime_s = time.perf_counter() - started
-            bounds = _reference_bounds_from_result(result)
-            metrics = compute_smoothing_metrics(
-                result.HR,
-                time_bias=cfg.time_bias,
-                reference_bounds=bounds,
-                reliable_mask=_reliable_mask_from_result(result),
-            )
-            run_rows.append(
-                {
-                    "anchor_type": anchor.anchor_type,
-                    "sample": anchor.sample,
-                    "scene": anchor.scene,
-                    "fold_id": anchor.fold_id,
-                    "smooth_duration_s": duration,
-                    "future_lookahead_s": (duration - 1) / 2.0,
-                    "forced_time_bias_s": cfg.time_bias,
-                    "forced_lms_mu_min": cfg.lms_mu_min,
-                    "source_smooth_win_len": anchor.source_smooth_win_len,
-                    "source_time_bias_s": anchor.source_time_bias_s,
-                    "runtime_s": runtime_s,
-                    "status": "ok",
-                    **metrics,
-                }
-            )
-            trajectory_rows.extend(
-                _trajectory_rows(anchor, duration, result, time_bias=cfg.time_bias)
-            )
+                for anchor, duration in tasks
+            }
+            for ordinal, future in enumerate(as_completed(futures), start=1):
+                anchor, duration = futures[future]
+                run_row, trajectories = future.result()
+                print(
+                    f"[{ordinal:03d}/{total}] completed {anchor.anchor_type} "
+                    f"{anchor.sample} smooth={duration}s",
+                    flush=True,
+                )
+                run_rows.append(run_row)
+                trajectory_rows.extend(trajectories)
 
     run_frame = _add_paired_deltas(pd.DataFrame(run_rows))
     trajectory_frame = pd.DataFrame(trajectory_rows)
@@ -394,6 +382,7 @@ def run_smoothing_mechanism_experiment(
         output_dir=output,
         independent_batch_dir=Path(independent_batch_dir).resolve(),
         generalization_dir=Path(generalization_dir).resolve(),
+        workers=workers,
     )
     return {
         "output_dir": output,
@@ -407,6 +396,52 @@ def run_smoothing_mechanism_experiment(
         "decision": output / "human_smoothing_decision.json",
         "manifest": manifest_path,
     }
+
+
+def _solve_anchor_duration(
+    anchor: SmoothingAnchor,
+    duration: int,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    payload = _load_json(anchor.report_path)
+    cfg = load_lite_report_config(payload)
+    if not math.isclose(float(cfg.window_step_seconds), 1.0, abs_tol=1e-9):
+        raise ValueError(
+            f"{anchor.sample} 的窗口步长不是 1 s，不能把 smooth_win_len 解释为秒"
+        )
+    cfg = replace(
+        cfg,
+        smooth_win_len=int(duration),
+        time_bias=5.0,
+        lms_mu_min=1e-6,
+    )
+    started = time.perf_counter()
+    result = solve_v2(cfg)
+    runtime_s = time.perf_counter() - started
+    metrics = compute_smoothing_metrics(
+        result.HR,
+        time_bias=cfg.time_bias,
+        reference_bounds=_reference_bounds_from_result(result),
+        reliable_mask=_reliable_mask_from_result(result),
+    )
+    run_row = {
+        "anchor_type": anchor.anchor_type,
+        "sample": anchor.sample,
+        "scene": anchor.scene,
+        "fold_id": anchor.fold_id,
+        "smooth_duration_s": duration,
+        "future_lookahead_s": (duration - 1) / 2.0,
+        "forced_time_bias_s": cfg.time_bias,
+        "forced_lms_mu_min": cfg.lms_mu_min,
+        "source_smooth_win_len": anchor.source_smooth_win_len,
+        "source_time_bias_s": anchor.source_time_bias_s,
+        "runtime_s": runtime_s,
+        "status": "ok",
+        **metrics,
+    }
+    return (
+        run_row,
+        _trajectory_rows(anchor, duration, result, time_bias=cfg.time_bias),
+    )
 
 
 def audit_method_identity(anchors: Sequence[SmoothingAnchor]) -> list[dict[str, Any]]:
@@ -1379,6 +1414,7 @@ def _write_run_manifest(
     output_dir: Path,
     independent_batch_dir: Path,
     generalization_dir: Path,
+    workers: int,
 ) -> None:
     input_paths: set[Path] = set()
     for anchor in anchors:
@@ -1411,6 +1447,7 @@ def _write_run_manifest(
             "anchor_count": len(anchors),
             "durations_s": list(durations),
             "planned_solve_count": len(anchors) * len(durations),
+            "workers": int(workers),
             "time_bias_s": 5.0,
             "lms_mu_min": 1e-6,
             "window_step_requirement_s": 1.0,
@@ -1588,6 +1625,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=list(DEFAULT_SMOOTH_DURATIONS_S),
     )
     parser.add_argument("--expected-record-count", type=int, default=24)
+    parser.add_argument("--workers", type=int, default=1)
     parser.add_argument(
         "--samples",
         nargs="+",
@@ -1606,6 +1644,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         durations_s=args.durations,
         expected_record_count=args.expected_record_count,
         sample_names=args.samples,
+        workers=args.workers,
     )
     print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False))
     return 0
