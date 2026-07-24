@@ -217,12 +217,14 @@ def test_k0_fold_freezes_mean_training_selection_before_heldout_replay(
         history = list(csv.DictReader(handle))
     assert history
     assert {
+        "stage",
         "train_0_full_final_mae_bpm",
         "train_1_full_final_mae_bpm",
         "mean_train_full_final_mae_bpm",
         "cache_hit_train_0",
         "cache_hit_train_1",
     } <= set(history[0])
+    assert {row["stage"] for row in history} <= {"search", "fill"}
     for row in history:
         if row["metric_valid"] == "True":
             expected_mean = (
@@ -252,6 +254,34 @@ def test_k0_fold_freezes_mean_training_selection_before_heldout_replay(
     )
     assert failure_payload["replay_status"] == "success"
     assert failure_payload["invalid_candidate_count"] == 0
+
+
+def test_k0_plot_title_names_fold_roles_and_frozen_params() -> None:
+    title = phase2_kfold._k0_plot_title(
+        training_record_ids=("run-1", "run-2"),
+        heldout_record_id="run-3",
+        view_role="test",
+        view_record_id="run-3",
+        actual_params={
+            "fs_target": 50,
+            "max_order": 20,
+            "lms_mu_base": 0.012,
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.2,
+            "time_bias": 5.0,
+        },
+    )
+
+    assert "K0" in title
+    assert "train: run-1 + run-2" in title
+    assert "test: run-3" in title
+    assert "view: test run-3" in title
+    assert "fs=50Hz" in title
+    assert "order=20taps" in title
+    assert "mu=0.012" in title
+    assert "smooth=5" in title
+    assert "width=0.2Hz" in title
+    assert "bias=5s" in title
 
 
 def test_classic_plot_artifact_rejects_missing_acc_curve(tmp_path) -> None:

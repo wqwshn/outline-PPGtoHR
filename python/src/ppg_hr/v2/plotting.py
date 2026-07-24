@@ -232,6 +232,7 @@ def render_v2_report(
     *,
     csv_dir: str | Path | None = None,
     output_prefix: str | None = None,
+    figure_title: str | None = None,
     plot_curves: tuple[str, ...] | list[str] | None = None,
     comparison_groups: tuple[tuple[str, ...], ...] = (),
 ) -> V2PlotArtefacts:
@@ -289,6 +290,7 @@ def render_v2_report(
         fig_base, hr, key, order, payload, adaptive_label,
         plot_curves=plot_curves, comparison_curves=comparison_curves,
         fft_label=fft_label,
+        figure_title=figure_title,
     )
     return V2PlotArtefacts(
         report_path=report,
@@ -348,6 +350,7 @@ def _plot_hr(
     plot_curves: tuple[str, ...] | list[str] | None = None,
     comparison_curves: list[dict[str, object]] | None = None,
     fft_label: str = "FFT",
+    figure_title: str | None = None,
 ) -> None:
     _apply_style()
     curves = _normalise_plot_curves(plot_curves)
@@ -355,6 +358,8 @@ def _plot_hr(
     fig, ax = plt.subplots(figsize=(3.54, 2.60), dpi=120)
 
     if hr.size == 0:
+        if figure_title:
+            ax.set_title(figure_title)
         ax.set_xlabel("Time (s)")
         ax.set_ylabel("Heart rate (BPM)")
         ax.spines["top"].set_visible(False)
@@ -452,6 +457,8 @@ def _plot_hr(
                 y_series.append(comp_final)
 
     ax.set_ylabel("Heart rate (BPM)")
+    if figure_title:
+        ax.set_title(figure_title)
     ax.set_ylim(_common_ylim(*y_series))
     ax.grid(True, axis="y", alpha=0.12, linewidth=0.45)
     ax.spines["top"].set_visible(False)

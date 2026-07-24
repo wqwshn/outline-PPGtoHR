@@ -5,12 +5,13 @@ from pathlib import Path
 
 import numpy as np
 
-from ppg_hr.v2.solver import V2SolverResult
+import ppg_hr.v2.plotting as plotting
 from ppg_hr.v2.plotting import (
     discover_v2_plot_jobs,
     render_v2_report,
     render_v2_report_batch,
 )
+from ppg_hr.v2.solver import V2SolverResult
 
 
 def _write_report(
@@ -71,6 +72,28 @@ def test_render_v2_report_outputs_png_and_csv_with_reference_key(
     assert arte.figure_png.is_file()
     assert arte.error_csv.is_file()
     assert arte.reference_order_key == "HF+ACC"
+
+
+def test_render_v2_report_applies_explicit_figure_title(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    report = tmp_path / "new.json"
+    _write_report(report, ["HF"])
+    captured_titles: list[str] = []
+
+    def capture_figure(fig, _output_base) -> None:
+        captured_titles.append(fig.axes[0].get_title())
+
+    monkeypatch.setattr(plotting, "_export_figure", capture_figure)
+
+    render_v2_report(
+        report,
+        out_dir=tmp_path / "figures",
+        figure_title="K0 | train: run-1 + run-2 | test: run-3",
+    )
+
+    assert captured_titles == ["K0 | train: run-1 + run-2 | test: run-3"]
 
 
 def test_render_batch_records_reference_order(tmp_path: Path) -> None:

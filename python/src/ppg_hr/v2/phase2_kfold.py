@@ -175,6 +175,10 @@ def build_k0_default_runtime(
     """构造正式 solve_v2 适配器；留出数据延迟到冻结回放才加载。"""
 
     output = Path(output_dir).resolve()
+    training_record_ids = (
+        training_records[0].record_id,
+        training_records[1].record_id,
+    )
     training_runtimes: list[K0TrainingRecordRuntime] = []
     for record_input in training_records:
         record_config = _record_run_config(base_config, record_input)
@@ -232,6 +236,13 @@ def build_k0_default_runtime(
                 out_dir=render_dir,
                 csv_dir=render_dir.parent / "csv",
                 comparison_groups=(("ACC",),),
+                figure_title=_k0_plot_title(
+                    training_record_ids=training_record_ids,
+                    heldout_record_id=heldout_record.record_id,
+                    view_role="training",
+                    view_record_id=record_id,
+                    actual_params=candidate.actual_params,
+                ),
             )
             return ClassicPlotArtifact(
                 figure_png=rendered.figure_png,
@@ -292,6 +303,13 @@ def build_k0_default_runtime(
             out_dir=heldout_dir / "png",
             csv_dir=heldout_dir / "csv",
             comparison_groups=(("ACC",),),
+            figure_title=_k0_plot_title(
+                training_record_ids=training_record_ids,
+                heldout_record_id=heldout_record.record_id,
+                view_role="test",
+                view_record_id=heldout_record.record_id,
+                actual_params=context.actual_params,
+            ),
         )
         ClassicPlotArtifact(
             figure_png=rendered.figure_png,
@@ -481,7 +499,7 @@ def run_k0_fold_study(
         _select_k0_candidate(
             candidate_ids=search_result.global_candidate_ids,
             candidates=candidates,
-            runtime=runtime,
+            training_records=runtime.training_records,
             cache=cache,
             cache_identity=cache_identity,
             config=config,
@@ -686,7 +704,10 @@ def _select_k0_candidate(
     *,
     candidate_ids: Sequence[str],
     candidates: Mapping[str, BOCandidate],
-    runtime: K0FoldRuntime,
+    training_records: tuple[
+        K0TrainingRecordRuntime,
+        K0TrainingRecordRuntime,
+    ],
     cache: ContentAddressedSolverCache,
     cache_identity: Callable[
         [K0TrainingRecordRuntime, BOCandidate],
@@ -724,7 +745,7 @@ def _select_k0_candidate(
                     "candidate_id": candidate_id,
                 },
             ).outcome
-            for record in runtime.training_records
+            for record in training_records
         )
         if any(
             outcome.status != "valid" or outcome.formal_metrics is None
@@ -759,6 +780,37 @@ def _select_k0_candidate(
         key=lambda item: (item[0], item[1]),
     )
     return candidate, outcomes, metrics
+
+
+def _k0_plot_title(
+    *,
+    training_record_ids: tuple[str, str],
+    heldout_record_id: str,
+    view_role: str,
+    view_record_id: str,
+    actual_params: Mapping[str, Any],
+) -> str:
+    if view_role not in {"training", "test"}:
+        raise ValueError("K0 图视图角色必须是 training 或 test")
+
+    def value(name: str) -> str:
+        if name not in actual_params:
+            return "?"
+        raw = actual_params[name]
+        if isinstance(raw, float):
+            return f"{raw:g}"
+        return str(raw)
+
+    return (
+        f"K0 | train: {' + '.join(training_record_ids)} | "
+        f"test: {heldout_record_id} | view: {view_role} {view_record_id}\n"
+        f"params: fs={value('fs_target')}Hz, "
+        f"order={value('max_order')}taps, "
+        f"mu={value('lms_mu_base')}, "
+        f"smooth={value('smooth_win_len')}, "
+        f"width={value('spec_penalty_width')}Hz, "
+        f"bias={value('time_bias')}s"
+    )
 
 
 def _write_candidate_history(
@@ -798,6 +850,7 @@ def _write_candidate_history(
             "lane": trial.lane,
             "seed": trial.seed,
             "trial_number": trial.trial_number,
+            "stage": trial.stage,
             "suggestion_index": trial.suggestion_index,
             "unique_index": trial.unique_index,
             "candidate_id": trial.candidate_id,
