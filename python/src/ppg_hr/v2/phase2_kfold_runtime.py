@@ -10,8 +10,6 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any, Literal
 
-import numpy as np
-
 from .bo_space_generalization import (
     BOCandidate,
     CandidateSolveOutcome,
@@ -22,17 +20,20 @@ from .phase2_receipt import (
     FrozenReplayOutcome,
     RecordIdentity,
 )
+from .phase2_solver_diagnostics import collect_solver_diagnostics
 from .plotting import render_v2_report
 from .preprocess import load_v2_dataset
 from .reference_groups import method_label
 from .report import save_v2_report
-from .solver import V2SolverResult, solve_v2
+from .solver import solve_v2
 from .types import V2RunConfig
 
 FoldArm = Literal["K0", "K1", "K2", "K3"]
 _REQUIRED_CLASSIC_METHODS = frozenset(
     {"reset FFT", "LMS+H", "LMS+A"}
 )
+# 兼容既有测试与审计入口；新代码统一调用公共实现。
+_solver_diagnostics = collect_solver_diagnostics
 
 
 @dataclass(frozen=True)
@@ -185,7 +186,7 @@ def build_default_kfold_runtime(
             return CandidateSolveOutcome.valid(
                 result,
                 metrics,
-                diagnostics=_solver_diagnostics(
+                diagnostics=collect_solver_diagnostics(
                     result,
                     max_order=candidate_config.max_order,
                     solver_runtime_seconds=solver_runtime_seconds,
@@ -423,51 +424,6 @@ def _method_names_from_error_csv(path: Path) -> tuple[str, ...]:
             f"K-fold 经典图 error CSV 缺少方法身份: {path}"
         )
     return names
-
-
-def _solver_diagnostics(
-    result: V2SolverResult,
-    *,
-    max_order: int,
-    solver_runtime_seconds: float,
-) -> Mapping[str, Any]:
-    stages = [
-        stage
-        for window in result.window_table
-        for stage in window.get("adaptive_stages", ())
-        if isinstance(stage, Mapping)
-    ]
-    orders = [
-        int(stage["M"])
-        for stage in stages
-        if isinstance(stage.get("M"), (int, float))
-        and np.isfinite(float(stage["M"]))
-    ]
-    delays = [
-        int(stage["delay_samples"])
-        for stage in stages
-        if isinstance(stage.get("delay_samples"), (int, float))
-        and np.isfinite(float(stage["delay_samples"]))
-    ]
-    hit_count = sum(order >= int(max_order) for order in orders)
-    return {
-        "solver_runtime_seconds": float(solver_runtime_seconds),
-        "lms_stage_count": len(stages),
-        "lms_delay_derived_order_min": min(orders) if orders else None,
-        "lms_delay_derived_order_max": max(orders) if orders else None,
-        "lms_delay_derived_order_mean": (
-            float(np.mean(orders)) if orders else None
-        ),
-        "lms_configured_max_order": int(max_order),
-        "lms_max_order_hit": bool(hit_count),
-        "lms_max_order_hit_count": int(hit_count),
-        "lms_delay_samples_min": min(delays) if delays else None,
-        "lms_delay_samples_max": max(delays) if delays else None,
-        "nonfinite_hr_value_count": int(
-            np.size(result.HR)
-            - np.count_nonzero(np.isfinite(result.HR))
-        ),
-    }
 
 
 def _run_config_mapping(config: V2RunConfig) -> dict[str, Any]:

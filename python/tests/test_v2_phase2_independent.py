@@ -96,6 +96,12 @@ def _runtime(tmp_path: Path) -> IndependentRecordRuntime:
                 reliable_motion=full + 1.0,
                 classic_motion=full + 1.5,
             ),
+            diagnostics={
+                "solver_runtime_seconds": 0.01,
+                "lms_configured_max_order": int(
+                    candidate.actual_params["max_order"]
+                ),
+            },
         )
 
     def render(arm, candidate, _outcome, output_dir: Path) -> Path:
@@ -182,6 +188,7 @@ def test_independent_study_writes_dual_baseline_history_and_classic_plots(
     assert "seed_42" in legacy_history
     assert "cache_hit" in legacy_history
     assert "base_motion_window_sha256" in legacy_history
+    assert "diagnostic_solver_runtime_seconds" in legacy_history
     assert "requested_fs_target" in legacy_history
     assert "actual_fs_target" in legacy_history
     legacy_stability = json.loads(
@@ -196,6 +203,12 @@ def test_independent_study_writes_dual_baseline_history_and_classic_plots(
         legacy_stability["cache_statistics"]["physical_solve_count"]
         == result.legacy.cache_summary["physical_solve_count"]
     )
+    selected = json.loads(
+        (
+            result.legacy.candidate_history.parent / "selected_candidate.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert "diagnostics" in selected
 
 
 def test_independent_study_reuses_cache_and_is_numerically_repeatable(

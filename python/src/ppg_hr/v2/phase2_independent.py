@@ -10,6 +10,7 @@ import os
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 import numpy as np
@@ -32,6 +33,7 @@ from .bo_space_generalization import (
     run_seed_search,
 )
 from .phase2_experiment_io import atomic_temp_path
+from .phase2_solver_diagnostics import collect_solver_diagnostics
 from .plotting import render_v2_report
 from .post_motion_reset_fft_reacquire import load_lite_report_config
 from .preprocess import load_v2_dataset
@@ -230,6 +232,7 @@ def _run_arm(
                     if lookup.outcome.formal_metrics is not None
                     else {}
                 ),
+                "diagnostics": dict(lookup.outcome.diagnostics),
             },
         )
         if lookup.outcome.status != "valid":
@@ -282,6 +285,7 @@ def _run_arm(
             "actual_params": selected_candidate.actual_params,
             "fixed_params": selected_candidate.fixed_params,
             "formal_metrics": asdict(selected_outcome.formal_metrics),
+            "diagnostics": dict(selected_outcome.diagnostics),
         },
     )
     history_path = arm_dir / "candidate_history.csv"
@@ -394,6 +398,7 @@ def _write_candidate_history(
         audit = _read_json(_trial_audit_path(audit_dir, context))
         candidate = candidates[row.candidate_id]
         metrics = audit.get("formal_metrics", {})
+        diagnostics = audit.get("diagnostics", {})
         output = {
             "arm": arm,
             "lane": row.lane,
@@ -411,6 +416,10 @@ def _write_candidate_history(
             "eligible": row.eligible,
             "failure_reason": row.failure_reason,
             **metrics,
+            **{
+                f"diagnostic_{key}": value
+                for key, value in diagnostics.items()
+            },
         }
         for key in parameter_keys:
             output[f"requested_{key}"] = candidate.requested_params.get(key)
@@ -744,7 +753,9 @@ def _build_default_runtime(
 
     def solve_candidate(candidate: BOCandidate) -> CandidateSolveOutcome:
         candidate_config = replace(base, **dict(candidate.actual_params))
+        started_at = perf_counter()
         result = solve_v2(candidate_config)
+        solver_runtime_seconds = perf_counter() - started_at
         metrics = evaluate_formal_metrics(
             result,
             ref_data=dataset.ref_data,
@@ -754,7 +765,15 @@ def _build_default_runtime(
                 method_label("lms", ("HF",)),
             ),
         )
-        return CandidateSolveOutcome.valid(result, metrics)
+        return CandidateSolveOutcome.valid(
+            result,
+            metrics,
+            diagnostics=collect_solver_diagnostics(
+                result,
+                max_order=candidate_config.max_order,
+                solver_runtime_seconds=solver_runtime_seconds,
+            ),
+        )
 
     def render_selected(
         arm: str,
