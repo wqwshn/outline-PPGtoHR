@@ -235,7 +235,7 @@ seed 42 最后连续 200 个 trial 都是它已经见过的候选；最近若干
 
 实施提交 `7bafc18` 完成后，分别进行了工程规范审查和实验规格审查。审查识别并闭环了以下风险：
 
-1. `fill_deterministic` 已启动后，中断恢复可能因末尾重复计数归零而重新进入自由 TPE。现改为从持久化 trial 的 `selection_source` 恢复调度状态；恢复中的确定性候选必须等于候选 ID 固定顺序中的下一项，否则失败关闭。
+1. `fill_deterministic` 已启动后，中断恢复可能因末尾重复计数归零而重新进入自由 TPE。现改为从持久化 trial 的 `selection_source` 恢复调度状态；恢复中的确定性候选必须等于候选 ID 固定顺序中的下一项，否则失败关闭。完整历史与 RUNNING trial 的来源序列还必须保持单调：一旦进入 `lane_stall_fallback` 或 `fill_deterministic`，后续不得回退到 `tpe` 或 `fill_tpe`。
 2. K0/K1/K3 原先只在候选历史逐行记录 `selection_source`，没有直接汇总 lane 稳定性。现将统一的 `seed_stability` 汇总写入各折 `cache_summary.json`，包含每条 lane 的 TPE、fallback、总不重复数，以及 `full_lane`、`tpe_only` 两套跨 seed 重合和最佳参数差异。
 3. `selection_source` 原先作为自由字符串传播。现定义封闭的来源类型并按 `search/fill/fill_import` 阶段集中解析；未知值或跨阶段值失败关闭。
 4. 独立 BO 的全量与 TPE-only 稳定性计算原先有两套重复实现。现统一复用 `build_seed_stability_audit()`，避免两种实验流程的统计口径漂移。

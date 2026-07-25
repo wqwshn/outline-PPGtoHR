@@ -79,6 +79,23 @@ def test_selection_source_rejects_unknown_or_cross_stage_values() -> None:
         phase2_bo._parse_selection_source("fill_deterministic", stage="search")
 
 
+def test_fallback_source_cannot_return_to_free_tpe() -> None:
+    with pytest.raises(StudyStateMismatchError, match="来源回退"):
+        phase2_bo._validate_fallback_source_sequence(
+            ("tpe", "lane_stall_fallback", "tpe"),
+            primary_source="tpe",
+            fallback_source="lane_stall_fallback",
+            lane="seed_42",
+        )
+    with pytest.raises(StudyStateMismatchError, match="来源回退"):
+        phase2_bo._validate_fallback_source_sequence(
+            ("fill_tpe", "fill_deterministic", "fill_tpe"),
+            primary_source="fill_tpe",
+            fallback_source="fill_deterministic",
+            lane="fill",
+        )
+
+
 def test_physical_space_preserves_requested_meaning_and_solver_mapping() -> None:
     physical = build_bo_search_space("physical_v1")
     mapped = {

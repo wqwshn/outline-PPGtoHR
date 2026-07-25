@@ -1349,13 +1349,6 @@ def _run_seed_lane(
         row.candidate_id for row in completed if not row.is_duplicate
     }
     duplicate_streak = _trailing_duplicate_count(completed)
-    fallback_started = any(
-        row.selection_source == "lane_stall_fallback" for row in completed
-    )
-    stalled = fallback_started or (
-        len(seen) < unique_budget
-        and duplicate_streak >= unique_stall_limit
-    )
 
     running = sorted(
         study.get_trials(
@@ -1364,13 +1357,31 @@ def _run_seed_lane(
         ),
         key=lambda trial: trial.number,
     )
-    for frozen in running:
-        running_selection_source = _parse_selection_source(
+    running_sources = tuple(
+        _parse_selection_source(
             frozen.user_attrs.get("selection_source"),
             stage="search",
         )
-        if running_selection_source == "lane_stall_fallback":
-            stalled = True
+        for frozen in running
+    )
+    fallback_started = _validate_fallback_source_sequence(
+        (
+            *(row.selection_source for row in completed),
+            *running_sources,
+        ),
+        primary_source="tpe",
+        fallback_source="lane_stall_fallback",
+        lane=lane,
+    )
+    stalled = fallback_started or (
+        len(seen) < unique_budget
+        and duplicate_streak >= unique_stall_limit
+    )
+    for frozen, running_selection_source in zip(
+        running,
+        running_sources,
+        strict=True,
+    ):
         candidate = _candidate_from_trial(
             frozen,
             space=space,
@@ -1681,9 +1692,6 @@ def _run_fill_study(
     }
     fill_suggestion_index = len(history)
     duplicate_streak = _trailing_duplicate_count(history)
-    deterministic_started = any(
-        row.selection_source == "fill_deterministic" for row in history
-    )
     running = sorted(
         study.get_trials(
             deepcopy=False,
@@ -1691,11 +1699,27 @@ def _run_fill_study(
         ),
         key=lambda trial: trial.number,
     )
-    for frozen in running:
-        running_selection_source = _parse_selection_source(
+    running_sources = tuple(
+        _parse_selection_source(
             frozen.user_attrs.get("selection_source"),
             stage="fill",
         )
+        for frozen in running
+    )
+    deterministic_started = _validate_fallback_source_sequence(
+        (
+            *(row.selection_source for row in history),
+            *running_sources,
+        ),
+        primary_source="fill_tpe",
+        fallback_source="fill_deterministic",
+        lane=lane,
+    )
+    for frozen, running_selection_source in zip(
+        running,
+        running_sources,
+        strict=True,
+    ):
         candidate = _candidate_from_trial(
             frozen,
             space=space,
@@ -2126,6 +2150,29 @@ def _parse_selection_source(
             f"stage={stage!r}, selection_source={source!r}"
         )
     return cast(SelectionSource, source)
+
+
+def _validate_fallback_source_sequence(
+    sources: Sequence[SelectionSource],
+    *,
+    primary_source: SelectionSource,
+    fallback_source: SelectionSource,
+    lane: str,
+) -> bool:
+    fallback_started = False
+    for source in sources:
+        if source == fallback_source:
+            fallback_started = True
+            continue
+        if source != primary_source:
+            raise StudyStateMismatchError(
+                f"{lane} 出现不支持的 selection_source: {source!r}"
+            )
+        if fallback_started:
+            raise StudyStateMismatchError(
+                f"{lane} 补齐启动后发生 selection_source 来源回退"
+            )
+    return fallback_started
 
 
 def _candidate_from_trial(
