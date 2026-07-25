@@ -233,6 +233,30 @@ def test_k0_fold_freezes_mean_training_selection_before_heldout_replay(
         "fill_tpe",
         "fill_deterministic",
     }
+    cache_summary = json.loads(
+        result.cache_summary.read_text(encoding="utf-8")
+    )
+    seed_stability = cache_summary["seed_stability"]
+    assert {
+        lane["seed"] for lane in seed_stability["lanes"]
+    } == {42, 43, 44}
+    assert all(
+        {
+            "tpe_unique_candidate_count",
+            "stall_fallback_unique_candidate_count",
+            "unique_candidate_count",
+        }
+        <= set(lane)
+        for lane in seed_stability["lanes"]
+    )
+    assert {
+        row["overlap_scope"]
+        for key in (
+            "pairwise_lane_overlap_counts",
+            "pairwise_tpe_lane_overlap_counts",
+        )
+        for row in seed_stability[key]
+    } == {"full_lane", "tpe_only"}
     for row in history:
         if row["metric_valid"] == "True":
             expected_mean = (

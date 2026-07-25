@@ -334,6 +334,21 @@ def test_k3_reuses_robust_contract_and_preserves_physical_parameter_meaning(
         "fill_deterministic",
         "neighborhood",
     }
+    cache_summary_payload = json.loads(
+        result.cache_summary.read_text(encoding="utf-8")
+    )
+    seed_stability = cache_summary_payload["seed_stability"]
+    assert {
+        lane["seed"] for lane in seed_stability["lanes"]
+    } == {42, 43, 44}
+    assert {
+        row["overlap_scope"]
+        for key in (
+            "pairwise_lane_overlap_counts",
+            "pairwise_tpe_lane_overlap_counts",
+        )
+        for row in seed_stability[key]
+    } == {"full_lane", "tpe_only"}
     for row in rows:
         expected_order = round(
             float(row["requested_fs_target"])

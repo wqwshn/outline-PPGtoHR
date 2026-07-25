@@ -20,7 +20,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from time import sleep
 from types import MappingProxyType
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import numpy as np
 import optuna
@@ -29,6 +29,13 @@ from .reference_groups import method_label, normalise_reference_order
 from .solver import V2SolverResult
 
 SpaceName = Literal["legacy_full_v1", "legacy_reduced_v1", "physical_v1"]
+SelectionSource = Literal[
+    "tpe",
+    "lane_stall_fallback",
+    "fill_tpe",
+    "fill_deterministic",
+    "fill_import",
+]
 METRIC_CONTRACT_VERSION = "lyx_bo_formal_metric_v1"
 FORMAL_MIN_WINDOW_COUNT = 10
 _FORMAL_ADAPTIVE_FILTERS = frozenset(
@@ -843,7 +850,7 @@ class SearchTrialRecord:
     eligible: bool
     failure_reason: str
     stage: Literal["search", "fill"]
-    selection_source: str
+    selection_source: SelectionSource
 
 
 @dataclass(frozen=True)
@@ -908,6 +915,226 @@ class SeedSearchResult:
     @property
     def fill_unique_candidate_count(self) -> int:
         return sum(not row.is_duplicate for row in self.fill_history)
+
+
+def build_seed_stability_audit(
+    result: SeedSearchResult,
+    *,
+    candidates: Mapping[str, BOCandidate],
+) -> dict[str, Any]:
+    """汇总 seed lane 的完整候选与纯 TPE 稳定性审计。"""
+
+    lanes: list[dict[str, Any]] = []
+    full_candidate_ids: dict[int, set[str]] = {}
+    tpe_candidate_ids: dict[int, set[str]] = {}
+    full_best: dict[int, SearchTrialRecord] = {}
+    tpe_best: dict[int, SearchTrialRecord] = {}
+    for lane in result.lanes:
+        unique_rows = [row for row in lane.history if not row.is_duplicate]
+        tpe_rows = [
+            row
+            for row in unique_rows
+            if row.selection_source == "tpe"
+        ]
+        if not unique_rows:
+            raise StudyStateMismatchError(
+                f"seed {lane.seed} 缺少不重复候选"
+            )
+        if not tpe_rows:
+            raise StudyStateMismatchError(
+                f"seed {lane.seed} 缺少 TPE 不重复候选"
+            )
+        full_best[lane.seed] = _best_audit_trial(unique_rows)
+        tpe_best[lane.seed] = _best_audit_trial(tpe_rows)
+        full_candidate_ids[lane.seed] = {
+            row.candidate_id for row in unique_rows
+        }
+        tpe_candidate_ids[lane.seed] = {
+            row.candidate_id for row in tpe_rows
+        }
+        best = full_best[lane.seed]
+        incumbent: SearchTrialRecord | None = None
+        best_so_far: list[dict[str, Any]] = []
+        for row in lane.history:
+            if incumbent is None or _audit_trial_order(row) < (
+                _audit_trial_order(incumbent)
+            ):
+                incumbent = row
+            best_so_far.append(
+                {
+                    "trial_number": row.trial_number,
+                    "suggestion_index": row.suggestion_index,
+                    "candidate_id": incumbent.candidate_id,
+                    "objective": incumbent.objective,
+                    "eligible": incumbent.eligible,
+                }
+            )
+        best_candidate = candidates[best.candidate_id]
+        lanes.append(
+            {
+                "seed": lane.seed,
+                "logical_suggestion_count": len(lane.history),
+                "unique_candidate_count": lane.unique_candidate_count,
+                "tpe_unique_candidate_count": (
+                    lane.tpe_unique_candidate_count
+                ),
+                "stall_fallback_unique_candidate_count": (
+                    lane.stall_fallback_unique_candidate_count
+                ),
+                "stall_fallback_triggered": (
+                    lane.stall_fallback_triggered
+                ),
+                "stall_duplicate_streak": lane.stall_duplicate_streak,
+                "duplicate_suggestion_count": sum(
+                    row.is_duplicate for row in lane.history
+                ),
+                "best_candidate_id": best.candidate_id,
+                "best_objective": best.objective,
+                "best_requested_params": best_candidate.requested_params,
+                "best_actual_params": best_candidate.actual_params,
+                "best_so_far": best_so_far,
+            }
+        )
+
+    full_overlap, full_difference = _pairwise_seed_audit(
+        candidate_ids_by_seed=full_candidate_ids,
+        best_by_seed=full_best,
+        candidates=candidates,
+        overlap_scope="full_lane",
+    )
+    tpe_overlap, tpe_difference = _pairwise_seed_audit(
+        candidate_ids_by_seed=tpe_candidate_ids,
+        best_by_seed=tpe_best,
+        candidates=candidates,
+        overlap_scope="tpe_only",
+    )
+    full_counts = _candidate_lane_counts(full_candidate_ids)
+    tpe_counts = _candidate_lane_counts(tpe_candidate_ids)
+    return {
+        "lanes": lanes,
+        "cross_lane_overlap_count": sum(
+            count > 1 for count in full_counts.values()
+        ),
+        "cross_lane_overlap_candidate_ids": sorted(
+            candidate_id
+            for candidate_id, count in full_counts.items()
+            if count > 1
+        ),
+        "pairwise_lane_overlap_counts": full_overlap,
+        "seed_best_parameter_differences": full_difference,
+        "cross_tpe_lane_overlap_count": sum(
+            count > 1 for count in tpe_counts.values()
+        ),
+        "cross_tpe_lane_overlap_candidate_ids": sorted(
+            candidate_id
+            for candidate_id, count in tpe_counts.items()
+            if count > 1
+        ),
+        "pairwise_tpe_lane_overlap_counts": tpe_overlap,
+        "tpe_seed_best_parameter_differences": tpe_difference,
+        "seed_stability_candidate_ids": result.seed_stability_candidate_ids,
+        "tpe_seed_stability_candidate_ids": sorted(
+            {
+                candidate_id
+                for candidate_ids in tpe_candidate_ids.values()
+                for candidate_id in candidate_ids
+            }
+        ),
+        "fill_unique_candidate_count": result.fill_unique_candidate_count,
+        "global_candidate_count": len(result.global_candidate_ids),
+        "requested_global_unique_budget": (
+            result.requested_global_unique_budget
+        ),
+        "effective_global_unique_budget": (
+            result.effective_global_unique_budget
+        ),
+        "space_exhausted": result.space_exhausted,
+    }
+
+
+def _audit_trial_order(
+    row: SearchTrialRecord,
+) -> tuple[bool, float, str]:
+    return (not row.eligible, row.objective, row.candidate_id)
+
+
+def _best_audit_trial(
+    rows: Sequence[SearchTrialRecord],
+) -> SearchTrialRecord:
+    return min(rows, key=_audit_trial_order)
+
+
+def _candidate_lane_counts(
+    candidate_ids_by_seed: Mapping[int, set[str]],
+) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for candidate_ids in candidate_ids_by_seed.values():
+        for candidate_id in candidate_ids:
+            counts[candidate_id] = counts.get(candidate_id, 0) + 1
+    return counts
+
+
+def _pairwise_seed_audit(
+    *,
+    candidate_ids_by_seed: Mapping[int, set[str]],
+    best_by_seed: Mapping[int, SearchTrialRecord],
+    candidates: Mapping[str, BOCandidate],
+    overlap_scope: Literal["full_lane", "tpe_only"],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    overlaps: list[dict[str, Any]] = []
+    differences: list[dict[str, Any]] = []
+    seeds = sorted(candidate_ids_by_seed)
+    for left_index, left_seed in enumerate(seeds):
+        for right_seed in seeds[left_index + 1 :]:
+            overlap = sorted(
+                candidate_ids_by_seed[left_seed]
+                & candidate_ids_by_seed[right_seed]
+            )
+            overlaps.append(
+                {
+                    "overlap_scope": overlap_scope,
+                    "left_seed": left_seed,
+                    "right_seed": right_seed,
+                    "overlap_count": len(overlap),
+                    "candidate_ids": overlap,
+                }
+            )
+            left_candidate = candidates[
+                best_by_seed[left_seed].candidate_id
+            ]
+            right_candidate = candidates[
+                best_by_seed[right_seed].candidate_id
+            ]
+            requested_keys = sorted(
+                set(left_candidate.requested_params)
+                | set(right_candidate.requested_params)
+            )
+            actual_keys = sorted(
+                set(left_candidate.actual_params)
+                | set(right_candidate.actual_params)
+            )
+            differences.append(
+                {
+                    "overlap_scope": overlap_scope,
+                    "left_seed": left_seed,
+                    "right_seed": right_seed,
+                    "left_candidate_id": left_candidate.candidate_id,
+                    "right_candidate_id": right_candidate.candidate_id,
+                    "differing_requested_params": [
+                        key
+                        for key in requested_keys
+                        if left_candidate.requested_params.get(key)
+                        != right_candidate.requested_params.get(key)
+                    ],
+                    "differing_actual_params": [
+                        key
+                        for key in actual_keys
+                        if left_candidate.actual_params.get(key)
+                        != right_candidate.actual_params.get(key)
+                    ],
+                }
+            )
+    return overlaps, differences
 
 
 class StudyStateMismatchError(RuntimeError):
@@ -1138,8 +1365,9 @@ def _run_seed_lane(
         key=lambda trial: trial.number,
     )
     for frozen in running:
-        running_selection_source = str(
-            frozen.user_attrs.get("selection_source", "tpe")
+        running_selection_source = _parse_selection_source(
+            frozen.user_attrs.get("selection_source"),
+            stage="search",
         )
         if running_selection_source == "lane_stall_fallback":
             stalled = True
@@ -1148,6 +1376,24 @@ def _run_seed_lane(
             space=space,
             candidate_by_coordinate=candidate_by_coordinate,
         )
+        if running_selection_source == "lane_stall_fallback":
+            expected = min(
+                (
+                    unseen
+                    for unseen in space.candidates
+                    if unseen.candidate_id not in seen
+                ),
+                key=lambda unseen: (
+                    hashlib.sha256(
+                        f"{seed}:{unseen.candidate_id}".encode()
+                    ).hexdigest(),
+                    unseen.candidate_id,
+                ),
+            )
+            if candidate.candidate_id != expected.candidate_id:
+                raise StudyStateMismatchError(
+                    "seed lane 中断恢复后的补齐候选顺序不一致"
+                )
         duplicate = candidate.candidate_id in seen
         unique_index = None if duplicate else len(seen) + 1
         _write_running_trial_state(
@@ -1435,6 +1681,9 @@ def _run_fill_study(
     }
     fill_suggestion_index = len(history)
     duplicate_streak = _trailing_duplicate_count(history)
+    deterministic_started = any(
+        row.selection_source == "fill_deterministic" for row in history
+    )
     running = sorted(
         study.get_trials(
             deepcopy=False,
@@ -1443,11 +1692,29 @@ def _run_fill_study(
         key=lambda trial: trial.number,
     )
     for frozen in running:
+        running_selection_source = _parse_selection_source(
+            frozen.user_attrs.get("selection_source"),
+            stage="fill",
+        )
         candidate = _candidate_from_trial(
             frozen,
             space=space,
             candidate_by_coordinate=candidate_by_coordinate,
         )
+        if running_selection_source == "fill_deterministic":
+            deterministic_started = True
+            expected = min(
+                (
+                    unseen
+                    for unseen in space.candidates
+                    if unseen.candidate_id not in global_seen
+                ),
+                key=lambda unseen: unseen.candidate_id,
+            )
+            if candidate.candidate_id != expected.candidate_id:
+                raise StudyStateMismatchError(
+                    "fill 中断恢复后的确定性候选顺序不一致"
+                )
         fill_suggestion_index += 1
         duplicate = candidate.candidate_id in global_seen
         evaluation = evaluate(
@@ -1483,9 +1750,7 @@ def _run_fill_study(
             suggestion_index=fill_suggestion_index,
             unique_index=(None if duplicate else len(global_seen) + 1),
             is_duplicate=duplicate,
-            selection_source=str(
-                frozen.user_attrs.get("selection_source", "fill_tpe")
-            ),
+            selection_source=running_selection_source,
         )
         _clear_running_trial_state(
             state_path,
@@ -1592,6 +1857,13 @@ def _run_fill_study(
     if enumerate_entire_space:
         return complete_with_deterministic_unseen(
             selection_reason="full_enumeration_candidate_id_order",
+        )
+
+    if deterministic_started and len(global_seen) < global_unique_budget:
+        return complete_with_deterministic_unseen(
+            selection_reason=(
+                "tpe_duplicate_stall_fallback_candidate_id_order"
+            ),
         )
 
     while (
@@ -1714,7 +1986,7 @@ def _finish_trial(
     suggestion_index: int,
     unique_index: int | None,
     is_duplicate: bool,
-    selection_source: str | None = None,
+    selection_source: SelectionSource | None = None,
 ) -> None:
     live_trial = _as_live_trial(study, trial)
     for key, value in _trial_user_attrs(
@@ -1757,8 +2029,12 @@ def _trial_user_attrs(
     suggestion_index: int,
     unique_index: int | None,
     is_duplicate: bool,
-    selection_source: str | None = None,
+    selection_source: SelectionSource | None = None,
 ) -> dict[str, Any]:
+    parsed_selection_source = _parse_selection_source(
+        selection_source,
+        stage=stage,
+    )
     return {
         "candidate_id": candidate.candidate_id,
         "requested_params": _json_ready(candidate.requested_params),
@@ -1769,15 +2045,7 @@ def _trial_user_attrs(
         "suggestion_index": int(suggestion_index),
         "unique_index": unique_index,
         "is_duplicate": bool(is_duplicate),
-        "selection_source": (
-            selection_source
-            if selection_source is not None
-            else {
-                "search": "tpe",
-                "fill": "fill_tpe",
-                "fill_import": "fill_import",
-            }.get(stage, stage)
-        ),
+        "selection_source": parsed_selection_source,
         "constraints": [float(value) for value in evaluation.constraints],
         "metric_valid": bool(evaluation.metric_valid),
         "eligible": bool(evaluation.eligible),
@@ -1823,15 +2091,41 @@ def _study_history(
                     trial.user_attrs.get("failure_reason", "")
                 ),
                 stage=stage,
-                selection_source=str(
-                    trial.user_attrs.get(
-                        "selection_source",
-                        "tpe" if stage == "search" else "fill_tpe",
-                    )
+                selection_source=_parse_selection_source(
+                    trial.user_attrs.get("selection_source"),
+                    stage=stage,
                 ),
             )
         )
     return tuple(sorted(rows, key=lambda row: row.trial_number))
+
+
+def _parse_selection_source(
+    value: object,
+    *,
+    stage: str,
+) -> SelectionSource:
+    defaults: dict[str, SelectionSource] = {
+        "search": "tpe",
+        "fill": "fill_tpe",
+        "fill_import": "fill_import",
+    }
+    allowed: dict[str, frozenset[SelectionSource]] = {
+        "search": frozenset({"tpe", "lane_stall_fallback"}),
+        "fill": frozenset({"fill_tpe", "fill_deterministic"}),
+        "fill_import": frozenset({"fill_import"}),
+    }
+    if stage not in defaults:
+        raise StudyStateMismatchError(
+            f"未知 trial stage，无法解析 selection_source: {stage!r}"
+        )
+    source = defaults[stage] if value is None else str(value)
+    if source not in allowed[stage]:
+        raise StudyStateMismatchError(
+            "trial selection_source 与阶段不匹配: "
+            f"stage={stage!r}, selection_source={source!r}"
+        )
+    return cast(SelectionSource, source)
 
 
 def _candidate_from_trial(

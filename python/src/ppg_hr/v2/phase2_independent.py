@@ -24,11 +24,11 @@ from .bo_space_generalization import (
     SearchEvaluation,
     SearchExperimentIdentity,
     SearchRequestContext,
-    SearchTrialRecord,
     SeedSearchBudget,
     SeedSearchResult,
     SolverCacheIdentity,
     build_bo_search_space,
+    build_seed_stability_audit,
     evaluate_formal_metrics,
     run_seed_search,
 )
@@ -453,205 +453,10 @@ def _write_seed_stability(
     candidates: Mapping[str, BOCandidate],
     cache_statistics: Mapping[str, Any],
 ) -> None:
-    lanes = []
-    best_by_seed: dict[int, SearchTrialRecord] = {}
-    lane_candidate_ids: dict[int, set[str]] = {}
-    tpe_best_by_seed: dict[int, SearchTrialRecord] = {}
-    tpe_lane_candidate_ids: dict[int, set[str]] = {}
-    for lane in result.lanes:
-        best = min(
-            lane.history,
-            key=lambda row: (
-                not row.eligible,
-                row.objective,
-                row.candidate_id,
-            ),
-        )
-        best_by_seed[lane.seed] = best
-        lane_candidate_ids[lane.seed] = set(lane.unique_candidate_ids)
-        tpe_rows = [
-            row
-            for row in lane.history
-            if not row.is_duplicate and row.selection_source == "tpe"
-        ]
-        if not tpe_rows:
-            raise RuntimeError(f"seed {lane.seed} 缺少 TPE 不重复候选")
-        tpe_best_by_seed[lane.seed] = min(
-            tpe_rows,
-            key=lambda row: (
-                not row.eligible,
-                row.objective,
-                row.candidate_id,
-            ),
-        )
-        tpe_lane_candidate_ids[lane.seed] = {
-            row.candidate_id for row in tpe_rows
-        }
-        best_so_far = []
-        incumbent: SearchTrialRecord | None = None
-        for row in lane.history:
-            if incumbent is None or (
-                not row.eligible,
-                row.objective,
-                row.candidate_id,
-            ) < (
-                not incumbent.eligible,
-                incumbent.objective,
-                incumbent.candidate_id,
-            ):
-                incumbent = row
-            best_so_far.append(
-                {
-                    "trial_number": row.trial_number,
-                    "suggestion_index": row.suggestion_index,
-                    "candidate_id": incumbent.candidate_id,
-                    "objective": incumbent.objective,
-                    "eligible": incumbent.eligible,
-                }
-            )
-        lanes.append(
-            {
-                "seed": lane.seed,
-                "logical_suggestion_count": len(lane.history),
-                "unique_candidate_count": lane.unique_candidate_count,
-                "tpe_unique_candidate_count": (
-                    lane.tpe_unique_candidate_count
-                ),
-                "stall_fallback_unique_candidate_count": (
-                    lane.stall_fallback_unique_candidate_count
-                ),
-                "stall_fallback_triggered": (
-                    lane.stall_fallback_triggered
-                ),
-                "stall_duplicate_streak": lane.stall_duplicate_streak,
-                "duplicate_suggestion_count": sum(
-                    row.is_duplicate for row in lane.history
-                ),
-                "best_candidate_id": best.candidate_id,
-                "best_objective": best.objective,
-                "best_requested_params": candidates[
-                    best.candidate_id
-                ].requested_params,
-                "best_actual_params": candidates[
-                    best.candidate_id
-                ].actual_params,
-                "best_so_far": best_so_far,
-            }
-        )
-    pairwise_overlaps = []
-    best_parameter_differences = []
-    seeds = sorted(lane_candidate_ids)
-    for left_index, left_seed in enumerate(seeds):
-        for right_seed in seeds[left_index + 1 :]:
-            overlap = sorted(
-                lane_candidate_ids[left_seed]
-                & lane_candidate_ids[right_seed]
-            )
-            pairwise_overlaps.append(
-                {
-                    "left_seed": left_seed,
-                    "right_seed": right_seed,
-                    "overlap_count": len(overlap),
-                    "candidate_ids": overlap,
-                }
-            )
-            left_candidate = candidates[
-                best_by_seed[left_seed].candidate_id
-            ]
-            right_candidate = candidates[
-                best_by_seed[right_seed].candidate_id
-            ]
-            requested_keys = sorted(
-                set(left_candidate.requested_params)
-                | set(right_candidate.requested_params)
-            )
-            actual_keys = sorted(
-                set(left_candidate.actual_params)
-                | set(right_candidate.actual_params)
-            )
-            best_parameter_differences.append(
-                {
-                    "left_seed": left_seed,
-                    "right_seed": right_seed,
-                    "left_candidate_id": left_candidate.candidate_id,
-                    "right_candidate_id": right_candidate.candidate_id,
-                    "differing_requested_params": [
-                        key
-                        for key in requested_keys
-                        if left_candidate.requested_params.get(key)
-                        != right_candidate.requested_params.get(key)
-                    ],
-                    "differing_actual_params": [
-                        key
-                        for key in actual_keys
-                        if left_candidate.actual_params.get(key)
-                        != right_candidate.actual_params.get(key)
-                    ],
-                }
-            )
-    tpe_pairwise_overlaps = []
-    tpe_best_parameter_differences = []
-    tpe_seeds = sorted(tpe_lane_candidate_ids)
-    for left_index, left_seed in enumerate(tpe_seeds):
-        for right_seed in tpe_seeds[left_index + 1 :]:
-            overlap = sorted(
-                tpe_lane_candidate_ids[left_seed]
-                & tpe_lane_candidate_ids[right_seed]
-            )
-            tpe_pairwise_overlaps.append(
-                {
-                    "left_seed": left_seed,
-                    "right_seed": right_seed,
-                    "overlap_count": len(overlap),
-                    "candidate_ids": overlap,
-                }
-            )
-            left_candidate = candidates[
-                tpe_best_by_seed[left_seed].candidate_id
-            ]
-            right_candidate = candidates[
-                tpe_best_by_seed[right_seed].candidate_id
-            ]
-            requested_keys = sorted(
-                set(left_candidate.requested_params)
-                | set(right_candidate.requested_params)
-            )
-            actual_keys = sorted(
-                set(left_candidate.actual_params)
-                | set(right_candidate.actual_params)
-            )
-            tpe_best_parameter_differences.append(
-                {
-                    "left_seed": left_seed,
-                    "right_seed": right_seed,
-                    "left_candidate_id": left_candidate.candidate_id,
-                    "right_candidate_id": right_candidate.candidate_id,
-                    "differing_requested_params": [
-                        key
-                        for key in requested_keys
-                        if left_candidate.requested_params.get(key)
-                        != right_candidate.requested_params.get(key)
-                    ],
-                    "differing_actual_params": [
-                        key
-                        for key in actual_keys
-                        if left_candidate.actual_params.get(key)
-                        != right_candidate.actual_params.get(key)
-                    ],
-                }
-            )
-    candidate_lane_counts: dict[str, int] = {}
-    for candidate_ids in lane_candidate_ids.values():
-        for candidate_id in candidate_ids:
-            candidate_lane_counts[candidate_id] = (
-                candidate_lane_counts.get(candidate_id, 0) + 1
-            )
-    tpe_candidate_lane_counts: dict[str, int] = {}
-    for candidate_ids in tpe_lane_candidate_ids.values():
-        for candidate_id in candidate_ids:
-            tpe_candidate_lane_counts[candidate_id] = (
-                tpe_candidate_lane_counts.get(candidate_id, 0) + 1
-            )
+    payload = build_seed_stability_audit(
+        result,
+        candidates=candidates,
+    )
     cache_counts = {
         key: cache_statistics[key]
         for key in (
@@ -665,54 +470,8 @@ def _write_seed_stability(
     _atomic_write_json(
         path,
         {
-            "lanes": lanes,
-            "cross_lane_overlap_count": sum(
-                count > 1 for count in candidate_lane_counts.values()
-            ),
-            "cross_lane_overlap_candidate_ids": sorted(
-                candidate_id
-                for candidate_id, count in candidate_lane_counts.items()
-                if count > 1
-            ),
-            "pairwise_lane_overlap_counts": pairwise_overlaps,
-            "seed_best_parameter_differences": (
-                best_parameter_differences
-            ),
-            "cross_tpe_lane_overlap_count": sum(
-                count > 1
-                for count in tpe_candidate_lane_counts.values()
-            ),
-            "cross_tpe_lane_overlap_candidate_ids": sorted(
-                candidate_id
-                for candidate_id, count in tpe_candidate_lane_counts.items()
-                if count > 1
-            ),
-            "pairwise_tpe_lane_overlap_counts": tpe_pairwise_overlaps,
-            "tpe_seed_best_parameter_differences": (
-                tpe_best_parameter_differences
-            ),
+            **payload,
             "cache_statistics": cache_counts,
-            "seed_stability_candidate_ids": (
-                result.seed_stability_candidate_ids
-            ),
-            "tpe_seed_stability_candidate_ids": sorted(
-                {
-                    row.candidate_id
-                    for lane in result.lanes
-                    for row in lane.history
-                    if not row.is_duplicate
-                    and row.selection_source == "tpe"
-                }
-            ),
-            "fill_unique_candidate_count": result.fill_unique_candidate_count,
-            "global_candidate_count": len(result.global_candidate_ids),
-            "requested_global_unique_budget": (
-                result.requested_global_unique_budget
-            ),
-            "effective_global_unique_budget": (
-                result.effective_global_unique_budget
-            ),
-            "space_exhausted": result.space_exhausted,
         },
     )
 

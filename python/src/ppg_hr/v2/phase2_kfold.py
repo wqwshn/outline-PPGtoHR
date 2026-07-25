@@ -22,6 +22,7 @@ from .bo_space_generalization import (
     SeedSearchResult,
     SolverCacheIdentity,
     build_bo_search_space,
+    build_seed_stability_audit,
     run_seed_search,
 )
 from .phase2_experiment_io import (
@@ -442,6 +443,10 @@ def run_k0_fold_study(
         replay=runtime.replay_heldout,
     )
     cache_summary_payload = _cache_summary(cache)
+    cache_summary_payload["seed_stability"] = build_seed_stability_audit(
+        search_result,
+        candidates=candidates,
+    )
     cache_summary_path = output / "cache_summary.json"
     _atomic_write_json(cache_summary_path, cache_summary_payload)
     invalid_candidate_ids = {

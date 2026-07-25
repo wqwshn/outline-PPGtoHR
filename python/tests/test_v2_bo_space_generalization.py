@@ -64,6 +64,21 @@ def test_phase2_search_spaces_match_frozen_candidate_contract() -> None:
     assert len({candidate.candidate_id for candidate in physical.candidates}) == 300
 
 
+def test_selection_source_rejects_unknown_or_cross_stage_values() -> None:
+    assert phase2_bo._parse_selection_source(None, stage="search") == "tpe"
+    assert (
+        phase2_bo._parse_selection_source(
+            "lane_stall_fallback",
+            stage="search",
+        )
+        == "lane_stall_fallback"
+    )
+    with pytest.raises(StudyStateMismatchError, match="selection_source"):
+        phase2_bo._parse_selection_source("tp3", stage="search")
+    with pytest.raises(StudyStateMismatchError, match="selection_source"):
+        phase2_bo._parse_selection_source("fill_deterministic", stage="search")
+
+
 def test_physical_space_preserves_requested_meaning_and_solver_mapping() -> None:
     physical = build_bo_search_space("physical_v1")
     mapped = {
@@ -905,6 +920,62 @@ def test_fill_switches_to_deterministic_unseen_candidates_after_stall(
             }
         )
     )
+
+
+def test_stalled_fill_resume_preserves_deterministic_history(tmp_path) -> None:
+    space = _fill_physical_space()
+    budget = SeedSearchBudget(
+        lane_seeds=(42, 43, 44),
+        lane_unique_budget=1,
+        global_unique_budget=8,
+        n_startup_trials=1,
+        unique_stall_limit=1,
+    )
+    uninterrupted = run_seed_search(
+        space=space,
+        output_dir=tmp_path / "uninterrupted",
+        experiment_identity=_search_experiment_identity(),
+        evaluate=_deterministic_search_evaluation,
+        budget=budget,
+    )
+    first_deterministic = next(
+        row.candidate_id
+        for row in uninterrupted.fill_history
+        if row.selection_source == "fill_deterministic"
+    )
+
+    def interrupt_first_deterministic_fill(
+        candidate,
+        context: SearchRequestContext,
+    ) -> SearchEvaluation:
+        if (
+            context.stage == "fill"
+            and candidate.candidate_id == first_deterministic
+        ):
+            raise RuntimeError("simulated deterministic fill interruption")
+        return _deterministic_search_evaluation(candidate, context)
+
+    with pytest.raises(
+        RuntimeError,
+        match="simulated deterministic fill interruption",
+    ):
+        run_seed_search(
+            space=space,
+            output_dir=tmp_path / "resumed",
+            experiment_identity=_search_experiment_identity(),
+            evaluate=interrupt_first_deterministic_fill,
+            budget=budget,
+        )
+
+    resumed = run_seed_search(
+        space=space,
+        output_dir=tmp_path / "resumed",
+        experiment_identity=_search_experiment_identity(),
+        evaluate=_deterministic_search_evaluation,
+        budget=budget,
+    )
+
+    assert resumed == uninterrupted
 
 
 def test_seed_search_resume_completes_running_trial_before_new_ask(
