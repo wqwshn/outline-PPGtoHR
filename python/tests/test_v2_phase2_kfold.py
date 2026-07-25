@@ -219,6 +219,7 @@ def test_k0_fold_freezes_mean_training_selection_before_heldout_replay(
     assert history
     assert {
         "stage",
+        "selection_source",
         "train_0_full_final_mae_bpm",
         "train_1_full_final_mae_bpm",
         "mean_train_full_final_mae_bpm",
@@ -226,6 +227,12 @@ def test_k0_fold_freezes_mean_training_selection_before_heldout_replay(
         "cache_hit_train_1",
     } <= set(history[0])
     assert {row["stage"] for row in history} <= {"search", "fill"}
+    assert {row["selection_source"] for row in history} <= {
+        "tpe",
+        "lane_stall_fallback",
+        "fill_tpe",
+        "fill_deterministic",
+    }
     for row in history:
         if row["metric_valid"] == "True":
             expected_mean = (

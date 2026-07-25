@@ -260,7 +260,13 @@ K1 最多覆盖完整旧空间的 150/1620，K2 覆盖 108/108，K3 最多覆盖
 - `fill` 使用固定 seed `20260724`，先按 `candidate_id` 字典序导入 `U` 的完整已完成 trial，再建议全局未见候选，直到全局不同候选恰好达到 150；禁止按并行完成顺序导入；
 - `fill` 候选参与最终选择，但不参与 seed 间稳定性统计。
 
-同一 seed 内的重复建议和 `fill` 中的全局重复建议都记录并反馈已知结果，但不增加相应不重复计数。空间尚未穷尽而连续 200 次建议无法补足新候选时，失败关闭为 `unique_budget_stalled`。
+同一 seed 内的重复建议和 `fill` 中的全局重复建议都记录并反馈已知结果，但不增加相应不重复计数。
+
+若某个 seed lane 在空间尚未穷尽时连续 200 次没有产生 lane 内新候选，视为离散 TPE 饱和，不再无限重试，也不直接终止整批实验。驱动器必须保留全部 TPE 历史，并从该 lane 尚未见过的候选中，按 `SHA256("<seed>:<candidate_id>")`、再按 `candidate_id` 的固定顺序，通过同一个 Optuna study 的 `enqueue_trial → ask → solve/cache → tell` 补足该 lane 的不重复预算。补齐 trial 必须标记 `selection_source=lane_stall_fallback`；不得伪装成 TPE 建议。不同 seed 使用不同固定顺序，串行、并行和中断恢复必须得到完全相同的结果。
+
+`fill` 自由建议标记为 `fill_tpe`；`fill` 达到相同停滞条件或需要全枚举时，按既有 `candidate_id` 顺序确定性补足，并标记为 `fill_deterministic`。
+
+冻结空间不足、入队候选与实际 `ask()` 候选不一致、中断恢复后的来源或顺序不一致，或补齐后仍未达到 lane 预算时继续失败关闭；不得通过降低 lane 预算绕过错误。
 
 物理求解缓存必须使用原子候选预占。同一候选被并行 lane 同时建议时，只允许一个 worker 求解，其他 lane 等待后取得相同结果；无论 lane 串行还是并行，三个独立 study 的建议序列和最终候选并集都必须一致。
 
@@ -273,7 +279,7 @@ K1 最多覆盖完整旧空间的 150/1620，K2 覆盖 108/108，K3 最多覆盖
 
 这里的严格运动段值固定指第 3.4 节 `reliable_motion_mae`。
 
-必须报告每个 seed lane 的 best-so-far、lane 内不重复数、跨 lane 重合数、`fill` 数量、重复建议数和 seed 间最佳参数差异，不能只保留全局 best。
+必须报告每个 seed lane 的 best-so-far、lane 内不重复数、TPE 不重复数、停滞补齐数、触发时重复长度、跨 lane 重合数、`fill` 数量、重复建议数和 seed 间最佳参数差异，不能只保留全局 best。跨 lane 重合和最佳参数差异必须分别给出 `full_lane` 与 `tpe_only` 两套统计，避免确定性补齐掩盖真实 TPE 稳定性。
 
 ## 8. 场景内三折的目标与选择
 
@@ -451,6 +457,7 @@ K2 已经全枚举 108 个组合，不再划分额外邻域预算；每个中心
 - sampler seed、`n_startup_trials` 和约束函数版本；
 - ask/tell 的 trial 编号、状态、参数、标量目标和约束值；
 - lane 内不重复计数；
+- 每个 trial 的 `selection_source`，以及每条 lane 的 TPE/停滞补齐不重复计数、触发状态和触发时重复长度；
 - `fill` 导入的候选并集与导入顺序；
 - 未完成 trial 的候选身份。
 
@@ -477,7 +484,7 @@ K2 已经全枚举 108 个组合，不再划分额外邻域预算；每个中心
 报告同时列出：
 
 - 逻辑建议数；
-- 每个 lane 的不重复候选数、跨 lane 重合数和全局不重复候选数；
+- 每个 lane 的 TPE/补齐/总不重复候选数、`full_lane` 与 `tpe_only` 跨 lane 重合数，以及全局不重复候选数；
 - `fill` 候选数；
 - 物理求解数；
 - 缓存命中数。
@@ -627,7 +634,7 @@ human_expansion_decision.json
 `candidate_history.csv` 至少包含：
 
 - `arm/scene/fold/lane`，其中 lane 为 `seed_42/seed_43/seed_44/fill/enumeration`
-- `suggestion_index/unique_index/candidate_id`
+- `suggestion_index/unique_index/candidate_id/selection_source`
 - `is_duplicate/cache_hit/cache_key`
 - 所有请求参数、实际参数和固定参数
 - 两条训练记录各自的 full/motion Final MAE
@@ -698,24 +705,25 @@ human_expansion_decision.json
 8. Final/reset FFT 非伤害指标使用完全相同的运动窗口和分母；
 9. 少于 10 个窗口、可靠窗口全空或任一基础窗口预测非有限时失败关闭；
 10. 三个 seed lane 允许跨 lane 重合，且缓存命中不改变各 lane 建议序列；
-11. seed 42/43/44 的 lane 内不重复数分别为 50/50/50 或 40/40/40，K2 则稳定全枚举 108 个组合；
-12. 确定性 `fill` 把全局候选并集补足到 150 或 120，且不进入 seed 稳定性；
-13. Optuna trial 保存真实 `worst_train_mae`、两个约束和无效候选固定反馈；
-14. 审查给出的 A/B/C 示例不会形成排序循环，两阶段集合和最终元组排序与遍历顺序无关；
-15. 独立 BO 使用全记录可靠口径目标，验收另算严格运动可靠口径和经典口径；
-16. 最差训练记录目标不会被另一条记录的低误差平均掉；
-17. 任一训练记录无效时不会被忽略后只对另一条记录求平均；
-18. 无合格候选时失败关闭；
-19. 邻域只改变一个维度一档，先完整复核主带再使用诊断带预算；
-20. 邻域新低点不会未经自身邻域复核直接晋级；
-21. 测试记录在 `selection_receipt.json` 写入前从未传给求解器；
-22. 回执哈希变化会拒绝复用旧测试结果；
-23. Final/reset FFT 方法行换序、缺失和错误身份继续失败关闭；
-24. 经典图包含 ACC，多方案并排图不包含 ACC；
-25. 并行候选原子预占只产生一次物理求解；
-26. 中断恢复先完成未 tell trial，候选、选择结果和未中断运行一致；
-27. seed lane 串行或并行执行得到相同的 lane 历史、全局并集和 `fill` 结果；
-28. 同 commit、同输入、同种子的核心数值可重复。
+11. seed lane 连续重复 200 次后保留 TPE 历史，并按 seed 特异固定顺序补齐；TPE 与补齐来源、计数和两套稳定性统计可审计；
+12. seed 42/43/44 的 lane 内不重复数分别为 50/50/50 或 40/40/40，K2 则稳定全枚举 108 个组合；
+13. 确定性 `fill` 把全局候选并集补足到 150 或 120，且不进入 seed 稳定性；
+14. Optuna trial 保存真实 `worst_train_mae`、两个约束和无效候选固定反馈；
+15. 审查给出的 A/B/C 示例不会形成排序循环，两阶段集合和最终元组排序与遍历顺序无关；
+16. 独立 BO 使用全记录可靠口径目标，验收另算严格运动可靠口径和经典口径；
+17. 最差训练记录目标不会被另一条记录的低误差平均掉；
+18. 任一训练记录无效时不会被忽略后只对另一条记录求平均；
+19. 无合格候选时失败关闭；
+20. 邻域只改变一个维度一档，先完整复核主带再使用诊断带预算；
+21. 邻域新低点不会未经自身邻域复核直接晋级；
+22. 测试记录在 `selection_receipt.json` 写入前从未传给求解器；
+23. 回执哈希变化会拒绝复用旧测试结果；
+24. Final/reset FFT 方法行换序、缺失和错误身份继续失败关闭；
+25. 经典图包含 ACC，多方案并排图不包含 ACC；
+26. 并行候选原子预占只产生一次物理求解；
+27. 中断恢复先完成未 tell trial，候选、选择结果和未中断运行一致；
+28. seed lane 串行或并行执行得到相同的 lane 历史、全局并集和 `fill` 结果；
+29. 同 commit、同输入、同种子的核心数值可重复。
 
 正式运行前执行：
 
@@ -733,7 +741,6 @@ conda run -n ppg-hr python -m pytest -q python/tests/test_v2_optimizer.py python
 - `preflight_failed`
 - `method_identity_mismatch`
 - `metric_window_contract_failed`
-- `unique_budget_stalled`
 - `search_space_exhausted`
 - `nonfinite_solver_output`
 - `no_safe_shared_candidate`

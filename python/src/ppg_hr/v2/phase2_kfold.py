@@ -647,6 +647,7 @@ def _write_candidate_history(
             "unique_index": trial.unique_index,
             "candidate_id": trial.candidate_id,
             "is_duplicate": trial.is_duplicate,
+            "selection_source": trial.selection_source,
             "objective": trial.objective,
             "metric_valid": trial.metric_valid,
             "eligible": trial.eligible,

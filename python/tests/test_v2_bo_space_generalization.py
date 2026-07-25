@@ -23,7 +23,6 @@ from ppg_hr.v2.bo_space_generalization import (
     SeedSearchBudget,
     SolverCacheIdentity,
     StudyStateMismatchError,
-    UniqueBudgetStalledError,
     build_bo_search_space,
     build_solver_cache_key,
     evaluate_formal_metrics,
@@ -893,6 +892,9 @@ def test_fill_switches_to_deterministic_unseen_candidates_after_stall(
     assert first.global_candidate_ids == second.global_candidate_ids
     assert first.fill_history == second.fill_history
     assert any(row.is_duplicate for row in first.fill_history)
+    assert {
+        row.selection_source for row in first.fill_history
+    } == {"fill_tpe", "fill_deterministic"}
     assert sum(not row.is_duplicate for row in first.fill_history) == (
         8
         - len(
@@ -982,6 +984,46 @@ def test_seed_lane_parallelism_does_not_change_histories_or_fill(tmp_path) -> No
     assert parallel.lanes == serial.lanes
     assert parallel.fill_history == serial.fill_history
     assert parallel.global_candidate_ids == serial.global_candidate_ids
+
+
+def test_stall_fallback_order_is_seed_specific_and_parallel_safe(
+    tmp_path,
+) -> None:
+    budget = SeedSearchBudget(
+        lane_seeds=(42, 43, 44),
+        lane_unique_budget=4,
+        global_unique_budget=4,
+        n_startup_trials=1,
+        unique_stall_limit=1,
+    )
+    serial = run_seed_search(
+        space=_small_physical_space(),
+        output_dir=tmp_path / "serial-stalled",
+        experiment_identity=_search_experiment_identity(),
+        evaluate=_deterministic_search_evaluation,
+        budget=budget,
+        parallel_lanes=False,
+    )
+    parallel = run_seed_search(
+        space=_small_physical_space(),
+        output_dir=tmp_path / "parallel-stalled",
+        experiment_identity=_search_experiment_identity(),
+        evaluate=_deterministic_search_evaluation,
+        budget=budget,
+        parallel_lanes=True,
+    )
+
+    assert parallel == serial
+    fallback_orders = {
+        lane.seed: tuple(
+            row.candidate_id
+            for row in lane.history
+            if row.selection_source == "lane_stall_fallback"
+        )
+        for lane in serial.lanes
+    }
+    assert all(fallback_orders.values())
+    assert len(set(fallback_orders.values())) == 3
 
 
 def test_seed_search_fully_enumerates_space_smaller_than_requested_budget(
@@ -1080,32 +1122,123 @@ def test_seed_search_exclusively_locks_output_directory(tmp_path) -> None:
         running.result(timeout=10)
 
 
-def test_seed_search_fails_before_new_ask_when_recovered_streak_hit_limit(
+def test_seed_search_completes_stalled_lane_with_seeded_unseen_candidates(
     tmp_path,
-    monkeypatch,
 ) -> None:
-    monkeypatch.setattr(
-        phase2_bo,
-        "_trailing_duplicate_count",
-        lambda _: 3,
+    budget = SeedSearchBudget(
+        lane_seeds=(42,),
+        lane_unique_budget=4,
+        global_unique_budget=4,
+        n_startup_trials=1,
+        unique_stall_limit=1,
+    )
+    first = run_seed_search(
+        space=_small_physical_space(),
+        output_dir=tmp_path / "stalled",
+        experiment_identity=_search_experiment_identity(),
+        evaluate=_deterministic_search_evaluation,
+        budget=budget,
     )
 
-    with pytest.raises(UniqueBudgetStalledError, match="连续 3 次"):
+    lane = first.lanes[0]
+    assert [
+        (row.candidate_id, row.is_duplicate, row.selection_source)
+        for row in lane.history
+    ] == [
+        (
+            "physical_v1:"
+            "d46598f212b8e32d3957877836c62a8fb005e24a0a01a21066660eb5ad293480",
+            False,
+            "tpe",
+        ),
+        (
+            "physical_v1:"
+            "d46598f212b8e32d3957877836c62a8fb005e24a0a01a21066660eb5ad293480",
+            True,
+            "tpe",
+        ),
+        (
+            "physical_v1:"
+            "8bb36990cb42691c4e26799f63408338101e11bdf5ad71a3061f245c5e5281f1",
+            False,
+            "lane_stall_fallback",
+        ),
+        (
+            "physical_v1:"
+            "e182dc6d18531977b9ad201e1c21c006461e05662e359973ecb09606b337521f",
+            False,
+            "lane_stall_fallback",
+        ),
+        (
+            "physical_v1:"
+            "127018e71d2e76f83aedd8a04fd634045754262fe2d9300eb5cd653a7582310c",
+            False,
+            "lane_stall_fallback",
+        ),
+    ]
+    assert lane.unique_candidate_count == 4
+    assert lane.tpe_unique_candidate_count == 1
+    assert lane.stall_fallback_unique_candidate_count == 3
+    assert lane.stall_fallback_triggered is True
+    assert lane.stall_duplicate_streak == 1
+
+    resumed = run_seed_search(
+        space=_small_physical_space(),
+        output_dir=tmp_path / "stalled",
+        experiment_identity=_search_experiment_identity(),
+        evaluate=lambda _candidate, _context: pytest.fail(
+            "completed stalled lane must resume without evaluation"
+        ),
+        budget=budget,
+    )
+    assert resumed == first
+
+
+def test_stalled_lane_resume_preserves_fallback_history(tmp_path) -> None:
+    budget = SeedSearchBudget(
+        lane_seeds=(42,),
+        lane_unique_budget=4,
+        global_unique_budget=4,
+        n_startup_trials=1,
+        unique_stall_limit=1,
+    )
+    uninterrupted = run_seed_search(
+        space=_small_physical_space(),
+        output_dir=tmp_path / "uninterrupted",
+        experiment_identity=_search_experiment_identity(),
+        evaluate=_deterministic_search_evaluation,
+        budget=budget,
+    )
+    interrupted_candidate_ids: list[str] = []
+
+    def interrupt_first_fallback(candidate, context) -> SearchEvaluation:
+        if context.trial_number == 2:
+            interrupted_candidate_ids.append(candidate.candidate_id)
+            raise RuntimeError("simulated fallback interruption")
+        return _deterministic_search_evaluation(candidate, context)
+
+    with pytest.raises(RuntimeError, match="simulated fallback interruption"):
         run_seed_search(
             space=_small_physical_space(),
-            output_dir=tmp_path / "stalled",
+            output_dir=tmp_path / "resumed",
             experiment_identity=_search_experiment_identity(),
-            evaluate=lambda _candidate, _context: pytest.fail(
-                "stalled resume must not evaluate"
-            ),
-            budget=SeedSearchBudget(
-                lane_seeds=(42,),
-                lane_unique_budget=2,
-                global_unique_budget=2,
-                n_startup_trials=1,
-                unique_stall_limit=3,
-            ),
+            evaluate=interrupt_first_fallback,
+            budget=budget,
         )
+
+    resumed = run_seed_search(
+        space=_small_physical_space(),
+        output_dir=tmp_path / "resumed",
+        experiment_identity=_search_experiment_identity(),
+        evaluate=_deterministic_search_evaluation,
+        budget=budget,
+    )
+
+    assert interrupted_candidate_ids == [
+        "physical_v1:"
+        "8bb36990cb42691c4e26799f63408338101e11bdf5ad71a3061f245c5e5281f1"
+    ]
+    assert resumed == uninterrupted
 
 
 def test_seed_search_evaluator_receives_exact_lane_trial_context(

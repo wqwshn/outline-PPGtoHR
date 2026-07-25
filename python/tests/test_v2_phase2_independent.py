@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 from dataclasses import replace
 from pathlib import Path
@@ -18,6 +19,10 @@ from ppg_hr.v2.phase2_independent import (
     IndependentRecordRuntime,
     IndependentStudyConfig,
     run_independent_bo_study,
+)
+from ppg_hr.v2.phase2_stage2_1 import (
+    FrozenIndependentRecord,
+    build_stage2_1_seed_stability_rows,
 )
 from ppg_hr.v2.solver import V2SolverResult
 
@@ -202,6 +207,17 @@ def test_independent_study_writes_dual_baseline_history_and_classic_plots(
     assert "cross_lane_overlap_count" in legacy_stability
     assert "pairwise_lane_overlap_counts" in legacy_stability
     assert "seed_best_parameter_differences" in legacy_stability
+    assert "cross_tpe_lane_overlap_count" in legacy_stability
+    assert "pairwise_tpe_lane_overlap_counts" in legacy_stability
+    assert "tpe_seed_best_parameter_differences" in legacy_stability
+    assert (
+        legacy_stability["tpe_seed_stability_candidate_ids"]
+        == legacy_stability["seed_stability_candidate_ids"]
+    )
+    assert (
+        legacy_stability["cross_tpe_lane_overlap_count"]
+        == legacy_stability["cross_lane_overlap_count"]
+    )
     assert legacy_stability["cache_statistics"]["logical_request_count"] > 0
     assert (
         legacy_stability["cache_statistics"]["physical_solve_count"]
@@ -247,6 +263,87 @@ def test_independent_study_keeps_fill_out_of_seed_stability(tmp_path) -> None:
         }
         assert set(arm.search_result.seed_stability_candidate_ids) == seed_union
         assert all(row.stage == "fill" for row in arm.search_result.fill_history)
+
+
+def test_independent_study_audits_tpe_and_stall_fallback_counts(
+    tmp_path,
+) -> None:
+    stalled_budget = SeedSearchBudget(
+        lane_seeds=(42,),
+        lane_unique_budget=4,
+        global_unique_budget=4,
+        n_startup_trials=1,
+        unique_stall_limit=1,
+    )
+    config = replace(
+        _config(tmp_path),
+        legacy_budget=stalled_budget,
+        physical_budget=replace(
+            stalled_budget,
+            objective_version="phase2_independent_physical_v1",
+        ),
+    )
+    result = run_independent_bo_study(config, runtime=_runtime(tmp_path))
+
+    for arm in (result.legacy, result.physical):
+        with arm.candidate_history.open(
+            "r",
+            encoding="utf-8-sig",
+            newline="",
+        ) as handle:
+            history = list(csv.DictReader(handle))
+        stability = json.loads(
+            arm.seed_stability.read_text(encoding="utf-8")
+        )
+        lane = stability["lanes"][0]
+
+        assert {row["selection_source"] for row in history} == {
+            "tpe",
+            "lane_stall_fallback",
+        }
+        assert lane["unique_candidate_count"] == 4
+        assert (
+            lane["tpe_unique_candidate_count"]
+            + lane["stall_fallback_unique_candidate_count"]
+            == 4
+        )
+        assert lane["stall_fallback_unique_candidate_count"] > 0
+        assert lane["stall_fallback_triggered"] is True
+        assert lane["stall_duplicate_streak"] == 1
+        assert set(stability["tpe_seed_stability_candidate_ids"]).issubset(
+            stability["seed_stability_candidate_ids"]
+        )
+
+
+def test_stage2_1_stability_rows_keep_full_and_tpe_only_scopes(
+    tmp_path,
+) -> None:
+    result = run_independent_bo_study(
+        _config(tmp_path),
+        runtime=_runtime(tmp_path),
+    )
+    record = FrozenIndependentRecord(
+        sample_id=result.sample_id,
+        scene="xiezi",
+        data_path=tmp_path / "data.csv",
+        reference_path=tmp_path / "reference.csv",
+        historical_report_path=tmp_path / "historical.json",
+        historical_error_csv=tmp_path / "historical-error.csv",
+    )
+
+    rows, overlaps = build_stage2_1_seed_stability_rows(record, result)
+
+    assert len(rows) == 6
+    assert all(row["tpe_unique_candidate_count"] == 1 for row in rows)
+    assert all(
+        row["stall_fallback_unique_candidate_count"] == 0 for row in rows
+    )
+    assert all(row["stall_fallback_triggered"] is False for row in rows)
+    assert {row["overlap_scope"] for row in overlaps} == {
+        "full_lane",
+        "tpe_only",
+    }
+    assert len(overlaps) == 12
 
 
 def test_classic_plot_method_validation_requires_acc_curve(tmp_path) -> None:

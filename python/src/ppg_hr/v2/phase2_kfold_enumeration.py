@@ -242,6 +242,7 @@ def run_k2_fold_study(
                 candidate=candidate,
                 audit=read_json(audit_path),
                 is_duplicate=False,
+                selection_source="enumeration",
             )
         )
 

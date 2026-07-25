@@ -754,7 +754,10 @@ def _build_record_receipt(
     }
     method_rows = _method_identity_rows(record, result)
     mask_rows = _metric_mask_rows(record, result)
-    stability_rows, overlap_rows = _seed_stability_rows(record, result)
+    stability_rows, overlap_rows = build_stage2_1_seed_stability_rows(
+        record,
+        result,
+    )
     cache_rows = _cache_rows(record, result)
     diagnostic_rows = _diagnostic_rows(record, result)
     parameter_rows = _selected_parameter_rows(record, result)
@@ -935,7 +938,7 @@ def _metric_mask_rows(
     return rows
 
 
-def _seed_stability_rows(
+def build_stage2_1_seed_stability_rows(
     record: FrozenIndependentRecord,
     result: IndependentStudyResult,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -956,6 +959,18 @@ def _seed_stability_rows(
                     "unique_candidate_count": lane[
                         "unique_candidate_count"
                     ],
+                    "tpe_unique_candidate_count": lane[
+                        "tpe_unique_candidate_count"
+                    ],
+                    "stall_fallback_unique_candidate_count": lane[
+                        "stall_fallback_unique_candidate_count"
+                    ],
+                    "stall_fallback_triggered": lane[
+                        "stall_fallback_triggered"
+                    ],
+                    "stall_duplicate_streak": lane[
+                        "stall_duplicate_streak"
+                    ],
                     "duplicate_suggestion_count": lane[
                         "duplicate_suggestion_count"
                     ],
@@ -975,6 +990,17 @@ def _seed_stability_rows(
                     "sample_id": record.sample_id,
                     "scene": record.scene,
                     "arm": arm_result.arm,
+                    "overlap_scope": "full_lane",
+                    **overlap,
+                }
+            )
+        for overlap in payload["pairwise_tpe_lane_overlap_counts"]:
+            overlaps.append(
+                {
+                    "sample_id": record.sample_id,
+                    "scene": record.scene,
+                    "arm": arm_result.arm,
+                    "overlap_scope": "tpe_only",
                     **overlap,
                 }
             )

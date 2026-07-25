@@ -397,6 +397,7 @@ def history_row_from_audit(
     candidate: BOCandidate,
     audit: Mapping[str, Any],
     is_duplicate: bool,
+    selection_source: str,
 ) -> dict[str, Any]:
     evidence = audit["robust_evidence"]
     row: dict[str, Any] = {
@@ -411,6 +412,7 @@ def history_row_from_audit(
         "unique_index": unique_index,
         "candidate_id": candidate.candidate_id,
         "is_duplicate": is_duplicate,
+        "selection_source": selection_source,
         "objective": evidence["objective_bpm"],
         "tpe_objective": evidence["objective_bpm"],
         "metric_valid": evidence["metric_valid"],

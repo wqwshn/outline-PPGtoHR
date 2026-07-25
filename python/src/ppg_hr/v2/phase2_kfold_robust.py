@@ -520,6 +520,7 @@ def _run_robust_fold_study(
                 candidate=candidates[candidate_id],
                 audit=read_json(audit_path),
                 is_duplicate=False,
+                selection_source="neighborhood",
             )
         )
     try:
@@ -1204,6 +1205,7 @@ def _write_candidate_history(
                     )
                 ),
                 is_duplicate=trial.is_duplicate,
+                selection_source=trial.selection_source,
             )
         )
     rows.extend(dict(row) for row in neighborhood_rows)

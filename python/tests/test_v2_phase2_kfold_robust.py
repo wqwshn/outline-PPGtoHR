@@ -310,6 +310,7 @@ def test_k3_reuses_robust_contract_and_preserves_physical_parameter_meaning(
     ) as handle:
         rows = list(csv.DictReader(handle))
     required_fields = {
+        "selection_source",
         "requested_memory_ms",
         "requested_mu_base",
         "requested_exclusion_half_width_bpm",
@@ -326,6 +327,13 @@ def test_k3_reuses_robust_contract_and_preserves_physical_parameter_meaning(
         "diagnostic_train_0_nonfinite_hr_value_count",
     }
     assert required_fields <= set(rows[0])
+    assert {row["selection_source"] for row in rows} <= {
+        "tpe",
+        "lane_stall_fallback",
+        "fill_tpe",
+        "fill_deterministic",
+        "neighborhood",
+    }
     for row in rows:
         expected_order = round(
             float(row["requested_fs_target"])

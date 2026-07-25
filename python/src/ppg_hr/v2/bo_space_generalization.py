@@ -843,6 +843,7 @@ class SearchTrialRecord:
     eligible: bool
     failure_reason: str
     stage: Literal["search", "fill"]
+    selection_source: str
 
 
 @dataclass(frozen=True)
@@ -854,6 +855,44 @@ class SeedLaneResult:
     @property
     def unique_candidate_count(self) -> int:
         return len(self.unique_candidate_ids)
+
+    @property
+    def tpe_unique_candidate_count(self) -> int:
+        return sum(
+            not row.is_duplicate and row.selection_source == "tpe"
+            for row in self.history
+        )
+
+    @property
+    def stall_fallback_unique_candidate_count(self) -> int:
+        return sum(
+            not row.is_duplicate
+            and row.selection_source == "lane_stall_fallback"
+            for row in self.history
+        )
+
+    @property
+    def stall_fallback_triggered(self) -> bool:
+        return any(
+            row.selection_source == "lane_stall_fallback"
+            for row in self.history
+        )
+
+    @property
+    def stall_duplicate_streak(self) -> int:
+        for index, row in enumerate(self.history):
+            if row.selection_source != "lane_stall_fallback":
+                continue
+            streak = 0
+            for previous in reversed(self.history[:index]):
+                if (
+                    previous.selection_source != "tpe"
+                    or not previous.is_duplicate
+                ):
+                    break
+                streak += 1
+            return streak
+        return 0
 
 
 @dataclass(frozen=True)
@@ -1083,10 +1122,13 @@ def _run_seed_lane(
         row.candidate_id for row in completed if not row.is_duplicate
     }
     duplicate_streak = _trailing_duplicate_count(completed)
-    if len(seen) < unique_budget and duplicate_streak >= unique_stall_limit:
-        raise UniqueBudgetStalledError(
-            f"{lane} 连续 {duplicate_streak} 次未产生新候选"
-        )
+    fallback_started = any(
+        row.selection_source == "lane_stall_fallback" for row in completed
+    )
+    stalled = fallback_started or (
+        len(seen) < unique_budget
+        and duplicate_streak >= unique_stall_limit
+    )
 
     running = sorted(
         study.get_trials(
@@ -1096,6 +1138,11 @@ def _run_seed_lane(
         key=lambda trial: trial.number,
     )
     for frozen in running:
+        running_selection_source = str(
+            frozen.user_attrs.get("selection_source", "tpe")
+        )
+        if running_selection_source == "lane_stall_fallback":
+            stalled = True
         candidate = _candidate_from_trial(
             frozen,
             space=space,
@@ -1135,6 +1182,7 @@ def _run_seed_lane(
             suggestion_index=frozen.number + 1,
             unique_index=unique_index,
             is_duplicate=duplicate,
+            selection_source=running_selection_source,
         )
         _clear_running_trial_state(
             state_path,
@@ -1146,14 +1194,12 @@ def _run_seed_lane(
         if duplicate:
             duplicate_streak += 1
             if duplicate_streak >= unique_stall_limit:
-                raise UniqueBudgetStalledError(
-                    f"{lane} 连续 {duplicate_streak} 次未产生新候选"
-                )
+                stalled = True
         else:
             seen.add(candidate.candidate_id)
             duplicate_streak = 0
 
-    while len(seen) < unique_budget:
+    while len(seen) < unique_budget and not stalled:
         trial = study.ask(fixed_distributions=distributions)
         candidate = _candidate_from_trial(
             trial,
@@ -1205,12 +1251,90 @@ def _run_seed_lane(
         if duplicate:
             duplicate_streak += 1
             if duplicate_streak >= unique_stall_limit:
-                raise UniqueBudgetStalledError(
-                    f"{lane} 连续 {duplicate_streak} 次未产生新候选"
-                )
+                stalled = True
         else:
             seen.add(candidate.candidate_id)
             duplicate_streak = 0
+
+    if len(seen) < unique_budget:
+        remaining = sorted(
+            (
+                candidate
+                for candidate in space.candidates
+                if candidate.candidate_id not in seen
+            ),
+            key=lambda candidate: (
+                hashlib.sha256(
+                    f"{seed}:{candidate.candidate_id}".encode()
+                ).hexdigest(),
+                candidate.candidate_id,
+            ),
+        )[: unique_budget - len(seen)]
+        for candidate in remaining:
+            study.enqueue_trial(
+                _trial_params(candidate, space),
+                user_attrs={
+                    "selection_source": "lane_stall_fallback",
+                    "stall_duplicate_streak": duplicate_streak,
+                },
+                skip_if_exists=True,
+            )
+            trial = study.ask(fixed_distributions=distributions)
+            suggested = _candidate_from_trial(
+                trial,
+                space=space,
+                candidate_by_coordinate=candidate_by_coordinate,
+            )
+            if suggested.candidate_id != candidate.candidate_id:
+                raise StudyStateMismatchError(
+                    "seed lane 确定性补齐的队列候选顺序不一致"
+                )
+            _write_running_trial_state(
+                state_path,
+                config_hash=config_hash,
+                lane=lane,
+                stage="search",
+                trial_number=trial.number,
+                candidate_id=candidate.candidate_id,
+                state_lock=state_lock,
+            )
+            evaluation = evaluate(
+                candidate,
+                SearchRequestContext(
+                    lane=lane,
+                    seed=seed,
+                    trial_number=trial.number,
+                    stage="search",
+                    suggestion_index=trial.number + 1,
+                    unique_index=len(seen) + 1,
+                    is_duplicate=False,
+                ),
+            )
+            _finish_trial(
+                study,
+                trial=trial,
+                candidate=candidate,
+                evaluation=evaluation,
+                lane=lane,
+                seed=seed,
+                stage="search",
+                suggestion_index=trial.number + 1,
+                unique_index=len(seen) + 1,
+                is_duplicate=False,
+                selection_source="lane_stall_fallback",
+            )
+            _clear_running_trial_state(
+                state_path,
+                config_hash=config_hash,
+                lane=lane,
+                trial_number=trial.number,
+                state_lock=state_lock,
+            )
+            seen.add(candidate.candidate_id)
+        if len(seen) != unique_budget:
+            raise StudyStateMismatchError(
+                "seed lane 确定性补齐后候选数与唯一预算不一致"
+            )
     history = _study_history(study, lane=lane, seed=seed, stage="search")
     return SeedLaneResult(
         seed=seed,
@@ -1359,6 +1483,9 @@ def _run_fill_study(
             suggestion_index=fill_suggestion_index,
             unique_index=(None if duplicate else len(global_seen) + 1),
             is_duplicate=duplicate,
+            selection_source=str(
+                frozen.user_attrs.get("selection_source", "fill_tpe")
+            ),
         )
         _clear_running_trial_state(
             state_path,
@@ -1391,6 +1518,7 @@ def _run_fill_study(
                 _trial_params(candidate, space),
                 user_attrs={
                     "fill_selection": selection_reason,
+                    "selection_source": "fill_deterministic",
                 },
                 skip_if_exists=True,
             )
@@ -1440,6 +1568,7 @@ def _run_fill_study(
                 suggestion_index=fill_suggestion_index,
                 unique_index=len(global_seen) + 1,
                 is_duplicate=False,
+                selection_source="fill_deterministic",
             )
             _clear_running_trial_state(
                 state_path,
@@ -1585,6 +1714,7 @@ def _finish_trial(
     suggestion_index: int,
     unique_index: int | None,
     is_duplicate: bool,
+    selection_source: str | None = None,
 ) -> None:
     live_trial = _as_live_trial(study, trial)
     for key, value in _trial_user_attrs(
@@ -1596,6 +1726,7 @@ def _finish_trial(
         suggestion_index=suggestion_index,
         unique_index=unique_index,
         is_duplicate=is_duplicate,
+        selection_source=selection_source,
     ).items():
         live_trial.set_user_attr(key, value)
     study.tell(live_trial, float(evaluation.objective))
@@ -1626,6 +1757,7 @@ def _trial_user_attrs(
     suggestion_index: int,
     unique_index: int | None,
     is_duplicate: bool,
+    selection_source: str | None = None,
 ) -> dict[str, Any]:
     return {
         "candidate_id": candidate.candidate_id,
@@ -1637,6 +1769,15 @@ def _trial_user_attrs(
         "suggestion_index": int(suggestion_index),
         "unique_index": unique_index,
         "is_duplicate": bool(is_duplicate),
+        "selection_source": (
+            selection_source
+            if selection_source is not None
+            else {
+                "search": "tpe",
+                "fill": "fill_tpe",
+                "fill_import": "fill_import",
+            }.get(stage, stage)
+        ),
         "constraints": [float(value) for value in evaluation.constraints],
         "metric_valid": bool(evaluation.metric_valid),
         "eligible": bool(evaluation.eligible),
@@ -1682,6 +1823,12 @@ def _study_history(
                     trial.user_attrs.get("failure_reason", "")
                 ),
                 stage=stage,
+                selection_source=str(
+                    trial.user_attrs.get(
+                        "selection_source",
+                        "tpe" if stage == "search" else "fill_tpe",
+                    )
+                ),
             )
         )
     return tuple(sorted(rows, key=lambda row: row.trial_number))
