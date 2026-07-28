@@ -37,7 +37,35 @@ def _write_archive_fixture(tmp_path: Path) -> tuple[Path, Path]:
             writer.writerows((second, 100.0) for second in range(30))
 
         candidate_id = f"physical_v1:test-{record_index:02d}"
-        cache_key = f"cache-{record_index:02d}"
+        actual_params = {
+            "analysis_scope": "full",
+            "smooth_win_len": 5,
+            "time_bias": 5.0,
+        }
+        requested_params = {"fs_target": 50}
+        fixed_params = {"smooth_win_len": 5, "time_bias": 5.0}
+        solver_identity = {
+            "data_sha256": _sha256(sensor_path),
+            "reference_sha256": _sha256(reference_path),
+            "git_commit": "a" * 40,
+            "run_config": {"analysis_scope": "full"},
+            "candidate_id": candidate_id,
+            "space_name": "physical_v1",
+            "requested_params": requested_params,
+            "actual_params": actual_params,
+            "fixed_params": fixed_params,
+            "reference_groups_order": ["HF"],
+            "metric_contract_version": "lyx_bo_formal_metric_v1",
+        }
+        cache_key = hashlib.sha256(
+            json.dumps(
+                solver_identity,
+                ensure_ascii=True,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode("utf-8")
+        ).hexdigest()
         record_root = formal_root / "records" / sample_id
         cache_entry = record_root / "cache" / cache_key
         cache_entry.mkdir(parents=True)
@@ -46,11 +74,19 @@ def _write_archive_fixture(tmp_path: Path) -> tuple[Path, Path]:
             json.dumps(
                 {
                     "candidate_id": candidate_id,
-                    "actual_params": {
-                        "analysis_scope": "full",
-                        "smooth_win_len": 5,
-                        "time_bias": 5.0,
-                    },
+                    "requested_params": requested_params,
+                    "actual_params": actual_params,
+                    "fixed_params": fixed_params,
+                }
+            ),
+            encoding="utf-8",
+        )
+        selection_audit_path = record_root / "selection_audit.json"
+        selection_audit_path.write_text(
+            json.dumps(
+                {
+                    "candidate_id": candidate_id,
+                    "cache_key": cache_key,
                 }
             ),
             encoding="utf-8",
@@ -71,17 +107,7 @@ def _write_archive_fixture(tmp_path: Path) -> tuple[Path, Path]:
             json.dumps(
                 {
                     "cache_key": cache_key,
-                    "identity": {
-                        "candidate_id": candidate_id,
-                        "actual_params": {
-                            "analysis_scope": "full",
-                            "smooth_win_len": 5,
-                            "time_bias": 5.0,
-                        },
-                        "data_sha256": _sha256(sensor_path),
-                        "reference_sha256": _sha256(reference_path),
-                        "git_commit": "a" * 40,
-                    },
+                    "identity": solver_identity,
                 }
             ),
             encoding="utf-8",
@@ -145,6 +171,9 @@ def _write_archive_fixture(tmp_path: Path) -> tuple[Path, Path]:
                 "selected_candidate": str(
                     selected_path.relative_to(formal_root)
                 ),
+                "selection_audit": str(
+                    selection_audit_path.relative_to(formal_root)
+                ),
                 "sensor_path": str(sensor_path),
                 "reference_path": str(reference_path),
                 "data_sha256": _sha256(sensor_path),
@@ -207,6 +236,7 @@ def test_rebuild_independent_bo_baseline_writes_complete_atomic_artifact(
     )
     assert rows[0]["actual_params"]["smooth_win_len"] == 5
     assert len(rows[0]["selected_candidate_sha256"]) == 64
+    assert len(rows[0]["selection_audit_sha256"]) == 64
     assert len(rows[0]["solver_identity_sha256"]) == 64
     assert len(rows[0]["solver_outcome_sha256"]) == 64
     assert len(rows[0]["solver_result_sha256"]) == 64
@@ -242,7 +272,26 @@ def test_rebuild_independent_bo_baseline_rejects_wrong_cache_identity(
     reservation["identity"]["candidate_id"] = "physical_v1:wrong"
     reservation_path.write_text(json.dumps(reservation), encoding="utf-8")
 
-    with pytest.raises(BaselineRebuildError, match="缓存 candidate_id"):
+    with pytest.raises(BaselineRebuildError, match="完整 identity"):
+        rebuild_independent_bo_baseline(
+            formal_root=formal_root,
+            record_manifest=manifest_path,
+            output_dir=tmp_path / "baseline",
+        )
+
+
+def test_rebuild_independent_bo_baseline_rejects_tampered_identity_payload(
+    tmp_path: Path,
+) -> None:
+    formal_root, manifest_path = _write_archive_fixture(tmp_path)
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    cache_entry = formal_root / payload["records"][0]["cache_entry"]
+    reservation_path = cache_entry / "reservation.json"
+    reservation = json.loads(reservation_path.read_text(encoding="utf-8"))
+    reservation["identity"]["run_config"]["analysis_scope"] = "motion"
+    reservation_path.write_text(json.dumps(reservation), encoding="utf-8")
+
+    with pytest.raises(BaselineRebuildError, match="完整 identity"):
         rebuild_independent_bo_baseline(
             formal_root=formal_root,
             record_manifest=manifest_path,

@@ -68,6 +68,7 @@
       "sample_id": "kaihe3_LYX_0613",
       "scene": "kaihe",
       "selected_candidate_sha256": "bc7fea3e8b5fdfd79624a7caf31d0a56570807a12ced08ccb7c6971a0d87d8c5",
+      "selection_audit_sha256": "84c0483486afd9a476871de61057df74ceb99d95c3fb2ae33f2d001ccd8cd13c",
       "solver_identity_sha256": "91e7261306702aa8e2280a26972700a6b08521847dc42efc33af907db27957b0",
       "solver_outcome_sha256": "809df7786e40a858bf0eee4aad90f1ea5c12199a62d2e241fb478ef273dcdd9b",
       "solver_result_sha256": "c8c746601288dbe5e84dd9565c57ba965af4b481dff3253004e40bc3b045ee9f"

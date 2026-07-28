@@ -14,7 +14,10 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from .bo_space_generalization import _read_cached_outcome
+from .bo_space_generalization import (
+    METRIC_CONTRACT_VERSION,
+    _read_cached_outcome,
+)
 from .phase2_experiment_io import (
     atomic_write_json,
     file_sha256,
@@ -175,6 +178,10 @@ def _rebuild_record(
     try:
         cache_entry = _formal_path(root, record["cache_entry"])
         selected_path = _formal_path(root, record["selected_candidate"])
+        selection_audit_path = _formal_path(
+            root,
+            record["selection_audit"],
+        )
         sensor_path = _source_path(manifest_dir, record["sensor_path"])
         reference_path = _source_path(
             manifest_dir,
@@ -202,6 +209,12 @@ def _rebuild_record(
         if not isinstance(actual_params, Mapping):
             raise BaselineRebuildError("selected actual_params 缺失")
         _require_frozen_params(actual_params)
+        selection_audit = read_json(selection_audit_path)
+        _validate_selection_audit(
+            selection_audit=selection_audit,
+            candidate_id=expected_candidate_id,
+            cache_key=cache_entry.name,
+        )
         reservation_path = cache_entry / "reservation.json"
         reservation = read_json(reservation_path)
         _validate_solver_identity(
@@ -209,6 +222,8 @@ def _rebuild_record(
             cache_key=cache_entry.name,
             candidate_id=expected_candidate_id,
             actual_params=actual_params,
+            requested_params=selected.get("requested_params"),
+            fixed_params=selected.get("fixed_params"),
             data_sha256=str(record["data_sha256"]),
             reference_sha256=str(record["reference_sha256"]),
             archive_git_commit=archive_git_commit,
@@ -240,6 +255,7 @@ def _rebuild_record(
             "data_sha256": str(record["data_sha256"]),
             "reference_sha256": str(record["reference_sha256"]),
             "selected_candidate_sha256": file_sha256(selected_path),
+            "selection_audit_sha256": file_sha256(selection_audit_path),
             "solver_identity_sha256": file_sha256(reservation_path),
             "solver_outcome_sha256": file_sha256(
                 cache_entry / "outcome.json"
@@ -311,6 +327,8 @@ def _validate_solver_identity(
     cache_key: str,
     candidate_id: str,
     actual_params: Mapping[str, Any],
+    requested_params: object,
+    fixed_params: object,
     data_sha256: str,
     reference_sha256: str,
     archive_git_commit: str,
@@ -320,12 +338,29 @@ def _validate_solver_identity(
     identity = reservation.get("identity")
     if not isinstance(identity, Mapping):
         raise BaselineRebuildError("reservation identity 缺失")
+    canonical = json.dumps(
+        json_ready(identity),
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+    identity_sha256 = hashlib.sha256(canonical).hexdigest()
+    if identity_sha256 != cache_key:
+        raise BaselineRebuildError(
+            "完整 identity SHA-256 与 cache_key 不匹配: "
+            f"expected={cache_key}, actual={identity_sha256}"
+        )
     expected = {
         "candidate_id": candidate_id,
+        "space_name": candidate_id.split(":", 1)[0],
+        "requested_params": requested_params,
         "actual_params": dict(actual_params),
+        "fixed_params": fixed_params,
         "data_sha256": data_sha256,
         "reference_sha256": reference_sha256,
         "git_commit": archive_git_commit,
+        "metric_contract_version": METRIC_CONTRACT_VERSION,
     }
     for name, expected_value in expected.items():
         if identity.get(name) != expected_value:
@@ -333,6 +368,18 @@ def _validate_solver_identity(
                 f"缓存 {name} 不匹配: expected={expected_value!r}, "
                 f"actual={identity.get(name)!r}"
             )
+
+
+def _validate_selection_audit(
+    *,
+    selection_audit: Mapping[str, Any],
+    candidate_id: str,
+    cache_key: str,
+) -> None:
+    if selection_audit.get("candidate_id") != candidate_id:
+        raise BaselineRebuildError("selection audit candidate_id 不匹配")
+    if selection_audit.get("cache_key") != cache_key:
+        raise BaselineRebuildError("selection audit cache_key 不匹配")
 
 
 def _with_frozen_metric_metadata(
