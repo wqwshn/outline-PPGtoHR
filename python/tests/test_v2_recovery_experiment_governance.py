@@ -48,24 +48,28 @@ def _identity(
 def _write_cache_receipt(
     root: Path,
     *,
-    identity_sha256: str,
+    identity: AttemptIdentity,
 ) -> Path:
-    result_path = root / f"result-{identity_sha256[:8]}.json"
+    root.mkdir(parents=True, exist_ok=True)
+    result_path = root / f"result-{identity.sha256[:8]}.json"
     result_path.write_text(
         json.dumps(
             {
-                "identity_sha256": identity_sha256,
+                "producer": "content_addressed_solver_cache_v1",
+                "status": "complete",
+                "valid": True,
+                "identity": identity.to_dict(),
                 "mae_bpm": 1.25,
             }
         ),
         encoding="utf-8",
     )
     result_sha256 = hashlib.sha256(result_path.read_bytes()).hexdigest()
-    receipt_path = root / f"cache-{identity_sha256[:8]}.json"
+    receipt_path = root / f"cache-{identity.sha256[:8]}.json"
     receipt_path.write_text(
         json.dumps(
             {
-                "identity_sha256": identity_sha256,
+                "identity_sha256": identity.sha256,
                 "result_path": str(result_path),
                 "result_sha256": result_sha256,
             }
@@ -226,12 +230,16 @@ def test_attempt_registry_reopens_with_bound_contract_and_counts_cache(
     identity = _identity()
     registry.register_identity(identity)
     cache_path = _write_cache_receipt(
-        tmp_path,
-        identity_sha256=identity.sha256,
+        tmp_path / "solver_cache",
+        identity=identity,
     )
     registry.record_cache_hit(
         identity,
-        evidence=CacheEvidence.from_path(cache_path),
+        evidence=CacheEvidence.from_path(
+            cache_path,
+            expected_identity=identity,
+            trusted_cache_root=tmp_path / "solver_cache",
+        ),
     )
 
     reopened = AttemptRegistry.open(
@@ -259,25 +267,62 @@ def test_cache_evidence_must_bind_complete_identity(tmp_path: Path) -> None:
     )
     identity = _identity()
     registry.register_identity(identity)
+    other = _identity(record_id="other")
     cache_path = _write_cache_receipt(
-        tmp_path,
-        identity_sha256="0" * 64,
+        tmp_path / "solver_cache",
+        identity=other,
     )
 
     with pytest.raises(GovernanceError, match="cache_identity_mismatch"):
         registry.record_cache_hit(
             identity,
-            evidence=CacheEvidence.from_path(cache_path),
+            evidence=CacheEvidence.from_path(
+                cache_path,
+                expected_identity=other,
+                trusted_cache_root=tmp_path / "solver_cache",
+            ),
         )
+
+
+def test_cache_evidence_must_come_from_registry_trusted_root(
+    tmp_path: Path,
+) -> None:
+    identity = _identity()
+    outside_root = tmp_path / "untrusted"
+    receipt_path = _write_cache_receipt(
+        outside_root,
+        identity=identity,
+    )
+    evidence = CacheEvidence.from_path(
+        receipt_path,
+        expected_identity=identity,
+        trusted_cache_root=outside_root,
+    )
+    registry = AttemptRegistry.create(
+        tmp_path / "attempt_registry.json",
+        budget_contract=BudgetContract.frozen_v1(),
+        exploration_registry=ExplorationRegistry.zero_budget_v1(),
+    )
+    registry.register_identity(identity)
+
+    with pytest.raises(
+        GovernanceError,
+        match="cache_evidence_outside_trusted_root",
+    ):
+        registry.record_cache_hit(identity, evidence=evidence)
 
 
 def test_cache_evidence_rejects_changed_result_bytes(tmp_path: Path) -> None:
     identity = _identity()
     receipt_path = _write_cache_receipt(
-        tmp_path,
-        identity_sha256=identity.sha256,
+        tmp_path / "solver_cache",
+        identity=identity,
     )
-    evidence = CacheEvidence.from_path(receipt_path)
+    evidence = CacheEvidence.from_path(
+        receipt_path,
+        expected_identity=identity,
+        trusted_cache_root=tmp_path / "solver_cache",
+    )
     evidence.result_path.write_text(
         '{"identity_sha256":"tampered"}',
         encoding="utf-8",
@@ -641,3 +686,9 @@ def test_initialize_governance_writes_frozen_zero_run_artifacts(
     ]
     attempts = json.loads((output / "attempt_registry.json").read_text(encoding="utf-8"))
     assert attempts["entries"] == {}
+    reopened = AttemptRegistry.open(
+        output / "attempt_registry.json",
+        budget_contract=BudgetContract.frozen_v1(),
+        exploration_registry=ExplorationRegistry.zero_budget_v1(),
+    )
+    assert reopened.trusted_cache_root == (output / "solver_cache").resolve()

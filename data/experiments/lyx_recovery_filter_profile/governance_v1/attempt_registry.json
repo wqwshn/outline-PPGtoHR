@@ -10,5 +10,6 @@
     "logical_task_count": 0,
     "planned_unique_identity_count": 0,
     "retry_count": 0
-  }
+  },
+  "trusted_cache_root": "D:\\data\\PPG_HeartRate\\Algorithm\\Algorithm\\outline-PPGtoHR\\.worktrees\\lyx-bo-space-generalization\\data\\experiments\\lyx_recovery_filter_profile\\governance_v1_review\\solver_cache"
 }

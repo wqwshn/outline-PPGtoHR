@@ -159,8 +159,17 @@ class CacheEvidence:
             _require_sha256(name, getattr(self, name))
 
     @classmethod
-    def from_path(cls, path: Path) -> CacheEvidence:
+    def from_path(
+        cls,
+        path: Path,
+        *,
+        expected_identity: AttemptIdentity,
+        trusted_cache_root: Path,
+    ) -> CacheEvidence:
         path = path.resolve()
+        trusted_cache_root = trusted_cache_root.resolve()
+        if not path.is_relative_to(trusted_cache_root):
+            raise GovernanceError(f"cache_evidence_outside_trusted_root:{path}")
         raw = path.read_bytes()
         receipt_hash = hashlib.sha256(raw).hexdigest()
         try:
@@ -175,8 +184,8 @@ class CacheEvidence:
             if declared_result_path.is_absolute()
             else path.parent / declared_result_path
         ).resolve()
-        if not result_path.is_relative_to(path.parent):
-            raise GovernanceError(f"cache_result_outside_receipt_root:{result_path}")
+        if not result_path.is_relative_to(trusted_cache_root):
+            raise GovernanceError(f"cache_result_outside_trusted_root:{result_path}")
         result_raw = result_path.read_bytes()
         if hashlib.sha256(result_raw).hexdigest() != result_hash:
             raise GovernanceError(f"cache_result_hash_mismatch:{result_path}")
@@ -186,9 +195,13 @@ class CacheEvidence:
             raise GovernanceError(f"invalid_cache_result:{result_path}") from error
         if (
             not isinstance(result_payload, dict)
-            or result_payload.get("identity_sha256") != identity_hash
+            or identity_hash != expected_identity.sha256
+            or result_payload.get("identity") != expected_identity.to_dict()
+            or result_payload.get("status") != "complete"
+            or result_payload.get("valid") is not True
+            or result_payload.get("producer") != "content_addressed_solver_cache_v1"
         ):
-            raise GovernanceError(f"cache_result_identity_mismatch:{result_path}")
+            raise GovernanceError(f"cache_result_contract_mismatch:{result_path}")
         return cls(
             path=path,
             result_path=result_path,
@@ -391,11 +404,13 @@ class AttemptRegistry:
         *,
         budget_contract: BudgetContract,
         exploration_registry: ExplorationRegistry,
+        trusted_cache_root: Path,
         entries: dict[str, dict[str, Any]],
     ) -> None:
         self.path = path
         self.budget_contract = budget_contract
         self.exploration_registry = exploration_registry
+        self.trusted_cache_root = trusted_cache_root.resolve()
         self._entries = entries
 
     @classmethod
@@ -405,7 +420,11 @@ class AttemptRegistry:
         *,
         budget_contract: BudgetContract,
         exploration_registry: ExplorationRegistry,
+        trusted_cache_root: Path | None = None,
     ) -> AttemptRegistry:
+        cache_root = (
+            trusted_cache_root if trusted_cache_root is not None else path.parent / "solver_cache"
+        ).resolve()
         path.parent.mkdir(parents=True, exist_ok=True)
         with _exclusive_registry_lock(path):
             if path.exists():
@@ -414,6 +433,7 @@ class AttemptRegistry:
                 path,
                 budget_contract=budget_contract,
                 exploration_registry=exploration_registry,
+                trusted_cache_root=cache_root,
                 entries={},
             )
             registry._write_entries({})
@@ -426,7 +446,11 @@ class AttemptRegistry:
         *,
         budget_contract: BudgetContract,
         exploration_registry: ExplorationRegistry,
+        trusted_cache_root: Path | None = None,
     ) -> AttemptRegistry:
+        cache_root = (
+            trusted_cache_root if trusted_cache_root is not None else path.parent / "solver_cache"
+        ).resolve()
         payload = read_json(path)
         if payload.get("registry_version") != ("lyx_recovery_attempt_registry_v2"):
             raise GovernanceError("attempt_registry_version_mismatch")
@@ -434,6 +458,8 @@ class AttemptRegistry:
             raise GovernanceError("budget_contract_mismatch")
         if payload.get("exploration_registry_sha256") != exploration_registry.sha256:
             raise GovernanceError("exploration_registry_mismatch")
+        if payload.get("trusted_cache_root") != str(cache_root):
+            raise GovernanceError("trusted_cache_root_mismatch")
         entries = payload.get("entries")
         if not isinstance(entries, dict):
             raise GovernanceError("invalid_attempt_registry_entries")
@@ -441,6 +467,7 @@ class AttemptRegistry:
             path,
             budget_contract=budget_contract,
             exploration_registry=exploration_registry,
+            trusted_cache_root=cache_root,
             entries=entries,
         )
         registry._validate_entries(entries)
@@ -579,7 +606,14 @@ class AttemptRegistry:
                 raise GovernanceError(f"identity_payload_mismatch:{identity.sha256}")
             if evidence.identity_sha256 != identity.sha256:
                 raise GovernanceError(f"cache_identity_mismatch:{identity.sha256}")
-            if CacheEvidence.from_path(evidence.path) != evidence:
+            if (
+                CacheEvidence.from_path(
+                    evidence.path,
+                    expected_identity=identity,
+                    trusted_cache_root=self.trusted_cache_root,
+                )
+                != evidence
+            ):
                 raise GovernanceError(f"cache_evidence_changed:{evidence.path}")
             serialized = evidence.to_dict()
             if serialized not in entry["cache_evidence"]:
@@ -614,6 +648,7 @@ class AttemptRegistry:
             self.path,
             budget_contract=self.budget_contract,
             exploration_registry=self.exploration_registry,
+            trusted_cache_root=self.trusted_cache_root,
         )
         entry = fresh._entries.get(identity.sha256)
         if entry is None:
@@ -627,6 +662,7 @@ class AttemptRegistry:
             self.path,
             budget_contract=self.budget_contract,
             exploration_registry=self.exploration_registry,
+            trusted_cache_root=self.trusted_cache_root,
         )
         self._entries = fresh._entries
         return self._summary(self._entries)
@@ -652,6 +688,7 @@ class AttemptRegistry:
                 self.path,
                 budget_contract=self.budget_contract,
                 exploration_registry=self.exploration_registry,
+                trusted_cache_root=self.trusted_cache_root,
             )
             entries = deepcopy(fresh._entries)
             result = mutate(entries)
@@ -670,6 +707,7 @@ class AttemptRegistry:
                 "registry_version": "lyx_recovery_attempt_registry_v2",
                 "budget_contract_sha256": self.budget_contract.sha256,
                 "exploration_registry_sha256": (self.exploration_registry.sha256),
+                "trusted_cache_root": str(self.trusted_cache_root),
                 "entries": entries,
                 "summary": self._summary(entries),
             },
@@ -731,7 +769,14 @@ class AttemptRegistry:
                     raise GovernanceError(f"invalid_cache_evidence:{identity_hash}") from error
                 if evidence.identity_sha256 != identity_hash:
                     raise GovernanceError(f"cache_identity_mismatch:{identity_hash}")
-                if CacheEvidence.from_path(evidence.path) != evidence:
+                if (
+                    CacheEvidence.from_path(
+                        evidence.path,
+                        expected_identity=identity,
+                        trusted_cache_root=self.trusted_cache_root,
+                    )
+                    != evidence
+                ):
                     raise GovernanceError(f"cache_evidence_changed:{evidence.path}")
             total_attempts += len(attempts)
         for stage, count in stage_counts.items():
@@ -1001,6 +1046,7 @@ def initialize_recovery_experiment_governance(
             staging / "attempt_registry.json",
             budget_contract=budget,
             exploration_registry=exploration,
+            trusted_cache_root=output_dir / "solver_cache",
         )
         (staging / ".attempt_registry.json.lock").unlink(missing_ok=True)
         receipt = {
