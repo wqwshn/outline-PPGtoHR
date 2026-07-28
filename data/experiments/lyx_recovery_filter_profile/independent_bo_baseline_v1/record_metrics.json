@@ -46,6 +46,7 @@
       "sample_id": "jianpan1_LYX_0708",
       "scene": "jianpan",
       "selected_candidate_sha256": "95ff37848946e3a4900df76a132ef9d3c7003ad2ebf5629be2183b3c9d5e2d88",
+      "solver_identity_sha256": "c90872f5befd97631ba7448360a875d256d74047ed1dfcb4733e41e436a86c48",
       "solver_outcome_sha256": "aeacf4c40e23fbe004b71e44f3dc058fe63f5ea3824bec800c32079deae30fb0",
       "solver_result_sha256": "31477a44e36e180e484f1237227a302f9a37f4c9ffe5cfa7f1ae0141703bdd19"
     },
@@ -95,6 +96,7 @@
       "sample_id": "jianpan2_LYX_0708",
       "scene": "jianpan",
       "selected_candidate_sha256": "7025100605ad879402bf005cf28b97e9611580579942b386e554ac6a1167aee5",
+      "solver_identity_sha256": "a144e0d334f1a76bc3fa5cf54bc672359be2dd412ffd4ac2dc761cf430f69c80",
       "solver_outcome_sha256": "a5fbd2cdfb56715be47798a7bbe6368e75a142d03964b1f318daee7123f4f681",
       "solver_result_sha256": "fbdb32da22c6fe3314ece21de18817ca533ac5f8d61b96a3140ddb5a0d40a8ce"
     },
@@ -144,6 +146,7 @@
       "sample_id": "jianpan3_LYX_0708",
       "scene": "jianpan",
       "selected_candidate_sha256": "3671c3c7ad76962eeef68cd0c079b15c6586096709565dd0711784775ccf7779",
+      "solver_identity_sha256": "c112215fdb9b4339b46d9906cacdc3f0bdb70dab50729d4c51249ad00b7b9b60",
       "solver_outcome_sha256": "c3a958838bd76413bca9656c69ff7d6531e829ab1ac6a49f216570317b174750",
       "solver_result_sha256": "044dd599efbb8e8707f9e75db7e9fa2743ad9b7647f96d5685ed22a750e3a27a"
     },
@@ -200,6 +203,7 @@
       "sample_id": "kaihe1_LYX_0613",
       "scene": "kaihe",
       "selected_candidate_sha256": "c7de2fcecaea6836e9768f74ffde9075328e11d06c9191e93deb505cb35e384b",
+      "solver_identity_sha256": "8a816e950b4b9eec79b610faf1685a13c5bfa62eaf8c858e2bc1800d637212c6",
       "solver_outcome_sha256": "fb797d3f0be712940729dd632268c8a036d45ef154061891600a2ae1fee25db9",
       "solver_result_sha256": "06a580e7714f39361342a80854abec71c9c2d1fe673795bb5c6ec97a331bb0fc"
     },
@@ -275,6 +279,7 @@
       "sample_id": "kaihe1_LYX_0617",
       "scene": "kaihe",
       "selected_candidate_sha256": "fe093ba7fdeb929054a225d502344f1a61c92d46351da04ed77b86c0e5655fd8",
+      "solver_identity_sha256": "30da5ba65be5b8d292553b855ce177b864319228c3c254b33ccd382d825741d7",
       "solver_outcome_sha256": "d6df642ecef2bbba76ef3139c67bcd98a1ba1bcd002b6b566a6ba4c14eaaae96",
       "solver_result_sha256": "51c6d20abf5ecbcc07876fab96aabac19a98d1f09c6f2b3ad2cf7ea7df2033ad"
     },
@@ -344,6 +349,7 @@
       "sample_id": "kaihe3_LYX_0613",
       "scene": "kaihe",
       "selected_candidate_sha256": "bc7fea3e8b5fdfd79624a7caf31d0a56570807a12ced08ccb7c6971a0d87d8c5",
+      "solver_identity_sha256": "91e7261306702aa8e2280a26972700a6b08521847dc42efc33af907db27957b0",
       "solver_outcome_sha256": "809df7786e40a858bf0eee4aad90f1ea5c12199a62d2e241fb478ef273dcdd9b",
       "solver_result_sha256": "c8c746601288dbe5e84dd9565c57ba965af4b481dff3253004e40bc3b045ee9f"
     },
@@ -407,6 +413,7 @@
       "sample_id": "run1_LYX_0708",
       "scene": "run",
       "selected_candidate_sha256": "ffd13b8a4c27345d26620058d4657c416dc97829f51d727a20e154757c5e17da",
+      "solver_identity_sha256": "acda4b83a32dc0bd83add6a41c9655d68828551fa3a6b68ae2978c66666a6873",
       "solver_outcome_sha256": "0e177d35ceb9209fc087ed61adeb53d18c5c92a62df79e2f2e2a7cbbd4a7fc5b",
       "solver_result_sha256": "947a17223ba1c0f6c1cd54a7261bde38cdd6b2bb505dac7799b6324ab7572b9e"
     },
@@ -463,6 +470,7 @@
       "sample_id": "run2_LYX_0708",
       "scene": "run",
       "selected_candidate_sha256": "837da2d9b7d82ae4db618f4f2d37726bf471ca792fcfea932b40f23175d1c3f0",
+      "solver_identity_sha256": "5e0810b02ffab41aa5477cddb125aeb7b52f9928d2f27e5fe6de1a5c59fd20cb",
       "solver_outcome_sha256": "1933f6d0ca99ae5cd24af1bf6c8d715aa635e46902103ab5bd6bbdd693e99010",
       "solver_result_sha256": "6fb5a9c69db05c4940384d090e68a1f8d86a0972d730e2bf09aba0a46181f4f9"
     },
@@ -519,6 +527,7 @@
       "sample_id": "run3_LYX_0708",
       "scene": "run",
       "selected_candidate_sha256": "4e72c20228a5c12001329696d9e17a9f8cdfd80fa6c215ea9e1c56c1138b5bc0",
+      "solver_identity_sha256": "10f2f0d41e711bf00f168f06643111af0dda1b6445d0e0366c11de6325bc1e46",
       "solver_outcome_sha256": "9cc6a4bedc713e87c12656aa1194aa7f5c114ea579b2abe50582b77fd8e247e1",
       "solver_result_sha256": "43ddd78f052bce336a407ab75602721689b67b07a82c63fc5cc92e7154b8d5e1"
     },
@@ -568,6 +577,7 @@
       "sample_id": "xiezi2_LYX_0708",
       "scene": "xiezi",
       "selected_candidate_sha256": "5c1c3477e326080ad981092a67ba0994f40df97ce49afb54fd76d9437604c921",
+      "solver_identity_sha256": "ed2350e70f0439db5d57a96d83a52c2df172e32971eb8feddfcdb61c5c7c2fd4",
       "solver_outcome_sha256": "0b921f4218372ad3a704c4f5bc1253d0b8875211e74e28aa5a3866060482fb70",
       "solver_result_sha256": "cc89cf025ec9410184a25636ab97b8c62fe0e74c54960b14f00602333565c143"
     },
@@ -617,6 +627,7 @@
       "sample_id": "xiezi3_LYX_0708",
       "scene": "xiezi",
       "selected_candidate_sha256": "42d4374a9f91bf85a0c5bc2d650faadc1c4dda099d24fcc9b03f3a2c64d09143",
+      "solver_identity_sha256": "7694af6ae9804c4dc56ce16383cb982df4ef473a0ffcd2023cf8a6893e5a6cdd",
       "solver_outcome_sha256": "23a8a2cc66032b16a6e83a5381f3c47965367078a255712563225868e89adc3d",
       "solver_result_sha256": "839abee065c16a45340f9480bb41e4c3f0aaaf9a5d3efcc6f077655a6c3b33a6"
     },
@@ -666,6 +677,7 @@
       "sample_id": "xiezi4_LYX_0708",
       "scene": "xiezi",
       "selected_candidate_sha256": "3e4448bacd1ddb3c2713a262c7fcf6eea5ef0f4e7146c2eb409103c046981329",
+      "solver_identity_sha256": "efbe2c2f9a44d15e35a835ed14feb7ca2b810e5ec49586b82ed99c71e6c31945",
       "solver_outcome_sha256": "a99ae2a760902654bffcdef01eddf827eae7d37949bb1ac461a85414b3edcc9f",
       "solver_result_sha256": "68f9ddd366e6ca7b173639f6bd912806409f2ebba992e05e04b78733115d620d"
     }

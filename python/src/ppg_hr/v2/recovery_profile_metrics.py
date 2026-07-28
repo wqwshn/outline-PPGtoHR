@@ -331,7 +331,7 @@ def _physiological_rise_episodes(
     ):
         if block_end - block_start < 10:
             continue
-        best: tuple[int, int] | None = None
+        candidates: list[tuple[int, int]] = []
         for start in range(block_start, block_end - 9):
             for end in range(start + 10, block_end + 1):
                 segment_reference = reference_bpm[start:end]
@@ -341,24 +341,32 @@ def _physiological_rise_episodes(
                 median_step = float(np.median(np.diff(segment_reference)))
                 if gain < 15.0 or median_step <= 0.0:
                     continue
-                if best is None or (end - start, -start) > (
-                    best[1] - best[0],
-                    -best[0],
-                ):
-                    best = (start, end)
-        if best is None:
-            continue
-        start, end = best
-        episodes.append(
-            PhysiologicalRiseEpisodeMetric(
-                start_center_s=float(centers_s[start]),
-                end_center_s=float(centers_s[end - 1]),
-                window_count=end - start,
-                rise_underestimate_bpm=float(
-                    np.median(
-                        reference_bpm[start:end] - final_bpm[start:end]
-                    )
-                ),
+                candidates.append((start, end))
+        selected: list[tuple[int, int]] = []
+        for start, end in sorted(
+            candidates,
+            key=lambda interval: (
+                -(interval[1] - interval[0]),
+                interval[0],
+            ),
+        ):
+            if any(
+                start < selected_end and selected_start < end
+                for selected_start, selected_end in selected
+            ):
+                continue
+            selected.append((start, end))
+        for start, end in sorted(selected):
+            episodes.append(
+                PhysiologicalRiseEpisodeMetric(
+                    start_center_s=float(centers_s[start]),
+                    end_center_s=float(centers_s[end - 1]),
+                    window_count=end - start,
+                    rise_underestimate_bpm=float(
+                        np.median(
+                            reference_bpm[start:end] - final_bpm[start:end]
+                        )
+                    ),
+                )
             )
-        )
     return episodes

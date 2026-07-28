@@ -1,11 +1,11 @@
 {
   "archive_git_commit": "7c76fcd644eb66f8443a5eded622d81ac53a54c0",
   "artifact_sha256": {
-    "record_metrics.csv": "7a9551a46777daa33195196d9d1afd1758ac208ca6175fcc74fc0591195d7ec8",
-    "record_metrics.json": "c3f3dca955a9442c598679a60cbeea44486bbe4df6d22194ea192405f69170e6",
-    "summary.json": "16e2a78c9859c55ca00e2ced1c4a55bea33a5e6135e017a1878f8f4f6d5beced"
+    "record_metrics.csv": "84e7df37c807d0b5ad58a60c659591754e17628c92464fbbe528ea06d8c44f74",
+    "record_metrics.json": "f430246551e361d7877fbcc9d3df50dbe24e2b7b5b1f92c059e0908f28427060",
+    "summary.json": "e6c149b7888038caf998a577375f771a58343237c001409c2adf0397c80323d3"
   },
-  "evaluation_code_sha256": "b29f027fcc94327124dd6ed06eae1225a283d0ffb80fdc6806d67d1881969639",
+  "evaluation_code_sha256": "f7a2ba1b9aa8bdd96fa2f418f171deb573c0976d7a33b27bfa7c6066617f4894",
   "formal_root": "D:\\data\\PPG_HeartRate\\Algorithm\\Algorithm\\outline-PPGtoHR\\.worktrees\\lyx-bo-space-generalization\\data\\experiments\\lyx_bo_space_generalization\\formal_phase2_20260725T110252",
   "manifest_sha256": "d51d4ecf9261c739cacef2cda12e36c7bac111e8a4896bee1f0a5b708330700e",
   "manifest_version": "lyx_recovery_profile_baseline_manifest_v1",

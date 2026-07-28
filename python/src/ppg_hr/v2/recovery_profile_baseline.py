@@ -75,6 +75,7 @@ def rebuild_independent_bo_baseline(
                 root=root,
                 manifest_dir=manifest_path.parent,
                 record=record,
+                archive_git_commit=str(manifest["archive_git_commit"]),
             )
             for record in records
         ]
@@ -168,6 +169,7 @@ def _rebuild_record(
     root: Path,
     manifest_dir: Path,
     record: Mapping[str, Any],
+    archive_git_commit: str,
 ) -> dict[str, Any]:
     sample_id = str(record["sample_id"])
     try:
@@ -200,6 +202,17 @@ def _rebuild_record(
         if not isinstance(actual_params, Mapping):
             raise BaselineRebuildError("selected actual_params 缺失")
         _require_frozen_params(actual_params)
+        reservation_path = cache_entry / "reservation.json"
+        reservation = read_json(reservation_path)
+        _validate_solver_identity(
+            reservation=reservation,
+            cache_key=cache_entry.name,
+            candidate_id=expected_candidate_id,
+            actual_params=actual_params,
+            data_sha256=str(record["data_sha256"]),
+            reference_sha256=str(record["reference_sha256"]),
+            archive_git_commit=archive_git_commit,
+        )
         outcome = _read_cached_outcome(cache_entry)
         if outcome.status != "valid" or outcome.solver_result is None:
             raise BaselineRebuildError(
@@ -227,6 +240,7 @@ def _rebuild_record(
             "data_sha256": str(record["data_sha256"]),
             "reference_sha256": str(record["reference_sha256"]),
             "selected_candidate_sha256": file_sha256(selected_path),
+            "solver_identity_sha256": file_sha256(reservation_path),
             "solver_outcome_sha256": file_sha256(
                 cache_entry / "outcome.json"
             ),
@@ -288,6 +302,36 @@ def _require_frozen_params(actual_params: Mapping[str, Any]) -> None:
             raise BaselineRebuildError(
                 f"{name} 未冻结: expected={expected_value!r}, "
                 f"actual={actual_params.get(name)!r}"
+            )
+
+
+def _validate_solver_identity(
+    *,
+    reservation: Mapping[str, Any],
+    cache_key: str,
+    candidate_id: str,
+    actual_params: Mapping[str, Any],
+    data_sha256: str,
+    reference_sha256: str,
+    archive_git_commit: str,
+) -> None:
+    if reservation.get("cache_key") != cache_key:
+        raise BaselineRebuildError("reservation cache_key 与目录名不一致")
+    identity = reservation.get("identity")
+    if not isinstance(identity, Mapping):
+        raise BaselineRebuildError("reservation identity 缺失")
+    expected = {
+        "candidate_id": candidate_id,
+        "actual_params": dict(actual_params),
+        "data_sha256": data_sha256,
+        "reference_sha256": reference_sha256,
+        "git_commit": archive_git_commit,
+    }
+    for name, expected_value in expected.items():
+        if identity.get(name) != expected_value:
+            raise BaselineRebuildError(
+                f"缓存 {name} 不匹配: expected={expected_value!r}, "
+                f"actual={identity.get(name)!r}"
             )
 
 

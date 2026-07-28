@@ -252,6 +252,34 @@ def test_recovery_profile_metrics_find_rise_subsegment_inside_mixed_block() -> N
     assert episode.window_count == 16
 
 
+def test_recovery_profile_metrics_report_disjoint_rises_in_one_motion_block() -> None:
+    aligned_reference = np.concatenate(
+        [
+            np.arange(100.0, 116.0),
+            np.arange(140.0, 99.0, -1.0),
+            np.arange(100.0, 116.0),
+        ]
+    )
+    centers = np.arange(len(aligned_reference), dtype=float)
+    result = _solver_result(
+        final_bpm=list(aligned_reference - 4.0),
+        centers_s=list(centers),
+    )
+    reference = np.column_stack([centers + 5.0, aligned_reference])
+
+    metrics = evaluate_recovery_profile_metrics(
+        result,
+        ref_data=reference,
+        method_names=("reset FFT", "LMS+H"),
+    )
+
+    assert metrics.physiological_rise_episode_count == 2
+    assert all(
+        episode.rise_underestimate_bpm == pytest.approx(4.0)
+        for episode in metrics.physiological_rise_episodes
+    )
+
+
 def test_recovery_profile_metrics_require_frozen_smoothing() -> None:
     result = _solver_result(final_bpm=[100.0] * 12)
     result.metadata["smooth_win_len"] = 9

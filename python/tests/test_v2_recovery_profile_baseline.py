@@ -67,6 +67,25 @@ def _write_archive_fixture(tmp_path: Path) -> tuple[Path, Path]:
             ]
         )
         np.savez_compressed(cache_entry / "solver_result.npz", HR=hr)
+        (cache_entry / "reservation.json").write_text(
+            json.dumps(
+                {
+                    "cache_key": cache_key,
+                    "identity": {
+                        "candidate_id": candidate_id,
+                        "actual_params": {
+                            "analysis_scope": "full",
+                            "smooth_win_len": 5,
+                            "time_bias": 5.0,
+                        },
+                        "data_sha256": _sha256(sensor_path),
+                        "reference_sha256": _sha256(reference_path),
+                        "git_commit": "a" * 40,
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
         (cache_entry / "outcome.json").write_text(
             json.dumps(
                 {
@@ -188,6 +207,7 @@ def test_rebuild_independent_bo_baseline_writes_complete_atomic_artifact(
     )
     assert rows[0]["actual_params"]["smooth_win_len"] == 5
     assert len(rows[0]["selected_candidate_sha256"]) == 64
+    assert len(rows[0]["solver_identity_sha256"]) == 64
     assert len(rows[0]["solver_outcome_sha256"]) == 64
     assert len(rows[0]["solver_result_sha256"]) == 64
 
@@ -209,3 +229,22 @@ def test_rebuild_independent_bo_baseline_fails_closed_without_partial_output(
         )
 
     assert not output_dir.exists()
+
+
+def test_rebuild_independent_bo_baseline_rejects_wrong_cache_identity(
+    tmp_path: Path,
+) -> None:
+    formal_root, manifest_path = _write_archive_fixture(tmp_path)
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    cache_entry = formal_root / payload["records"][0]["cache_entry"]
+    reservation_path = cache_entry / "reservation.json"
+    reservation = json.loads(reservation_path.read_text(encoding="utf-8"))
+    reservation["identity"]["candidate_id"] = "physical_v1:wrong"
+    reservation_path.write_text(json.dumps(reservation), encoding="utf-8")
+
+    with pytest.raises(BaselineRebuildError, match="缓存 candidate_id"):
+        rebuild_independent_bo_baseline(
+            formal_root=formal_root,
+            record_manifest=manifest_path,
+            output_dir=tmp_path / "baseline",
+        )
