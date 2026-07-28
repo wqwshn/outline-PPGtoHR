@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import FrozenInstanceError
 from pathlib import Path
@@ -42,6 +43,36 @@ def _identity(
         attempt_kind=attempt_kind,
         parent_experiment_id="lyx_recovery_filter_profile_v1",
     )
+
+
+def _write_cache_receipt(
+    root: Path,
+    *,
+    identity_sha256: str,
+) -> Path:
+    result_path = root / f"result-{identity_sha256[:8]}.json"
+    result_path.write_text(
+        json.dumps(
+            {
+                "identity_sha256": identity_sha256,
+                "mae_bpm": 1.25,
+            }
+        ),
+        encoding="utf-8",
+    )
+    result_sha256 = hashlib.sha256(result_path.read_bytes()).hexdigest()
+    receipt_path = root / f"cache-{identity_sha256[:8]}.json"
+    receipt_path.write_text(
+        json.dumps(
+            {
+                "identity_sha256": identity_sha256,
+                "result_path": str(result_path),
+                "result_sha256": result_sha256,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return receipt_path
 
 
 def test_attempt_registry_rejects_unregistered_and_limits_retry(
@@ -194,15 +225,9 @@ def test_attempt_registry_reopens_with_bound_contract_and_counts_cache(
     )
     identity = _identity()
     registry.register_identity(identity)
-    cache_path = tmp_path / "cache_receipt.json"
-    cache_path.write_text(
-        json.dumps(
-            {
-                "identity_sha256": identity.sha256,
-                "result_sha256": "f" * 64,
-            }
-        ),
-        encoding="utf-8",
+    cache_path = _write_cache_receipt(
+        tmp_path,
+        identity_sha256=identity.sha256,
     )
     registry.record_cache_hit(
         identity,
@@ -234,15 +259,9 @@ def test_cache_evidence_must_bind_complete_identity(tmp_path: Path) -> None:
     )
     identity = _identity()
     registry.register_identity(identity)
-    cache_path = tmp_path / "cache_receipt.json"
-    cache_path.write_text(
-        json.dumps(
-            {
-                "identity_sha256": "0" * 64,
-                "result_sha256": "f" * 64,
-            }
-        ),
-        encoding="utf-8",
+    cache_path = _write_cache_receipt(
+        tmp_path,
+        identity_sha256="0" * 64,
     )
 
     with pytest.raises(GovernanceError, match="cache_identity_mismatch"):
@@ -250,6 +269,28 @@ def test_cache_evidence_must_bind_complete_identity(tmp_path: Path) -> None:
             identity,
             evidence=CacheEvidence.from_path(cache_path),
         )
+
+
+def test_cache_evidence_rejects_changed_result_bytes(tmp_path: Path) -> None:
+    identity = _identity()
+    receipt_path = _write_cache_receipt(
+        tmp_path,
+        identity_sha256=identity.sha256,
+    )
+    evidence = CacheEvidence.from_path(receipt_path)
+    evidence.result_path.write_text(
+        '{"identity_sha256":"tampered"}',
+        encoding="utf-8",
+    )
+    registry = AttemptRegistry.create(
+        tmp_path / "attempt_registry.json",
+        budget_contract=BudgetContract.frozen_v1(),
+        exploration_registry=ExplorationRegistry.zero_budget_v1(),
+    )
+    registry.register_identity(identity)
+
+    with pytest.raises(GovernanceError, match="cache_result_hash_mismatch"):
+        registry.record_cache_hit(identity, evidence=evidence)
 
 
 def test_attempt_registry_refuses_contract_hash_mismatch(tmp_path: Path) -> None:

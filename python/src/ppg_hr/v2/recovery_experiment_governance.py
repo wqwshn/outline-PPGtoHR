@@ -139,12 +139,18 @@ class CacheEvidence:
     """绑定完整求解身份与结果哈希的缓存命中回执。"""
 
     path: Path
+    result_path: Path
     receipt_sha256: str
     identity_sha256: str
     result_sha256: str
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "path", self.path.resolve())
+        object.__setattr__(
+            self,
+            "result_path",
+            self.result_path.resolve(),
+        )
         for name in (
             "receipt_sha256",
             "identity_sha256",
@@ -154,16 +160,38 @@ class CacheEvidence:
 
     @classmethod
     def from_path(cls, path: Path) -> CacheEvidence:
+        path = path.resolve()
         raw = path.read_bytes()
         receipt_hash = hashlib.sha256(raw).hexdigest()
         try:
             payload = json.loads(raw.decode("utf-8"))
             identity_hash = payload["identity_sha256"]
+            declared_result_path = Path(payload["result_path"])
             result_hash = payload["result_sha256"]
         except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
             raise GovernanceError(f"invalid_cache_evidence:{path}") from error
+        result_path = (
+            declared_result_path
+            if declared_result_path.is_absolute()
+            else path.parent / declared_result_path
+        ).resolve()
+        if not result_path.is_relative_to(path.parent):
+            raise GovernanceError(f"cache_result_outside_receipt_root:{result_path}")
+        result_raw = result_path.read_bytes()
+        if hashlib.sha256(result_raw).hexdigest() != result_hash:
+            raise GovernanceError(f"cache_result_hash_mismatch:{result_path}")
+        try:
+            result_payload = json.loads(result_raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise GovernanceError(f"invalid_cache_result:{result_path}") from error
+        if (
+            not isinstance(result_payload, dict)
+            or result_payload.get("identity_sha256") != identity_hash
+        ):
+            raise GovernanceError(f"cache_result_identity_mismatch:{result_path}")
         return cls(
             path=path,
+            result_path=result_path,
             receipt_sha256=receipt_hash,
             identity_sha256=identity_hash,
             result_sha256=result_hash,
@@ -172,6 +200,7 @@ class CacheEvidence:
     def to_dict(self) -> dict[str, str]:
         return {
             "path": str(self.path),
+            "result_path": str(self.result_path),
             "receipt_sha256": self.receipt_sha256,
             "identity_sha256": self.identity_sha256,
             "result_sha256": self.result_sha256,
@@ -693,6 +722,7 @@ class AttemptRegistry:
                 try:
                     evidence = CacheEvidence(
                         path=Path(evidence_payload["path"]),
+                        result_path=Path(evidence_payload["result_path"]),
                         receipt_sha256=evidence_payload["receipt_sha256"],
                         identity_sha256=evidence_payload["identity_sha256"],
                         result_sha256=evidence_payload["result_sha256"],
