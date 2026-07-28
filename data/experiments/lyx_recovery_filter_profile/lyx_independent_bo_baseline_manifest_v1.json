@@ -1,5 +1,7 @@
 {
   "manifest_version": "lyx_recovery_profile_baseline_manifest_v1",
+  "parent_experiment_id": "formal_phase2_20260725T110252:s21",
+  "archive_git_commit": "7c76fcd644eb66f8443a5eded622d81ac53a54c0",
   "records": [
     {
       "sample_id": "jianpan1_LYX_0708",

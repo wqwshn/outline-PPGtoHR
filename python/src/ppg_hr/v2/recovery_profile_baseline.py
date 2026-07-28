@@ -1,8 +1,9 @@
-"""从正式归档重建 LYX 恢复—滤波实验的独立 BO 基线。"""
+"""从正式归档重建 LYX 独立 BO 工程精度锚点。"""
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -22,7 +23,11 @@ from .phase2_experiment_io import (
     write_csv,
 )
 from .preprocess import load_v2_reference
-from .recovery_profile_metrics import evaluate_recovery_profile_metrics
+from .recovery_profile_metrics import (
+    RECOVERY_PROFILE_METRIC_VERSION,
+    evaluate_recovery_profile_metrics,
+)
+from .solver import V2SolverResult
 
 BASELINE_MANIFEST_VERSION = "lyx_recovery_profile_baseline_manifest_v1"
 BASELINE_RECEIPT_VERSION = "lyx_recovery_profile_baseline_receipt_v1"
@@ -35,7 +40,7 @@ _EXPECTED_SCENE_COUNTS = {
 
 
 class BaselineRebuildError(RuntimeError):
-    """归档身份或指标合同不完整，基线重建失败关闭。"""
+    """归档身份或指标合同不完整，工程精度锚点重建失败关闭。"""
 
 
 def rebuild_independent_bo_baseline(
@@ -44,7 +49,7 @@ def rebuild_independent_bo_baseline(
     record_manifest: str | Path,
     output_dir: str | Path,
 ) -> dict[str, Any]:
-    """重建 12 条独立 BO 基线，并以目录为单位原子发布产物。"""
+    """重建 12 条独立 BO 工程精度锚点并原子发布产物。"""
 
     root = Path(formal_root).resolve()
     manifest_path = Path(record_manifest).resolve()
@@ -82,11 +87,12 @@ def rebuild_independent_bo_baseline(
         receipt = {
             "receipt_version": BASELINE_RECEIPT_VERSION,
             "status": "complete",
-            "metric_contract_version": (
-                "lyx_recovery_profile_metric_v1"
-            ),
+            "metric_contract_version": RECOVERY_PROFILE_METRIC_VERSION,
             "manifest_version": BASELINE_MANIFEST_VERSION,
             "manifest_sha256": file_sha256(manifest_path),
+            "parent_experiment_id": manifest["parent_experiment_id"],
+            "archive_git_commit": manifest["archive_git_commit"],
+            "evaluation_code_sha256": _evaluation_code_sha256(),
             "formal_root": str(root),
             "record_count": len(rows),
             "scene_counts": dict(
@@ -121,6 +127,19 @@ def _validate_manifest(
             "manifest_version 不匹配: "
             f"{manifest.get('manifest_version')!r}"
         )
+    parent_experiment_id = manifest.get("parent_experiment_id")
+    if not isinstance(parent_experiment_id, str) or not parent_experiment_id:
+        raise BaselineRebuildError("parent_experiment_id 不能为空")
+    archive_git_commit = manifest.get("archive_git_commit")
+    if (
+        not isinstance(archive_git_commit, str)
+        or len(archive_git_commit) != 40
+        or any(
+            character not in "0123456789abcdef"
+            for character in archive_git_commit
+        )
+    ):
+        raise BaselineRebuildError("archive_git_commit 必须是 40 位小写十六进制")
     raw_records = manifest.get("records")
     if not isinstance(raw_records, list):
         raise BaselineRebuildError("records 必须是数组")
@@ -191,8 +210,12 @@ def _rebuild_record(
             isinstance(name, str) and name for name in raw_method_names
         ):
             raise BaselineRebuildError("method_names 必须是非空字符串数组")
-        metrics = evaluate_recovery_profile_metrics(
+        solver_result = _with_frozen_metric_metadata(
             outcome.solver_result,
+            actual_params,
+        )
+        metrics = evaluate_recovery_profile_metrics(
+            solver_result,
             ref_data=load_v2_reference(reference_path),
             method_names=tuple(raw_method_names),
         )
@@ -203,12 +226,17 @@ def _rebuild_record(
             "cache_key": cache_entry.name,
             "data_sha256": str(record["data_sha256"]),
             "reference_sha256": str(record["reference_sha256"]),
+            "selected_candidate_sha256": file_sha256(selected_path),
+            "solver_outcome_sha256": file_sha256(
+                cache_entry / "outcome.json"
+            ),
+            "solver_result_sha256": file_sha256(
+                cache_entry / "solver_result.npz"
+            ),
             "actual_params": dict(actual_params),
             "metrics": asdict(metrics),
         }
     except Exception as exc:
-        if isinstance(exc, BaselineRebuildError):
-            raise BaselineRebuildError(f"{sample_id}: {exc}") from exc
         raise BaselineRebuildError(f"{sample_id}: {exc}") from exc
 
 
@@ -261,6 +289,32 @@ def _require_frozen_params(actual_params: Mapping[str, Any]) -> None:
                 f"{name} 未冻结: expected={expected_value!r}, "
                 f"actual={actual_params.get(name)!r}"
             )
+
+
+def _with_frozen_metric_metadata(
+    result: V2SolverResult,
+    actual_params: Mapping[str, Any],
+) -> V2SolverResult:
+    metadata = dict(result.metadata)
+    metadata["smooth_win_len"] = actual_params["smooth_win_len"]
+    metadata["time_bias"] = actual_params["time_bias"]
+    return V2SolverResult(
+        HR=result.HR,
+        err_stats=result.err_stats,
+        metadata=metadata,
+        window_table=result.window_table,
+    )
+
+
+def _evaluation_code_sha256() -> str:
+    digest = hashlib.sha256()
+    for path in (
+        Path(__file__),
+        Path(__file__).with_name("recovery_profile_metrics.py"),
+    ):
+        digest.update(path.name.encode("utf-8"))
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
 
 
 def _flatten_record(record: Mapping[str, Any]) -> dict[str, Any]:
@@ -316,7 +370,7 @@ def _build_summary(
             ),
         }
     return {
-        "evidence_class": "development_reuse_baseline_rebuild",
+        "evidence_class": "development_reuse_engineering_anchor_rebuild",
         "algorithm_level_holdout": False,
         "record_count": len(rows),
         "scene_summary": dict(sorted(scene_summary.items())),
@@ -330,7 +384,7 @@ def _build_summary(
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="重建 LYX 12 条独立 BO Lite 正式基线",
+        description="重建 LYX 12 条独立 BO Lite 工程精度锚点",
     )
     parser.add_argument("--formal-root", required=True, type=Path)
     parser.add_argument("--record-manifest", required=True, type=Path)

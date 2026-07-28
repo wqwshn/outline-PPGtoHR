@@ -140,6 +140,8 @@ def _write_archive_fixture(tmp_path: Path) -> tuple[Path, Path]:
                 "manifest_version": (
                     "lyx_recovery_profile_baseline_manifest_v1"
                 ),
+                "parent_experiment_id": "synthetic-formal:s21",
+                "archive_git_commit": "a" * 40,
                 "records": records,
             }
         ),
@@ -168,6 +170,9 @@ def test_rebuild_independent_bo_baseline_writes_complete_atomic_artifact(
         "run": 3,
         "xiezi": 3,
     }
+    assert receipt["parent_experiment_id"] == "synthetic-formal:s21"
+    assert receipt["archive_git_commit"] == "a" * 40
+    assert len(receipt["evaluation_code_sha256"]) == 64
     assert sorted(path.name for path in output_dir.iterdir()) == [
         "contract_receipt.json",
         "record_metrics.csv",
@@ -182,6 +187,9 @@ def test_rebuild_independent_bo_baseline_writes_complete_atomic_artifact(
         "lyx_recovery_profile_metric_v1"
     )
     assert rows[0]["actual_params"]["smooth_win_len"] == 5
+    assert len(rows[0]["selected_candidate_sha256"]) == 64
+    assert len(rows[0]["solver_outcome_sha256"]) == 64
+    assert len(rows[0]["solver_result_sha256"]) == 64
 
 
 def test_rebuild_independent_bo_baseline_fails_closed_without_partial_output(

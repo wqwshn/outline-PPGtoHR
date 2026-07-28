@@ -3,7 +3,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from ppg_hr.v2.recovery_profile_metrics import evaluate_recovery_profile_metrics
+from ppg_hr.v2.recovery_profile_metrics import (
+    RecoveryProfileMetricContractError,
+    evaluate_recovery_profile_metrics,
+)
 from ppg_hr.v2.solver import V2SolverResult
 
 
@@ -40,6 +43,7 @@ def _solver_result(
             "analysis_scope": "full",
             "adaptive_filter": "lms",
             "reference_groups_order": ["HF"],
+            "smooth_win_len": 5,
             "time_bias": 5.0,
         },
         window_table=[
@@ -96,10 +100,16 @@ def test_recovery_profile_metrics_report_long_error_runs_and_censoring() -> None
     assert metrics.recovery_episode_count == 3
     assert metrics.right_censored_recovery_count == 1
     assert metrics.max_recovered_delay_s == 5.0
-    assert metrics.recovered_delay_s == (5.0, 2.0)
-    assert metrics.right_censored_recovery == (False, False, True)
+    assert tuple(episode.delay_s for episode in metrics.recovery_episodes) == (
+        5.0,
+        2.0,
+        None,
+    )
+    assert tuple(
+        episode.right_censored for episode in metrics.recovery_episodes
+    ) == (False, False, True)
     assert metrics.physiological_rise_episode_count == 0
-    assert metrics.rise_underestimate_bpm == ()
+    assert metrics.physiological_rise_episodes == ()
     assert len(metrics.base_motion_window_sha256) == 64
 
 
@@ -139,7 +149,7 @@ def test_recovery_profile_metrics_break_error_runs_at_time_gaps() -> None:
     assert metrics.recovery_episode_count == 2
 
 
-def test_recovery_profile_metrics_do_not_recover_across_time_gaps() -> None:
+def test_recovery_profile_metrics_require_continuous_confirmation_after_gap() -> None:
     result = _solver_result(
         final_bpm=[
             100.0,
@@ -166,8 +176,8 @@ def test_recovery_profile_metrics_do_not_recover_across_time_gaps() -> None:
     )
 
     assert metrics.recovery_episode_count == 1
-    assert metrics.right_censored_recovery_count == 1
-    assert metrics.max_recovered_delay_s is None
+    assert metrics.right_censored_recovery_count == 0
+    assert metrics.max_recovered_delay_s == 7.0
 
 
 def test_recovery_profile_metrics_break_runs_at_missing_motion_windows() -> None:
@@ -213,4 +223,48 @@ def test_recovery_profile_metrics_report_physiological_rise_underestimate() -> N
 
     assert metrics.physiological_rise_episode_count == 1
     assert metrics.max_rise_underestimate_bpm == pytest.approx(4.0)
-    assert metrics.rise_underestimate_bpm == pytest.approx((4.0,))
+    assert metrics.physiological_rise_episodes[0].rise_underestimate_bpm == (
+        pytest.approx(4.0)
+    )
+
+
+def test_recovery_profile_metrics_find_rise_subsegment_inside_mixed_block() -> None:
+    aligned_reference = np.concatenate(
+        [np.arange(130.0, 110.0, -1.0), np.arange(100.0, 116.0)]
+    )
+    centers = np.arange(len(aligned_reference), dtype=float)
+    result = _solver_result(
+        final_bpm=list(aligned_reference - 4.0),
+        centers_s=list(centers),
+    )
+    reference = np.column_stack([centers + 5.0, aligned_reference])
+
+    metrics = evaluate_recovery_profile_metrics(
+        result,
+        ref_data=reference,
+        method_names=("reset FFT", "LMS+H"),
+    )
+
+    assert metrics.physiological_rise_episode_count == 1
+    episode = metrics.physiological_rise_episodes[0]
+    assert episode.start_center_s == 20.0
+    assert episode.end_center_s == 35.0
+    assert episode.window_count == 16
+
+
+def test_recovery_profile_metrics_require_frozen_smoothing() -> None:
+    result = _solver_result(final_bpm=[100.0] * 12)
+    result.metadata["smooth_win_len"] = 9
+    reference = np.column_stack(
+        [np.arange(0.0, 30.0), np.full(30, 100.0)]
+    )
+
+    with pytest.raises(
+        RecoveryProfileMetricContractError,
+        match="smooth_win_len_not_frozen",
+    ):
+        evaluate_recovery_profile_metrics(
+            result,
+            ref_data=reference,
+            method_names=("reset FFT", "LMS+H"),
+        )
