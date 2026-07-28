@@ -1,0 +1,82 @@
+{
+  "algorithm_level_holdout": false,
+  "evidence_class": "development_reuse_baseline_rebuild",
+  "kaihe3_records": [
+    {
+      "actual_params": {
+        "analysis_scope": "full",
+        "fs_target": 50,
+        "lms_mu_base": 0.012,
+        "lms_mu_min": 1e-06,
+        "max_order": 10,
+        "smooth_win_len": 5,
+        "spec_penalty_width": 0.2,
+        "time_bias": 5.0
+      },
+      "cache_key": "3eaf15113ccb23a6d97fe35961acad0961772b1a5c5cfdfcf3756ff7b9dd843d",
+      "candidate_id": "physical_v1:300f07aefd5f09e7cae71c7b658bab3cc768edddaefb92f55683b6119dfab633",
+      "data_sha256": "778f75d02d47a134a5999a5641de201dfc613da915b43876398792c6833c6e84",
+      "metrics": {
+        "base_metric_contract_version": "lyx_bo_formal_metric_v1",
+        "base_motion_window_count": 68,
+        "base_motion_window_sha256": "ab2e55d02dc48484372d0fc06bffae862285a2b7b2e13ee070a27abb0a3e1834",
+        "e10_window_count": 31,
+        "e20_window_count": 19,
+        "final_method": "LMS+H",
+        "final_motion_mae_bpm": 11.979730200308001,
+        "longest_e10_run_windows": 30,
+        "longest_e20_run_windows": 13,
+        "max_recovered_delay_s": 30.0,
+        "max_rise_underestimate_bpm": 8.022362033786976,
+        "metric_contract_version": "lyx_recovery_profile_metric_v1",
+        "physiological_rise_episode_count": 1,
+        "recovered_delay_s": [
+          30.0,
+          1.0
+        ],
+        "recovery_episode_count": 2,
+        "reset_fft_method": "reset FFT",
+        "reset_motion_mae_bpm": 65.67289533056726,
+        "right_censored_recovery": [
+          false,
+          false
+        ],
+        "right_censored_recovery_count": 0,
+        "rise_underestimate_bpm": [
+          8.022362033786976
+        ],
+        "time_bias_s": 5.0
+      },
+      "reference_sha256": "5cb40473d1793f8ff91eeed993f4a1b9a59c44b7fefcfd57a0314ad34c626050",
+      "sample_id": "kaihe3_LYX_0613",
+      "scene": "kaihe"
+    }
+  ],
+  "record_count": 12,
+  "scene_summary": {
+    "jianpan": {
+      "max_longest_e10_run_windows": 0,
+      "mean_final_motion_mae_bpm": 1.9937714702463312,
+      "record_count": 3,
+      "right_censored_recovery_count": 0
+    },
+    "kaihe": {
+      "max_longest_e10_run_windows": 30,
+      "mean_final_motion_mae_bpm": 6.4227969172250114,
+      "record_count": 3,
+      "right_censored_recovery_count": 0
+    },
+    "run": {
+      "max_longest_e10_run_windows": 5,
+      "mean_final_motion_mae_bpm": 1.2318155158674133,
+      "record_count": 3,
+      "right_censored_recovery_count": 0
+    },
+    "xiezi": {
+      "max_longest_e10_run_windows": 0,
+      "mean_final_motion_mae_bpm": 1.893604949366561,
+      "record_count": 3,
+      "right_censored_recovery_count": 0
+    }
+  }
+}

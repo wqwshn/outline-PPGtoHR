@@ -1,0 +1,20 @@
+{
+  "artifact_sha256": {
+    "record_metrics.csv": "cff815e748ec939cdaf39919a20f7b78c90c4a29ed9a6427abf9215b214c6657",
+    "record_metrics.json": "292ce8e01ae85e224a5d7a8d032e4de73cd441ed953c6693b195076fff0c4c80",
+    "summary.json": "61903a3bff60481c5dfbca478bf3af01ac0261398c14aa999a75a815af762dc2"
+  },
+  "formal_root": "D:\\data\\PPG_HeartRate\\Algorithm\\Algorithm\\outline-PPGtoHR\\.worktrees\\lyx-bo-space-generalization\\data\\experiments\\lyx_bo_space_generalization\\formal_phase2_20260725T110252",
+  "manifest_sha256": "987d93f9c3480cd240782df0bb5f8f0ff4265d31f87649f1bd7f628f5423494c",
+  "manifest_version": "lyx_recovery_profile_baseline_manifest_v1",
+  "metric_contract_version": "lyx_recovery_profile_metric_v1",
+  "receipt_version": "lyx_recovery_profile_baseline_receipt_v1",
+  "record_count": 12,
+  "scene_counts": {
+    "jianpan": 3,
+    "kaihe": 3,
+    "run": 3,
+    "xiezi": 3
+  },
+  "status": "complete"
+}
