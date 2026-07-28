@@ -24,8 +24,16 @@ from .phase2_experiment_io import (
     file_sha256,
     read_json,
 )
+from .recovery_contracts import (
+    RECOVERY_PREFLIGHT_HASH_FIELDS,
+)
+from .recovery_contracts import (
+    canonical_sha256 as _canonical_sha256,
+)
+from .recovery_contracts import (
+    require_sha256 as _require_sha256,
+)
 
-_HASH_LENGTH = 64
 _ATTEMPT_KINDS = frozenset({"exploration", "diagnostic", "formal"})
 _TERMINAL_ATTEMPT_STATUSES = frozenset({"succeeded", "failed"})
 _HUMAN_GATE_STATES = frozenset(
@@ -61,22 +69,67 @@ class HumanGateRequiredError(GovernanceError):
         super().__init__(message or state)
 
 
-def _require_sha256(name: str, value: str) -> None:
-    if len(value) != _HASH_LENGTH or any(
-        character not in "0123456789abcdef" for character in value
-    ):
-        raise ValueError(f"{name}_must_be_lowercase_sha256")
+@dataclass(frozen=True)
+class FrozenExperimentContractHashes:
+    """The seven contracts that must agree before any formal solve."""
+
+    metric_contract_hash: str
+    spectral_gate_contract_hash: str
+    recovery_candidate_registry_hash: str
+    recovery_selection_contract_hash: str
+    penalty_registry_hash: str
+    filter_profile_design_rule_hash: str
+    budget_contract_hash: str
+
+    def __post_init__(self) -> None:
+        for name in RECOVERY_PREFLIGHT_HASH_FIELDS:
+            _require_sha256(name, getattr(self, name))
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            name: getattr(self, name)
+            for name in RECOVERY_PREFLIGHT_HASH_FIELDS
+        }
 
 
-def _canonical_sha256(payload: Any) -> str:
-    encoded = json.dumps(
-        payload,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        allow_nan=False,
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
+def validate_recovery_experiment_preflight(
+    *,
+    expected: FrozenExperimentContractHashes,
+    actual: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Fail closed unless every frozen experiment contract is present and equal."""
+
+    actual_keys = set(actual)
+    required_keys = set(RECOVERY_PREFLIGHT_HASH_FIELDS)
+    missing = sorted(required_keys - actual_keys)
+    if missing:
+        raise GovernanceError(
+            f"preflight_contract_missing:{','.join(missing)}"
+        )
+    unexpected = sorted(actual_keys - required_keys)
+    if unexpected:
+        raise GovernanceError(
+            f"preflight_contract_unexpected:{','.join(unexpected)}"
+        )
+    expected_hashes = expected.to_dict()
+    verified: dict[str, str] = {}
+    for name in RECOVERY_PREFLIGHT_HASH_FIELDS:
+        value = str(actual[name])
+        try:
+            _require_sha256(name, value)
+        except ValueError as exc:
+            raise GovernanceError(f"preflight_contract_invalid:{name}") from exc
+        if value != expected_hashes[name]:
+            raise GovernanceError(f"preflight_contract_mismatch:{name}")
+        verified[name] = value
+    receipt = {
+        "receipt_version": "lyx_recovery_preflight_contract_receipt_v1",
+        "status": "preflight_contracts_verified",
+        "required_contract_count": len(RECOVERY_PREFLIGHT_HASH_FIELDS),
+        "contracts": verified,
+    }
+    receipt["preflight_sha256"] = _canonical_sha256(receipt)
+    return receipt
 
 
 def _filesystem_path(path: Path) -> str:

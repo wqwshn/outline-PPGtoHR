@@ -1,0 +1,750 @@
+{
+  "artifacts": {
+    "recovery_candidate_registry.json": "09233a5781866dcd24cf198069b6010b818b326d47e4894cdb1c28f127ec9b3d",
+    "recovery_selection_contract.json": "3b7cbef055a30bf571a29e7056c676ea1d49fe0efeddda3a7095a1cdcdf2af8e"
+  },
+  "config_schema_sha256": "11f3d807782115dc380f16f5184fad5def93a0739080362b7b58a4816fdbe736",
+  "config_schemas": {
+    "SolverParams": {
+      "adaptive_filter": {
+        "annotation": "str",
+        "default": "lms"
+      },
+      "analysis_scope": {
+        "annotation": "str",
+        "default": "full"
+      },
+      "as_lms_mu_max": {
+        "annotation": "float",
+        "default": 0.05
+      },
+      "as_lms_rho": {
+        "annotation": "float",
+        "default": 0.0001
+      },
+      "bp_high_hz": {
+        "annotation": "float",
+        "default": 5.0
+      },
+      "bp_low_hz": {
+        "annotation": "float",
+        "default": 0.5
+      },
+      "bp_order": {
+        "annotation": "int",
+        "default": 4
+      },
+      "calib_time": {
+        "annotation": "float",
+        "default": 30.0
+      },
+      "delay_prefit_margin_samples": {
+        "annotation": "int",
+        "default": 2
+      },
+      "delay_prefit_max_seconds": {
+        "annotation": "float",
+        "default": 0.8
+      },
+      "delay_prefit_min_corr": {
+        "annotation": "float",
+        "default": 0.15
+      },
+      "delay_prefit_min_span_samples": {
+        "annotation": "int",
+        "default": 6
+      },
+      "delay_prefit_windows": {
+        "annotation": "int",
+        "default": 20
+      },
+      "delay_search_mode": {
+        "annotation": "str",
+        "default": "adaptive"
+      },
+      "extras": {
+        "annotation": "dict[str, Any]",
+        "default": {}
+      },
+      "file_name": {
+        "annotation": "str | Path",
+        "default": ""
+      },
+      "fs_target": {
+        "annotation": "int",
+        "default": 25
+      },
+      "hr_range_hz": {
+        "annotation": "float",
+        "default": 0.4166666666666667
+      },
+      "hr_range_rest": {
+        "annotation": "float",
+        "default": 0.5
+      },
+      "interpolate_unreliable_hr": {
+        "annotation": "bool",
+        "default": true
+      },
+      "klms_epsilon": {
+        "annotation": "float",
+        "default": 0.1
+      },
+      "klms_sigma": {
+        "annotation": "float",
+        "default": 1.0
+      },
+      "klms_step_size": {
+        "annotation": "float",
+        "default": 0.2
+      },
+      "lms_mu_base": {
+        "annotation": "float",
+        "default": 0.01
+      },
+      "lms_mu_min": {
+        "annotation": "float",
+        "default": 1e-06
+      },
+      "max_consecutive_missing_seconds": {
+        "annotation": "float",
+        "default": 1.0
+      },
+      "max_missing_ratio_per_window": {
+        "annotation": "float",
+        "default": 0.2
+      },
+      "max_order": {
+        "annotation": "int",
+        "default": 16
+      },
+      "max_recovery_seconds": {
+        "annotation": "float",
+        "default": 30.0
+      },
+      "motion_th_scale": {
+        "annotation": "float",
+        "default": 2.5
+      },
+      "num_cascade_acc": {
+        "annotation": "int",
+        "default": 3
+      },
+      "num_cascade_hf": {
+        "annotation": "int",
+        "default": 2
+      },
+      "ppg_mode": {
+        "annotation": "str",
+        "default": "green"
+      },
+      "ref_file": {
+        "annotation": "str | Path | None",
+        "default": null
+      },
+      "rff_D": {
+        "annotation": "int",
+        "default": 100
+      },
+      "rff_seed": {
+        "annotation": "int",
+        "default": 42
+      },
+      "rff_sigma": {
+        "annotation": "float",
+        "default": 1.0
+      },
+      "slew_limit_bpm": {
+        "annotation": "float",
+        "default": 10.0
+      },
+      "slew_limit_rest": {
+        "annotation": "float",
+        "default": 6.0
+      },
+      "slew_step_bpm": {
+        "annotation": "float",
+        "default": 7.0
+      },
+      "slew_step_rest": {
+        "annotation": "float",
+        "default": 4.0
+      },
+      "smooth_win_len": {
+        "annotation": "int",
+        "default": 7
+      },
+      "spec_penalty_enable": {
+        "annotation": "bool",
+        "default": true
+      },
+      "spec_penalty_weight": {
+        "annotation": "float",
+        "default": 0.2
+      },
+      "spec_penalty_width": {
+        "annotation": "float",
+        "default": 0.2
+      },
+      "time_bias": {
+        "annotation": "float",
+        "default": 5.0
+      },
+      "time_buffer": {
+        "annotation": "float",
+        "default": 10.0
+      },
+      "time_start": {
+        "annotation": "float",
+        "default": 1.0
+      },
+      "volterra_max_order_vol": {
+        "annotation": "int",
+        "default": 3
+      }
+    },
+    "V2RunConfig": {
+      "C_scale": {
+        "annotation": "float",
+        "default": 1.0
+      },
+      "K_max": {
+        "annotation": "int",
+        "default": 16
+      },
+      "M_base": {
+        "annotation": "int",
+        "default": 1
+      },
+      "adaptive_filter": {
+        "annotation": "str",
+        "default": "noncausal_lms"
+      },
+      "algorithm_preset": {
+        "annotation": "str",
+        "default": "dynamic_rest_bo"
+      },
+      "analysis_scope": {
+        "annotation": "str",
+        "default": "full"
+      },
+      "as_lms_mu_max": {
+        "annotation": "float",
+        "default": 0.05
+      },
+      "as_lms_rho": {
+        "annotation": "float",
+        "default": 0.0001
+      },
+      "calib_time": {
+        "annotation": "float",
+        "default": 30.0
+      },
+      "data_path": {
+        "annotation": "Path",
+        "default": "<required>"
+      },
+      "extras": {
+        "annotation": "dict[str, Any]",
+        "default": {}
+      },
+      "fs_origin": {
+        "annotation": "int",
+        "default": 100
+      },
+      "fs_target": {
+        "annotation": "int",
+        "default": 25
+      },
+      "high_lock_escape_candidate_min_bpm": {
+        "annotation": "float",
+        "default": 85.0
+      },
+      "high_lock_escape_candidate_stable_bpm": {
+        "annotation": "float",
+        "default": 10.0
+      },
+      "high_lock_escape_confirm_windows": {
+        "annotation": "int",
+        "default": 3
+      },
+      "high_lock_escape_cooldown_windows": {
+        "annotation": "int",
+        "default": 4
+      },
+      "high_lock_escape_down_step_bpm": {
+        "annotation": "float",
+        "default": 20.0
+      },
+      "high_lock_escape_enable": {
+        "annotation": "bool",
+        "default": true
+      },
+      "high_lock_escape_min_amp_ratio": {
+        "annotation": "float",
+        "default": 0.45
+      },
+      "high_lock_escape_min_gap_bpm": {
+        "annotation": "float",
+        "default": 20.0
+      },
+      "high_lock_escape_penalty_exclusion_bpm": {
+        "annotation": "float",
+        "default": 10.0
+      },
+      "high_lock_escape_up_step_bpm": {
+        "annotation": "float",
+        "default": 3.0
+      },
+      "hr_range_hz": {
+        "annotation": "float",
+        "default": 0.4166666666666667
+      },
+      "hr_range_rest": {
+        "annotation": "float",
+        "default": 0.5
+      },
+      "interpolate_unreliable_hr": {
+        "annotation": "bool",
+        "default": true
+      },
+      "klms_epsilon": {
+        "annotation": "float",
+        "default": 0.1
+      },
+      "klms_sigma": {
+        "annotation": "float",
+        "default": 1.0
+      },
+      "klms_step_size": {
+        "annotation": "float",
+        "default": 0.2
+      },
+      "lms_mu_base": {
+        "annotation": "float",
+        "default": 0.01
+      },
+      "lms_mu_min": {
+        "annotation": "float",
+        "default": 1e-06
+      },
+      "max_consecutive_missing_seconds": {
+        "annotation": "float",
+        "default": 1.0
+      },
+      "max_missing_ratio_per_window": {
+        "annotation": "float",
+        "default": 0.2
+      },
+      "max_order": {
+        "annotation": "int",
+        "default": 16
+      },
+      "max_recovery_seconds": {
+        "annotation": "float",
+        "default": 30.0
+      },
+      "motion_gate_filter_allowlist": {
+        "annotation": "tuple[str, ...]",
+        "default": [
+          "lms",
+          "noncausal_lms"
+        ]
+      },
+      "motion_th_scale": {
+        "annotation": "float",
+        "default": 2.5
+      },
+      "penalty_confidence_enable": {
+        "annotation": "bool",
+        "default": true
+      },
+      "post_motion_adaptive_seconds": {
+        "annotation": "float",
+        "default": 10.0
+      },
+      "post_motion_dual_reset_enable": {
+        "annotation": "bool",
+        "default": true
+      },
+      "post_motion_dual_reset_experiment_mode": {
+        "annotation": "Literal['a0', 'a1', 'a2']",
+        "default": "a0"
+      },
+      "post_motion_dual_reset_gap_rescue_gap_bpm": {
+        "annotation": "float",
+        "default": 18.0
+      },
+      "post_motion_dual_reset_handoff_only_switch": {
+        "annotation": "bool",
+        "default": false
+      },
+      "post_motion_dual_reset_observability_peak_competition_min": {
+        "annotation": "float",
+        "default": 1.3
+      },
+      "post_motion_dual_reset_observability_periodicity_min": {
+        "annotation": "float",
+        "default": 0.5
+      },
+      "post_motion_dual_reset_observability_recovery_hits": {
+        "annotation": "int",
+        "default": 2
+      },
+      "post_motion_dual_reset_post_switch_hold_actual_final": {
+        "annotation": "bool",
+        "default": false
+      },
+      "post_motion_dual_reset_prior_invalidation_enable": {
+        "annotation": "bool",
+        "default": false
+      },
+      "post_motion_dual_reset_prior_invalidation_gap_bpm": {
+        "annotation": "float",
+        "default": 40.0
+      },
+      "post_motion_dual_reset_prior_invalidation_hits": {
+        "annotation": "int",
+        "default": 3
+      },
+      "post_motion_dual_reset_prior_invalidation_prior_decline_bpm_per_window": {
+        "annotation": "float",
+        "default": 0.5
+      },
+      "post_motion_dual_reset_prior_invalidation_raw_decline_bpm": {
+        "annotation": "float",
+        "default": 0.5
+      },
+      "post_motion_dynamic_guard_crossover_gap_bpm": {
+        "annotation": "float",
+        "default": 2.0
+      },
+      "post_motion_dynamic_guard_enable": {
+        "annotation": "bool",
+        "default": true
+      },
+      "post_motion_dynamic_guard_fft_floor_bpm": {
+        "annotation": "float",
+        "default": 55.0
+      },
+      "post_motion_dynamic_guard_gap_rescue_enable": {
+        "annotation": "bool",
+        "default": true
+      },
+      "post_motion_dynamic_guard_gap_rescue_fft_stable_bpm": {
+        "annotation": "float",
+        "default": 6.0
+      },
+      "post_motion_dynamic_guard_gap_rescue_fft_stable_windows": {
+        "annotation": "int",
+        "default": 3
+      },
+      "post_motion_dynamic_guard_gap_rescue_min_hits": {
+        "annotation": "int",
+        "default": 3
+      },
+      "post_motion_dynamic_guard_gap_rescue_windows": {
+        "annotation": "int",
+        "default": 4
+      },
+      "post_motion_dynamic_guard_min_elapsed_s": {
+        "annotation": "float",
+        "default": 5.0
+      },
+      "post_motion_dynamic_guard_recovery_step_down_bpm": {
+        "annotation": "float",
+        "default": 3.0
+      },
+      "post_motion_dynamic_guard_recovery_step_up_bpm": {
+        "annotation": "float",
+        "default": 1.5
+      },
+      "post_motion_dynamic_guard_rescue_gap_bpm": {
+        "annotation": "float",
+        "default": 20.0
+      },
+      "post_motion_dynamic_guard_rising_slope_bpm_per_window": {
+        "annotation": "float",
+        "default": 1.5
+      },
+      "post_motion_dynamic_guard_rising_windows": {
+        "annotation": "int",
+        "default": 3
+      },
+      "post_motion_dynamic_guard_stable_windows": {
+        "annotation": "int",
+        "default": 3
+      },
+      "post_motion_dynamic_guard_upward_gap_bpm": {
+        "annotation": "float",
+        "default": 1.5
+      },
+      "post_motion_guard_seconds": {
+        "annotation": "float",
+        "default": 20.0
+      },
+      "post_motion_minimal_handoff_enable": {
+        "annotation": "bool",
+        "default": true
+      },
+      "post_motion_minimal_provisional_enable": {
+        "annotation": "bool",
+        "default": true
+      },
+      "post_motion_minimal_relocation_mode": {
+        "annotation": "Literal['none', 'a2', 'controlled_reanchor', 'a2_reanchor']",
+        "default": "controlled_reanchor"
+      },
+      "post_motion_reacquire_adaptive_min_bpm": {
+        "annotation": "float",
+        "default": 115.0
+      },
+      "post_motion_reacquire_down_step_bpm": {
+        "annotation": "float",
+        "default": 10.0
+      },
+      "post_motion_reacquire_enable": {
+        "annotation": "bool",
+        "default": true
+      },
+      "post_motion_reacquire_fft_min_bpm": {
+        "annotation": "float",
+        "default": 55.0
+      },
+      "post_motion_reacquire_first_drop_limit_bpm": {
+        "annotation": "float",
+        "default": 70.0
+      },
+      "post_motion_reacquire_gap_bpm": {
+        "annotation": "float",
+        "default": 25.0
+      },
+      "post_motion_reacquire_up_step_bpm": {
+        "annotation": "float",
+        "default": 2.0
+      },
+      "postprocess_dynamics_enable": {
+        "annotation": "bool",
+        "default": true
+      },
+      "postprocess_limit_motion_down_bpm": {
+        "annotation": "float",
+        "default": 2.0
+      },
+      "postprocess_limit_motion_up_bpm": {
+        "annotation": "float",
+        "default": 5.5
+      },
+      "postprocess_limit_recovery_down_bpm": {
+        "annotation": "float",
+        "default": 3.5
+      },
+      "postprocess_limit_recovery_up_bpm": {
+        "annotation": "float",
+        "default": 1.5
+      },
+      "postprocess_limit_rest_down_bpm": {
+        "annotation": "float",
+        "default": 3.0
+      },
+      "postprocess_limit_rest_up_bpm": {
+        "annotation": "float",
+        "default": 1.5
+      },
+      "postprocess_step_motion_down_bpm": {
+        "annotation": "float",
+        "default": 1.5
+      },
+      "postprocess_step_motion_up_bpm": {
+        "annotation": "float",
+        "default": 3.5
+      },
+      "postprocess_step_recovery_down_bpm": {
+        "annotation": "float",
+        "default": 3.0
+      },
+      "postprocess_step_recovery_up_bpm": {
+        "annotation": "float",
+        "default": 1.5
+      },
+      "postprocess_step_rest_down_bpm": {
+        "annotation": "float",
+        "default": 1.5
+      },
+      "postprocess_step_rest_up_bpm": {
+        "annotation": "float",
+        "default": 1.5
+      },
+      "ppg_input_baseline_seconds": {
+        "annotation": "float",
+        "default": 5.0
+      },
+      "ppg_input_transform": {
+        "annotation": "str",
+        "default": "raw_bandpass"
+      },
+      "ppg_mode": {
+        "annotation": "str",
+        "default": "green"
+      },
+      "pre_motion_context_seconds": {
+        "annotation": "float",
+        "default": 30.0
+      },
+      "reacquire_enable": {
+        "annotation": "bool",
+        "default": true
+      },
+      "recovery_candidate_id": {
+        "annotation": "str | None",
+        "default": null
+      },
+      "recovery_trigger_bpm": {
+        "annotation": "float",
+        "default": 20.0
+      },
+      "ref_path": {
+        "annotation": "Path",
+        "default": "<required>"
+      },
+      "reference_groups_order": {
+        "annotation": "tuple[str, ...]",
+        "default": [
+          "HF",
+          "CF",
+          "ACC"
+        ]
+      },
+      "rff_D": {
+        "annotation": "int",
+        "default": 100
+      },
+      "rff_seed": {
+        "annotation": "int",
+        "default": 42
+      },
+      "rff_sigma": {
+        "annotation": "float",
+        "default": 1.0
+      },
+      "slew_limit_bpm": {
+        "annotation": "float",
+        "default": 10.0
+      },
+      "slew_limit_rest": {
+        "annotation": "float",
+        "default": 6.0
+      },
+      "slew_step_bpm": {
+        "annotation": "float",
+        "default": 7.0
+      },
+      "slew_step_rest": {
+        "annotation": "float",
+        "default": 4.0
+      },
+      "smooth_win_len": {
+        "annotation": "int",
+        "default": 7
+      },
+      "spec_penalty_enable": {
+        "annotation": "bool",
+        "default": true
+      },
+      "spec_penalty_weight": {
+        "annotation": "float",
+        "default": 0.4
+      },
+      "spec_penalty_width": {
+        "annotation": "float",
+        "default": 0.2
+      },
+      "time_bias": {
+        "annotation": "float",
+        "default": 5.0
+      },
+      "volterra_max_order_vol": {
+        "annotation": "int",
+        "default": 3
+      },
+      "window_seconds": {
+        "annotation": "float",
+        "default": 8.0
+      },
+      "window_step_seconds": {
+        "annotation": "float",
+        "default": 1.0
+      }
+    }
+  },
+  "diagnostic_solver_run_count": 0,
+  "formal_solver_run_count": 0,
+  "independent_bo_run_count": 0,
+  "preflight_status": "awaiting_full_preflight_contracts",
+  "receipt_sha256": "ec3b23046d12cefd24a57c4d5c29b1b1066f468efda5cf1989203962f2ffc23a",
+  "receipt_version": "lyx_recovery_candidate_freeze_receipt_v1",
+  "recovery_candidate_registry_sha256": "afab385978abb1439c58cce5d46ede40dfc3e90039becfa55114ac21201796fb",
+  "recovery_selection_contract_sha256": "0b6724747935bcc5e770fd8a9ebc4e92471657174c3b6f94579f5d60ae03ffa0",
+  "required_preflight_hashes": [
+    "metric_contract_hash",
+    "spectral_gate_contract_hash",
+    "recovery_candidate_registry_hash",
+    "recovery_selection_contract_hash",
+    "penalty_registry_hash",
+    "filter_profile_design_rule_hash",
+    "budget_contract_hash"
+  ],
+  "source_bundle_sha256": "05cc131b36b8bd275019463a01c7f295ee6eff3ea8cac0664c9d195cdafcc7da",
+  "source_files": {
+    "ppg_hr/__init__.py": "a75c364a694f664b76a00d2522395328f838f5ad5707d0aa217befb7ef6fdcdf",
+    "ppg_hr/core/__init__.py": "7039113e745774f96cd44e3e2e786506753d8f54e6b00dd6aebef73262375e0b",
+    "ppg_hr/core/adaptive_filter.py": "be01658412f30845abfdbe41f306257a069336af2ce34217a315756872e82cd3",
+    "ppg_hr/core/as_lms_filter.py": "66323684f66c974cedc3e4d0c14d4c669ebec30c3781418913ad006013dfbaab",
+    "ppg_hr/core/choose_delay.py": "4eeea686eccdbc8b3164d56fc06dedf66ab573fa0f4d4a7b56ba392a413f6574",
+    "ppg_hr/core/delay_profile.py": "6e5f969e1013716581e093c7f491e17011611d5c7f0fbc4fd730341bd9048ae5",
+    "ppg_hr/core/fft_peaks.py": "918bf45439c72ac119696be3c1508a5ae0a823728c7883a84924ed025780f274",
+    "ppg_hr/core/find_maxpeak.py": "37d07d981db471028a1e6d76b6272d4836f808c93243c417ea433c51b88df0ef",
+    "ppg_hr/core/find_near_biggest.py": "7b3e2895911c23893d61f5ea6cd7febfbcda1c46f4a6ff5faac642f9d91d622c",
+    "ppg_hr/core/find_real_hr.py": "59f3905061f336fe81f7ea2a811905476e8b41e65157cdff5cead380b1711dfd",
+    "ppg_hr/core/heart_rate_solver.py": "cf72f28226a6dbb28b4f8dfd12e38f2bc0b6539a97223853dfc3623d48df1c30",
+    "ppg_hr/core/klms_filter.py": "69b27bbee0630035d55e3cd5891ed13a93463af6fd71e5a5bf462da61210d9b5",
+    "ppg_hr/core/lms_filter.py": "afa27166e5eb64b09a7e8f7d683284914025764da1395fd203b2280ddc845bbb",
+    "ppg_hr/core/noncausal_lms.py": "e244fa4c119ebcaba82f7c99c6b218b54e456b8c079f42428682811344fb0d6b",
+    "ppg_hr/core/noncausal_tap.py": "0ddfd91f1201f166d1d06065dd211cab7ffa9df79e1095012a69639c921b6f6b",
+    "ppg_hr/core/ppg_peace.py": "8693781ee88b880cd17c1562ee28b0fae4b3f0a7db1bbe72715cbb9f972fc3f5",
+    "ppg_hr/core/rff_lms.py": "0ab003aa59b47fb7b6a9699e9cdbeb6db301c74c5c491c0b9427ce977b22c8bc",
+    "ppg_hr/core/volterra_filter.py": "0fd57672b0d260499c6822531feffaaa4d3a07493314612448187806f1f67684",
+    "ppg_hr/params.py": "1506c9083f42706d2d0180513635f03fdbe786d217d0aa59d14d4d09177947b0",
+    "ppg_hr/preprocess/__init__.py": "58f44eb9a380e522ed881ef8884af2fb45e62e211690e24a563693dc72410f27",
+    "ppg_hr/preprocess/data_loader.py": "826cec8ede1ef2417eca8e15d46ee5430fef2814d5d5dc8b76be4c29d3b809b4",
+    "ppg_hr/preprocess/utils.py": "f8e1889e8690894253ce321d9ab25d7e7fe8fa3d450b84f2de06958d3eb94d34",
+    "ppg_hr/v2/__init__.py": "6d4f2daf950492c35817e24f37f5bff2732d92561571bfa70c5b8e160ecbf761",
+    "ppg_hr/v2/algorithm_presets.py": "89f65ead000fc53b8da027c6679866798264e709287e5a0995de7231f4f046a8",
+    "ppg_hr/v2/generalization.py": "1c03967147152910fdd91ae7ee1b6d9bc18ef5316f850951652797cb07e31472",
+    "ppg_hr/v2/generalization_stats.py": "b79fa07cc9ea4cdd63de26d0e56485973a6f20e75fc77a85a226055349994f0f",
+    "ppg_hr/v2/optimizer.py": "46d7fcebd230500a65998076ff82f38c8db85364d9fc9deeae5b43b700456d27",
+    "ppg_hr/v2/output_paths.py": "3ca590408e6c7cf19e3fa787e920ac0c6eff3e4eaa317b13d27107b46ea26b7c",
+    "ppg_hr/v2/plotting.py": "142fd58249ce69afc3e53b35a2d81ab8660f020c51f37d198131f43ea9fbea64",
+    "ppg_hr/v2/post_motion_dual_reset.py": "374129e7758dd3e2f14ca86626d81660ebf9097de68a69983780e6719d3ecf76",
+    "ppg_hr/v2/post_motion_dual_reset_runtime.py": "a2440264785f9d3a13a84b8645ff9698a0ab8ab3058560371732c4d908a2fff1",
+    "ppg_hr/v2/post_motion_dynamic_guard_policy.py": "4720b9cbe47bf3e8e8ec76adb59995d92398206d89c3cce04b23f1a4f8b134af",
+    "ppg_hr/v2/post_motion_minimal_handoff.py": "a9e7186abbcfe9af12c2444ae51b707ebdf131c677e7b45fa2b1c0be5bba2253",
+    "ppg_hr/v2/ppg_observability.py": "b1341127593efe0efaf291daf71357e5ba39b5c234866d879b1bb933c2fe79da",
+    "ppg_hr/v2/preprocess.py": "c5584e2df9d6ea130ab9cad104a4a63f4d3a5e418f87cc651fdd3b55c576276e",
+    "ppg_hr/v2/raw_fft_candidates.py": "a584c861aaaab5be34c56f584d580449721db96fa018fcf80042120fdd3fab57",
+    "ppg_hr/v2/recovery_candidates.py": "52d2cfd97a9c28657c2e81654af1b65e1b2307c7b72a0f7a75b8691c1ea0982f",
+    "ppg_hr/v2/recovery_contracts.py": "c3383e20d82e7d60cd2a28e62f5ed6921b33f4b269b3dc8190e5972a400c41c0",
+    "ppg_hr/v2/reference_groups.py": "369e403c789d7106b4481340e952d9b0c6dc4165015042a4b82f549991581cee",
+    "ppg_hr/v2/reference_overlap.py": "bfdd1596b3d9faac6f2bb164492504082d45464dbd65519bef3fc2f2ea6008db",
+    "ppg_hr/v2/report.py": "4dbf887d1bbe2e9ca19b93805588c52f660b64ae345fa3cd6928add9ed5d5eae",
+    "ppg_hr/v2/runtime_policy.py": "e1604f9689f01762e96a764d44a685fb691aa27adda2b6eae779514ac9b06f7e",
+    "ppg_hr/v2/search_space.py": "93336eaf55290f1ad754ba7b0b71783fbaa890c138ed276b3dc40a3bcf3e5804",
+    "ppg_hr/v2/signal_preparation.py": "9b774e77eb8db019e93ebe2b493994906a43afdaaea7366a059f9cb16946f90c",
+    "ppg_hr/v2/solver.py": "4ae55eb2a4f6f741023231fbb17bd6d51e29b99cf295b36894529a196eee6aa5",
+    "ppg_hr/v2/spectrum_tracking.py": "a6ac8ed47d1dcc5c6099960dadf09ef95c2d7b8b26210eeee32b0a55657a2da2",
+    "ppg_hr/v2/spo2.py": "5e5cdcb61c55a0dd488b3ff9e48e2c04a3647bb26a837f0f4d176bd3b1c72657",
+    "ppg_hr/v2/spo2_holdbreath.py": "d7add7cbd818e47d4795f1f7dfacd5483b9e121a7accb36c687b5e91e070ede9",
+    "ppg_hr/v2/types.py": "8249701a86543ad4b35c379e185da4fca4d1c72424ba42e0ef2a3868ee6b3ffe"
+  },
+  "status": "frozen_zero_formal_runs"
+}

@@ -668,6 +668,329 @@ def test_motion_high_lock_escape_requires_stable_challenger(monkeypatch) -> None
     assert value == pytest.approx(3.0)
 
 
+def test_relative_recovery_candidate_accepts_stable_challenger_below_85_bpm(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+    from ppg_hr.v2.runtime_policy import runtime_policy_from_config
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.20, 1.25, 1.30, 2.25, 2.30, 2.35],
+        [0.0, 0.80, 0.0, 0.0, 0.30, 0.0],
+    )
+    policy = runtime_policy_from_config(
+        V2RunConfig(
+            data_path=Path("data.csv"),
+            ref_path=Path("ref.csv"),
+            recovery_candidate_id="relative_gap_timeout_v1",
+        )
+    )
+    params = SolverParams(spec_penalty_enable=False)
+    state = solver.SpectrumHighLockEscapeState()
+    history = np.asarray([2.5, 2.5, 2.5, 0.0])
+
+    for idx in range(1, 4):
+        value, trace = solver._process_spectrum_with_trace(
+            np.ones(128),
+            np.ones(128),
+            50,
+            params,
+            idx,
+            history,
+            False,
+            _tracking(10.0 / 60.0, 10.0, 3.0),
+            path="adaptive",
+            window_kind="motion",
+            high_lock_state=state,
+            high_lock_enable=True,
+            high_lock_params=policy.high_lock_escape.as_solver_params(),
+        )
+        history[idx] = value
+
+    assert trace.high_lock_triggered is True
+    assert trace.high_lock_candidate_bpm == pytest.approx(75.0)
+    assert trace.recovery_candidate_id == "relative_gap_timeout_v1"
+    assert trace.high_lock_gate_mode == "relative_gap"
+    assert trace.high_lock_effective_gap_bpm == pytest.approx(22.5)
+    assert value == pytest.approx(130.0 / 60.0)
+
+
+def test_relative_recovery_uses_target_neighborhood_after_entry_gap_closes(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+    from ppg_hr.v2.runtime_policy import runtime_policy_from_config
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.9, 2.0, 2.1, 2.25, 2.3, 2.35],
+        [0.0, 0.80, 0.0, 0.0, 0.30, 0.0],
+    )
+    policy = runtime_policy_from_config(
+        V2RunConfig(
+            data_path=Path("data.csv"),
+            ref_path=Path("ref.csv"),
+            recovery_candidate_id="relative_gap_timeout_v1",
+        )
+    )
+    state = solver.SpectrumHighLockEscapeState()
+    params = SolverParams(spec_penalty_enable=False)
+    history = np.asarray([3.0] * 6)
+
+    traces = []
+    for idx in range(1, 6):
+        value, trace = solver._process_spectrum_with_trace(
+            np.ones(128),
+            np.ones(128),
+            50,
+            params,
+            idx,
+            history,
+            False,
+            _tracking(10.0 / 60.0, 10.0, 3.0),
+            path="adaptive",
+            window_kind="motion",
+            high_lock_state=state,
+            high_lock_enable=True,
+            high_lock_params=policy.high_lock_escape.as_solver_params(),
+        )
+        history[idx] = value
+        traces.append(trace)
+
+    assert traces[2].high_lock_triggered is True
+    assert value == pytest.approx(2.0)
+    assert traces[-1].high_lock_suppressed_reason == "target_reached"
+    assert traces[-1].high_lock_exit_from_mode == "reacquiring"
+
+
+def test_relative_recovery_challenge_timeout_is_reachable_in_solver(
+) -> None:
+    from ppg_hr.v2 import solver
+    from ppg_hr.v2.runtime_policy import runtime_policy_from_config
+
+    policy = runtime_policy_from_config(
+        V2RunConfig(
+            data_path=Path("data.csv"),
+            ref_path=Path("ref.csv"),
+            recovery_candidate_id="relative_gap_timeout_v1",
+        )
+    )
+    state = solver.SpectrumHighLockEscapeState()
+
+    for low in (2.0, 2.25, 2.0, 2.25, 2.0):
+        freqs = np.asarray(
+            [low - 0.1, low, low + 0.1, 2.9, 3.0, 3.1],
+            dtype=float,
+        )
+        amps = np.asarray(
+            [0.0, 0.80, 0.0, 0.0, 0.30, 0.0],
+            dtype=float,
+        )
+        decision = solver._apply_motion_high_lock_escape(
+            freqs=freqs,
+            raw_amps=amps,
+            raw_order=np.argsort(-amps),
+            previous_hz=3.0,
+            legacy_hz=3.0,
+            state=state,
+            enabled=True,
+            params=policy.high_lock_escape.as_solver_params(),
+            window_kind="motion",
+            selected_peak_rank=1,
+            candidate_source="held_previous",
+            penalty_centers_hz=(),
+            protection_applied=False,
+            protected_penalty_overlap=False,
+        )
+
+    assert decision.hr_hz == pytest.approx(3.0)
+    assert decision.mode == "cooldown"
+    assert decision.suppressed_reason == "challenge_timeout"
+    assert decision.exit_from_mode == "challenge"
+    assert decision.exit_age == 5
+
+
+def test_rate_guard_recovery_candidate_does_not_escape_during_true_rise(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+    from ppg_hr.v2.runtime_policy import runtime_policy_from_config
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.95, 2.00, 2.05, 2.95, 3.00, 3.05],
+        [0.0, 0.80, 0.0, 0.0, 1.00, 0.0],
+    )
+    policy = runtime_policy_from_config(
+        V2RunConfig(
+            data_path=Path("data.csv"),
+            ref_path=Path("ref.csv"),
+            recovery_candidate_id="relative_gap_rise_guard_v1",
+        )
+    )
+    params = SolverParams(spec_penalty_enable=False)
+    state = solver.SpectrumHighLockEscapeState()
+    history = np.asarray([2.9, 0.0])
+
+    value, trace = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        1,
+        history,
+        False,
+        _tracking(25.0 / 60.0, 10.0, 7.0),
+        path="adaptive",
+        window_kind="motion",
+        high_lock_state=state,
+        high_lock_enable=True,
+        high_lock_params=policy.high_lock_escape.as_solver_params(),
+    )
+
+    assert value == pytest.approx(3.0)
+    assert trace.high_lock_triggered is False
+    assert trace.high_lock_true_rise_guard is True
+    assert trace.high_lock_suppressed_reason == "physiological_rise_guard"
+
+
+def test_frozen_control_matches_current_high_lock_trajectory(monkeypatch) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+    from ppg_hr.v2.runtime_policy import runtime_policy_from_config
+
+    spectrum = (
+        [1.9, 2.0, 2.1, 2.25, 2.3, 2.35],
+        [0.0, 0.80, 0.0, 0.0, 0.30, 0.0],
+    )
+    spectra = [spectrum] * 7
+    params = SolverParams(spec_penalty_enable=False)
+
+    def run(candidate_id: str | None) -> tuple[list[float], list[tuple]]:
+        source = iter(spectra)
+        monkeypatch.setattr(
+            solver,
+            "_candidate_peak_spectrum",
+            lambda _sig, _fs: tuple(
+                np.asarray(value, dtype=float) for value in next(source)
+            ),
+        )
+        policy = runtime_policy_from_config(
+            V2RunConfig(
+                data_path=Path("data.csv"),
+                ref_path=Path("ref.csv"),
+                recovery_candidate_id=candidate_id,
+            )
+        )
+        state = solver.SpectrumHighLockEscapeState()
+        history = np.asarray([3.0] * 8)
+        values: list[float] = []
+        traces: list[tuple] = []
+        for idx in range(1, 8):
+            value, trace = solver._process_spectrum_with_trace(
+                np.ones(128),
+                np.ones(128),
+                50,
+                params,
+                idx,
+                history,
+                False,
+                _tracking(10.0 / 60.0, 10.0, 3.0),
+                path="adaptive",
+                window_kind="motion",
+                high_lock_state=state,
+                high_lock_enable=True,
+                high_lock_params=policy.high_lock_escape.as_solver_params(),
+            )
+            history[idx] = value
+            values.append(value)
+            traces.append(
+                (
+                    trace.high_lock_mode,
+                    trace.high_lock_candidate_bpm,
+                    trace.high_lock_count,
+                    trace.high_lock_cooldown,
+                    trace.high_lock_suppressed_reason,
+                    trace.high_lock_triggered,
+                )
+            )
+        return values, traces
+
+    legacy_values, legacy_traces = run(None)
+    control_values, control_traces = run("current_fixed_floor_control_v1")
+
+    assert control_values == pytest.approx(legacy_values)
+    assert control_traces == legacy_traces
+    assert any(trace[-1] is True for trace in control_traces)
+    assert any(trace[-2] == "target_reached" for trace in control_traces)
+    assert any(trace[0] == "cooldown" for trace in control_traces)
+
+
+def test_relative_recovery_candidate_exits_when_challenger_is_lost(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+    from ppg_hr.v2.runtime_policy import runtime_policy_from_config
+
+    source = iter(
+        [
+            ([1.20, 1.25, 1.30, 2.25, 2.30, 2.35], [0.0, 0.80, 0.0, 0.0, 0.30, 0.0]),
+            ([1.20, 1.25, 1.30, 2.25, 2.30, 2.35], [0.0, 0.80, 0.0, 0.0, 0.30, 0.0]),
+            ([1.20, 1.25, 1.30, 2.25, 2.30, 2.35], [0.0, 0.80, 0.0, 0.0, 0.30, 0.0]),
+            ([2.45, 2.50, 2.55], [0.0, 0.30, 0.0]),
+        ]
+    )
+    monkeypatch.setattr(
+        solver,
+        "_candidate_peak_spectrum",
+        lambda _sig, _fs: tuple(
+            np.asarray(value, dtype=float) for value in next(source)
+        ),
+    )
+    policy = runtime_policy_from_config(
+        V2RunConfig(
+            data_path=Path("data.csv"),
+            ref_path=Path("ref.csv"),
+            recovery_candidate_id="relative_gap_timeout_v1",
+        )
+    )
+    params = SolverParams(spec_penalty_enable=False)
+    state = solver.SpectrumHighLockEscapeState()
+    history = np.asarray([2.5, 2.5, 2.5, 0.0, 0.0])
+
+    for idx in range(1, 5):
+        value, trace = solver._process_spectrum_with_trace(
+            np.ones(128),
+            np.ones(128),
+            50,
+            params,
+            idx,
+            history,
+            False,
+            _tracking(10.0 / 60.0, 10.0, 3.0),
+            path="adaptive",
+            window_kind="motion",
+            high_lock_state=state,
+            high_lock_enable=True,
+            high_lock_params=policy.high_lock_escape.as_solver_params(),
+        )
+        history[idx] = value
+
+    assert value == pytest.approx(130.0 / 60.0)
+    assert trace.high_lock_mode == "cooldown"
+    assert trace.high_lock_cooldown == 4
+    assert trace.high_lock_suppressed_reason == "candidate_lost"
+    assert trace.high_lock_exit_from_mode == "reacquiring"
+    assert trace.high_lock_exit_age == 1
+    assert trace.high_lock_timeout_windows == 8
+    assert trace.high_lock_triggered is False
+
+
 def test_motion_reacquire_requires_sustained_low_lock(monkeypatch) -> None:
     from ppg_hr.params import SolverParams
     from ppg_hr.v2 import solver

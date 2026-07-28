@@ -63,6 +63,14 @@ class SpectrumTrackingTrace:
     high_lock_labels: tuple[str, ...] = ()
     high_lock_suppressed_reason: str = ""
     high_lock_gap_bpm: float | None = None
+    recovery_candidate_id: str = "legacy_config"
+    high_lock_gate_mode: str = "fixed_floor"
+    high_lock_effective_gap_bpm: float = 20.0
+    high_lock_age: int = 0
+    high_lock_timeout_windows: int = 0
+    high_lock_exit_from_mode: str | None = None
+    high_lock_exit_age: int | None = None
+    high_lock_true_rise_guard: bool = False
     high_lock_triggered: bool = False
     source: str = "report"
 

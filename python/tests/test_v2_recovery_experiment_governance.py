@@ -24,6 +24,7 @@ from ppg_hr.v2.recovery_experiment_governance import (
     DataRoleManifest,
     ExplorationRegistry,
     FoldReadBarrier,
+    FrozenExperimentContractHashes,
     GovernanceError,
     HumanGateRequiredError,
     IndependentBORequest,
@@ -32,6 +33,7 @@ from ppg_hr.v2.recovery_experiment_governance import (
     validate_budget_amendment_authorization,
     validate_human_gate,
     validate_independent_bo_authorization,
+    validate_recovery_experiment_preflight,
 )
 
 
@@ -52,6 +54,54 @@ def _identity(
         attempt_kind=attempt_kind,
         parent_experiment_id="lyx_recovery_filter_profile_v1",
     )
+
+
+def test_recovery_preflight_requires_all_seven_matching_contract_hashes() -> None:
+    expected = FrozenExperimentContractHashes(
+        metric_contract_hash="a" * 64,
+        spectral_gate_contract_hash="b" * 64,
+        recovery_candidate_registry_hash="c" * 64,
+        recovery_selection_contract_hash="d" * 64,
+        penalty_registry_hash="e" * 64,
+        filter_profile_design_rule_hash="f" * 64,
+        budget_contract_hash="0" * 64,
+    )
+
+    receipt = validate_recovery_experiment_preflight(
+        expected=expected,
+        actual=expected.to_dict(),
+    )
+
+    assert receipt["status"] == "preflight_contracts_verified"
+    assert receipt["required_contract_count"] == 7
+    assert len(receipt["preflight_sha256"]) == 64
+
+
+def test_recovery_preflight_fails_closed_on_missing_or_mismatched_hash() -> None:
+    expected = FrozenExperimentContractHashes(
+        metric_contract_hash="a" * 64,
+        spectral_gate_contract_hash="b" * 64,
+        recovery_candidate_registry_hash="c" * 64,
+        recovery_selection_contract_hash="d" * 64,
+        penalty_registry_hash="e" * 64,
+        filter_profile_design_rule_hash="f" * 64,
+        budget_contract_hash="0" * 64,
+    )
+    missing = expected.to_dict()
+    missing.pop("penalty_registry_hash")
+    with pytest.raises(GovernanceError, match="preflight_contract_missing"):
+        validate_recovery_experiment_preflight(
+            expected=expected,
+            actual=missing,
+        )
+
+    mismatch = expected.to_dict()
+    mismatch["budget_contract_hash"] = "1" * 64
+    with pytest.raises(GovernanceError, match="preflight_contract_mismatch"):
+        validate_recovery_experiment_preflight(
+            expected=expected,
+            actual=mismatch,
+        )
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows extended-path regression")

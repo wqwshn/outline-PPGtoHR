@@ -104,6 +104,7 @@ class V2RunConfig:
     spec_penalty_width: float = 0.2
     motion_gate_filter_allowlist: tuple[str, ...] = ("lms", "noncausal_lms")
     reacquire_enable: bool = True
+    recovery_candidate_id: str | None = None
     high_lock_escape_enable: bool = True
     high_lock_escape_confirm_windows: int = 3
     high_lock_escape_cooldown_windows: int = 4
