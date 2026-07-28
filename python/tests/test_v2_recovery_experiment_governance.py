@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 
@@ -70,7 +71,7 @@ def _write_cache_receipt(
         json.dumps(
             {
                 "identity_sha256": identity.sha256,
-                "result_path": str(result_path),
+                "result_path": result_path.name,
                 "result_sha256": result_sha256,
             }
         ),
@@ -336,6 +337,41 @@ def test_cache_evidence_rejects_changed_result_bytes(tmp_path: Path) -> None:
 
     with pytest.raises(GovernanceError, match="cache_result_hash_mismatch"):
         registry.record_cache_hit(identity, evidence=evidence)
+
+
+def test_registry_with_cache_evidence_survives_directory_move(
+    tmp_path: Path,
+) -> None:
+    original = tmp_path / "original"
+    path = original / "attempt_registry.json"
+    registry = AttemptRegistry.create(
+        path,
+        budget_contract=BudgetContract.frozen_v1(),
+        exploration_registry=ExplorationRegistry.zero_budget_v1(),
+    )
+    identity = _identity()
+    registry.register_identity(identity)
+    receipt_path = _write_cache_receipt(
+        original / "solver_cache",
+        identity=identity,
+    )
+    registry.record_cache_hit(
+        identity,
+        evidence=CacheEvidence.from_path(
+            receipt_path,
+            expected_identity=identity,
+            trusted_cache_root=original / "solver_cache",
+        ),
+    )
+    moved = tmp_path / "moved"
+    shutil.move(original, moved)
+
+    reopened = AttemptRegistry.open(
+        moved / "attempt_registry.json",
+        budget_contract=BudgetContract.frozen_v1(),
+        exploration_registry=ExplorationRegistry.zero_budget_v1(),
+    )
+    reopened.assert_nominatable(identity)
 
 
 def test_attempt_registry_refuses_contract_hash_mismatch(tmp_path: Path) -> None:

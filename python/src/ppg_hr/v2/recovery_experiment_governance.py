@@ -210,10 +210,13 @@ class CacheEvidence:
             result_sha256=result_hash,
         )
 
-    def to_dict(self) -> dict[str, str]:
+    def to_dict(self, *, trusted_cache_root: Path) -> dict[str, str]:
+        root = trusted_cache_root.resolve()
+        if not self.path.is_relative_to(root) or not self.result_path.is_relative_to(root):
+            raise GovernanceError("cache_evidence_outside_trusted_root")
         return {
-            "path": str(self.path),
-            "result_path": str(self.result_path),
+            "path": str(self.path.relative_to(root)),
+            "result_path": str(self.result_path.relative_to(root)),
             "receipt_sha256": self.receipt_sha256,
             "identity_sha256": self.identity_sha256,
             "result_sha256": self.result_sha256,
@@ -604,7 +607,7 @@ class AttemptRegistry:
                 != evidence
             ):
                 raise GovernanceError(f"cache_evidence_changed:{evidence.path}")
-            serialized = evidence.to_dict()
+            serialized = evidence.to_dict(trusted_cache_root=self.trusted_cache_root)
             if serialized not in entry["cache_evidence"]:
                 entry["cache_evidence"].append(serialized)
 
@@ -744,9 +747,18 @@ class AttemptRegistry:
             )
             for evidence_payload in cache_evidence:
                 try:
+                    receipt_relative = Path(evidence_payload["path"])
+                    result_relative = Path(evidence_payload["result_path"])
+                    if (
+                        receipt_relative.is_absolute()
+                        or result_relative.is_absolute()
+                        or ".." in receipt_relative.parts
+                        or ".." in result_relative.parts
+                    ):
+                        raise ValueError("cache evidence paths must be relative")
                     evidence = CacheEvidence(
-                        path=Path(evidence_payload["path"]),
-                        result_path=Path(evidence_payload["result_path"]),
+                        path=self.trusted_cache_root / receipt_relative,
+                        result_path=self.trusted_cache_root / result_relative,
                         receipt_sha256=evidence_payload["receipt_sha256"],
                         identity_sha256=evidence_payload["identity_sha256"],
                         result_sha256=evidence_payload["result_sha256"],
