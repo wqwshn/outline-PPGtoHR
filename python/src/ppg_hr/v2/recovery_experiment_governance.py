@@ -404,13 +404,12 @@ class AttemptRegistry:
         *,
         budget_contract: BudgetContract,
         exploration_registry: ExplorationRegistry,
-        trusted_cache_root: Path,
         entries: dict[str, dict[str, Any]],
     ) -> None:
         self.path = path
         self.budget_contract = budget_contract
         self.exploration_registry = exploration_registry
-        self.trusted_cache_root = trusted_cache_root.resolve()
+        self.trusted_cache_root = (path.parent / "solver_cache").resolve()
         self._entries = entries
 
     @classmethod
@@ -420,11 +419,7 @@ class AttemptRegistry:
         *,
         budget_contract: BudgetContract,
         exploration_registry: ExplorationRegistry,
-        trusted_cache_root: Path | None = None,
     ) -> AttemptRegistry:
-        cache_root = (
-            trusted_cache_root if trusted_cache_root is not None else path.parent / "solver_cache"
-        ).resolve()
         path.parent.mkdir(parents=True, exist_ok=True)
         with _exclusive_registry_lock(path):
             if path.exists():
@@ -433,7 +428,6 @@ class AttemptRegistry:
                 path,
                 budget_contract=budget_contract,
                 exploration_registry=exploration_registry,
-                trusted_cache_root=cache_root,
                 entries={},
             )
             registry._write_entries({})
@@ -446,11 +440,7 @@ class AttemptRegistry:
         *,
         budget_contract: BudgetContract,
         exploration_registry: ExplorationRegistry,
-        trusted_cache_root: Path | None = None,
     ) -> AttemptRegistry:
-        cache_root = (
-            trusted_cache_root if trusted_cache_root is not None else path.parent / "solver_cache"
-        ).resolve()
         payload = read_json(path)
         if payload.get("registry_version") != ("lyx_recovery_attempt_registry_v2"):
             raise GovernanceError("attempt_registry_version_mismatch")
@@ -458,7 +448,7 @@ class AttemptRegistry:
             raise GovernanceError("budget_contract_mismatch")
         if payload.get("exploration_registry_sha256") != exploration_registry.sha256:
             raise GovernanceError("exploration_registry_mismatch")
-        if payload.get("trusted_cache_root") != str(cache_root):
+        if payload.get("trusted_cache_root_relative") != "solver_cache":
             raise GovernanceError("trusted_cache_root_mismatch")
         entries = payload.get("entries")
         if not isinstance(entries, dict):
@@ -467,7 +457,6 @@ class AttemptRegistry:
             path,
             budget_contract=budget_contract,
             exploration_registry=exploration_registry,
-            trusted_cache_root=cache_root,
             entries=entries,
         )
         registry._validate_entries(entries)
@@ -648,7 +637,6 @@ class AttemptRegistry:
             self.path,
             budget_contract=self.budget_contract,
             exploration_registry=self.exploration_registry,
-            trusted_cache_root=self.trusted_cache_root,
         )
         entry = fresh._entries.get(identity.sha256)
         if entry is None:
@@ -662,7 +650,6 @@ class AttemptRegistry:
             self.path,
             budget_contract=self.budget_contract,
             exploration_registry=self.exploration_registry,
-            trusted_cache_root=self.trusted_cache_root,
         )
         self._entries = fresh._entries
         return self._summary(self._entries)
@@ -688,7 +675,6 @@ class AttemptRegistry:
                 self.path,
                 budget_contract=self.budget_contract,
                 exploration_registry=self.exploration_registry,
-                trusted_cache_root=self.trusted_cache_root,
             )
             entries = deepcopy(fresh._entries)
             result = mutate(entries)
@@ -707,7 +693,7 @@ class AttemptRegistry:
                 "registry_version": "lyx_recovery_attempt_registry_v2",
                 "budget_contract_sha256": self.budget_contract.sha256,
                 "exploration_registry_sha256": (self.exploration_registry.sha256),
-                "trusted_cache_root": str(self.trusted_cache_root),
+                "trusted_cache_root_relative": "solver_cache",
                 "entries": entries,
                 "summary": self._summary(entries),
             },
@@ -1046,7 +1032,6 @@ def initialize_recovery_experiment_governance(
             staging / "attempt_registry.json",
             budget_contract=budget,
             exploration_registry=exploration,
-            trusted_cache_root=output_dir / "solver_cache",
         )
         (staging / ".attempt_registry.json.lock").unlink(missing_ok=True)
         receipt = {
