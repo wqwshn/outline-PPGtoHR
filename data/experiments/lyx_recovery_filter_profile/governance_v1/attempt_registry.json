@@ -1,0 +1,14 @@
+{
+  "budget_contract_sha256": "bf2b09ff3bfc55da9a28f9b58e83c0a7d0f63d52408c30ef49923fe65a070686",
+  "entries": {},
+  "exploration_registry_sha256": "7d39692736fe8b98a23b5c6baaa7a07e4cd9b8733539e601d5f9b8f1818863d1",
+  "registry_version": "lyx_recovery_attempt_registry_v1",
+  "summary": {
+    "actual_unique_run_count": 0,
+    "cache_hit_count": 0,
+    "failed_attempt_count": 0,
+    "logical_task_count": 0,
+    "planned_unique_identity_count": 0,
+    "retry_count": 0
+  }
+}
