@@ -30,6 +30,11 @@ from .algorithm_presets import (
     normalise_v2_algorithm_preset,
     v2_trace_rescue_candidates,
 )
+from .penalty_candidates import (
+    PenaltyPolicyObservation,
+    decide_penalty_policy,
+    penalty_candidate_by_id,
+)
 from .post_motion_dual_reset_runtime import (
     LEGACY_DUAL_RESET_CANDIDATE,
     POST_MOTION_CAUSAL_HANDOFF_RECOVERY,
@@ -177,6 +182,7 @@ def _process_spectrum_with_trace(
     high_lock_state: SpectrumHighLockEscapeState | None = None,
     high_lock_enable: bool = False,
     high_lock_params: dict[str, float | int | str] | None = None,
+    penalty_policy_id: str = "legacy_config",
     penalty_confidence_enable: bool = False,
 ) -> tuple[float, SpectrumTrackingTrace]:
     return track_spectrum_window(
@@ -195,6 +201,7 @@ def _process_spectrum_with_trace(
         high_lock_state=high_lock_state,
         high_lock_enable=high_lock_enable,
         high_lock_params=high_lock_params,
+        penalty_policy_id=penalty_policy_id,
         penalty_confidence_enable=penalty_confidence_enable,
         implementation=_process_spectrum_with_trace_impl,
     )
@@ -217,6 +224,7 @@ def _process_spectrum_with_trace_impl(
     high_lock_state: SpectrumHighLockEscapeState | None = None,
     high_lock_enable: bool = False,
     high_lock_params: dict[str, float | int | str] | None = None,
+    penalty_policy_id: str = "legacy_config",
     penalty_confidence_enable: bool = False,
 ) -> tuple[float, SpectrumTrackingTrace]:
     raw_frame = _raw_fft_candidate_frame(sig_in, fs)
@@ -242,10 +250,55 @@ def _process_spectrum_with_trace_impl(
     penalty_confidence = 1.0
     harmonic_penalty_applied = False
     penalty_applied = bool(params.spec_penalty_enable and enable_penalty)
+    runtime_penalty_candidate = penalty_candidate_by_id(
+        "current_soft_penalty_control_v1"
+        if penalty_policy_id == "legacy_config"
+        else penalty_policy_id
+    )
+    base_protection_half_width_hz = (
+        _continuity_protection_half_width_hz(
+            max(tracking.range_up_hz, tracking.range_down_hz),
+            max(
+                float(tracking.limit_up_bpm),
+                float(tracking.limit_down_bpm),
+            ),
+            max(
+                float(tracking.step_up_bpm),
+                float(tracking.step_down_bpm),
+            ),
+        )
+        if previous_hz is not None and window_kind == "motion"
+        else None
+    )
+    recovery_reacquire_active = bool(
+        reacquire_enable
+        and reacquire_state is not None
+        and reacquire_state.mode == "reacquiring"
+    )
+    penalty_policy_decision = decide_penalty_policy(
+        runtime_penalty_candidate,
+        _penalty_policy_observation(
+            window_kind=window_kind,
+            configured_half_width_hz=float(params.spec_penalty_width),
+            fs=fs,
+            window_samples=len(sig_in),
+            previous_hz=previous_hz,
+            history_arr=history_arr,
+            times_idx=times_idx,
+            raw_candidate_freqs=freqs[raw_order],
+            raw_candidate_amps=raw_amps[raw_order],
+            motion_reference_confidence=1.0,
+            base_protection_half_width_hz=base_protection_half_width_hz,
+            recovery_reacquire_active=recovery_reacquire_active,
+        ),
+    )
+    effective_penalty_width = (
+        penalty_policy_decision.effective_half_width_hz
+    )
     penalty_state = _spectrum_penalty_state(
         freqs,
         (),
-        penalty_width_hz=float(params.spec_penalty_width),
+        penalty_width_hz=effective_penalty_width,
         penalty_weight=float(params.spec_penalty_weight),
         previous_hz=None,
         protection_half_width_hz=None,
@@ -258,13 +311,42 @@ def _process_spectrum_with_trace_impl(
             ref_amps = np.asarray(ref_amps, dtype=float)
             motion_peak_idx = int(np.nanargmax(ref_amps))
             motion_freq = float(ref_freqs[motion_peak_idx])
+            observed_motion_confidence = _motion_penalty_confidence(ref_amps)
+            penalty_policy_decision = decide_penalty_policy(
+                runtime_penalty_candidate,
+                _penalty_policy_observation(
+                    window_kind=window_kind,
+                    configured_half_width_hz=float(
+                        params.spec_penalty_width
+                    ),
+                    fs=fs,
+                    window_samples=len(sig_in),
+                    previous_hz=previous_hz,
+                    history_arr=history_arr,
+                    times_idx=times_idx,
+                    raw_candidate_freqs=freqs[raw_order],
+                    raw_candidate_amps=raw_amps[raw_order],
+                    motion_reference_confidence=(
+                        observed_motion_confidence
+                    ),
+                    base_protection_half_width_hz=(
+                        base_protection_half_width_hz
+                    ),
+                    recovery_reacquire_active=(
+                        recovery_reacquire_active
+                    ),
+                ),
+            )
+            effective_penalty_width = (
+                penalty_policy_decision.effective_half_width_hz
+            )
             if penalty_confidence_enable:
-                penalty_confidence = _motion_penalty_confidence(ref_amps)
+                penalty_confidence = observed_motion_confidence
                 penalty_centers_hz = _motion_penalty_centers(
                     motion_freq,
                     freqs,
                     raw_peak_indices,
-                    penalty_width_hz=float(params.spec_penalty_width),
+                    penalty_width_hz=effective_penalty_width,
                 )
             else:
                 penalty_centers_hz = (motion_freq, 2.0 * motion_freq)
@@ -273,24 +355,19 @@ def _process_spectrum_with_trace_impl(
                 float(params.spec_penalty_weight),
                 penalty_confidence if penalty_confidence_enable else 1.0,
             )
-            protection_disabled = bool(
-                reacquire_enable
-                and reacquire_state is not None
-                and reacquire_state.mode == "reacquiring"
-            )
             protection_half_width_hz = (
-                _continuity_protection_half_width_hz(
-                    max(tracking.range_up_hz, tracking.range_down_hz),
-                    max(float(tracking.limit_up_bpm), float(tracking.limit_down_bpm)),
-                    max(float(tracking.step_up_bpm), float(tracking.step_down_bpm)),
+                None
+                if penalty_policy_decision.protection_half_width_bpm
+                is None
+                else (
+                    penalty_policy_decision.protection_half_width_bpm
+                    / 60.0
                 )
-                if previous_hz is not None and window_kind == "motion" and not protection_disabled
-                else None
             )
             penalty_state = _spectrum_penalty_state(
                 freqs,
                 penalty_centers_hz,
-                penalty_width_hz=float(params.spec_penalty_width),
+                penalty_width_hz=effective_penalty_width,
                 penalty_weight=effective_penalty_weight,
                 previous_hz=previous_hz,
                 protection_half_width_hz=protection_half_width_hz,
@@ -301,13 +378,17 @@ def _process_spectrum_with_trace_impl(
 
     peak_indices = raw_peak_indices
 
-    def _orders_for_state(state: SpectrumPenaltyState) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def _orders_for_state(
+        state: SpectrumPenaltyState,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         scored = raw_amps * state.weights
-        selectable = _preferred_candidate_indices(
+        selectable, removed = _preferred_candidate_partition(
             freqs,
             peak_indices,
             penalty_centers_hz=penalty_centers_hz,
-            penalty_width_hz=float(params.spec_penalty_width),
+            penalty_exclusion_half_width_hz=(
+                penalty_policy_decision.candidate_exclusion_half_width_hz
+            ),
             prefer_outside_penalty=bool(penalty_applied and window_kind == "motion"),
             protected_mask=state.protected_mask,
             fallback_to_all=not bool(
@@ -316,9 +397,11 @@ def _process_spectrum_with_trace_impl(
         )
         preferred_order = selectable[np.argsort(-scored[selectable], kind="stable")]
         full_order = peak_indices[np.argsort(-scored[peak_indices], kind="stable")]
-        return scored, preferred_order, full_order
+        return scored, preferred_order, full_order, removed
 
-    scored_amps, order, all_order = _orders_for_state(penalty_state)
+    scored_amps, order, all_order, removed_peak_indices = _orders_for_state(
+        penalty_state
+    )
     selected_peak_idx: int | None = None
     protection_suppressed = False
     protection_suppression_reason = ""
@@ -355,7 +438,7 @@ def _process_spectrum_with_trace_impl(
             unprotected_state = _spectrum_penalty_state(
                 freqs,
                 penalty_centers_hz,
-                penalty_width_hz=float(params.spec_penalty_width),
+                penalty_width_hz=effective_penalty_width,
                 penalty_weight=effective_penalty_weight,
                 previous_hz=None,
                 protection_half_width_hz=None,
@@ -371,12 +454,19 @@ def _process_spectrum_with_trace_impl(
                 search_min_hz=search_min_hz,
                 search_max_hz=search_max_hz,
                 penalty_centers_hz=penalty_centers_hz,
-                penalty_width_hz=float(params.spec_penalty_width),
+                penalty_exclusion_half_width_hz=(
+                    penalty_policy_decision.candidate_exclusion_half_width_hz
+                ),
                 current_peak_idx=int(selected_peak_idx),
             )
             if challenger_idx is not None:
                 penalty_state = unprotected_state
-                scored_amps, order, all_order = _orders_for_state(penalty_state)
+                (
+                    scored_amps,
+                    order,
+                    all_order,
+                    removed_peak_indices,
+                ) = _orders_for_state(penalty_state)
                 selected_peak_idx = int(challenger_idx)
                 protection_suppressed = True
                 protection_suppression_reason = "motion_core_challenger"
@@ -478,12 +568,37 @@ def _process_spectrum_with_trace_impl(
 
     trace_protection_state = protected_penalty_state
     protection_has_corridor = bool(trace_protection_state.protected_mask.any())
+    removed_candidate_peaks_bpm = tuple(
+        float(freqs[int(peak_idx)]) * 60.0
+        for peak_idx in removed_peak_indices
+    )
+    if not params.spec_penalty_enable or not enable_penalty:
+        history_protection_status = "penalty_disabled"
+    elif not penalty_applied:
+        history_protection_status = "penalty_reference_unavailable"
+    elif protection_suppressed:
+        history_protection_status = "blocked_by_challenger"
+    else:
+        history_protection_status = penalty_policy_decision.protection_status
+
+    if protection_suppressed:
+        tracking_nonadoption_reason = "protection_blocked_by_challenger"
+    elif high_lock_decision.triggered or high_lock_decision.mode == "reacquiring":
+        tracking_nonadoption_reason = "high_lock_escape_override"
+    elif reacquire_decision.triggered or reacquire_decision.mode == "reacquiring":
+        tracking_nonadoption_reason = "motion_reacquire_override"
+    elif candidate_source == "held_previous":
+        tracking_nonadoption_reason = "no_reachable_preferred_candidate"
+    elif not np.isclose(limited_hz, tracked_hz):
+        tracking_nonadoption_reason = "slew_limited"
+    else:
+        tracking_nonadoption_reason = "selected"
     trace = SpectrumTrackingTrace(
         path=path,
         window_kind=window_kind,
         penalty_applied=penalty_applied,
         penalty_centers_bpm=tuple(v * 60.0 for v in penalty_centers_hz),
-        penalty_half_width_bpm=float(params.spec_penalty_width) * 60.0,
+        penalty_half_width_bpm=effective_penalty_width * 60.0,
         candidate_peaks_bpm=tuple(float(v) * 60.0 for v in candidates_hz),
         candidate_peak_amplitudes=tuple(float(v) for v in candidate_amps),
         raw_candidate_hr_bpm=raw_hz * 60.0,
@@ -518,6 +633,28 @@ def _process_spectrum_with_trace_impl(
         unpenalized_candidate_peak_amplitudes=tuple(float(v) for v in raw_candidate_amps),
         penalty_confidence=float(penalty_confidence),
         harmonic_penalty_applied=bool(harmonic_penalty_applied),
+        penalty_policy_id=str(penalty_policy_id),
+        penalty_width_source=penalty_policy_decision.width_source,
+        penalty_effective_half_width_bpm=(
+            effective_penalty_width * 60.0
+        ),
+        penalty_candidate_exclusion_half_width_bpm=(
+            penalty_policy_decision.candidate_exclusion_half_width_hz * 60.0
+        ),
+        penalty_resolution_hz=penalty_policy_decision.resolution_hz,
+        history_protection_confidence=(
+            penalty_policy_decision.history_confidence
+        ),
+        history_protection_status=(
+            history_protection_status
+        ),
+        unpenalized_previous_support_visible=(
+            penalty_policy_decision.unpenalized_previous_support_visible
+        ),
+        penalty_removed_candidate_peaks_bpm=(
+            removed_candidate_peaks_bpm
+        ),
+        tracking_nonadoption_reason=tracking_nonadoption_reason,
         reacquire_mode=reacquire_decision.mode,
         reacquire_candidate_bpm=(
             None
@@ -564,6 +701,67 @@ def _process_spectrum_with_trace_impl(
         high_lock_triggered=bool(high_lock_decision.triggered),
     )
     return limited_hz, trace
+
+
+def _penalty_policy_observation(
+    *,
+    window_kind: WindowKind,
+    configured_half_width_hz: float,
+    fs: int,
+    window_samples: int,
+    previous_hz: float | None,
+    history_arr: np.ndarray,
+    times_idx: int,
+    raw_candidate_freqs: np.ndarray,
+    raw_candidate_amps: np.ndarray,
+    motion_reference_confidence: float,
+    base_protection_half_width_hz: float | None,
+    recovery_reacquire_active: bool,
+) -> PenaltyPolicyObservation:
+    amplitudes = np.asarray(raw_candidate_amps, dtype=float)
+    finite_positive = amplitudes[
+        np.isfinite(amplitudes) & (amplitudes > 0.0)
+    ]
+    max_amp = (
+        float(np.max(finite_positive))
+        if finite_positive.size
+        else 0.0
+    )
+    amp_ratios = tuple(
+        0.0 if max_amp <= 0.0 else float(value) / max_amp
+        for value in amplitudes
+    )
+    history = np.asarray(history_arr, dtype=float)[: max(0, times_idx)]
+    recent = tuple(
+        float(value) * 60.0
+        for value in history[-3:]
+        if np.isfinite(value) and value > 0.0
+    )
+    return PenaltyPolicyObservation(
+        window_kind=window_kind,
+        configured_half_width_hz=float(configured_half_width_hz),
+        fs_hz=float(fs),
+        window_samples=int(window_samples),
+        previous_track_bpm=(
+            None if previous_hz is None else float(previous_hz) * 60.0
+        ),
+        recent_track_bpm=recent,
+        unpenalized_candidate_bpm=tuple(
+            float(value) * 60.0
+            for value in np.asarray(raw_candidate_freqs, dtype=float)
+        ),
+        unpenalized_candidate_amp_ratio=amp_ratios,
+        motion_reference_confidence=float(
+            motion_reference_confidence
+        ),
+        base_corridor_half_width_bpm=(
+            None
+            if base_protection_half_width_hz is None
+            else float(base_protection_half_width_hz) * 60.0
+        ),
+        recovery_reacquire_active=bool(recovery_reacquire_active),
+    )
+
 
 def _continuity_protection_half_width_hz(
     range_hz: float,
@@ -1372,21 +1570,27 @@ def _raw_fft_candidate_frame(signal: np.ndarray, fs: float) -> RawFftCandidateFr
     )
 
 
-def _preferred_candidate_indices(
+def _preferred_candidate_partition(
     freqs: np.ndarray,
     peak_indices: np.ndarray,
     *,
     penalty_centers_hz: tuple[float, ...],
-    penalty_width_hz: float,
+    penalty_exclusion_half_width_hz: float,
     prefer_outside_penalty: bool,
     protected_mask: np.ndarray | None = None,
     fallback_to_all: bool = True,
-) -> np.ndarray:
-    if peak_indices.size == 0 or not prefer_outside_penalty:
-        return peak_indices
+) -> tuple[np.ndarray, np.ndarray]:
+    empty = np.asarray([], dtype=int)
+    half_width = float(penalty_exclusion_half_width_hz)
+    if (
+        peak_indices.size == 0
+        or not prefer_outside_penalty
+        or not np.isfinite(half_width)
+        or half_width <= 0.0
+    ):
+        return peak_indices, empty
 
     blocked = np.zeros(freqs.shape, dtype=bool)
-    half_width = float(penalty_width_hz) + _MOTION_PENALTY_EDGE_GUARD_HZ
     for center in penalty_centers_hz:
         blocked |= np.abs(freqs - float(center)) < half_width
     if protected_mask is not None:
@@ -1394,23 +1598,24 @@ def _preferred_candidate_indices(
         if protected.shape == blocked.shape:
             blocked &= ~protected
     preferred = peak_indices[~blocked[peak_indices]]
+    removed = peak_indices[blocked[peak_indices]]
     if preferred.size:
-        return preferred
-    return peak_indices if fallback_to_all else np.asarray([], dtype=int)
+        return preferred, removed
+    if fallback_to_all:
+        return peak_indices, empty
+    return empty, removed
 
 
 def _is_inside_penalty_band(
     value_hz: float,
     penalty_centers_hz: tuple[float, ...],
-    penalty_width_hz: float,
-    *,
-    include_edge_guard: bool,
+    penalty_exclusion_half_width_hz: float,
 ) -> bool:
     if not np.isfinite(value_hz):
         return False
-    half_width = float(penalty_width_hz)
-    if include_edge_guard:
-        half_width += _MOTION_PENALTY_EDGE_GUARD_HZ
+    half_width = float(penalty_exclusion_half_width_hz)
+    if not np.isfinite(half_width) or half_width <= 0.0:
+        return False
     return any(
         np.isfinite(center) and abs(float(value_hz) - float(center)) < half_width
         for center in penalty_centers_hz
@@ -1438,7 +1643,7 @@ def _protection_challenger_peak_index(
     search_min_hz: float,
     search_max_hz: float,
     penalty_centers_hz: tuple[float, ...],
-    penalty_width_hz: float,
+    penalty_exclusion_half_width_hz: float,
     current_peak_idx: int,
 ) -> int | None:
     if ordered_indices.size == 0 or current_peak_idx < 0:
@@ -1462,8 +1667,7 @@ def _protection_challenger_peak_index(
         if _is_inside_penalty_band(
             candidate_hz,
             penalty_centers_hz,
-            penalty_width_hz,
-            include_edge_guard=True,
+            penalty_exclusion_half_width_hz,
         ):
             continue
         return idx
@@ -1954,6 +2158,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                     and provisional_kind == "motion"
                 ),
                 high_lock_params=runtime_policy.high_lock_escape.as_solver_params(),
+                penalty_policy_id=runtime_policy.motion_penalty.penalty_id,
                 penalty_confidence_enable=bool(
                     cfg.penalty_confidence_enable and provisional_kind == "motion"
                 ),
@@ -2270,6 +2475,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 )
             ),
         ),
+        "motion_penalty": runtime_policy.motion_penalty.metadata(),
         "penalty_confidence_enable": bool(cfg.penalty_confidence_enable),
         "postprocess_dynamics_enable": bool(runtime_policy.postprocess_dynamics.enabled),
         "postprocess_dynamics_params": runtime_policy.postprocess_dynamics.metadata(

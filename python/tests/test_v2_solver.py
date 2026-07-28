@@ -240,6 +240,101 @@ def test_process_spectrum_extracts_candidates_after_motion_penalty(
     assert trace.raw_candidate_hr_bpm == pytest.approx(120.0)
     assert trace.candidate_peaks_bpm[0] == pytest.approx(120.0)
     assert trace.selected_peak_rank == 1
+    assert trace.penalty_removed_candidate_peaks_bpm == pytest.approx(
+        (54.0,)
+    )
+    assert trace.tracking_nonadoption_reason == "selected"
+
+
+def test_invalid_penalty_width_disables_candidate_exclusion(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [0.9, 1.0, 1.1],
+        [0.0, 1.0, 0.0],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([1.0]),
+            np.asarray([1.0]),
+        ),
+    )
+
+    value, trace = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        SolverParams(
+            spec_penalty_enable=True,
+            spec_penalty_width=0.0,
+        ),
+        1,
+        np.asarray([2.0, 0.0]),
+        True,
+        _tracking(1.2, 120.0, 120.0),
+        path="adaptive",
+        window_kind="motion",
+        penalty_policy_id="current_soft_penalty_control_v1",
+    )
+
+    assert value == pytest.approx(1.0)
+    assert trace.candidate_source != "held_previous"
+    assert trace.selected_peak_rank == 1
+    assert trace.penalty_weight_min == pytest.approx(1.0)
+    assert trace.penalty_effective_half_width_bpm == pytest.approx(0.0)
+    assert trace.penalty_candidate_exclusion_half_width_bpm == pytest.approx(
+        0.0
+    )
+    assert trace.penalty_removed_candidate_peaks_bpm == ()
+
+
+def test_missing_motion_reference_downgrades_protection_trace(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.9, 2.0, 2.1],
+        [0.0, 1.0, 0.0],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([], dtype=float),
+            np.asarray([], dtype=float),
+        ),
+    )
+
+    _, trace = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        SolverParams(
+            spec_penalty_enable=True,
+            spec_penalty_width=0.2,
+        ),
+        3,
+        np.asarray([1.9, 1.95, 2.0, 0.0]),
+        True,
+        _tracking(0.3, 10.0, 7.0),
+        path="adaptive",
+        window_kind="motion",
+        penalty_policy_id="trusted_history_corridor_v1",
+    )
+
+    assert trace.penalty_applied is False
+    assert trace.history_protection_status == "penalty_reference_unavailable"
+    assert trace.protection_applied is False
+    assert trace.penalty_removed_candidate_peaks_bpm == ()
 
 
 def test_process_spectrum_prefers_non_penalty_peak_inside_tracking_range(
@@ -420,6 +515,11 @@ def test_motion_protection_is_suppressed_by_strong_non_penalty_challenger(
     assert trace.protection_suppression_reason == "motion_core_challenger"
     assert trace.protection_challenger_bpm == pytest.approx(123.0)
     assert trace.candidate_source == "protection_suppressed"
+    assert trace.history_protection_status == "blocked_by_challenger"
+    assert (
+        trace.tracking_nonadoption_reason
+        == "protection_blocked_by_challenger"
+    )
 
 
 def test_motion_tracking_holds_previous_when_only_penalty_band_peak_exists(
@@ -1231,6 +1331,176 @@ def test_motion_penalty_confidence_downweights_ambiguous_reference(
 
     assert 0.0 <= trace.penalty_confidence < 0.2
     assert 0.2 < trace.penalty_weight_min < 0.35
+
+
+def test_resolution_adaptive_penalty_reports_effective_runtime_width(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+    from ppg_hr.v2.runtime_policy import runtime_policy_from_config
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [0.9, 1.0, 1.1, 1.9, 2.0, 2.1],
+        [0.0, 0.9, 0.0, 0.0, 0.8, 0.0],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([1.0]),
+            np.asarray([1.0]),
+        ),
+    )
+    policy = runtime_policy_from_config(
+        V2RunConfig(
+            data_path=Path("data.csv"),
+            ref_path=Path("ref.csv"),
+            penalty_candidate_id="resolution_adaptive_width_v1",
+        )
+    )
+
+    _, trace = solver._process_spectrum_with_trace(
+        np.ones(200),
+        np.ones(200),
+        25,
+        SolverParams(spec_penalty_enable=True),
+        1,
+        np.asarray([2.0, 0.0]),
+        True,
+        _tracking(0.3, 10.0, 7.0),
+        path="adaptive",
+        window_kind="motion",
+        penalty_policy_id=policy.motion_penalty.penalty_id,
+        penalty_confidence_enable=True,
+    )
+
+    assert trace.penalty_policy_id == "resolution_adaptive_width_v1"
+    assert trace.penalty_width_source == "causal_window_resolution"
+    assert trace.penalty_resolution_hz == pytest.approx(0.125)
+    assert trace.penalty_effective_half_width_bpm == pytest.approx(11.25)
+    assert trace.penalty_candidate_exclusion_half_width_bpm == pytest.approx(
+        12.25
+    )
+    assert trace.penalty_half_width_bpm == pytest.approx(11.25)
+
+
+def test_frozen_penalty_control_matches_legacy_runtime_behavior(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [0.9, 1.0, 1.1, 1.9, 2.0, 2.1],
+        [0.0, 0.9, 0.0, 0.0, 0.8, 0.0],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([1.0]),
+            np.asarray([1.0]),
+        ),
+    )
+    params = SolverParams(
+        spec_penalty_enable=True,
+        spec_penalty_weight=0.2,
+        spec_penalty_width=0.2,
+    )
+
+    legacy_value, legacy = solver._process_spectrum_with_trace(
+        np.ones(200),
+        np.ones(200),
+        25,
+        params,
+        1,
+        np.asarray([2.0, 0.0]),
+        True,
+        _tracking(0.3, 10.0, 7.0),
+        path="adaptive",
+        window_kind="motion",
+        penalty_confidence_enable=True,
+    )
+    control_value, control = solver._process_spectrum_with_trace(
+        np.ones(200),
+        np.ones(200),
+        25,
+        params,
+        1,
+        np.asarray([2.0, 0.0]),
+        True,
+        _tracking(0.3, 10.0, 7.0),
+        path="adaptive",
+        window_kind="motion",
+        penalty_policy_id="current_soft_penalty_control_v1",
+        penalty_confidence_enable=True,
+    )
+
+    assert control_value == pytest.approx(legacy_value)
+    assert control.penalty_half_width_bpm == pytest.approx(
+        legacy.penalty_half_width_bpm
+    )
+    assert control.penalty_weight_min == pytest.approx(
+        legacy.penalty_weight_min
+    )
+    assert control.candidate_peaks_bpm == pytest.approx(
+        legacy.candidate_peaks_bpm
+    )
+    assert control.protection_applied == legacy.protection_applied
+    assert legacy.penalty_policy_id == "legacy_config"
+    assert control.penalty_policy_id == "current_soft_penalty_control_v1"
+
+
+def test_trusted_history_corridor_trace_distinguishes_supported_true_rise(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.0, 1.05, 1.1, 2.033, 2.133, 2.233],
+        [0.0, 0.9, 0.0, 0.0, 0.7, 0.0],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([1.05]),
+            np.asarray([1.0]),
+        ),
+    )
+
+    _, trace = solver._process_spectrum_with_trace(
+        np.ones(400),
+        np.ones(400),
+        50,
+        SolverParams(
+            spec_penalty_enable=True,
+            spec_penalty_width=0.2,
+        ),
+        3,
+        np.asarray([2.0, 2.05, 2.10, 0.0]),
+        True,
+        _tracking(0.3, 10.0, 7.0),
+        path="adaptive",
+        window_kind="motion",
+        penalty_policy_id="trusted_history_corridor_v1",
+        penalty_confidence_enable=True,
+    )
+
+    assert trace.history_protection_confidence == pytest.approx(0.70)
+    assert trace.history_protection_status == "applied_trusted_history"
+    assert trace.unpenalized_previous_support_visible is True
+    assert trace.protection_applied is True
+    assert trace.protected_penalty_overlap is True
+    assert not any(
+        value == pytest.approx(127.98)
+        for value in trace.penalty_removed_candidate_peaks_bpm
+    )
 
 
 def test_motion_reacquire_and_confidence_flags_can_reproduce_legacy(

@@ -72,6 +72,16 @@ class SpectrumTrackingTrace:
     high_lock_exit_age: int | None = None
     high_lock_true_rise_guard: bool = False
     high_lock_triggered: bool = False
+    penalty_policy_id: str = "legacy_config"
+    penalty_width_source: str = "configured"
+    penalty_effective_half_width_bpm: float = 0.0
+    penalty_candidate_exclusion_half_width_bpm: float = 0.0
+    penalty_resolution_hz: float | None = None
+    history_protection_confidence: float | None = None
+    history_protection_status: str = "not_evaluated"
+    unpenalized_previous_support_visible: bool = False
+    penalty_removed_candidate_peaks_bpm: tuple[float, ...] = ()
+    tracking_nonadoption_reason: str = ""
     source: str = "report"
 
     def to_dict(self) -> dict[str, Any]:
@@ -140,6 +150,7 @@ def track_spectrum_window(
     high_lock_state: Any | None = None,
     high_lock_enable: bool = False,
     high_lock_params: Any | None = None,
+    penalty_policy_id: str = "legacy_config",
     penalty_confidence_enable: bool = False,
     implementation: Callable[..., tuple[float, SpectrumTrackingTrace]] | None = None,
 ) -> tuple[float, SpectrumTrackingTrace]:
@@ -167,5 +178,6 @@ def track_spectrum_window(
         high_lock_state=high_lock_state,
         high_lock_enable=high_lock_enable,
         high_lock_params=high_lock_params,
+        penalty_policy_id=penalty_policy_id,
         penalty_confidence_enable=penalty_confidence_enable,
     )

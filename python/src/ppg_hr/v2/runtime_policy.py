@@ -10,6 +10,7 @@ from .algorithm_presets import (
     normalise_v2_algorithm_preset,
     v2_tracking_policy_for_preset,
 )
+from .penalty_candidates import penalty_candidate_by_id
 from .post_motion_dynamic_guard_policy import (
     DynamicGuardConfig,
     dynamic_guard_config_from_run_config,
@@ -90,6 +91,22 @@ class V2HighLockEscapePolicy:
                 self.retain_target_on_evidence_loss
             ),
             "trigger_count": int(trigger_count),
+        }
+
+
+@dataclass(frozen=True)
+class V2MotionPenaltyPolicy:
+    enabled: bool
+    penalty_id: str
+    width_mode: str
+    corridor_mode: str
+
+    def metadata(self) -> dict[str, Any]:
+        return {
+            "enabled": bool(self.enabled),
+            "penalty_id": self.penalty_id,
+            "width_mode": self.width_mode,
+            "corridor_mode": self.corridor_mode,
         }
 
 
@@ -191,6 +208,7 @@ class V2PostprocessDynamicsPolicy:
 class V2RuntimePolicy:
     algorithm_preset: str
     tracking: V2TrackingPolicy
+    motion_penalty: V2MotionPenaltyPolicy
     high_lock_escape: V2HighLockEscapePolicy
     post_motion_reacquire: V2PostMotionReacquirePolicy
     post_motion_dynamic_guard: V2PostMotionDynamicGuardPolicy
@@ -204,6 +222,11 @@ def runtime_policy_from_config(cfg: V2RunConfig) -> V2RuntimePolicy:
         if cfg.recovery_candidate_id is None
         else recovery_candidate_by_id(cfg.recovery_candidate_id)
     )
+    penalty_candidate = (
+        None
+        if cfg.penalty_candidate_id is None
+        else penalty_candidate_by_id(cfg.penalty_candidate_id)
+    )
     constants = (
         {}
         if recovery_candidate is None
@@ -212,6 +235,24 @@ def runtime_policy_from_config(cfg: V2RunConfig) -> V2RuntimePolicy:
     return V2RuntimePolicy(
         algorithm_preset=algorithm_preset,
         tracking=v2_tracking_policy_for_preset(algorithm_preset),
+        motion_penalty=V2MotionPenaltyPolicy(
+            enabled=bool(cfg.spec_penalty_enable),
+            penalty_id=(
+                "legacy_config"
+                if penalty_candidate is None
+                else penalty_candidate.penalty_id
+            ),
+            width_mode=(
+                "configured"
+                if penalty_candidate is None
+                else str(penalty_candidate.constants["width_mode"])
+            ),
+            corridor_mode=(
+                "single_previous_track"
+                if penalty_candidate is None
+                else str(penalty_candidate.constants["corridor_mode"])
+            ),
+        ),
         high_lock_escape=V2HighLockEscapePolicy(
             enabled=bool(cfg.high_lock_escape_enable),
             candidate_id=(
