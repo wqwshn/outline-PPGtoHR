@@ -1,0 +1,46 @@
+{
+  "actual_hr_tracking_trajectory_count": 0,
+  "all_recovery_sentinels_eligible": false,
+  "attempt_registry_summary": {
+    "actual_unique_run_count": 32,
+    "cache_hit_count": 32,
+    "failed_attempt_count": 1,
+    "logical_task_count": 65,
+    "planned_unique_identity_count": 32,
+    "retry_count": 1
+  },
+  "completion_sha256": "0fc07ed89ec57c2553f0a1ba95a4f8631dd520366c412fa8212d91d1136fe52e",
+  "eligible_profile_count": 0,
+  "eligible_profile_ids": [],
+  "exploration_run_count": 0,
+  "independent_bo_run_count": 0,
+  "planned_identity_count": 32,
+  "profile_count": 8,
+  "profile_receipt_sha256": {
+    "p100-long-low": "732a22852e373019aa97e799d41adc2c7bb89b2c7c8d968dc1759de1050f7ad4",
+    "p100-short-high": "734aa3785472f7410b23d91362316b11a4c1b82d83e6f69d2a73904f5f569419",
+    "p25-long-mid": "74f2b61edcbe57f5f0474a37ff2a3ad2780d1d800c4bd2c29759cc6e618eef6b",
+    "p25-short-low": "71e3153772e6777da34f304a8f83db02b2576ccc3096f0e9bed929c7b00307fb",
+    "p25-short-mid": "282944fb25ecf900e565bc250a76856ec8a15acc25d14ad4955772a5bac72f7a",
+    "p50-long-high": "f0901175b081888c29f421a388a746b9bc953687b705dc1933706579787b146f",
+    "p50-long-mid": "7575368753a6f43a3bdf734b5649d646d42a2d86e616c49f041bd89e8e820b38",
+    "p50-short-low": "9d958e3e2c71777eea52064fee3cd66186e3f653ca2a337c8c1d8d16f4d31042"
+  },
+  "receipt_version": "lyx_filter_profile_audit_completion_v1",
+  "recovery_sentinels": {
+    "aggressive": "p100-short-high",
+    "conservative": "p50-short-low",
+    "intermediate": "p50-long-mid"
+  },
+  "rejected_profile_ids": [
+    "p25-short-low",
+    "p25-short-mid",
+    "p25-long-mid",
+    "p50-short-low",
+    "p50-long-mid",
+    "p50-long-high",
+    "p100-short-high",
+    "p100-long-low"
+  ],
+  "status": "incomplete_profile_library"
+}

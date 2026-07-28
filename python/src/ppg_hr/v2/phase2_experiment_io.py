@@ -76,7 +76,7 @@ def space_sha256(candidates: Sequence[BOCandidate]) -> str:
 
 def file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
-    with path.open("rb") as handle:
+    with open(filesystem_path(path), "rb") as handle:
         for chunk in iter(
             lambda: handle.read(1024 * 1024),
             b"",
@@ -91,12 +91,13 @@ def write_csv(
 ) -> None:
     if not rows:
         raise ValueError(f"不能写入空 CSV: {path}")
-    path.parent.mkdir(parents=True, exist_ok=True)
+    os.makedirs(filesystem_path(path.parent), exist_ok=True)
     fieldnames = list(
         dict.fromkeys(key for row in rows for key in row)
     )
     temp = atomic_temp_path(path)
-    with temp.open(
+    with open(
+        filesystem_path(temp),
         "w",
         encoding="utf-8-sig",
         newline="",
@@ -107,35 +108,47 @@ def write_csv(
         )
         writer.writeheader()
         writer.writerows(json_ready(row) for row in rows)
-    os.replace(temp, path)
+    os.replace(filesystem_path(temp), filesystem_path(path))
 
 
 def atomic_write_json(
     path: Path,
     payload: Mapping[str, Any],
 ) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    os.makedirs(filesystem_path(path.parent), exist_ok=True)
     temp = atomic_temp_path(path)
-    temp.write_text(
-        json.dumps(
-            json_ready(payload),
-            ensure_ascii=False,
-            sort_keys=True,
-            indent=2,
-            allow_nan=False,
+    with open(filesystem_path(temp), "w", encoding="utf-8") as handle:
+        handle.write(
+            json.dumps(
+                json_ready(payload),
+                ensure_ascii=False,
+                sort_keys=True,
+                indent=2,
+                allow_nan=False,
+            )
+            + "\n"
         )
-        + "\n",
-        encoding="utf-8",
-    )
-    os.replace(temp, path)
+    os.replace(filesystem_path(temp), filesystem_path(path))
 
 
 def atomic_temp_path(path: Path) -> Path:
     return path.with_name(f".{uuid.uuid4().hex}.tmp")
 
 
+def filesystem_path(path: Path) -> str:
+    """Return an absolute path usable beyond Win32's legacy MAX_PATH limit."""
+
+    resolved = os.path.abspath(os.fspath(path))
+    if os.name != "nt" or resolved.startswith("\\\\?\\"):
+        return resolved
+    if resolved.startswith("\\\\"):
+        return "\\\\?\\UNC\\" + resolved[2:]
+    return "\\\\?\\" + resolved
+
+
 def read_json(path: Path) -> dict[str, Any]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    with open(filesystem_path(path), encoding="utf-8") as handle:
+        payload = json.load(handle)
     if not isinstance(payload, dict):
         raise ValueError(f"JSON 根节点必须是对象: {path}")
     return payload

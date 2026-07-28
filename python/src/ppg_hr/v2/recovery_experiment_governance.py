@@ -79,6 +79,22 @@ def _canonical_sha256(payload: Any) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _filesystem_path(path: Path) -> str:
+    resolved = str(path.resolve())
+    if os.name == "nt":
+        if resolved.startswith("\\\\?\\"):
+            return resolved
+        if resolved.startswith("\\\\"):
+            return "\\\\?\\UNC\\" + resolved[2:]
+        return "\\\\?\\" + resolved
+    return resolved
+
+
+def _read_bytes(path: Path) -> bytes:
+    with open(_filesystem_path(path), "rb") as stream:
+        return stream.read()
+
+
 @dataclass(frozen=True)
 class AttemptIdentity:
     """一个唯一的 solver/config/metric/data/record 求解身份。"""
@@ -170,7 +186,7 @@ class CacheEvidence:
         trusted_cache_root = trusted_cache_root.resolve()
         if not path.is_relative_to(trusted_cache_root):
             raise GovernanceError(f"cache_evidence_outside_trusted_root:{path}")
-        raw = path.read_bytes()
+        raw = _read_bytes(path)
         receipt_hash = hashlib.sha256(raw).hexdigest()
         try:
             payload = json.loads(raw.decode("utf-8"))
@@ -186,7 +202,7 @@ class CacheEvidence:
         ).resolve()
         if not result_path.is_relative_to(trusted_cache_root):
             raise GovernanceError(f"cache_result_outside_trusted_root:{result_path}")
-        result_raw = result_path.read_bytes()
+        result_raw = _read_bytes(result_path)
         if hashlib.sha256(result_raw).hexdigest() != result_hash:
             raise GovernanceError(f"cache_result_hash_mismatch:{result_path}")
         try:
@@ -294,6 +310,89 @@ class BudgetContract:
             max_unique_identities=684,
             max_attempts=1368,
             retry_limit=1,
+        )
+
+    @classmethod
+    def approved_v2(cls) -> BudgetContract:
+        """Return the user-approved contract with one bounded filter audit lane."""
+        return cls(
+            stage_unique_limits={
+                "fixed_lower_bound_diagnostic": 60,
+                "historical_recovery_ab": 24,
+                "recovery_sentinel": 108,
+                "filter_profile_stability_audit": 32,
+                "penalty_interaction": 288,
+                "current_role_matrix": 96,
+                "rollback_backup_matrix": 96,
+                "fold_replay": 12,
+            },
+            normal_unique_identity_limit=704,
+            supplemental_stage="fold_replay",
+            max_unique_identities=716,
+            max_attempts=1432,
+            retry_limit=1,
+            contract_version="lyx_recovery_filter_budget_v2",
+            stage_attempt_kinds={
+                "fixed_lower_bound_diagnostic": "diagnostic",
+                "historical_recovery_ab": "formal",
+                "recovery_sentinel": "formal",
+                "filter_profile_stability_audit": "diagnostic",
+                "penalty_interaction": "formal",
+                "current_role_matrix": "formal",
+                "rollback_backup_matrix": "formal",
+                "fold_replay": "formal",
+            },
+        )
+
+    @classmethod
+    def approved_v3(cls) -> BudgetContract:
+        """Return the contract with eight bounded replacement diagnostics."""
+        return cls(
+            stage_unique_limits={
+                "fixed_lower_bound_diagnostic": 60,
+                "historical_recovery_ab": 24,
+                "recovery_sentinel": 108,
+                "filter_profile_stability_audit": 40,
+                "penalty_interaction": 288,
+                "current_role_matrix": 96,
+                "rollback_backup_matrix": 96,
+                "fold_replay": 12,
+            },
+            normal_unique_identity_limit=712,
+            supplemental_stage="fold_replay",
+            max_unique_identities=724,
+            max_attempts=1448,
+            retry_limit=1,
+            contract_version="lyx_recovery_filter_budget_v3",
+            stage_attempt_kinds={
+                "fixed_lower_bound_diagnostic": "diagnostic",
+                "historical_recovery_ab": "formal",
+                "recovery_sentinel": "formal",
+                "filter_profile_stability_audit": "diagnostic",
+                "penalty_interaction": "formal",
+                "current_role_matrix": "formal",
+                "rollback_backup_matrix": "formal",
+                "fold_replay": "formal",
+            },
+        )
+
+    @classmethod
+    def approved_v4(cls) -> BudgetContract:
+        """Return the contract for the 24-identity frozen-gate supplement."""
+
+        prior = cls.approved_v3()
+        return cls(
+            stage_unique_limits={
+                **prior.stage_unique_limits,
+                "filter_profile_stability_audit": 64,
+            },
+            normal_unique_identity_limit=736,
+            supplemental_stage=prior.supplemental_stage,
+            max_unique_identities=748,
+            max_attempts=1496,
+            retry_limit=prior.retry_limit,
+            contract_version="lyx_recovery_filter_budget_v4",
+            stage_attempt_kinds=prior.stage_attempt_kinds,
         )
 
     @property
@@ -423,7 +522,7 @@ class AttemptRegistry:
         budget_contract: BudgetContract,
         exploration_registry: ExplorationRegistry,
     ) -> AttemptRegistry:
-        path.parent.mkdir(parents=True, exist_ok=True)
+        os.makedirs(_filesystem_path(path.parent), exist_ok=True)
         with _exclusive_registry_lock(path):
             if path.exists():
                 raise GovernanceError(f"attempt_registry_already_exists:{path}")
@@ -466,6 +565,110 @@ class AttemptRegistry:
         if payload.get("summary") != registry._summary(entries):
             raise GovernanceError("attempt_registry_summary_mismatch")
         return registry
+
+    def migrate_to(
+        self,
+        path: Path,
+        *,
+        budget_contract: BudgetContract,
+        amendment_request: BudgetAmendmentRequest,
+        authorization_receipt: Mapping[str, Any] | None,
+        new_identities: Sequence[AttemptIdentity] = (),
+        finalize_staging: Callable[[Path, AttemptRegistry], None] | None = None,
+    ) -> AttemptRegistry:
+        """Clone the complete ledger and cache into one expanded budget contract."""
+
+        validate_budget_amendment_authorization(
+            amendment_request,
+            receipt=authorization_receipt,
+        )
+        expected_stage_limit = (
+            self.budget_contract.stage_unique_limits.get(amendment_request.stage, 0)
+            + amendment_request.added_unique_identities
+        )
+        unchanged_stages = {
+            stage: limit
+            for stage, limit in self.budget_contract.stage_unique_limits.items()
+            if stage != amendment_request.stage
+        }
+        target_unchanged_stages = {
+            stage: limit
+            for stage, limit in budget_contract.stage_unique_limits.items()
+            if stage != amendment_request.stage
+        }
+        source_stage_kind = self.budget_contract.stage_attempt_kinds.get(
+            amendment_request.stage
+        )
+        expected_stage_kind = source_stage_kind or "diagnostic"
+        known_transitions = {
+            BudgetContract.frozen_v1().sha256: BudgetContract.approved_v2().sha256,
+            BudgetContract.approved_v2().sha256: BudgetContract.approved_v3().sha256,
+            BudgetContract.approved_v3().sha256: BudgetContract.approved_v4().sha256,
+        }
+        expected_known_target = known_transitions.get(self.budget_contract.sha256)
+        if (
+            budget_contract.stage_unique_limits.get(amendment_request.stage)
+            != expected_stage_limit
+            or target_unchanged_stages != unchanged_stages
+            or budget_contract.normal_unique_identity_limit
+            != amendment_request.normal_unique_identity_limit
+            or budget_contract.max_unique_identities
+            != amendment_request.max_unique_identities
+            or budget_contract.max_attempts != amendment_request.max_attempts
+            or budget_contract.retry_limit != self.budget_contract.retry_limit
+            or budget_contract.supplemental_stage
+            != self.budget_contract.supplemental_stage
+            or budget_contract.stage_attempt_kinds.get(amendment_request.stage)
+            != expected_stage_kind
+            or budget_contract.stage_attempt_kinds
+            != self.budget_contract.stage_attempt_kinds
+            or (
+                expected_known_target is not None
+                and budget_contract.sha256 != expected_known_target
+            )
+        ):
+            raise GovernanceError("budget_amendment_contract_mismatch")
+        source = self.open(
+            self.path,
+            budget_contract=self.budget_contract,
+            exploration_registry=self.exploration_registry,
+        )
+        target_dir = path.parent
+        if target_dir.exists():
+            raise GovernanceError(f"migration_target_already_exists:{target_dir}")
+        os.makedirs(_filesystem_path(target_dir.parent), exist_ok=True)
+        staging = target_dir.with_name(f".{target_dir.name}.{uuid.uuid4().hex}.staging")
+
+        try:
+            os.makedirs(_filesystem_path(staging))
+            if source.trusted_cache_root.exists():
+                shutil.copytree(
+                    _filesystem_path(source.trusted_cache_root),
+                    _filesystem_path(staging / "solver_cache"),
+                )
+            migrated_path = staging / path.name
+            migrated = type(self)(
+                migrated_path,
+                budget_contract=budget_contract,
+                exploration_registry=self.exploration_registry,
+                entries=deepcopy(source._entries),
+            )
+            for identity in new_identities:
+                migrated.register_identity(identity)
+            migrated._validate_entries(migrated._entries)
+            migrated._write_entries(migrated._entries)
+            if finalize_staging is not None:
+                finalize_staging(staging, migrated)
+            os.replace(_filesystem_path(staging), _filesystem_path(target_dir))
+        except Exception:
+            if staging.exists():
+                shutil.rmtree(_filesystem_path(staging))
+            raise
+        return self.open(
+            target_dir / path.name,
+            budget_contract=budget_contract,
+            exploration_registry=self.exploration_registry,
+        )
 
     def register_identity(self, identity: AttemptIdentity) -> str:
         def mutate(entries: dict[str, dict[str, Any]]) -> str:
@@ -966,6 +1169,33 @@ class IndependentBORequest:
             raise ValueError("independent_bo_budget_must_be_positive")
 
 
+@dataclass(frozen=True)
+class BudgetAmendmentRequest:
+    """Exact identity of the bounded, non-BO filter stability budget amendment."""
+
+    stage: str
+    profile_design_rule_hash: str
+    record_manifest_hash: str
+    added_unique_identities: int
+    normal_unique_identity_limit: int
+    max_unique_identities: int
+    max_attempts: int
+
+    def __post_init__(self) -> None:
+        if not self.stage:
+            raise ValueError("budget_amendment_stage_must_not_be_empty")
+        for name in ("profile_design_rule_hash", "record_manifest_hash"):
+            _require_sha256(name, getattr(self, name))
+        for name in (
+            "added_unique_identities",
+            "normal_unique_identity_limit",
+            "max_unique_identities",
+            "max_attempts",
+        ):
+            if not isinstance(getattr(self, name), int) or getattr(self, name) <= 0:
+                raise ValueError(f"{name}_must_be_positive")
+
+
 def validate_human_gate(
     *,
     state: str,
@@ -986,6 +1216,39 @@ def validate_human_gate(
     if not isinstance(receipt["approved_at"], str) or not isinstance(receipt["approved_by"], str):
         raise GovernanceError("authorization_metadata_must_be_strings")
     return dict(receipt)
+
+
+def validate_budget_amendment_authorization(
+    request: BudgetAmendmentRequest,
+    *,
+    receipt: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Validate the exact non-BO budget amendment approved by the user."""
+
+    state = "awaiting_human_budget_decision"
+    validated = validate_human_gate(state=state, receipt=receipt)
+    expected = asdict(request)
+    required = {
+        "approved",
+        "decision_state",
+        *expected.keys(),
+        "independent_bo_authorized",
+        "approved_at",
+        "approved_by",
+    }
+    missing = sorted(required - validated.keys())
+    if missing:
+        raise GovernanceError("authorization_missing_fields:" + ",".join(missing))
+    mismatched = sorted(
+        field
+        for field, expected_value in expected.items()
+        if validated.get(field) != expected_value
+    )
+    if mismatched:
+        raise GovernanceError("authorization_identity_mismatch:" + ",".join(mismatched))
+    if validated["independent_bo_authorized"] is not False:
+        raise GovernanceError("independent_bo_must_remain_unauthorized")
+    return validated
 
 
 def validate_independent_bo_authorization(
@@ -1029,12 +1292,12 @@ def initialize_recovery_experiment_governance(
         raise ValueError("parent_experiment_id_must_not_be_empty")
     if output_dir.exists():
         raise GovernanceError(f"output_dir_already_exists:{output_dir}")
-    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    os.makedirs(_filesystem_path(output_dir.parent), exist_ok=True)
     staging = output_dir.with_name(f".{output_dir.name}.{uuid.uuid4().hex}.staging")
     budget = BudgetContract.frozen_v1()
     exploration = ExplorationRegistry.zero_budget_v1()
     try:
-        staging.mkdir()
+        os.makedirs(_filesystem_path(staging))
         atomic_write_json(staging / "budget_contract.json", budget.to_dict())
         atomic_write_json(
             staging / "exploration_registry.json",

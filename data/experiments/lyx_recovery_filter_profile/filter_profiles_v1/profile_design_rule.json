@@ -1,0 +1,88 @@
+{
+  "archive_evidence_index_sha256": "9518624eb80727975690970636613d1dc69e55882bdfdd9bcb8849bba223d673",
+  "audit_contract": {
+    "contract_version": "lyx_filter_stability_audit_v1",
+    "max_residual_artifact_abs_corr_median": 0.95,
+    "max_residual_rms_ratio_p95": 2.0,
+    "max_residual_tail_head_ratio": 2.0,
+    "max_stability_load": 1.0,
+    "max_weight_norm": 25.0,
+    "min_motion_artifact_suppression_db_median": -1.0,
+    "min_true_peak_retention_ratio_median": 0.25
+  },
+  "audit_contract_sha256": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+  "audit_policy": "qualify_or_reject_only_never_tune_or_replace",
+  "design_rule_sha256": "d1744538afafe6c46291b6cc6bfa0655dd898c001f963859967d621056901024",
+  "design_rule_version": "lyx_filter_profile_design_rule_v1",
+  "independent_bo_authorized": false,
+  "profile_coordinates": [
+    {
+      "design_role": "core",
+      "fs_target": 25,
+      "memory_ms": 40,
+      "nominal_mu": 0.008,
+      "profile_id": "p25-short-low",
+      "recovery_sentinel_role": null
+    },
+    {
+      "design_role": "core",
+      "fs_target": 25,
+      "memory_ms": 40,
+      "nominal_mu": 0.012,
+      "profile_id": "p25-short-mid",
+      "recovery_sentinel_role": null
+    },
+    {
+      "design_role": "core",
+      "fs_target": 25,
+      "memory_ms": 200,
+      "nominal_mu": 0.01,
+      "profile_id": "p25-long-mid",
+      "recovery_sentinel_role": null
+    },
+    {
+      "design_role": "core",
+      "fs_target": 50,
+      "memory_ms": 80,
+      "nominal_mu": 0.006,
+      "profile_id": "p50-short-low",
+      "recovery_sentinel_role": "conservative"
+    },
+    {
+      "design_role": "core",
+      "fs_target": 50,
+      "memory_ms": 200,
+      "nominal_mu": 0.012,
+      "profile_id": "p50-long-mid",
+      "recovery_sentinel_role": "intermediate"
+    },
+    {
+      "design_role": "coverage_boundary",
+      "fs_target": 50,
+      "memory_ms": 200,
+      "nominal_mu": 0.016,
+      "profile_id": "p50-long-high",
+      "recovery_sentinel_role": null
+    },
+    {
+      "design_role": "core",
+      "fs_target": 100,
+      "memory_ms": 40,
+      "nominal_mu": 0.016,
+      "profile_id": "p100-short-high",
+      "recovery_sentinel_role": "aggressive"
+    },
+    {
+      "design_role": "coverage_boundary",
+      "fs_target": 100,
+      "memory_ms": 200,
+      "nominal_mu": 0.006,
+      "profile_id": "p100-long-low",
+      "recovery_sentinel_role": null
+    }
+  ],
+  "profile_selection_policy": "preserve_3_3_2_sampling_quota_and_cover_short_long_low_mid_high_regions",
+  "record_selection_rule": "each_scene_max_physical_reliable_motion_mae_then_record_id",
+  "source_policy": "existing_archived_trial_distribution_only",
+  "status": "frozen_before_new_diagnostics"
+}

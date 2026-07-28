@@ -1,0 +1,52 @@
+{
+  "actual_hr_tracking_trajectory_count": 0,
+  "all_recovery_sentinels_eligible": false,
+  "attempt_registry_summary": {
+    "actual_unique_run_count": 40,
+    "cache_hit_count": 40,
+    "failed_attempt_count": 1,
+    "logical_task_count": 81,
+    "planned_unique_identity_count": 40,
+    "retry_count": 1
+  },
+  "audit_contract_sha256": "8e46582997dc08db81a7430d4443c0b84bdbc2558c4f638afce1fbd67a667ac4",
+  "completion_sha256": "0ce2802bf09dfc7caf4082710df683fef90bccb45d47fbac1992fff42a84fecf",
+  "eligible_profile_count": 4,
+  "eligible_profile_ids": [
+    "p25-short-low",
+    "p25-short-mid",
+    "p25-long-mid",
+    "p50-short-low"
+  ],
+  "evaluation_hash": "1b5463ed242e76ecdae5d6ff1606779b40300dc46b3da4fc7e6173fe2fbbc6ea",
+  "exploration_run_count": 0,
+  "independent_bo_run_count": 0,
+  "new_replacement_run_count": 8,
+  "profile_count": 8,
+  "profile_receipt_sha256": {
+    "p100-boundary-low": "f67596215f6ebe0b6c64600c7b65179d210659d31cd3622f9d526ef3da9ae773",
+    "p100-short-high": "e766cea5ddf4ec7e5caa54e2b909616f562b057f2cc884e9cbab60bfc61b9e1a",
+    "p25-long-mid": "e9b55faa42c99efc75f387e87a23c4d83bd8188870ae79f8857a7d821a68b41c",
+    "p25-short-low": "e2e9aa2a67ab6d14e62c2cfb45d0b1344969a20e10f09091517b7881ed67dec3",
+    "p25-short-mid": "622564f786c9edafbf12aa62e1f3a3e69bb802f1e7887368f50727edbf137d85",
+    "p50-boundary-high": "bf62bc4f36841de70bb6388ea35478f4403cdcce16cc998970a429ae037faf70",
+    "p50-long-mid": "7e89f4c992ba4563a11a9ab96edec738de71a1f68fbc3d439929565c99f06feb",
+    "p50-short-low": "125b54d909483f212d40adc0d490f290b2ffb9a56359aced0effc75447a9309e"
+  },
+  "receipt_version": "lyx_filter_profile_audit_completion_v3",
+  "recovery_sentinels": {
+    "aggressive": "p100-short-high",
+    "conservative": "p50-short-low",
+    "intermediate": "p50-long-mid"
+  },
+  "rejected_profile_ids": [
+    "p100-boundary-low",
+    "p100-short-high",
+    "p50-boundary-high",
+    "p50-long-mid"
+  ],
+  "reused_numeric_result_count": 24,
+  "spec_gate_reclassification_numerical_rerun_count": 0,
+  "spec_gate_reclassified_result_count": 32,
+  "status": "blocked_insufficient_eligible_profiles"
+}
