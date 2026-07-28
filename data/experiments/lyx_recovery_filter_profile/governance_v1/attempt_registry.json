@@ -2,7 +2,7 @@
   "budget_contract_sha256": "e9663954d14e16904fb7c303f82a0287afc24882ffac6ffc17b7e564d4cc2297",
   "entries": {},
   "exploration_registry_sha256": "7d39692736fe8b98a23b5c6baaa7a07e4cd9b8733539e601d5f9b8f1818863d1",
-  "registry_version": "lyx_recovery_attempt_registry_v1",
+  "registry_version": "lyx_recovery_attempt_registry_v2",
   "summary": {
     "actual_unique_run_count": 0,
     "cache_hit_count": 0,

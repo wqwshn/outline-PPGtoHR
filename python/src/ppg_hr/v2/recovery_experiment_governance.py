@@ -135,6 +135,50 @@ class AttemptToken:
 
 
 @dataclass(frozen=True)
+class CacheEvidence:
+    """绑定完整求解身份与结果哈希的缓存命中回执。"""
+
+    path: Path
+    receipt_sha256: str
+    identity_sha256: str
+    result_sha256: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "path", self.path.resolve())
+        for name in (
+            "receipt_sha256",
+            "identity_sha256",
+            "result_sha256",
+        ):
+            _require_sha256(name, getattr(self, name))
+
+    @classmethod
+    def from_path(cls, path: Path) -> CacheEvidence:
+        raw = path.read_bytes()
+        receipt_hash = hashlib.sha256(raw).hexdigest()
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+            identity_hash = payload["identity_sha256"]
+            result_hash = payload["result_sha256"]
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
+            raise GovernanceError(f"invalid_cache_evidence:{path}") from error
+        return cls(
+            path=path,
+            receipt_sha256=receipt_hash,
+            identity_sha256=identity_hash,
+            result_sha256=result_hash,
+        )
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "path": str(self.path),
+            "receipt_sha256": self.receipt_sha256,
+            "identity_sha256": self.identity_sha256,
+            "result_sha256": self.result_sha256,
+        }
+
+
+@dataclass(frozen=True)
 class BudgetContract:
     """按阶段冻结的唯一身份及最坏尝试数合同。"""
 
@@ -260,30 +304,53 @@ class ExplorationRegistry:
 
 @contextmanager
 def _exclusive_registry_lock(path: Path) -> Iterator[None]:
-    """用同目录独占文件串行化跨进程的账本更新。"""
+    """用系统文件锁串行化更新；进程退出时由系统自动释放。"""
 
     lock_path = path.with_name(f".{path.name}.lock")
+    lock_path.touch(exist_ok=True)
     deadline = time.monotonic() + 10.0
-    descriptor: int | None = None
-    while descriptor is None:
-        try:
-            descriptor = os.open(
-                lock_path,
-                os.O_CREAT | os.O_EXCL | os.O_WRONLY,
-            )
-        except FileExistsError as error:
-            if time.monotonic() >= deadline:
-                raise GovernanceError(f"attempt_registry_lock_timeout:{lock_path}") from error
-            time.sleep(0.05)
+    handle = lock_path.open("r+b")
+    if lock_path.stat().st_size == 0:
+        handle.write(b"\0")
+        handle.flush()
+    acquired = False
+    if os.name == "nt":
+        import msvcrt
+
+        while not acquired:
+            try:
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                acquired = True
+            except OSError as error:
+                if time.monotonic() >= deadline:
+                    handle.close()
+                    raise GovernanceError(f"attempt_registry_lock_timeout:{lock_path}") from error
+                time.sleep(0.05)
+    else:
+        import fcntl
+
+        while not acquired:
+            try:
+                fcntl.flock(
+                    handle.fileno(),
+                    fcntl.LOCK_EX | fcntl.LOCK_NB,
+                )
+                acquired = True
+            except BlockingIOError as error:
+                if time.monotonic() >= deadline:
+                    handle.close()
+                    raise GovernanceError(f"attempt_registry_lock_timeout:{lock_path}") from error
+                time.sleep(0.05)
     try:
-        os.write(descriptor, str(os.getpid()).encode("ascii"))
-        os.close(descriptor)
-        descriptor = None
         yield
     finally:
-        if descriptor is not None:
-            os.close(descriptor)
-        lock_path.unlink(missing_ok=True)
+        if os.name == "nt":
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        handle.close()
 
 
 class AttemptRegistry:
@@ -332,6 +399,8 @@ class AttemptRegistry:
         exploration_registry: ExplorationRegistry,
     ) -> AttemptRegistry:
         payload = read_json(path)
+        if payload.get("registry_version") != ("lyx_recovery_attempt_registry_v2"):
+            raise GovernanceError("attempt_registry_version_mismatch")
         if payload.get("budget_contract_sha256") != budget_contract.sha256:
             raise GovernanceError("budget_contract_mismatch")
         if payload.get("exploration_registry_sha256") != exploration_registry.sha256:
@@ -393,7 +462,7 @@ class AttemptRegistry:
             entries[identity_hash] = {
                 "identity": identity.to_dict(),
                 "attempts": [],
-                "cache_hits": 0,
+                "cache_evidence": [],
                 "status": "registered",
             }
             return identity_hash
@@ -467,14 +536,25 @@ class AttemptRegistry:
 
         self._transaction(mutate)
 
-    def record_cache_hit(self, identity: AttemptIdentity) -> None:
+    def record_cache_hit(
+        self,
+        identity: AttemptIdentity,
+        *,
+        evidence: CacheEvidence,
+    ) -> None:
         def mutate(entries: dict[str, dict[str, Any]]) -> None:
             entry = entries.get(identity.sha256)
             if entry is None:
                 raise GovernanceError(f"unregistered_identity:{identity.sha256}")
             if entry["identity"] != identity.to_dict():
                 raise GovernanceError(f"identity_payload_mismatch:{identity.sha256}")
-            entry["cache_hits"] += 1
+            if evidence.identity_sha256 != identity.sha256:
+                raise GovernanceError(f"cache_identity_mismatch:{identity.sha256}")
+            if CacheEvidence.from_path(evidence.path) != evidence:
+                raise GovernanceError(f"cache_evidence_changed:{evidence.path}")
+            serialized = evidence.to_dict()
+            if serialized not in entry["cache_evidence"]:
+                entry["cache_evidence"].append(serialized)
 
         self._transaction(mutate)
 
@@ -510,10 +590,16 @@ class AttemptRegistry:
         if entry is None:
             raise GovernanceError(f"unregistered_nomination:{identity.sha256}")
         has_success = any(attempt["status"] == "succeeded" for attempt in entry["attempts"])
-        if not has_success and entry["cache_hits"] == 0:
+        if not has_success and not entry["cache_evidence"]:
             raise GovernanceError(f"nomination_without_evidence:{identity.sha256}")
 
     def summary(self) -> dict[str, int]:
+        fresh = self.open(
+            self.path,
+            budget_contract=self.budget_contract,
+            exploration_registry=self.exploration_registry,
+        )
+        self._entries = fresh._entries
         return self._summary(self._entries)
 
     @staticmethod
@@ -523,10 +609,10 @@ class AttemptRegistry:
         attempts = [attempt for entry in entries.values() for attempt in entry["attempts"]]
         return {
             "logical_task_count": len(attempts)
-            + sum(entry["cache_hits"] for entry in entries.values()),
+            + sum(len(entry["cache_evidence"]) for entry in entries.values()),
             "planned_unique_identity_count": len(entries),
             "actual_unique_run_count": sum(bool(entry["attempts"]) for entry in entries.values()),
-            "cache_hit_count": sum(entry["cache_hits"] for entry in entries.values()),
+            "cache_hit_count": sum(len(entry["cache_evidence"]) for entry in entries.values()),
             "failed_attempt_count": sum(attempt["status"] == "failed" for attempt in attempts),
             "retry_count": sum(max(0, len(entry["attempts"]) - 1) for entry in entries.values()),
         }
@@ -552,7 +638,7 @@ class AttemptRegistry:
         atomic_write_json(
             self.path,
             {
-                "registry_version": "lyx_recovery_attempt_registry_v1",
+                "registry_version": "lyx_recovery_attempt_registry_v2",
                 "budget_contract_sha256": self.budget_contract.sha256,
                 "exploration_registry_sha256": (self.exploration_registry.sha256),
                 "entries": entries,
@@ -576,7 +662,7 @@ class AttemptRegistry:
                 cache_hash = identity_payload.pop("cache_identity_sha256")
                 identity = AttemptIdentity(**identity_payload)
                 attempts = entry["attempts"]
-                cache_hits = entry["cache_hits"]
+                cache_evidence = entry["cache_evidence"]
                 entry_status = entry["status"]
             except (KeyError, TypeError, ValueError) as error:
                 raise GovernanceError(f"invalid_attempt_registry_entry:{identity_hash}") from error
@@ -596,18 +682,27 @@ class AttemptRegistry:
             stage_counts[identity.stage] = stage_counts.get(identity.stage, 0) + 1
             if identity.stage != self.budget_contract.supplemental_stage:
                 normal_count += 1
-            if (
-                not isinstance(attempts, list)
-                or not isinstance(cache_hits, int)
-                or isinstance(cache_hits, bool)
-                or cache_hits < 0
-            ):
+            if not isinstance(attempts, list) or not isinstance(cache_evidence, list):
                 raise GovernanceError(f"invalid_attempt_registry_entry:{identity_hash}")
             self._validate_attempt_state(
                 identity_hash,
                 attempts,
                 entry_status,
             )
+            for evidence_payload in cache_evidence:
+                try:
+                    evidence = CacheEvidence(
+                        path=Path(evidence_payload["path"]),
+                        receipt_sha256=evidence_payload["receipt_sha256"],
+                        identity_sha256=evidence_payload["identity_sha256"],
+                        result_sha256=evidence_payload["result_sha256"],
+                    )
+                except (KeyError, TypeError, ValueError) as error:
+                    raise GovernanceError(f"invalid_cache_evidence:{identity_hash}") from error
+                if evidence.identity_sha256 != identity_hash:
+                    raise GovernanceError(f"cache_identity_mismatch:{identity_hash}")
+                if CacheEvidence.from_path(evidence.path) != evidence:
+                    raise GovernanceError(f"cache_evidence_changed:{evidence.path}")
             total_attempts += len(attempts)
         for stage, count in stage_counts.items():
             if count > self.budget_contract.stage_unique_limits[stage]:
@@ -725,14 +820,20 @@ class FoldReadBarrier:
         if not requested:
             raise GovernanceError("empty_field_request")
         source = self.manifest.record_sources[record_id]
-        if file_sha256(source.path) != source.sha256:
+        raw = source.path.read_bytes()
+        if hashlib.sha256(raw).hexdigest() != source.sha256:
             raise GovernanceError(f"record_source_hash_mismatch:{record_id}")
         role = "audit_target" if record_id == self.manifest.audit_target_record_id else "training"
         if role == "audit_target":
             denied = sorted(set(requested) - self._target_identity_fields)
             if denied:
                 raise GovernanceError("audit_target_field_denied:" + ",".join(denied))
-        payload = read_json(source.path)
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise GovernanceError(f"record_source_invalid_json:{record_id}") from error
+        if not isinstance(payload, dict):
+            raise GovernanceError(f"record_source_root_must_be_object:{record_id}")
         missing = [field for field in requested if field not in payload]
         if missing:
             raise GovernanceError("requested_field_missing:" + ",".join(missing))
@@ -871,6 +972,7 @@ def initialize_recovery_experiment_governance(
             budget_contract=budget,
             exploration_registry=exploration,
         )
+        (staging / ".attempt_registry.json.lock").unlink(missing_ok=True)
         receipt = {
             "receipt_version": "lyx_recovery_governance_receipt_v1",
             "status": "complete",

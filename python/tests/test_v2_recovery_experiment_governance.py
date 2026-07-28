@@ -11,6 +11,7 @@ from ppg_hr.v2.recovery_experiment_governance import (
     AttemptIdentity,
     AttemptRegistry,
     BudgetContract,
+    CacheEvidence,
     DataRoleManifest,
     ExplorationRegistry,
     FoldReadBarrier,
@@ -193,7 +194,20 @@ def test_attempt_registry_reopens_with_bound_contract_and_counts_cache(
     )
     identity = _identity()
     registry.register_identity(identity)
-    registry.record_cache_hit(identity)
+    cache_path = tmp_path / "cache_receipt.json"
+    cache_path.write_text(
+        json.dumps(
+            {
+                "identity_sha256": identity.sha256,
+                "result_sha256": "f" * 64,
+            }
+        ),
+        encoding="utf-8",
+    )
+    registry.record_cache_hit(
+        identity,
+        evidence=CacheEvidence.from_path(cache_path),
+    )
 
     reopened = AttemptRegistry.open(
         path,
@@ -209,6 +223,33 @@ def test_attempt_registry_reopens_with_bound_contract_and_counts_cache(
         "failed_attempt_count": 0,
         "retry_count": 0,
     }
+
+
+def test_cache_evidence_must_bind_complete_identity(tmp_path: Path) -> None:
+    path = tmp_path / "attempt_registry.json"
+    registry = AttemptRegistry.create(
+        path,
+        budget_contract=BudgetContract.frozen_v1(),
+        exploration_registry=ExplorationRegistry.zero_budget_v1(),
+    )
+    identity = _identity()
+    registry.register_identity(identity)
+    cache_path = tmp_path / "cache_receipt.json"
+    cache_path.write_text(
+        json.dumps(
+            {
+                "identity_sha256": "0" * 64,
+                "result_sha256": "f" * 64,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(GovernanceError, match="cache_identity_mismatch"):
+        registry.record_cache_hit(
+            identity,
+            evidence=CacheEvidence.from_path(cache_path),
+        )
 
 
 def test_attempt_registry_refuses_contract_hash_mismatch(tmp_path: Path) -> None:
@@ -289,6 +330,25 @@ def test_stale_registry_instance_reloads_before_mutation(tmp_path: Path) -> None
         exploration_registry=exploration,
     )
     assert reopened.summary()["planned_unique_identity_count"] == 2
+    assert stale.summary()["planned_unique_identity_count"] == 2
+
+
+def test_stale_lock_file_does_not_block_registry_creation(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "attempt_registry.json"
+    path.with_name(f".{path.name}.lock").write_text(
+        "dead-process",
+        encoding="ascii",
+    )
+
+    registry = AttemptRegistry.create(
+        path,
+        budget_contract=BudgetContract.frozen_v1(),
+        exploration_registry=ExplorationRegistry.zero_budget_v1(),
+    )
+
+    assert registry.summary()["planned_unique_identity_count"] == 0
 
 
 def test_failed_persist_does_not_mutate_in_memory_registry(
@@ -393,6 +453,37 @@ def test_fold_read_barrier_binds_record_to_source_hash(tmp_path: Path) -> None:
         match="target_identity_fields_cannot_expand_whitelist",
     ):
         FoldReadBarrier(manifest, target_identity_fields=("mae",))
+
+
+def test_fold_read_barrier_hashes_and_parses_same_bytes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    training_path = tmp_path / "train.json"
+    target_path = tmp_path / "target.json"
+    training_path.write_text('{"sample_id":"train","mae":1.0}', encoding="utf-8")
+    target_path.write_text('{"sample_id":"target","mae":99.0}', encoding="utf-8")
+    manifest = DataRoleManifest(
+        fold_id="fold",
+        training_record_ids=("train",),
+        audit_target_record_id="target",
+        record_sources={
+            "train": RecordSource.from_path(training_path),
+            "target": RecordSource.from_path(target_path),
+        },
+    )
+
+    def swap_during_old_hash(path: Path) -> str:
+        path.write_text('{"sample_id":"swapped","mae":0.0}', encoding="utf-8")
+        return manifest.record_sources["target"].sha256
+
+    monkeypatch.setattr(governance, "file_sha256", swap_during_old_hash)
+    result = FoldReadBarrier(manifest).read_json_fields(
+        record_id="target",
+        fields=("sample_id",),
+    )
+
+    assert result == {"sample_id": "target"}
 
 
 def test_independent_bo_requires_exact_machine_authorization() -> None:
