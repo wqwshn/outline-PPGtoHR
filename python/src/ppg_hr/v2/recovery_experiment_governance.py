@@ -9,10 +9,14 @@ import hashlib
 import json
 import os
 import shutil
+import time
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
+from copy import deepcopy
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Literal
 
 from .phase2_experiment_io import (
@@ -82,6 +86,7 @@ class AttemptIdentity:
     solver_hash: str
     config_hash: str
     metric_contract_hash: str
+    evaluation_hash: str
     data_sha256: str
     record_id: str
     stage: str
@@ -93,6 +98,7 @@ class AttemptIdentity:
             "solver_hash",
             "config_hash",
             "metric_contract_hash",
+            "evaluation_hash",
             "data_sha256",
         ):
             _require_sha256(name, getattr(self, name))
@@ -106,8 +112,19 @@ class AttemptIdentity:
     def sha256(self) -> str:
         return _canonical_sha256(asdict(self))
 
+    @property
+    def cache_identity_sha256(self) -> str:
+        return self.sha256
+
+    def to_identity_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
     def to_dict(self) -> dict[str, Any]:
-        return {**asdict(self), "identity_sha256": self.sha256}
+        return {
+            **self.to_identity_dict(),
+            "identity_sha256": self.sha256,
+            "cache_identity_sha256": self.cache_identity_sha256,
+        }
 
 
 @dataclass(frozen=True)
@@ -127,8 +144,20 @@ class BudgetContract:
     retry_limit: int
     contract_version: str = "lyx_recovery_filter_budget_v1"
     normal_unique_identity_limit: int | None = None
+    supplemental_stage: str | None = None
+    stage_attempt_kinds: Mapping[str, str] | None = None
 
     def __post_init__(self) -> None:
+        frozen_limits = MappingProxyType(dict(self.stage_unique_limits))
+        object.__setattr__(self, "stage_unique_limits", frozen_limits)
+        kinds = self.stage_attempt_kinds
+        if kinds is None:
+            kinds = {
+                stage: ("diagnostic" if "diagnostic" in stage else "formal")
+                for stage in frozen_limits
+            }
+        frozen_kinds = MappingProxyType(dict(kinds))
+        object.__setattr__(self, "stage_attempt_kinds", frozen_kinds)
         if not self.stage_unique_limits:
             raise ValueError("stage_unique_limits_must_not_be_empty")
         if any(
@@ -149,6 +178,15 @@ class BudgetContract:
             and self.normal_unique_identity_limit > self.max_unique_identities
         ):
             raise ValueError("normal_limit_exceeds_absolute_limit")
+        if set(self.stage_attempt_kinds) != set(self.stage_unique_limits):
+            raise ValueError("stage_attempt_kinds_must_cover_all_stages")
+        if any(kind not in _ATTEMPT_KINDS for kind in self.stage_attempt_kinds.values()):
+            raise ValueError("invalid_stage_attempt_kind")
+        if (
+            self.supplemental_stage is not None
+            and self.supplemental_stage not in self.stage_unique_limits
+        ):
+            raise ValueError("supplemental_stage_not_budgeted")
 
     @classmethod
     def frozen_v1(cls) -> BudgetContract:
@@ -163,6 +201,7 @@ class BudgetContract:
                 "fold_replay": 12,
             },
             normal_unique_identity_limit=672,
+            supplemental_stage="fold_replay",
             max_unique_identities=684,
             max_attempts=1368,
             retry_limit=1,
@@ -177,6 +216,8 @@ class BudgetContract:
             "contract_version": self.contract_version,
             "stage_unique_limits": dict(self.stage_unique_limits),
             "normal_unique_identity_limit": self.normal_unique_identity_limit,
+            "supplemental_stage": self.supplemental_stage,
+            "stage_attempt_kinds": dict(self.stage_attempt_kinds),
             "max_unique_identities": self.max_unique_identities,
             "max_attempts": self.max_attempts,
             "retry_limit": self.retry_limit,
@@ -217,6 +258,34 @@ class ExplorationRegistry:
         }
 
 
+@contextmanager
+def _exclusive_registry_lock(path: Path) -> Iterator[None]:
+    """用同目录独占文件串行化跨进程的账本更新。"""
+
+    lock_path = path.with_name(f".{path.name}.lock")
+    deadline = time.monotonic() + 10.0
+    descriptor: int | None = None
+    while descriptor is None:
+        try:
+            descriptor = os.open(
+                lock_path,
+                os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+            )
+        except FileExistsError as error:
+            if time.monotonic() >= deadline:
+                raise GovernanceError(f"attempt_registry_lock_timeout:{lock_path}") from error
+            time.sleep(0.05)
+    try:
+        os.write(descriptor, str(os.getpid()).encode("ascii"))
+        os.close(descriptor)
+        descriptor = None
+        yield
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+        lock_path.unlink(missing_ok=True)
+
+
 class AttemptRegistry:
     """持久化的先登记后求解状态机。"""
 
@@ -241,15 +310,17 @@ class AttemptRegistry:
         budget_contract: BudgetContract,
         exploration_registry: ExplorationRegistry,
     ) -> AttemptRegistry:
-        if path.exists():
-            raise GovernanceError(f"attempt_registry_already_exists:{path}")
-        registry = cls(
-            path,
-            budget_contract=budget_contract,
-            exploration_registry=exploration_registry,
-            entries={},
-        )
-        registry._persist()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with _exclusive_registry_lock(path):
+            if path.exists():
+                raise GovernanceError(f"attempt_registry_already_exists:{path}")
+            registry = cls(
+                path,
+                budget_contract=budget_contract,
+                exploration_registry=exploration_registry,
+                entries={},
+            )
+            registry._write_entries({})
         return registry
 
     @classmethod
@@ -274,74 +345,96 @@ class AttemptRegistry:
             exploration_registry=exploration_registry,
             entries=entries,
         )
-        registry._validate_entries()
-        if payload.get("summary") != registry.summary():
+        registry._validate_entries(entries)
+        if payload.get("summary") != registry._summary(entries):
             raise GovernanceError("attempt_registry_summary_mismatch")
         return registry
 
     def register_identity(self, identity: AttemptIdentity) -> str:
-        identity_hash = identity.sha256
-        if identity_hash in self._entries:
-            return identity_hash
-        if identity.attempt_kind == "exploration":
-            if (
+        def mutate(entries: dict[str, dict[str, Any]]) -> str:
+            identity_hash = identity.sha256
+            if identity_hash in entries:
+                return identity_hash
+            if identity.attempt_kind == "exploration" and (
                 self.exploration_registry.unique_budget == 0
                 or identity_hash not in self.exploration_registry.allowed_identity_sha256
             ):
                 raise GovernanceError(f"exploration_not_authorized:{identity_hash}")
-        limit = self.budget_contract.stage_unique_limits.get(identity.stage)
-        if limit is None:
-            raise GovernanceError(f"unbudgeted_stage:{identity.stage}")
-        stage_count = sum(
-            entry["identity"]["stage"] == identity.stage for entry in self._entries.values()
-        )
-        if stage_count >= limit or len(self._entries) >= self.budget_contract.max_unique_identities:
-            raise HumanGateRequiredError(
-                "awaiting_human_budget_decision",
-                f"unique_budget_exceeded:{identity.stage}",
+            expected_kind = self.budget_contract.stage_attempt_kinds.get(identity.stage)
+            if expected_kind is None:
+                raise GovernanceError(f"unbudgeted_stage:{identity.stage}")
+            if identity.attempt_kind != expected_kind:
+                raise GovernanceError(
+                    f"stage_attempt_kind_mismatch:{identity.stage}:{identity.attempt_kind}"
+                )
+            stage_count = sum(
+                entry["identity"]["stage"] == identity.stage for entry in entries.values()
             )
-        self._entries[identity_hash] = {
-            "identity": identity.to_dict(),
-            "attempts": [],
-            "cache_hits": 0,
-            "status": "registered",
-        }
-        self._persist()
-        return identity_hash
+            stage_limit = self.budget_contract.stage_unique_limits[identity.stage]
+            normal_limit = self.budget_contract.normal_unique_identity_limit
+            normal_count = sum(
+                entry["identity"]["stage"] != self.budget_contract.supplemental_stage
+                for entry in entries.values()
+            )
+            normal_overflow = (
+                normal_limit is not None
+                and identity.stage != self.budget_contract.supplemental_stage
+                and normal_count >= normal_limit
+            )
+            if (
+                stage_count >= stage_limit
+                or len(entries) >= self.budget_contract.max_unique_identities
+                or normal_overflow
+            ):
+                raise HumanGateRequiredError(
+                    "awaiting_human_budget_decision",
+                    f"unique_budget_exceeded:{identity.stage}",
+                )
+            entries[identity_hash] = {
+                "identity": identity.to_dict(),
+                "attempts": [],
+                "cache_hits": 0,
+                "status": "registered",
+            }
+            return identity_hash
+
+        return self._transaction(mutate)
 
     def begin_attempt(self, identity: AttemptIdentity) -> AttemptToken:
-        identity_hash = identity.sha256
-        entry = self._entries.get(identity_hash)
-        if entry is None:
-            raise GovernanceError(f"unregistered_identity:{identity_hash}")
-        if entry["identity"] != identity.to_dict():
-            raise GovernanceError(f"identity_payload_mismatch:{identity_hash}")
-        attempts = entry["attempts"]
-        if any(attempt["status"] == "running" for attempt in attempts):
-            raise GovernanceError(f"attempt_already_running:{identity_hash}")
-        if any(attempt["status"] == "succeeded" for attempt in attempts):
-            raise GovernanceError(f"identity_already_succeeded:{identity_hash}")
-        if len(attempts) >= self.budget_contract.retry_limit + 1:
-            raise GovernanceError(f"retry_limit_exceeded:{identity_hash}")
-        total_attempts = sum(len(item["attempts"]) for item in self._entries.values())
-        if total_attempts >= self.budget_contract.max_attempts:
-            raise GovernanceError("attempt_budget_exceeded")
-        token = AttemptToken(
-            identity_sha256=identity_hash,
-            attempt_number=len(attempts) + 1,
-            token=uuid.uuid4().hex,
-        )
-        attempts.append(
-            {
-                "attempt_number": token.attempt_number,
-                "token": token.token,
-                "status": "running",
-                "failure_reason": None,
-            }
-        )
-        entry["status"] = "running"
-        self._persist()
-        return token
+        def mutate(entries: dict[str, dict[str, Any]]) -> AttemptToken:
+            identity_hash = identity.sha256
+            entry = entries.get(identity_hash)
+            if entry is None:
+                raise GovernanceError(f"unregistered_identity:{identity_hash}")
+            if entry["identity"] != identity.to_dict():
+                raise GovernanceError(f"identity_payload_mismatch:{identity_hash}")
+            attempts = entry["attempts"]
+            if any(attempt["status"] == "running" for attempt in attempts):
+                raise GovernanceError(f"attempt_already_running:{identity_hash}")
+            if any(attempt["status"] == "succeeded" for attempt in attempts):
+                raise GovernanceError(f"identity_already_succeeded:{identity_hash}")
+            if len(attempts) >= self.budget_contract.retry_limit + 1:
+                raise GovernanceError(f"retry_limit_exceeded:{identity_hash}")
+            total_attempts = sum(len(item["attempts"]) for item in entries.values())
+            if total_attempts >= self.budget_contract.max_attempts:
+                raise GovernanceError("attempt_budget_exceeded")
+            token = AttemptToken(
+                identity_sha256=identity_hash,
+                attempt_number=len(attempts) + 1,
+                token=uuid.uuid4().hex,
+            )
+            attempts.append(
+                {
+                    "attempt_number": token.attempt_number,
+                    "token": token.token,
+                    "status": "running",
+                    "failure_reason": None,
+                }
+            )
+            entry["status"] = "running"
+            return token
+
+        return self._transaction(mutate)
 
     def finish_attempt(
         self,
@@ -352,75 +445,223 @@ class AttemptRegistry:
     ) -> None:
         if status not in _TERMINAL_ATTEMPT_STATUSES:
             raise GovernanceError(f"invalid_attempt_status:{status}")
-        entry = self._entries.get(token.identity_sha256)
-        if entry is None:
-            raise GovernanceError(f"unknown_attempt_token_identity:{token.identity_sha256}")
-        try:
+
+        def mutate(entries: dict[str, dict[str, Any]]) -> None:
+            entry = entries.get(token.identity_sha256)
+            if entry is None:
+                raise GovernanceError(f"unknown_attempt_token_identity:{token.identity_sha256}")
+            if token.attempt_number <= 0 or token.attempt_number > len(entry["attempts"]):
+                raise GovernanceError("unknown_attempt_token")
             attempt = entry["attempts"][token.attempt_number - 1]
-        except IndexError as error:
-            raise GovernanceError("unknown_attempt_token") from error
-        if (
-            attempt["token"] != token.token
-            or attempt["attempt_number"] != token.attempt_number
-            or attempt["status"] != "running"
-        ):
-            raise GovernanceError("attempt_token_mismatch")
-        if status == "failed" and not failure_reason:
-            raise GovernanceError("failed_attempt_requires_reason")
-        attempt["status"] = status
-        attempt["failure_reason"] = failure_reason
-        entry["status"] = status
-        self._persist()
+            if (
+                attempt["token"] != token.token
+                or attempt["attempt_number"] != token.attempt_number
+                or attempt["status"] != "running"
+            ):
+                raise GovernanceError("attempt_token_mismatch")
+            if status == "failed" and not failure_reason:
+                raise GovernanceError("failed_attempt_requires_reason")
+            attempt["status"] = status
+            attempt["failure_reason"] = failure_reason
+            entry["status"] = status
+
+        self._transaction(mutate)
 
     def record_cache_hit(self, identity: AttemptIdentity) -> None:
-        entry = self._entries.get(identity.sha256)
+        def mutate(entries: dict[str, dict[str, Any]]) -> None:
+            entry = entries.get(identity.sha256)
+            if entry is None:
+                raise GovernanceError(f"unregistered_identity:{identity.sha256}")
+            if entry["identity"] != identity.to_dict():
+                raise GovernanceError(f"identity_payload_mismatch:{identity.sha256}")
+            entry["cache_hits"] += 1
+
+        self._transaction(mutate)
+
+    def execute_registered(
+        self,
+        identity: AttemptIdentity,
+        operation: Callable[[], Any],
+    ) -> Any:
+        """唯一受支持的新求解入口；账本先落 running 再调用求解。"""
+
+        token = self.begin_attempt(identity)
+        try:
+            result = operation()
+        except Exception as error:
+            self.finish_attempt(
+                token,
+                status="failed",
+                failure_reason=f"{type(error).__name__}:{error}",
+            )
+            raise
+        self.finish_attempt(token, status="succeeded")
+        return result
+
+    def assert_nominatable(self, identity: AttemptIdentity) -> None:
+        """候选只有存在成功求解或已登记缓存证据时才可被提名。"""
+
+        fresh = self.open(
+            self.path,
+            budget_contract=self.budget_contract,
+            exploration_registry=self.exploration_registry,
+        )
+        entry = fresh._entries.get(identity.sha256)
         if entry is None:
-            raise GovernanceError(f"unregistered_identity:{identity.sha256}")
-        entry["cache_hits"] += 1
-        self._persist()
+            raise GovernanceError(f"unregistered_nomination:{identity.sha256}")
+        has_success = any(attempt["status"] == "succeeded" for attempt in entry["attempts"])
+        if not has_success and entry["cache_hits"] == 0:
+            raise GovernanceError(f"nomination_without_evidence:{identity.sha256}")
 
     def summary(self) -> dict[str, int]:
-        attempts = [attempt for entry in self._entries.values() for attempt in entry["attempts"]]
+        return self._summary(self._entries)
+
+    @staticmethod
+    def _summary(
+        entries: Mapping[str, Mapping[str, Any]],
+    ) -> dict[str, int]:
+        attempts = [attempt for entry in entries.values() for attempt in entry["attempts"]]
         return {
             "logical_task_count": len(attempts)
-            + sum(entry["cache_hits"] for entry in self._entries.values()),
-            "planned_unique_identity_count": len(self._entries),
-            "actual_unique_run_count": sum(
-                bool(entry["attempts"]) for entry in self._entries.values()
-            ),
-            "cache_hit_count": sum(entry["cache_hits"] for entry in self._entries.values()),
+            + sum(entry["cache_hits"] for entry in entries.values()),
+            "planned_unique_identity_count": len(entries),
+            "actual_unique_run_count": sum(bool(entry["attempts"]) for entry in entries.values()),
+            "cache_hit_count": sum(entry["cache_hits"] for entry in entries.values()),
             "failed_attempt_count": sum(attempt["status"] == "failed" for attempt in attempts),
-            "retry_count": sum(
-                max(0, len(entry["attempts"]) - 1) for entry in self._entries.values()
-            ),
+            "retry_count": sum(max(0, len(entry["attempts"]) - 1) for entry in entries.values()),
         }
 
-    def _persist(self) -> None:
+    def _transaction(self, mutate: Callable[[dict[str, dict[str, Any]]], Any]) -> Any:
+        with _exclusive_registry_lock(self.path):
+            fresh = self.open(
+                self.path,
+                budget_contract=self.budget_contract,
+                exploration_registry=self.exploration_registry,
+            )
+            entries = deepcopy(fresh._entries)
+            result = mutate(entries)
+            self._validate_entries(entries)
+            self._write_entries(entries)
+            self._entries = entries
+            return result
+
+    def _write_entries(
+        self,
+        entries: dict[str, dict[str, Any]],
+    ) -> None:
         atomic_write_json(
             self.path,
             {
                 "registry_version": "lyx_recovery_attempt_registry_v1",
                 "budget_contract_sha256": self.budget_contract.sha256,
                 "exploration_registry_sha256": (self.exploration_registry.sha256),
-                "entries": self._entries,
-                "summary": self.summary(),
+                "entries": entries,
+                "summary": self._summary(entries),
             },
         )
 
-    def _validate_entries(self) -> None:
-        for identity_hash, entry in self._entries.items():
+    def _validate_entries(
+        self,
+        entries: Mapping[str, Mapping[str, Any]],
+    ) -> None:
+        if len(entries) > self.budget_contract.max_unique_identities:
+            raise GovernanceError("unique_budget_exceeded_in_registry")
+        total_attempts = 0
+        stage_counts: dict[str, int] = {}
+        normal_count = 0
+        for identity_hash, entry in entries.items():
             try:
                 identity_payload = dict(entry["identity"])
                 stored_hash = identity_payload.pop("identity_sha256")
+                cache_hash = identity_payload.pop("cache_identity_sha256")
                 identity = AttemptIdentity(**identity_payload)
                 attempts = entry["attempts"]
                 cache_hits = entry["cache_hits"]
+                entry_status = entry["status"]
             except (KeyError, TypeError, ValueError) as error:
                 raise GovernanceError(f"invalid_attempt_registry_entry:{identity_hash}") from error
-            if identity_hash != identity.sha256 or stored_hash != identity_hash:
+            if (
+                identity_hash != identity.sha256
+                or stored_hash != identity_hash
+                or cache_hash != identity.cache_identity_sha256
+            ):
                 raise GovernanceError(f"attempt_identity_hash_mismatch:{identity_hash}")
-            if not isinstance(attempts, list) or not isinstance(cache_hits, int) or cache_hits < 0:
+            expected_kind = self.budget_contract.stage_attempt_kinds.get(identity.stage)
+            if expected_kind != identity.attempt_kind:
+                raise GovernanceError(f"stage_attempt_kind_mismatch:{identity.stage}")
+            if identity.attempt_kind == "exploration" and (
+                identity_hash not in self.exploration_registry.allowed_identity_sha256
+            ):
+                raise GovernanceError(f"exploration_not_authorized:{identity_hash}")
+            stage_counts[identity.stage] = stage_counts.get(identity.stage, 0) + 1
+            if identity.stage != self.budget_contract.supplemental_stage:
+                normal_count += 1
+            if (
+                not isinstance(attempts, list)
+                or not isinstance(cache_hits, int)
+                or isinstance(cache_hits, bool)
+                or cache_hits < 0
+            ):
                 raise GovernanceError(f"invalid_attempt_registry_entry:{identity_hash}")
+            self._validate_attempt_state(
+                identity_hash,
+                attempts,
+                entry_status,
+            )
+            total_attempts += len(attempts)
+        for stage, count in stage_counts.items():
+            if count > self.budget_contract.stage_unique_limits[stage]:
+                raise GovernanceError(f"stage_budget_exceeded_in_registry:{stage}")
+        normal_limit = self.budget_contract.normal_unique_identity_limit
+        if normal_limit is not None and normal_count > normal_limit:
+            raise GovernanceError("normal_budget_exceeded_in_registry")
+        if total_attempts > self.budget_contract.max_attempts:
+            raise GovernanceError("attempt_budget_exceeded_in_registry")
+
+    def _validate_attempt_state(
+        self,
+        identity_hash: str,
+        attempts: Sequence[Mapping[str, Any]],
+        entry_status: Any,
+    ) -> None:
+        if len(attempts) > self.budget_contract.retry_limit + 1:
+            raise GovernanceError(f"invalid_attempt_state:{identity_hash}:retry_limit")
+        tokens: set[str] = set()
+        for index, attempt in enumerate(attempts, start=1):
+            token = attempt.get("token")
+            status = attempt.get("status")
+            reason = attempt.get("failure_reason")
+            if (
+                attempt.get("attempt_number") != index
+                or not isinstance(token, str)
+                or not token
+                or token in tokens
+                or status not in {"running", *_TERMINAL_ATTEMPT_STATUSES}
+                or (status == "failed" and not reason)
+                or (status != "failed" and reason is not None)
+                or (status in {"running", "succeeded"} and index != len(attempts))
+            ):
+                raise GovernanceError(f"invalid_attempt_state:{identity_hash}:{index}")
+            tokens.add(token)
+        expected_status = attempts[-1]["status"] if attempts else "registered"
+        if entry_status != expected_status:
+            raise GovernanceError(f"invalid_attempt_state:{identity_hash}:entry_status")
+
+
+@dataclass(frozen=True)
+class RecordSource:
+    """一个记录在读取屏障中的冻结物理来源。"""
+
+    path: Path
+    sha256: str
+
+    def __post_init__(self) -> None:
+        _require_sha256("record_source", self.sha256)
+        object.__setattr__(self, "path", self.path.resolve())
+
+    @classmethod
+    def from_path(cls, path: Path) -> RecordSource:
+        return cls(path=path, sha256=file_sha256(path))
 
 
 @dataclass(frozen=True)
@@ -430,8 +671,14 @@ class DataRoleManifest:
     fold_id: str
     training_record_ids: tuple[str, ...]
     audit_target_record_id: str
+    record_sources: Mapping[str, RecordSource]
 
     def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "record_sources",
+            MappingProxyType(dict(self.record_sources)),
+        )
         if not self.fold_id or not self.audit_target_record_id:
             raise ValueError("fold_and_target_must_not_be_empty")
         if not self.training_record_ids:
@@ -440,6 +687,12 @@ class DataRoleManifest:
             raise ValueError("duplicate_training_record")
         if self.audit_target_record_id in self.training_record_ids:
             raise ValueError("audit_target_cannot_be_training_record")
+        expected_records = {
+            *self.training_record_ids,
+            self.audit_target_record_id,
+        }
+        if set(self.record_sources) != expected_records:
+            raise ValueError("record_sources_must_match_fold_records")
 
 
 class FoldReadBarrier:
@@ -453,13 +706,14 @@ class FoldReadBarrier:
     ) -> None:
         self.manifest = manifest
         self._target_identity_fields = frozenset(target_identity_fields)
+        if not self._target_identity_fields <= _AUDIT_TARGET_IDENTITY_FIELDS:
+            raise ValueError("target_identity_fields_cannot_expand_whitelist")
         self._accesses: list[dict[str, Any]] = []
 
     def read_json_fields(
         self,
         *,
         record_id: str,
-        path: Path,
         fields: Sequence[str],
     ) -> dict[str, Any]:
         if record_id not in {
@@ -470,12 +724,15 @@ class FoldReadBarrier:
         requested = tuple(fields)
         if not requested:
             raise GovernanceError("empty_field_request")
+        source = self.manifest.record_sources[record_id]
+        if file_sha256(source.path) != source.sha256:
+            raise GovernanceError(f"record_source_hash_mismatch:{record_id}")
         role = "audit_target" if record_id == self.manifest.audit_target_record_id else "training"
         if role == "audit_target":
             denied = sorted(set(requested) - self._target_identity_fields)
             if denied:
                 raise GovernanceError("audit_target_field_denied:" + ",".join(denied))
-        payload = read_json(path)
+        payload = read_json(source.path)
         missing = [field for field in requested if field not in payload]
         if missing:
             raise GovernanceError("requested_field_missing:" + ",".join(missing))
@@ -484,8 +741,8 @@ class FoldReadBarrier:
             {
                 "record_id": record_id,
                 "role": role,
-                "path": str(path.resolve()),
-                "path_sha256": file_sha256(path),
+                "path": str(source.path),
+                "path_sha256": source.sha256,
                 "fields": list(requested),
             }
         )
@@ -499,8 +756,20 @@ class FoldReadBarrier:
             "audit_target_record_id": (self.manifest.audit_target_record_id),
             "algorithm_level_holdout": False,
             "evidence_class": "development_replay_audit",
+            "record_sources": {
+                record_id: {
+                    "path": str(source.path),
+                    "sha256": source.sha256,
+                }
+                for record_id, source in self.manifest.record_sources.items()
+            },
             "accesses": list(self._accesses),
         }
+
+    def write_receipt(self, path: Path) -> dict[str, Any]:
+        receipt = self.receipt()
+        atomic_write_json(path, receipt)
+        return receipt
 
 
 @dataclass(frozen=True)
@@ -534,10 +803,14 @@ def validate_human_gate(
         raise ValueError(f"unknown_human_gate_state:{state}")
     if receipt is None or receipt.get("approved") is not True:
         raise HumanGateRequiredError(state)
-    required = {"approved_at", "approved_by"}
+    required = {"decision_state", "approved_at", "approved_by"}
     missing = sorted(required - receipt.keys())
     if missing or not all(receipt.get(field) for field in required):
         raise GovernanceError("authorization_missing_fields:" + ",".join(missing))
+    if receipt["decision_state"] != state:
+        raise GovernanceError(f"authorization_state_mismatch:{receipt['decision_state']}:{state}")
+    if not isinstance(receipt["approved_at"], str) or not isinstance(receipt["approved_by"], str):
+        raise GovernanceError("authorization_metadata_must_be_strings")
     return dict(receipt)
 
 
@@ -553,6 +826,7 @@ def validate_independent_bo_authorization(
     expected = asdict(request)
     required = {
         "approved",
+        "decision_state",
         *expected.keys(),
         "approved_at",
         "approved_by",

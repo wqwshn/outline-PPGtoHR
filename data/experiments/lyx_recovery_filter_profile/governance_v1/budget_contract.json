@@ -4,6 +4,15 @@
   "max_unique_identities": 684,
   "normal_unique_identity_limit": 672,
   "retry_limit": 1,
+  "stage_attempt_kinds": {
+    "current_role_matrix": "formal",
+    "fixed_lower_bound_diagnostic": "diagnostic",
+    "fold_replay": "formal",
+    "historical_recovery_ab": "formal",
+    "penalty_interaction": "formal",
+    "recovery_sentinel": "formal",
+    "rollback_backup_matrix": "formal"
+  },
   "stage_unique_limits": {
     "current_role_matrix": 96,
     "fixed_lower_bound_diagnostic": 60,
@@ -12,5 +21,6 @@
     "penalty_interaction": 288,
     "recovery_sentinel": 108,
     "rollback_backup_matrix": 96
-  }
+  },
+  "supplemental_stage": "fold_replay"
 }
