@@ -13,6 +13,7 @@ from ppg_hr.v2.phase2_experiment_io import (
 )
 from ppg_hr.v2.recovery_contracts import canonical_sha256
 from ppg_hr.v2.recovery_experiment_governance import (
+    AttemptIdentity,
     AttemptRegistry,
     BudgetContract,
     ExplorationRegistry,
@@ -585,14 +586,32 @@ def test_no_safe_selection_builds_review_only_bo_package() -> None:
         "status": "no_safe_recovery_candidate",
         "selection_sha256": "a" * 64,
         "eliminated_candidates": {
-            "control": ["record:spectral_gate_contract_v1"],
+            "control": [
+                "p50/record:spectral_gate_contract_v1"
+            ],
         },
     }
+    evaluations = [
+        {
+            "candidate_id": "control",
+            "records": [
+                {
+                    "record_id": "record",
+                    "sentinel_id": "p50",
+                    "scene": "run",
+                    "mae": 4.0,
+                    "independent_mae": 2.0,
+                    "current_mae": 3.0,
+                }
+            ],
+        }
+    ]
 
     package = stage_r_module._independent_bo_review_package(
         proposal_sha256="b" * 64,
         authorization_sha256="c" * 64,
         selection=selection,
+        candidate_evaluations=evaluations,
     )
 
     assert package["status"] == (
@@ -600,8 +619,12 @@ def test_no_safe_selection_builds_review_only_bo_package() -> None:
     )
     assert package["independent_bo_authorized"] is False
     assert package["independent_bo_run_count"] == 0
-    assert package["execution_identity_count"] is None
-    assert package["execution_budget"] is None
+    assert package["execution_identity_count"] == 150
+    assert package["execution_budget"][
+        "maximum_unique_solver_config_record_identities"
+    ] == 150
+    assert package["trigger_records"][0]["record_id"] == "record"
+    assert package["recommendation"]["automatic_execution"] is False
     assert package["package_sha256"] == canonical_sha256(
         {
             key: value
@@ -758,7 +781,7 @@ def test_stage_r_execution_registers_runs_and_selects_exact_matrix(
     )
     assert completion["rollback_backup_id"] == "relative_gap_timeout_v1"
     assert writes[-1] == "stage_r_completion.json"
-    assert completion["attempt_registry_summary"] == {
+    assert completion["attempt_registry_summary_at_completion"] == {
         "logical_task_count": 168,
         "planned_unique_identity_count": 168,
         "actual_unique_run_count": 168,
@@ -785,6 +808,24 @@ def test_stage_r_execution_registers_runs_and_selects_exact_matrix(
         80.0,
         85.0,
     ]
+    later_registry = AttemptRegistry.open(
+        governance / "attempt_registry.json",
+        budget_contract=BudgetContract.approved_v5(),
+        exploration_registry=ExplorationRegistry.zero_budget_v1(),
+    )
+    later_registry.register_identity(
+        AttemptIdentity(
+            solver_hash="1" * 64,
+            config_hash="2" * 64,
+            metric_contract_hash="3" * 64,
+            evaluation_hash="4" * 64,
+            data_sha256="5" * 64,
+            record_id="later-stage-f",
+            stage="penalty_interaction",
+            attempt_kind="formal",
+            parent_experiment_id="parent",
+        )
+    )
     rerun = execute_stage_r_proposal(
         proposal_dir=proposal_dir,
         authorization_receipt_path=authorization_path,

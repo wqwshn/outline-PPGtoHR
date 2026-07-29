@@ -14,14 +14,13 @@ import os
 import shutil
 import uuid
 from collections import Counter
-from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, dataclass, fields
+from collections.abc import Mapping, Sequence
+from dataclasses import asdict, fields
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-
-from .bo_space_generalization import _cache_json_ready
+from . import recovery_stage_r_cache as stage_r_cache
+from . import recovery_stage_r_reporting as stage_r_reporting
 from .experiment_freeze_utils import runtime_source_identity
 from .phase2_experiment_io import atomic_write_json, file_sha256, read_json
 from .preprocess import load_v2_reference
@@ -30,7 +29,6 @@ from .recovery_experiment_governance import (
     AttemptIdentity,
     AttemptRegistry,
     BudgetContract,
-    CacheEvidence,
     ExplorationRegistry,
     FrozenExperimentContractHashes,
     validate_recovery_experiment_preflight,
@@ -55,6 +53,13 @@ from .recovery_spectral_gate import (
     StageRSpectralGateContract,
     audit_stage_r_profile_record,
 )
+from .recovery_stage_r_common import (
+    StageRAuthorizationError,
+    StageRNumericalResult,
+    StageRNumericalRunner,
+    StageRPlanError,
+    StageRProgressCallback,
+)
 from .solver import V2SolverResult, solve_v2
 from .types import V2RunConfig
 
@@ -71,28 +76,12 @@ _FORMAL_STAGE = "recovery_sentinel"
 _AUTHORIZATION_STATE = "awaiting_human_stage_r_execution_decision"
 
 
-class StageRPlanError(RuntimeError):
-    """A frozen source or Stage R identity is incomplete or inconsistent."""
-
-
-class StageRAuthorizationError(StageRPlanError):
-    """The exact 168-identity execution proposal has not been approved."""
-
-
-@dataclass(frozen=True)
-class StageRNumericalResult:
-    """One solved trajectory plus its frozen offline Stage R evidence."""
-
-    solver_result: V2SolverResult
-    metrics: Mapping[str, Any]
-    spectral_audit: Mapping[str, Any] | None
-
-
-StageRNumericalRunner = Callable[
-    [dict[str, Any], Path],
-    StageRNumericalResult,
-]
-StageRProgressCallback = Callable[[Mapping[str, Any]], None]
+_independent_bo_review_package = (
+    stage_r_reporting.build_independent_bo_review_package
+)
+_validate_completed_stage_r_execution = (
+    stage_r_reporting.validate_completed_stage_r_execution
+)
 
 
 def _json_ready(value: Any) -> Any:
@@ -1273,202 +1262,6 @@ def _run_stage_r_numerical_identity(
     )
 
 
-def _write_stage_r_cache_result(
-    *,
-    result_dir: Path,
-    identity: AttemptIdentity,
-    item: Mapping[str, Any],
-    numerical: StageRNumericalResult,
-) -> dict[str, Any]:
-    result_dir.mkdir(parents=True, exist_ok=True)
-    trajectory_path = result_dir / "trajectory.npz"
-    trajectory_temp = result_dir / (
-        f".trajectory.{uuid.uuid4().hex}.tmp"
-    )
-    with trajectory_temp.open("wb") as handle:
-        np.savez_compressed(
-            handle,
-            HR=np.asarray(numerical.solver_result.HR, dtype=float),
-        )
-    os.replace(trajectory_temp, trajectory_path)
-    details_path = result_dir / "solver_details.json"
-    atomic_write_json(
-        details_path,
-        _cache_json_ready(
-            {
-                "err_stats": numerical.solver_result.err_stats,
-                "metadata": numerical.solver_result.metadata,
-                "window_table": numerical.solver_result.window_table,
-            }
-        ),
-    )
-    result_path = result_dir / "result.json"
-    payload = {
-        "producer": "content_addressed_solver_cache_v1",
-        "result_version": "lyx_stage_r_solver_result_v1",
-        "status": "complete",
-        "valid": True,
-        "identity": identity.to_dict(),
-        "config": _json_ready(item["config"]),
-        "data_identity": {
-            "raw_data_sha256": item["raw_data_sha256"],
-            "reference_sha256": item["reference_sha256"],
-            "combined_data_sha256": item["data_sha256"],
-        },
-        "coordinate": {
-            key: item[key]
-            for key in (
-                "stage",
-                "scene",
-                "record_id",
-                "filter_profile_id",
-                "recovery_candidate_id",
-                "candidate_min_bpm",
-                "penalty_candidate_id",
-            )
-        },
-        "metrics": _json_ready(dict(numerical.metrics)),
-        "spectral_audit": (
-            None
-            if numerical.spectral_audit is None
-            else _json_ready(dict(numerical.spectral_audit))
-        ),
-        "trajectory": {
-            "path": trajectory_path.name,
-            "sha256": file_sha256(trajectory_path),
-            "solver_details_path": details_path.name,
-            "solver_details_sha256": file_sha256(details_path),
-        },
-    }
-    atomic_write_json(result_path, payload)
-    receipt_path = result_dir / "cache_receipt.json"
-    atomic_write_json(
-        receipt_path,
-        {
-            "identity_sha256": identity.sha256,
-            "result_path": result_path.name,
-            "result_sha256": file_sha256(result_path),
-        },
-    )
-    return payload
-
-
-def _load_stage_r_cache_result(
-    *,
-    evidence: CacheEvidence,
-) -> dict[str, Any]:
-    payload = read_json(evidence.result_path)
-    identity = _require_mapping(
-        "stage_r_cached_identity",
-        payload.get("identity"),
-    )
-    config = _require_mapping(
-        "stage_r_cached_config",
-        payload.get("config"),
-    )
-    data_identity = _require_mapping(
-        "stage_r_cached_data_identity",
-        payload.get("data_identity"),
-    )
-    if (
-        canonical_sha256(config) != identity.get("config_hash")
-        or data_identity.get("combined_data_sha256")
-        != identity.get("data_sha256")
-    ):
-        raise StageRPlanError(
-            "stage_r_cached_result_identity_mismatch"
-        )
-    trajectory = _require_mapping(
-        "stage_r_trajectory",
-        payload.get("trajectory"),
-    )
-    for path_field, hash_field in (
-        ("path", "sha256"),
-        ("solver_details_path", "solver_details_sha256"),
-    ):
-        path = (evidence.result_path.parent / str(trajectory[path_field])).resolve()
-        if (
-            not path.is_relative_to(evidence.result_path.parent)
-            or not path.is_file()
-            or file_sha256(path) != trajectory.get(hash_field)
-        ):
-            raise StageRPlanError(
-                f"stage_r_cached_trajectory_hash_mismatch:{path_field}"
-            )
-    _require_mapping("stage_r_cached_metrics", payload.get("metrics"))
-    return payload
-
-
-def _execute_stage_r_identity(
-    *,
-    registry: AttemptRegistry,
-    item: dict[str, Any],
-    numerical_runner: StageRNumericalRunner,
-    spectral_audit_dir: Path,
-) -> dict[str, Any]:
-    identity = _attempt_identity_from_item(item)
-    if canonical_sha256(_json_ready(item["config"])) != identity.config_hash:
-        raise StageRPlanError(
-            f"stage_r_identity_config_hash_mismatch:{identity.sha256}"
-        )
-    result_dir = registry.trusted_cache_root / identity.sha256
-    receipt_path = result_dir / "cache_receipt.json"
-    cache_hit = receipt_path.is_file()
-    if cache_hit:
-        evidence = CacheEvidence.from_path(
-            receipt_path,
-            expected_identity=identity,
-            trusted_cache_root=registry.trusted_cache_root,
-        )
-        payload = _load_stage_r_cache_result(evidence=evidence)
-        recovery = registry.reconcile_interrupted_attempt(
-            identity,
-            evidence=evidence,
-        )
-        if recovery == "no_running_attempt":
-            registry.record_cache_hit(identity, evidence=evidence)
-    else:
-        registry.reconcile_interrupted_attempt(
-            identity,
-            evidence=None,
-        )
-
-        def operation() -> dict[str, Any]:
-            numerical = numerical_runner(item, spectral_audit_dir)
-            return _write_stage_r_cache_result(
-                result_dir=result_dir,
-                identity=identity,
-                item=item,
-                numerical=numerical,
-            )
-
-        payload = registry.execute_registered(identity, operation)
-        evidence = CacheEvidence.from_path(
-            receipt_path,
-            expected_identity=identity,
-            trusted_cache_root=registry.trusted_cache_root,
-        )
-        registry.bind_cache_evidence(identity, evidence=evidence)
-    provenance = registry.matrix_execution_summary((identity,))
-    cache_hit = (
-        provenance["identity_with_solver_attempt_count"] == 0
-    )
-    return {
-        "identity_sha256": identity.sha256,
-        "stage": item["stage"],
-        "record_id": item["record_id"],
-        "scene": item["scene"],
-        "filter_profile_id": item["filter_profile_id"],
-        "recovery_candidate_id": item["recovery_candidate_id"],
-        "candidate_min_bpm": item["candidate_min_bpm"],
-        "cache_hit": cache_hit,
-        "cache_receipt_sha256": evidence.receipt_sha256,
-        "result_sha256": evidence.result_sha256,
-        "metrics": dict(payload["metrics"]),
-        "spectral_audit": payload.get("spectral_audit"),
-    }
-
-
 def _selection_recovery_delay(metrics: Mapping[str, Any]) -> float:
     raw = metrics.get("max_recovered_delay_s")
     if raw is not None:
@@ -1728,143 +1521,6 @@ def _build_stage_r_selection(
     return selection, serialized
 
 
-def _independent_bo_review_package(
-    *,
-    proposal_sha256: str,
-    authorization_sha256: str,
-    selection: Mapping[str, Any],
-) -> dict[str, Any]:
-    if selection.get("status") != "no_safe_recovery_candidate":
-        raise StageRPlanError(
-            "independent_bo_review_requires_no_safe_selection"
-        )
-    payload = {
-        "package_version": "lyx_stage_r_independent_bo_review_v1",
-        "status": "awaiting_human_independent_bo_decision",
-        "proposal_sha256": proposal_sha256,
-        "authorization_sha256": authorization_sha256,
-        "trigger": "no_safe_recovery_candidate",
-        "trigger_selection_sha256": selection[
-            "selection_sha256"
-        ],
-        "eliminated_candidates": dict(
-            _require_mapping(
-                "eliminated_candidates",
-                selection.get("eliminated_candidates"),
-            )
-        ),
-        "requested_human_decision": (
-            "whether_to_prepare_a_separate_exact_independent_bo_proposal"
-        ),
-        "independent_bo_authorized": False,
-        "independent_bo_run_count": 0,
-        "execution_identity_count": None,
-        "execution_budget": None,
-        "execution_policy": (
-            "no BO may run until identities, search budget, data scope, "
-            "source closure, and a new authorization hash are frozen"
-        ),
-    }
-    payload["package_sha256"] = canonical_sha256(payload)
-    return payload
-
-
-def _validate_completed_stage_r_execution(
-    *,
-    completion_path: Path,
-    proposal: Mapping[str, Any],
-    authorization_sha256: str,
-    governance_root: Path,
-    destination: Path,
-    registry: AttemptRegistry,
-    identities: Sequence[AttemptIdentity],
-) -> dict[str, Any]:
-    completion = read_json(completion_path)
-    _verify_embedded_hash(
-        completion,
-        hash_field="completion_sha256",
-        artifact_name="stage_r_completion",
-    )
-    if (
-        completion.get("proposal_sha256")
-        != proposal.get("proposal_sha256")
-        or completion.get("authorization_sha256")
-        != authorization_sha256
-    ):
-        raise StageRPlanError(
-            "stage_r_completion_authorization_mismatch"
-        )
-    artifacts = _require_mapping(
-        "stage_r_completion_artifacts",
-        completion.get("artifacts"),
-    )
-    for name, expected_hash in artifacts.items():
-        path = (destination / str(name)).resolve()
-        if (
-            not path.is_relative_to(destination)
-            or not path.is_file()
-            or file_sha256(path) != expected_hash
-        ):
-            raise StageRPlanError(
-                f"stage_r_completion_artifact_mismatch:{name}"
-            )
-    governance_path = (
-        governance_root / "stage_r_governance_receipt.json"
-    )
-    if (
-        not governance_path.is_file()
-        or file_sha256(governance_path)
-        != completion.get("governance_receipt_file_sha256")
-    ):
-        raise StageRPlanError(
-            "stage_r_completion_governance_receipt_mismatch"
-        )
-    governance = read_json(governance_path)
-    _verify_embedded_hash(
-        governance,
-        hash_field="receipt_sha256",
-        artifact_name="stage_r_governance_receipt",
-    )
-    if (
-        governance.get("proposal_sha256")
-        != proposal.get("proposal_sha256")
-        or governance.get("authorization_sha256")
-        != authorization_sha256
-        or governance.get("receipt_sha256")
-        != completion.get("governance_receipt_sha256")
-        or governance.get("status") != completion.get("status")
-        or governance.get("artifacts") != dict(artifacts)
-    ):
-        raise StageRPlanError(
-            "stage_r_governance_receipt_binding_mismatch"
-        )
-    registry.assert_complete_matrix(identities)
-    current_registry_summary = registry.summary()
-    current_matrix_summary = registry.matrix_execution_summary(
-        identities
-    )
-    if (
-        file_sha256(registry.path)
-        != governance.get("attempt_registry_sha256")
-        or current_registry_summary
-        != governance.get("attempt_registry_summary")
-        or current_registry_summary
-        != completion.get("attempt_registry_summary")
-        or current_matrix_summary
-        != governance.get("matrix_execution_summary")
-        or current_matrix_summary
-        != completion.get("matrix_execution_summary")
-        or governance.get("identity_matrix_sha256")
-        != canonical_sha256(
-            [identity.sha256 for identity in identities]
-        )
-    ):
-        raise StageRPlanError(
-            "stage_r_completion_attempt_registry_mismatch"
-        )
-    return completion
-
-
 def execute_stage_r_proposal(
     *,
     proposal_dir: Path,
@@ -1974,7 +1630,7 @@ def execute_stage_r_proposal(
     spectral_audit_dir = destination / "spectral_audits"
     results: list[dict[str, Any]] = []
     for index, raw_item in enumerate(raw_identities, start=1):
-        result = _execute_stage_r_identity(
+        result = stage_r_cache.execute_stage_r_identity(
             registry=registry,
             item=dict(
                 _require_mapping("stage_r_identity", raw_item)
@@ -2038,6 +1694,7 @@ def execute_stage_r_proposal(
                 proposal_sha256=proposal["proposal_sha256"],
                 authorization_sha256=authorization_sha256,
                 selection=selection,
+                candidate_evaluations=evaluations,
             ),
         )
     registry_summary = registry.summary()
@@ -2058,12 +1715,18 @@ def execute_stage_r_proposal(
         formal_identities
     )
     matrix_summary = registry.matrix_execution_summary(identities)
+    matrix_snapshot = registry.matrix_snapshot(identities)
+    atomic_write_json(
+        destination / "attempt_registry_stage_r_snapshot.json",
+        matrix_snapshot,
+    )
     artifact_names = [
         "execution_binding.json",
         "identity_result_index.json",
         "threshold_diagnostic_summary.json",
         "formal_candidate_evaluations.json",
         "recovery_selection.json",
+        "attempt_registry_stage_r_snapshot.json",
     ]
     if selection["status"] == "no_safe_recovery_candidate":
         artifact_names.append("independent_bo_review_package.json")
@@ -2079,10 +1742,13 @@ def execute_stage_r_proposal(
         "identity_matrix_sha256": canonical_sha256(
             [identity.sha256 for identity in identities]
         ),
-        "attempt_registry_sha256": file_sha256(
+        "attempt_registry_file_sha256_at_completion": file_sha256(
             governance_root / "attempt_registry.json"
         ),
-        "attempt_registry_summary": registry_summary,
+        "attempt_registry_summary_at_completion": registry_summary,
+        "attempt_registry_matrix_snapshot_sha256": matrix_snapshot[
+            "snapshot_sha256"
+        ],
         "matrix_execution_summary": matrix_summary,
         "diagnostic_unique_identities": 60,
         "formal_unique_identities": 108,
@@ -2120,7 +1786,7 @@ def execute_stage_r_proposal(
             if selection["status"] == "no_safe_recovery_candidate"
             else "ready_for_stage_f_filter_matrix"
         ),
-        "attempt_registry_summary": registry_summary,
+        "attempt_registry_summary_at_completion": registry_summary,
         "matrix_execution_summary": matrix_summary,
         "artifacts": artifacts,
         "governance_receipt_sha256": governance_receipt[

@@ -204,7 +204,11 @@ def test_registry_recovers_dead_owner_with_complete_cache_atomically(
         expected_identity=identity,
         trusted_cache_root=tmp_path / "solver_cache",
     )
-    monkeypatch.setattr(governance, "_process_is_alive", lambda _pid: False)
+    monkeypatch.setattr(
+        governance,
+        "_process_identity_state",
+        lambda _pid, _token: "dead",
+    )
 
     outcome = registry.reconcile_interrupted_attempt(
         identity,
@@ -235,7 +239,11 @@ def test_registry_charges_dead_owner_without_cache_then_allows_retry(
     identity = _identity()
     registry.register_identity(identity)
     registry.begin_attempt(identity)
-    monkeypatch.setattr(governance, "_process_is_alive", lambda _pid: False)
+    monkeypatch.setattr(
+        governance,
+        "_process_identity_state",
+        lambda _pid, _token: "dead",
+    )
 
     outcome = registry.reconcile_interrupted_attempt(
         identity,
@@ -262,10 +270,56 @@ def test_registry_refuses_to_reconcile_live_owner(
     identity = _identity()
     registry.register_identity(identity)
     registry.begin_attempt(identity)
-    monkeypatch.setattr(governance, "_process_is_alive", lambda _pid: True)
+    monkeypatch.setattr(
+        governance,
+        "_process_identity_state",
+        lambda _pid, _token: "live",
+    )
 
     with pytest.raises(GovernanceError, match="attempt_already_running"):
         registry.reconcile_interrupted_attempt(identity, evidence=None)
+
+
+def test_process_owner_probe_is_read_only_and_has_creation_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def forbidden_kill(_pid: int, _signal: int) -> None:
+        raise AssertionError("process probe must not call os.kill")
+
+    monkeypatch.setattr(governance.os, "kill", forbidden_kill)
+
+    state, token = governance._query_process_start_token(os.getpid())
+
+    assert state == "live"
+    assert isinstance(token, str)
+    assert token
+    assert (
+        governance._process_identity_state(os.getpid(), token)
+        == "live"
+    )
+
+
+def test_matrix_snapshot_survives_unrelated_later_registration(
+    tmp_path: Path,
+) -> None:
+    registry = AttemptRegistry.create(
+        tmp_path / "attempt_registry.json",
+        budget_contract=BudgetContract.frozen_v1(),
+        exploration_registry=ExplorationRegistry.zero_budget_v1(),
+    )
+    stage_r_identity = _identity(record_id="stage-r")
+    later_identity = _identity(record_id="stage-f")
+    registry.register_identity(stage_r_identity)
+    token = registry.begin_attempt(stage_r_identity)
+    registry.finish_attempt(token, status="succeeded")
+    snapshot = registry.matrix_snapshot((stage_r_identity,))
+
+    registry.register_identity(later_identity)
+
+    registry.assert_matrix_matches_snapshot(
+        (stage_r_identity,),
+        snapshot,
+    )
 
 
 def test_bulk_registration_is_atomic_when_budget_would_overflow(

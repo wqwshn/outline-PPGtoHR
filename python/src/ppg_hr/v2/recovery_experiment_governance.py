@@ -56,19 +56,99 @@ _AUDIT_TARGET_IDENTITY_FIELDS = frozenset(
 )
 
 
-def _process_is_alive(pid: int) -> bool:
-    """Conservatively decide whether a same-host attempt owner may be alive."""
+def _query_process_start_token(
+    pid: int,
+) -> tuple[Literal["live", "dead", "unknown"], str | None]:
+    """Read process existence and creation identity without sending signals."""
 
-    if pid <= 0 or pid == os.getpid():
-        return True
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except (PermissionError, OSError):
-        # Platform-specific failures are ambiguous, so recovery fails closed.
-        return True
-    return True
+    if pid <= 0:
+        return "unknown", None
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+
+        process_query_limited_information = 0x1000
+        error_invalid_parameter = 87
+
+        class FileTime(ctypes.Structure):
+            _fields_ = (
+                ("dwLowDateTime", wintypes.DWORD),
+                ("dwHighDateTime", wintypes.DWORD),
+            )
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.argtypes = (
+            wintypes.DWORD,
+            wintypes.BOOL,
+            wintypes.DWORD,
+        )
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.GetProcessTimes.argtypes = (
+            wintypes.HANDLE,
+            ctypes.POINTER(FileTime),
+            ctypes.POINTER(FileTime),
+            ctypes.POINTER(FileTime),
+            ctypes.POINTER(FileTime),
+        )
+        kernel32.GetProcessTimes.restype = wintypes.BOOL
+        kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+        kernel32.CloseHandle.restype = wintypes.BOOL
+        handle = kernel32.OpenProcess(
+            process_query_limited_information,
+            False,
+            pid,
+        )
+        if not handle:
+            error = ctypes.get_last_error()
+            return (
+                ("dead", None)
+                if error == error_invalid_parameter
+                else ("unknown", None)
+            )
+        creation = FileTime()
+        exit_time = FileTime()
+        kernel = FileTime()
+        user = FileTime()
+        try:
+            if not kernel32.GetProcessTimes(
+                handle,
+                ctypes.byref(creation),
+                ctypes.byref(exit_time),
+                ctypes.byref(kernel),
+                ctypes.byref(user),
+            ):
+                return "unknown", None
+            token = (
+                int(creation.dwHighDateTime) << 32
+            ) | int(creation.dwLowDateTime)
+            return "live", f"windows-filetime:{token}"
+        finally:
+            kernel32.CloseHandle(handle)
+    stat_path = Path(f"/proc/{pid}/stat")
+    if stat_path.parent.exists():
+        try:
+            fields = stat_path.read_text(encoding="utf-8").split()
+            return "live", f"proc-start-ticks:{fields[21]}"
+        except FileNotFoundError:
+            return "dead", None
+        except (IndexError, OSError, UnicodeError):
+            return "unknown", None
+    # No portable creation-time query exists here. Never declare a live PID
+    # to be the same owner without it, and never send a signal to probe it.
+    return "unknown", None
+
+
+def _process_identity_state(
+    pid: int,
+    expected_start_token: str,
+) -> Literal["live", "dead", "unknown"]:
+    state, observed = _query_process_start_token(pid)
+    if state != "live":
+        return state
+    if not expected_start_token or observed is None:
+        return "unknown"
+    # A reused PID with a different creation token proves the old owner died.
+    return "live" if observed == expected_start_token else "dead"
 
 
 class GovernanceError(RuntimeError):
@@ -932,6 +1012,10 @@ class AttemptRegistry:
         return identity_hash
 
     def begin_attempt(self, identity: AttemptIdentity) -> AttemptToken:
+        _owner_state, owner_start_token = _query_process_start_token(
+            os.getpid()
+        )
+
         def mutate(entries: dict[str, dict[str, Any]]) -> AttemptToken:
             identity_hash = identity.sha256
             entry = entries.get(identity_hash)
@@ -962,6 +1046,9 @@ class AttemptRegistry:
                     "failure_reason": None,
                     "owner_pid": os.getpid(),
                     "owner_host": socket.gethostname(),
+                    "owner_process_start_token": (
+                        owner_start_token or "unavailable"
+                    ),
                     "started_at_unix_ns": time.time_ns(),
                 }
             )
@@ -1060,13 +1147,22 @@ class AttemptRegistry:
             attempt = running[0]
             owner_host = attempt.get("owner_host")
             owner_pid = attempt.get("owner_pid")
+            owner_start_token = attempt.get(
+                "owner_process_start_token"
+            )
             if (
                 not isinstance(owner_host, str)
                 or not owner_host
                 or owner_host != socket.gethostname()
                 or not isinstance(owner_pid, int)
                 or isinstance(owner_pid, bool)
-                or _process_is_alive(owner_pid)
+                or not isinstance(owner_start_token, str)
+                or not owner_start_token
+                or _process_identity_state(
+                    owner_pid,
+                    owner_start_token,
+                )
+                != "dead"
             ):
                 raise GovernanceError(
                     f"attempt_already_running:{identity.sha256}"
@@ -1285,6 +1381,82 @@ class AttemptRegistry:
             ),
         }
 
+    def matrix_snapshot(
+        self,
+        identities: Sequence[AttemptIdentity],
+    ) -> dict[str, Any]:
+        """Freeze only the requested entries so later stages may still append."""
+
+        frozen = tuple(identities)
+        self.assert_complete_matrix(frozen)
+        fresh = self.open(
+            self.path,
+            budget_contract=self.budget_contract,
+            exploration_registry=self.exploration_registry,
+        )
+        identity_hashes = [identity.sha256 for identity in frozen]
+        payload = {
+            "snapshot_version": "lyx_attempt_registry_matrix_snapshot_v1",
+            "budget_contract_sha256": self.budget_contract.sha256,
+            "identity_count": len(identity_hashes),
+            "identity_sha256": identity_hashes,
+            "entries": {
+                identity_hash: deepcopy(
+                    fresh._entries[identity_hash]
+                )
+                for identity_hash in identity_hashes
+            },
+            "matrix_execution_summary": (
+                self.matrix_execution_summary(frozen)
+            ),
+        }
+        payload["snapshot_sha256"] = _canonical_sha256(payload)
+        return payload
+
+    def assert_matrix_matches_snapshot(
+        self,
+        identities: Sequence[AttemptIdentity],
+        snapshot: Mapping[str, Any],
+    ) -> None:
+        """Verify frozen entries while permitting unrelated later additions."""
+
+        frozen = tuple(identities)
+        unsigned = {
+            key: value
+            for key, value in snapshot.items()
+            if key != "snapshot_sha256"
+        }
+        expected_hashes = [identity.sha256 for identity in frozen]
+        if (
+            snapshot.get("snapshot_version")
+            != "lyx_attempt_registry_matrix_snapshot_v1"
+            or snapshot.get("snapshot_sha256")
+            != _canonical_sha256(unsigned)
+            or snapshot.get("budget_contract_sha256")
+            != self.budget_contract.sha256
+            or snapshot.get("identity_count") != len(frozen)
+            or snapshot.get("identity_sha256") != expected_hashes
+            or snapshot.get("matrix_execution_summary")
+            != self.matrix_execution_summary(frozen)
+        ):
+            raise GovernanceError("attempt_matrix_snapshot_mismatch")
+        entries = snapshot.get("entries")
+        if not isinstance(entries, Mapping) or set(entries) != set(
+            expected_hashes
+        ):
+            raise GovernanceError("attempt_matrix_snapshot_entry_set_mismatch")
+        fresh = self.open(
+            self.path,
+            budget_contract=self.budget_contract,
+            exploration_registry=self.exploration_registry,
+        )
+        for identity_hash in expected_hashes:
+            if fresh._entries.get(identity_hash) != entries[identity_hash]:
+                raise GovernanceError(
+                    f"attempt_matrix_snapshot_entry_changed:{identity_hash}"
+                )
+        self.assert_complete_matrix(frozen)
+
     def summary(self) -> dict[str, int]:
         fresh = self.open(
             self.path,
@@ -1497,6 +1669,9 @@ class AttemptRegistry:
             if status == "running":
                 owner_pid = attempt.get("owner_pid")
                 owner_host = attempt.get("owner_host")
+                owner_start_token = attempt.get(
+                    "owner_process_start_token"
+                )
                 started_at_unix_ns = attempt.get("started_at_unix_ns")
                 if (
                     not isinstance(owner_pid, int)
@@ -1504,6 +1679,8 @@ class AttemptRegistry:
                     or owner_pid <= 0
                     or not isinstance(owner_host, str)
                     or not owner_host
+                    or not isinstance(owner_start_token, str)
+                    or not owner_start_token
                     or not isinstance(started_at_unix_ns, int)
                     or isinstance(started_at_unix_ns, bool)
                     or started_at_unix_ns <= 0
