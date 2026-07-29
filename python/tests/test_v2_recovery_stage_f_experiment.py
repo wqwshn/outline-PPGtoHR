@@ -1166,6 +1166,13 @@ def test_stage_f_execution_registers_two_matrices_and_is_resumable(
     upper = read_json(output_dir / "profile_sample_in_upper_bound.json")
     assert len(primary["rows"]) == 96
     assert len(control["rows"]) == 96
+    assert all(
+        row["config_hash"] == canonical_sha256(row["config"])
+        and row["solver_hash"]
+        and row["data_path"]
+        and row["reference_path"]
+        for row in [*primary["rows"], *control["rows"]]
+    )
     assert primary["unique_spectral_audit_count"] == 96
     assert control["unique_spectral_audit_count"] == 96
     assert {

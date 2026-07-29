@@ -130,6 +130,20 @@ def merge_identity_result_metadata(
     """Restore frozen experimental coordinates omitted by the cache view."""
 
     fields_to_restore = (
+        "solver_hash",
+        "config_hash",
+        "metric_contract_hash",
+        "evaluation_hash",
+        "data_sha256",
+        "stage",
+        "attempt_kind",
+        "parent_experiment_id",
+        "config",
+        "data_path",
+        "reference_path",
+        "raw_data_sha256",
+        "reference_sha256",
+        "method_names",
         "matrix_role",
         "filter_profile_id",
         "filter_profile_sha256",

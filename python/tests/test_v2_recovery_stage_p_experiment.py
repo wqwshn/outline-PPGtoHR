@@ -510,6 +510,10 @@ def test_cached_result_restores_frozen_penalty_and_profile_metadata(
     assert merged["penalty_candidate_id"] == item["penalty_candidate_id"]
     assert merged["actual_taps"] == item["actual_taps"]
     assert merged["recovery_candidate_id"] == item["recovery_candidate_id"]
+    assert merged["solver_hash"] == item["solver_hash"]
+    assert merged["config"] == item["config"]
+    assert merged["data_path"] == item["data_path"]
+    assert merged["reference_path"] == item["reference_path"]
 
 
 def _write_stage_p_sources(

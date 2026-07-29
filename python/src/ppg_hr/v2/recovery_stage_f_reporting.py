@@ -369,6 +369,18 @@ def finalize_stage_f_report(
         raise StageFPlanError("stage_f_spectral_audit_candidate_invariance_mismatch")
     registry.assert_complete_matrix(identities)
     by_identity = {str(row["identity_sha256"]): row for row in result_rows}
+    frozen_identity_by_hash = {
+        str(item["identity_sha256"]): dict(item)
+        for item in (
+            _require_mapping("stage_f_frozen_identity", raw)
+            for raw in _require_list(
+                "stage_f_frozen_identities",
+                proposal.get("identities"),
+            )
+        )
+    }
+    if set(frozen_identity_by_hash) != set(by_identity):
+        raise StageFPlanError("stage_f_result_identity_catalog_mismatch")
     logical_rows: list[dict[str, Any]] = []
     for raw_task in _require_list(
         "stage_f_logical_tasks",
@@ -391,7 +403,13 @@ def finalize_stage_f_report(
             )
         ):
             raise StageFPlanError("stage_f_logical_numerical_identity_mismatch")
-        logical_rows.append({**dict(numerical), **task})
+        logical_rows.append(
+            {
+                **frozen_identity_by_hash[identity_hash],
+                **dict(numerical),
+                **task,
+            }
+        )
     primary = [row for row in logical_rows if row["matrix_role"] == "provisional_recovery"]
     current = [row for row in logical_rows if row["matrix_role"] == "same_role_current_control"]
     if len(primary) != 96 or len(current) != 96:
