@@ -17,6 +17,9 @@ from .recovery_experiment_governance import (
     AttemptIdentity,
     AttemptRegistry,
 )
+from .recovery_profile_upper_bound import (
+    build_sample_in_upper_bound_payloads,
+)
 from .recovery_stage_f_contracts import (
     _CURRENT_ROLE_STAGE,
     _PROVISIONAL_STAGE,
@@ -64,44 +67,28 @@ def validate_spectral_evidence(
         spectral.get("stage_r_spectral_gate"),
     )
     if not set(_SPECTRAL_AGGREGATE_FIELDS) <= set(summary):
-        raise StageFPlanError(
-            "stage_f_spectral_evidence_incomplete"
-        )
+        raise StageFPlanError("stage_f_spectral_evidence_incomplete")
     nested_passed = summary.get("spectral_gate_pass") is True
     try:
         aggregates_finite = all(
-            math.isfinite(float(summary[name]))
-            for name in _SPECTRAL_AGGREGATE_FIELDS
+            math.isfinite(float(summary[name])) for name in _SPECTRAL_AGGREGATE_FIELDS
         )
     except (KeyError, TypeError, ValueError) as error:
         if nested_passed:
-            raise StageFPlanError(
-                "stage_f_passed_spectral_evidence_incomplete"
-            ) from error
+            raise StageFPlanError("stage_f_passed_spectral_evidence_incomplete") from error
         aggregates_finite = False
-    if (
-        nested_passed
-        and (
-            int(summary.get("valid_window_count", 0)) <= 0
-            or not aggregates_finite
-        )
-    ):
-        raise StageFPlanError(
-            "stage_f_passed_spectral_evidence_incomplete"
-        )
+    if nested_passed and (int(summary.get("valid_window_count", 0)) <= 0 or not aggregates_finite):
+        raise StageFPlanError("stage_f_passed_spectral_evidence_incomplete")
     if not nested_passed:
         try:
             failed_values_valid = all(
-                summary[name] is None
-                or math.isfinite(float(summary[name]))
+                summary[name] is None or math.isfinite(float(summary[name]))
                 for name in _SPECTRAL_AGGREGATE_FIELDS
             )
         except (TypeError, ValueError):
             failed_values_valid = False
         if not failed_values_valid:
-            raise StageFPlanError(
-                "stage_f_failed_spectral_evidence_invalid"
-            )
+            raise StageFPlanError("stage_f_failed_spectral_evidence_invalid")
     windows = _require_list(
         "stage_f_spectral_window_metrics",
         summary.get("window_metrics"),
@@ -140,13 +127,8 @@ def validate_spectral_evidence(
         except (TypeError, ValueError):
             complete_windows = False
             break
-    if (
-        len(windows) != int(summary["valid_window_count"])
-        or not complete_windows
-    ):
-        raise StageFPlanError(
-            "stage_f_passed_spectral_window_evidence_incomplete"
-        )
+    if len(windows) != int(summary["valid_window_count"]) or not complete_windows:
+        raise StageFPlanError("stage_f_passed_spectral_window_evidence_incomplete")
 
 
 def _metric_float(metrics: Mapping[str, Any], name: str) -> float:
@@ -180,10 +162,7 @@ def _qualification(
     )
     validate_spectral_evidence(spectral)
     reasons: list[str] = []
-    if (
-        spectral.get("stability_pass") is not True
-        or spectral.get("spectral_gate_pass") is not True
-    ):
+    if spectral.get("stability_pass") is not True or spectral.get("spectral_gate_pass") is not True:
         reasons.append("spectral_gate_contract_v1")
     candidate_l10 = int(candidate_metrics["longest_e10_run_windows"])
     candidate_l20 = int(candidate_metrics["longest_e20_run_windows"])
@@ -207,15 +186,11 @@ def _qualification(
     )
     if candidate_mae - independent_mae > 2.0:
         reasons.append("independent_mae_gate")
-    if (
-        int(candidate_metrics["right_censored_recovery_count"])
-        > int(current_metrics["right_censored_recovery_count"])
+    if int(candidate_metrics["right_censored_recovery_count"]) > int(
+        current_metrics["right_censored_recovery_count"]
     ):
         reasons.append("new_right_censored_recovery")
-    if (
-        int(current_metrics["longest_e10_run_windows"]) <= 10
-        and candidate_l10 >= 20
-    ):
+    if int(current_metrics["longest_e10_run_windows"]) <= 10 and candidate_l10 >= 20:
         reasons.append("current_l10_catastrophic_regression")
     if candidate_mae - current_mae > 2.0:
         reasons.append("current_mae_gate")
@@ -268,36 +243,24 @@ def validate_completed_stage_f(
     expected_numerical_spectral_reuse = expected_unique - 96
     expected_logical_reuse = 192 - expected_unique
     if (
-        completion.get("completion_version")
-        != "lyx_stage_f_completion_v1"
+        completion.get("completion_version") != "lyx_stage_f_completion_v1"
         or completion.get("status") != "complete"
-        or completion.get("evidence_class")
-        != "development_reuse_pilot"
+        or completion.get("evidence_class") != "development_reuse_pilot"
         or completion.get("algorithm_level_holdout") is not False
         or completion.get("logical_task_count") != 192
         or completion.get("logical_result_count") != 192
         or completion.get("formal_result_count") != expected_unique
         or completion.get("profile_enumeration_result_count") != 96
-        or completion.get(
-            "same_role_current_control_result_count"
-        )
-        != 96
-        or completion.get("planned_unique_identity_count")
-        != expected_unique
+        or completion.get("same_role_current_control_result_count") != 96
+        or completion.get("planned_unique_identity_count") != expected_unique
         or completion.get("unique_spectral_audit_count") != 96
-        or completion.get("spectral_audit_result_binding_count")
-        != expected_unique
-        or completion.get(
-            "spectral_audit_numerical_reuse_count"
-        )
+        or completion.get("spectral_audit_result_binding_count") != expected_unique
+        or completion.get("spectral_audit_numerical_reuse_count")
         != expected_numerical_spectral_reuse
-        or completion.get("spectral_audit_logical_reuse_count")
-        != expected_logical_reuse
-        or completion.get("reused_logical_task_count")
-        != expected_logical_reuse
+        or completion.get("spectral_audit_logical_reuse_count") != expected_logical_reuse
+        or completion.get("reused_logical_task_count") != expected_logical_reuse
         or completion.get("independent_bo_run_count") != 0
-        or completion.get("next_state")
-        != "ready_for_penalty_interaction_completion"
+        or completion.get("next_state") != "ready_for_penalty_interaction_completion"
     ):
         raise StageFPlanError("stage_f_completion_contract_mismatch")
     artifacts = _require_mapping(
@@ -310,9 +273,7 @@ def validate_completed_stage_f(
         "profile_sample_in_upper_bound.json",
         "attempt_registry_stage_f_snapshot.json",
     }:
-        raise StageFPlanError(
-            "stage_f_completion_artifact_set_mismatch"
-        )
+        raise StageFPlanError("stage_f_completion_artifact_set_mismatch")
     for name, expected_hash in artifacts.items():
         path = (destination / str(name)).resolve()
         if (
@@ -320,18 +281,12 @@ def validate_completed_stage_f(
             or not path.is_file()
             or file_sha256(path) != expected_hash
         ):
-            raise StageFPlanError(
-                f"stage_f_completion_artifact_mismatch:{name}"
-            )
+            raise StageFPlanError(f"stage_f_completion_artifact_mismatch:{name}")
     governance_path = governance_root / "stage_f_governance_receipt.json"
-    if (
-        not governance_path.is_file()
-        or file_sha256(governance_path)
-        != completion.get("governance_receipt_file_sha256")
+    if not governance_path.is_file() or file_sha256(governance_path) != completion.get(
+        "governance_receipt_file_sha256"
     ):
-        raise StageFPlanError(
-            "stage_f_completion_governance_receipt_mismatch"
-        )
+        raise StageFPlanError("stage_f_completion_governance_receipt_mismatch")
     governance = read_json(governance_path)
     _verify_embedded_hash(
         governance,
@@ -339,54 +294,37 @@ def validate_completed_stage_f(
         artifact_name="stage_f_governance_receipt",
     )
     if (
-        governance.get("receipt_version")
-        != "lyx_stage_f_governance_receipt_v1"
+        governance.get("receipt_version") != "lyx_stage_f_governance_receipt_v1"
         or governance.get("status") != "complete"
-        or governance.get("proposal_sha256")
-        != proposal.get("proposal_sha256")
+        or governance.get("proposal_sha256") != proposal.get("proposal_sha256")
         or governance.get("logical_task_count") != 192
         or governance.get("logical_result_count") != 192
         or governance.get("formal_result_count") != expected_unique
         or governance.get("profile_enumeration_result_count") != 96
-        or governance.get(
-            "same_role_current_control_result_count"
-        )
-        != 96
-        or governance.get("planned_unique_identity_count")
-        != expected_unique
+        or governance.get("same_role_current_control_result_count") != 96
+        or governance.get("planned_unique_identity_count") != expected_unique
         or governance.get("unique_spectral_audit_count") != 96
-        or governance.get("spectral_audit_result_binding_count")
-        != expected_unique
-        or governance.get(
-            "spectral_audit_numerical_reuse_count"
-        )
+        or governance.get("spectral_audit_result_binding_count") != expected_unique
+        or governance.get("spectral_audit_numerical_reuse_count")
         != expected_numerical_spectral_reuse
-        or governance.get("spectral_audit_logical_reuse_count")
-        != expected_logical_reuse
-        or governance.get("reused_logical_task_count")
-        != expected_logical_reuse
+        or governance.get("spectral_audit_logical_reuse_count") != expected_logical_reuse
+        or governance.get("reused_logical_task_count") != expected_logical_reuse
         or governance.get("independent_bo_run_count") != 0
         or governance.get("artifacts") != artifacts
-        or governance.get("receipt_sha256")
-        != completion.get("governance_receipt_sha256")
+        or governance.get("receipt_sha256") != completion.get("governance_receipt_sha256")
     ):
         raise StageFPlanError("stage_f_governance_binding_mismatch")
-    snapshot = read_json(
-        destination / "attempt_registry_stage_f_snapshot.json"
-    )
+    snapshot = read_json(destination / "attempt_registry_stage_f_snapshot.json")
     registry.assert_matrix_matches_snapshot(identities, snapshot)
     matrix_summary = registry.matrix_execution_summary(identities)
     if (
-        snapshot.get("snapshot_sha256")
-        != governance.get("attempt_registry_matrix_snapshot_sha256")
+        snapshot.get("snapshot_sha256") != governance.get("attempt_registry_matrix_snapshot_sha256")
         or matrix_summary != completion.get("matrix_execution_summary")
         or matrix_summary != governance.get("matrix_execution_summary")
         or completion.get("formal_solver_run_count")
         != matrix_summary["identity_with_solver_attempt_count"]
-        or completion.get("cache_hit_count")
-        != matrix_summary["cache_only_identity_count"]
-        or completion.get("failed_attempt_count")
-        != matrix_summary["failed_attempt_count"]
+        or completion.get("cache_hit_count") != matrix_summary["cache_only_identity_count"]
+        or completion.get("failed_attempt_count") != matrix_summary["failed_attempt_count"]
     ):
         raise StageFPlanError("stage_f_completion_registry_mismatch")
     return completion
@@ -425,66 +363,41 @@ def finalize_stage_f_report(
                 spectral.get("audit_sha256"),
             )
         )
-    if (
-        len(spectral_hashes_by_coordinate) != 96
-        or any(
-            len(hashes) != 1
-            for hashes in spectral_hashes_by_coordinate.values()
-        )
+    if len(spectral_hashes_by_coordinate) != 96 or any(
+        len(hashes) != 1 for hashes in spectral_hashes_by_coordinate.values()
     ):
-        raise StageFPlanError(
-            "stage_f_spectral_audit_candidate_invariance_mismatch"
-        )
+        raise StageFPlanError("stage_f_spectral_audit_candidate_invariance_mismatch")
     registry.assert_complete_matrix(identities)
-    by_identity = {
-        str(row["identity_sha256"]): row
-        for row in result_rows
-    }
+    by_identity = {str(row["identity_sha256"]): row for row in result_rows}
     logical_rows: list[dict[str, Any]] = []
     for raw_task in _require_list(
         "stage_f_logical_tasks",
         proposal.get("logical_tasks"),
     ):
-        task = dict(
-            _require_mapping("stage_f_logical_task", raw_task)
-        )
+        task = dict(_require_mapping("stage_f_logical_task", raw_task))
         identity_hash = str(task["identity_sha256"])
         numerical = by_identity.get(identity_hash)
         if (
             numerical is None
-            or numerical.get("stage")
-            != task.get("numerical_identity_stage")
-            or task.get("logical_stage")
-            not in {_PROVISIONAL_STAGE, _CURRENT_ROLE_STAGE}
+            or numerical.get("stage") != task.get("numerical_identity_stage")
+            or task.get("logical_stage") not in {_PROVISIONAL_STAGE, _CURRENT_ROLE_STAGE}
             or (
                 task.get("matrix_role") == "provisional_recovery"
                 and task.get("logical_stage") != _PROVISIONAL_STAGE
             )
             or (
-                task.get("matrix_role")
-                == "same_role_current_control"
+                task.get("matrix_role") == "same_role_current_control"
                 and task.get("logical_stage") != _CURRENT_ROLE_STAGE
             )
         ):
-            raise StageFPlanError(
-                "stage_f_logical_numerical_identity_mismatch"
-            )
+            raise StageFPlanError("stage_f_logical_numerical_identity_mismatch")
         logical_rows.append({**dict(numerical), **task})
-    primary = [
-        row
-        for row in logical_rows
-        if row["matrix_role"] == "provisional_recovery"
-    ]
-    current = [
-        row
-        for row in logical_rows
-        if row["matrix_role"] == "same_role_current_control"
-    ]
+    primary = [row for row in logical_rows if row["matrix_role"] == "provisional_recovery"]
+    current = [row for row in logical_rows if row["matrix_role"] == "same_role_current_control"]
     if len(primary) != 96 or len(current) != 96:
         raise StageFPlanError("stage_f_logical_result_matrix_mismatch")
     current_by_coordinate = {
-        (str(row["record_id"]), str(row["filter_profile_id"])): row
-        for row in current
+        (str(row["record_id"]), str(row["filter_profile_id"])): row for row in current
     }
     independent_by_record = {
         str(record["record_id"]): _require_mapping(
@@ -503,10 +416,7 @@ def finalize_stage_f_report(
         str(record["record_id"]): bool(record["true_rise_applicable"])
         for record in proposal["record_panel"]
     }
-    profiles_by_id = {
-        str(profile["profile_id"]): profile
-        for profile in proposal["profiles"]
-    }
+    profiles_by_id = {str(profile["profile_id"]): profile for profile in proposal["profiles"]}
     qualified_primary: list[dict[str, Any]] = []
     for row in primary:
         coordinate = (
@@ -519,7 +429,13 @@ def finalize_stage_f_report(
             independent=independent_by_record[coordinate[0]],
             true_rise_applicable=true_rise_by_record[coordinate[0]],
         )
-        qualified_primary.append({**row, "qualification": gate})
+        qualified_primary.append(
+            {
+                **row,
+                "actual_taps": int(profiles_by_id[coordinate[1]]["actual_taps"]),
+                "qualification": gate,
+            }
+        )
     control_rows = [
         {
             **row,
@@ -527,58 +443,17 @@ def finalize_stage_f_report(
                 candidate=row,
                 current=row,
                 independent=independent_by_record[str(row["record_id"])],
-                true_rise_applicable=true_rise_by_record[
-                    str(row["record_id"])
-                ],
+                true_rise_applicable=true_rise_by_record[str(row["record_id"])],
             ),
         }
         for row in current
     ]
-    upper_records: list[dict[str, Any]] = []
-    for record_id in sorted(independent_by_record):
-        eligible = [
-            row
-            for row in qualified_primary
-            if row["record_id"] == record_id
-            and row["qualification"]["qualified"]
-        ]
-        eligible.sort(
-            key=lambda row: (
-                int(row["metrics"]["longest_e10_run_windows"]),
-                _metric_float(row["metrics"], "max_recovered_delay_s"),
-                _metric_float(row["metrics"], "final_motion_mae_bpm"),
-                int(
-                    profiles_by_id[str(row["filter_profile_id"])][
-                        "actual_taps"
-                    ]
-                ),
-                str(row["filter_profile_id"]),
-            )
-        )
-        upper_records.append(
-            {
-                "record_id": record_id,
-                "scene": next(
-                    str(row["scene"])
-                    for row in qualified_primary
-                    if row["record_id"] == record_id
-                ),
-                "status": (
-                    "selected" if eligible else "no_safe_profile_for_record"
-                ),
-                "selected_profile_id": (
-                    eligible[0]["filter_profile_id"]
-                    if eligible
-                    else None
-                ),
-                "selected_identity_sha256": (
-                    eligible[0]["identity_sha256"]
-                    if eligible
-                    else None
-                ),
-                "qualified_profile_count": len(eligible),
-            }
-        )
+    upper_bounds = build_sample_in_upper_bound_payloads(
+        final_profile_rows=qualified_primary,
+        scene_by_record={
+            str(record["record_id"]): str(record["scene"]) for record in proposal["record_panel"]
+        },
+    )
     artifacts_payload = {
         "profile_enumeration_matrix.json": _with_self_hash(
             {
@@ -593,9 +468,7 @@ def finalize_stage_f_report(
         ),
         "same_role_current_control_matrix.json": _with_self_hash(
             {
-                "matrix_version": (
-                    "lyx_stage_f_current_role_matrix_v1"
-                ),
+                "matrix_version": ("lyx_stage_f_current_role_matrix_v1"),
                 "matrix_role": "same_role_current_control",
                 "algorithm_level_holdout": False,
                 "row_count": 96,
@@ -606,13 +479,9 @@ def finalize_stage_f_report(
         ),
         "profile_sample_in_upper_bound.json": _with_self_hash(
             {
-                "upper_bound_version": (
-                    "lyx_stage_f_sample_in_upper_bound_v1"
-                ),
-                "evidence_class": "diagnostic_sample_in_upper_bound",
-                "algorithm_level_holdout": False,
-                "record_count": 12,
-                "records": upper_records,
+                "upper_bound_version": ("lyx_stage_f_sample_in_upper_bound_v2"),
+                **upper_bounds["sample_in_upper_bound"],
+                "safe_qualified_upper_bound": upper_bounds["safe_qualified_upper_bound"],
             },
             field="upper_bound_sha256",
         ),
@@ -623,21 +492,14 @@ def finalize_stage_f_report(
     snapshot_name = "attempt_registry_stage_f_snapshot.json"
     atomic_write_json(destination / snapshot_name, matrix_snapshot)
     artifact_names = (*artifacts_payload, snapshot_name)
-    artifacts = {
-        name: file_sha256(destination / name)
-        for name in artifact_names
-    }
+    artifacts = {name: file_sha256(destination / name) for name in artifact_names}
     matrix_summary = registry.matrix_execution_summary(identities)
     governance_receipt = {
         "receipt_version": "lyx_stage_f_governance_receipt_v1",
         "status": "complete",
         "proposal_sha256": proposal["proposal_sha256"],
-        "identity_matrix_sha256": canonical_sha256(
-            [identity.sha256 for identity in identities]
-        ),
-        "attempt_registry_matrix_snapshot_sha256": matrix_snapshot[
-            "snapshot_sha256"
-        ],
+        "identity_matrix_sha256": canonical_sha256([identity.sha256 for identity in identities]),
+        "attempt_registry_matrix_snapshot_sha256": matrix_snapshot["snapshot_sha256"],
         "matrix_execution_summary": matrix_summary,
         "logical_task_count": 192,
         "logical_result_count": 192,
@@ -647,21 +509,13 @@ def finalize_stage_f_report(
         "planned_unique_identity_count": len(identities),
         "unique_spectral_audit_count": 96,
         "spectral_audit_result_binding_count": len(result_rows),
-        "spectral_audit_numerical_reuse_count": (
-            len(result_rows) - 96
-        ),
-        "spectral_audit_logical_reuse_count": (
-            192 - len(result_rows)
-        ),
-        "reused_logical_task_count": proposal[
-            "reused_logical_task_count"
-        ],
+        "spectral_audit_numerical_reuse_count": (len(result_rows) - 96),
+        "spectral_audit_logical_reuse_count": (192 - len(result_rows)),
+        "reused_logical_task_count": proposal["reused_logical_task_count"],
         "independent_bo_run_count": 0,
         "artifacts": artifacts,
     }
-    governance_receipt["receipt_sha256"] = canonical_sha256(
-        governance_receipt
-    )
+    governance_receipt["receipt_sha256"] = canonical_sha256(governance_receipt)
     governance_path = governance_root / "stage_f_governance_receipt.json"
     atomic_write_json(governance_path, governance_receipt)
     completion = {
@@ -678,29 +532,17 @@ def finalize_stage_f_report(
         "planned_unique_identity_count": len(identities),
         "unique_spectral_audit_count": 96,
         "spectral_audit_result_binding_count": len(result_rows),
-        "spectral_audit_numerical_reuse_count": (
-            len(result_rows) - 96
-        ),
-        "spectral_audit_logical_reuse_count": (
-            192 - len(result_rows)
-        ),
-        "reused_logical_task_count": proposal[
-            "reused_logical_task_count"
-        ],
-        "formal_solver_run_count": matrix_summary[
-            "identity_with_solver_attempt_count"
-        ],
+        "spectral_audit_numerical_reuse_count": (len(result_rows) - 96),
+        "spectral_audit_logical_reuse_count": (192 - len(result_rows)),
+        "reused_logical_task_count": proposal["reused_logical_task_count"],
+        "formal_solver_run_count": matrix_summary["identity_with_solver_attempt_count"],
         "cache_hit_count": matrix_summary["cache_only_identity_count"],
         "failed_attempt_count": matrix_summary["failed_attempt_count"],
         "independent_bo_run_count": 0,
         "matrix_execution_summary": matrix_summary,
         "artifacts": artifacts,
-        "governance_receipt_sha256": governance_receipt[
-            "receipt_sha256"
-        ],
-        "governance_receipt_file_sha256": file_sha256(
-            governance_path
-        ),
+        "governance_receipt_sha256": governance_receipt["receipt_sha256"],
+        "governance_receipt_file_sha256": file_sha256(governance_path),
         "next_state": "ready_for_penalty_interaction_completion",
     }
     completion["completion_sha256"] = canonical_sha256(completion)

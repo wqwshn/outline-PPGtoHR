@@ -49,12 +49,8 @@ def _with_hash(
 
 def _stage_f_inputs(tmp_path: Path) -> dict[str, object]:
     solver_hash = "1" * 64
-    metric_hash = canonical_sha256(
-        {"contract_version": "test_metric"}
-    )
-    spectral_hash = canonical_sha256(
-        {"contract_version": "test_spectral"}
-    )
+    metric_hash = canonical_sha256({"contract_version": "test_metric"})
+    spectral_hash = canonical_sha256({"contract_version": "test_spectral"})
     evaluation_hash = "4" * 64
     parent_experiment_id = "lyx_recovery_filter_profile_v1"
     recovery_candidates = [
@@ -203,9 +199,7 @@ def _stage_f_inputs(tmp_path: Path) -> dict[str, object]:
             "recovery_sentinels": {
                 "conservative": "p50-short-low",
                 "intermediate": "p50-short-low-40",
-                "aggressive": (
-                    "p100-short-rate-normalized-low-40"
-                ),
+                "aggressive": ("p100-short-rate-normalized-low-40"),
             },
             "profiles": profiles,
         },
@@ -215,11 +209,7 @@ def _stage_f_inputs(tmp_path: Path) -> dict[str, object]:
     record_panel: list[dict[str, object]] = []
     baseline_records: list[dict[str, object]] = []
     control = recovery_candidates[0]
-    anchor = next(
-        profile
-        for profile in profiles
-        if profile["profile_id"] == "p50-short-low"
-    )
+    anchor = next(profile for profile in profiles if profile["profile_id"] == "p50-short-low")
     for scene in ("jianpan", "kaihe", "run", "xiezi"):
         for index in range(1, 4):
             record_id = f"{scene}{index}"
@@ -254,12 +244,8 @@ def _stage_f_inputs(tmp_path: Path) -> dict[str, object]:
                     "smooth_win_len": 5,
                     "spec_penalty_width": 0.2,
                     "time_bias": 5.0,
-                    "penalty_candidate_id": (
-                        "current_soft_penalty_control_v1"
-                    ),
-                    "recovery_candidate_id": (
-                        "current_fixed_floor_control_v1"
-                    ),
+                    "penalty_candidate_id": ("current_soft_penalty_control_v1"),
+                    "recovery_candidate_id": ("current_fixed_floor_control_v1"),
                 },
             }
             attempt = AttemptIdentity(
@@ -287,31 +273,21 @@ def _stage_f_inputs(tmp_path: Path) -> dict[str, object]:
                     "sentinel_role": "conservative",
                     "filter_profile_id": anchor["profile_id"],
                     "filter_profile_sha256": anchor["profile_sha256"],
-                    "physical_memory_ms": anchor[
-                        "physical_memory_ms"
-                    ],
+                    "physical_memory_ms": anchor["physical_memory_ms"],
                     "recovery_candidate_id": control["candidate_id"],
-                    "recovery_candidate_sha256": control[
-                        "candidate_sha256"
-                    ],
+                    "recovery_candidate_sha256": control["candidate_sha256"],
                     "candidate_min_bpm": 85.0,
-                    "penalty_candidate_id": (
-                        "current_soft_penalty_control_v1"
-                    ),
+                    "penalty_candidate_id": ("current_soft_penalty_control_v1"),
                 }
             )
             independent_metrics = {
-                "metric_contract_version": (
-                    "lyx_recovery_profile_metric_v1"
-                ),
+                "metric_contract_version": ("lyx_recovery_profile_metric_v1"),
                 "longest_e10_run_windows": 4,
                 "longest_e20_run_windows": 1,
                 "final_motion_mae_bpm": 3.0,
                 "right_censored_recovery_count": 0,
                 "max_recovered_delay_s": 2.0,
-                "max_rise_underestimate_bpm": (
-                    1.0 if scene in {"kaihe", "run"} else None
-                ),
+                "max_rise_underestimate_bpm": (1.0 if scene in {"kaihe", "run"} else None),
             }
             record_panel.append(
                 {
@@ -352,13 +328,9 @@ def _stage_f_inputs(tmp_path: Path) -> dict[str, object]:
             "sha256": file_sha256(source_path),
         }
     baseline_contract_receipt = {
-        "receipt_version": (
-            "lyx_recovery_profile_baseline_receipt_v1"
-        ),
+        "receipt_version": ("lyx_recovery_profile_baseline_receipt_v1"),
         "status": "complete",
-        "metric_contract_version": (
-            "lyx_recovery_profile_metric_v1"
-        ),
+        "metric_contract_version": ("lyx_recovery_profile_metric_v1"),
         "record_count": 12,
         "scene_counts": {
             "jianpan": 3,
@@ -367,27 +339,18 @@ def _stage_f_inputs(tmp_path: Path) -> dict[str, object]:
             "xiezi": 3,
         },
         "artifact_sha256": {
-            "record_metrics.json": stage_r_source_artifacts[
-                "baseline_metrics"
-            ]["sha256"],
+            "record_metrics.json": stage_r_source_artifacts["baseline_metrics"]["sha256"],
         },
     }
     profile_library_completion = _with_hash(
         {
-            "receipt_version": (
-                "lyx_filter_rate_normalized_supplement_completion_v2"
-            ),
+            "receipt_version": ("lyx_filter_rate_normalized_supplement_completion_v2"),
             "status": "complete",
             "evidence_class": "development_reuse_pilot",
             "algorithm_level_holdout": False,
             "final_profile_count": 8,
-            "final_profile_ids": [
-                str(profile["profile_id"])
-                for profile in profiles
-            ],
-            "final_library_sha256": profile_library[
-                "library_sha256"
-            ],
+            "final_profile_ids": [str(profile["profile_id"]) for profile in profiles],
+            "final_library_sha256": profile_library["library_sha256"],
             "new_rate_normalized_run_count": 8,
             "exploration_run_count": 8,
             "reused_p50_numeric_result_count": 8,
@@ -401,9 +364,7 @@ def _stage_f_inputs(tmp_path: Path) -> dict[str, object]:
                 "p100-short-rate-normalized-midlow-40": "b" * 64,
             },
             "final_profile_receipt_sha256": {
-                str(profile["profile_id"]): (
-                    f"{index + 1:x}" * 64
-                )[:64]
+                str(profile["profile_id"]): (f"{index + 1:x}" * 64)[:64]
                 for index, profile in enumerate(profiles)
             },
             "actual_hr_tracking_trajectory_count": 0,
@@ -438,13 +399,9 @@ def _stage_f_inputs(tmp_path: Path) -> dict[str, object]:
         "frozen_contracts": {
             "metric_contract_hash": metric_hash,
             "spectral_gate_contract_hash": spectral_hash,
-            "recovery_candidate_registry_hash": recovery_registry[
-                "registry_sha256"
-            ],
+            "recovery_candidate_registry_hash": recovery_registry["registry_sha256"],
             "recovery_selection_contract_hash": "7" * 64,
-            "penalty_registry_hash": penalty_registry[
-                "registry_sha256"
-            ],
+            "penalty_registry_hash": penalty_registry["registry_sha256"],
             "filter_profile_design_rule_hash": "5" * 64,
             "budget_contract_hash": canonical_sha256(budget),
         },
@@ -454,9 +411,7 @@ def _stage_f_inputs(tmp_path: Path) -> dict[str, object]:
         "independent_bo_authorized": False,
         "source_artifacts": stage_r_source_artifacts,
     }
-    stage_r_proposal["proposal_sha256"] = canonical_sha256(
-        stage_r_proposal
-    )
+    stage_r_proposal["proposal_sha256"] = canonical_sha256(stage_r_proposal)
     stage_r_completion = {
         "completion_version": "lyx_stage_r_completion_v2",
         "status": "selected",
@@ -468,9 +423,7 @@ def _stage_f_inputs(tmp_path: Path) -> dict[str, object]:
         "rollback_backup_id": "current_fixed_floor_control_v1",
         "next_state": "ready_for_stage_f_filter_matrix",
     }
-    stage_r_completion["completion_sha256"] = canonical_sha256(
-        stage_r_completion
-    )
+    stage_r_completion["completion_sha256"] = canonical_sha256(stage_r_completion)
     return {
         "stage_r_proposal": stage_r_proposal,
         "stage_r_completion": stage_r_completion,
@@ -522,9 +475,7 @@ def _patch_stage_f_runtime(monkeypatch) -> None:
     ) -> dict[str, object]:
         bundle = "4" * 64 if root_modules else "1" * 64
         return {
-            "source_files": {
-                "ppg_hr/v2/recovery_stage_f_experiment.py": bundle
-            },
+            "source_files": {"ppg_hr/v2/recovery_stage_f_experiment.py": bundle},
             "source_bundle_sha256": bundle,
         }
 
@@ -539,9 +490,7 @@ def _patch_stage_f_runtime(monkeypatch) -> None:
         "stage_r_metric_contract_v1",
         lambda: {
             "contract_version": "test_metric",
-            "contract_sha256": canonical_sha256(
-                {"contract_version": "test_metric"}
-            ),
+            "contract_sha256": canonical_sha256({"contract_version": "test_metric"}),
         },
     )
     monkeypatch.setattr(
@@ -549,9 +498,7 @@ def _patch_stage_f_runtime(monkeypatch) -> None:
         "stage_r_spectral_gate_contract_v1",
         lambda: {
             "contract_version": "test_spectral",
-            "contract_sha256": canonical_sha256(
-                {"contract_version": "test_spectral"}
-            ),
+            "contract_sha256": canonical_sha256({"contract_version": "test_spectral"}),
         },
     )
 
@@ -562,11 +509,7 @@ def _publish_stage_f_proposal(
     *,
     inputs: dict[str, object] | None = None,
 ) -> Path:
-    frozen_inputs = (
-        _stage_f_inputs(tmp_path)
-        if inputs is None
-        else inputs
-    )
+    frozen_inputs = _stage_f_inputs(tmp_path) if inputs is None else inputs
     paths = _write_stage_f_source_files(tmp_path, frozen_inputs)
     _patch_stage_f_runtime(monkeypatch)
     proposal_dir = tmp_path / "stage_f_proposal"
@@ -574,18 +517,14 @@ def _publish_stage_f_proposal(
         **paths,
         output_dir=proposal_dir,
         source_root=Path(__file__).parents[1] / "src",
-        parent_experiment_id=str(
-            frozen_inputs["parent_experiment_id"]
-        ),
+        parent_experiment_id=str(frozen_inputs["parent_experiment_id"]),
     )
     return proposal_dir
 
 
 def _synthetic_solver_result() -> V2SolverResult:
     return V2SolverResult(
-        HR=np.asarray(
-            [[0.0, 60.0, 60.0, 60.0, 1.0, 0.0]]
-        ),
+        HR=np.asarray([[0.0, 60.0, 60.0, 60.0, 1.0, 0.0]]),
         err_stats={},
         metadata={"time_bias": 5.0, "smooth_win_len": 5},
         window_table=[],
@@ -677,10 +616,7 @@ def test_stage_f_proposal_freezes_two_fair_eight_by_twelve_matrices(
     assert proposal["algorithm_level_holdout"] is False
     assert proposal["evidence_class"] == "development_reuse_pilot"
     assert proposal["independent_bo_authorized"] is False
-    assert all(
-        "independent_metrics" in record
-        for record in proposal["record_panel"]
-    )
+    assert all("independent_metrics" in record for record in proposal["record_panel"])
     assert proposal["logical_task_count"] == 192
     assert proposal["planned_unique_identity_count"] == 192
     assert len(proposal["identities"]) == 192
@@ -708,20 +644,12 @@ def test_stage_f_proposal_freezes_two_fair_eight_by_twelve_matrices(
         "provisional_recovery",
         "same_role_current_control",
     ):
-        lane = [
-            item
-            for item in proposal["logical_tasks"]
-            if item["matrix_role"] == matrix_role
-        ]
+        lane = [item for item in proposal["logical_tasks"] if item["matrix_role"] == matrix_role]
         assert len(lane) == 96
         assert len({item["record_id"] for item in lane}) == 12
         assert len({item["filter_profile_id"] for item in lane}) == 8
     assert proposal["proposal_sha256"] == canonical_sha256(
-        {
-            key: value
-            for key, value in proposal.items()
-            if key != "proposal_sha256"
-        }
+        {key: value for key, value in proposal.items() if key != "proposal_sha256"}
     )
 
 
@@ -731,9 +659,7 @@ def test_stage_f_proposal_reuses_control_matrix_when_it_is_provisional(
     inputs = _stage_f_inputs(tmp_path)
     completion = dict(inputs["stage_r_completion"])
     completion.pop("completion_sha256")
-    completion["provisional_recovery_id"] = (
-        "current_fixed_floor_control_v1"
-    )
+    completion["provisional_recovery_id"] = "current_fixed_floor_control_v1"
     completion["rollback_backup_id"] = "relative_gap_timeout_v1"
     completion["completion_sha256"] = canonical_sha256(completion)
     inputs["stage_r_completion"] = completion
@@ -745,24 +671,18 @@ def test_stage_f_proposal_reuses_control_matrix_when_it_is_provisional(
     assert proposal["reused_logical_task_count"] == 96
     assert len(proposal["identities"]) == 96
     provisional = {
-        (item["record_id"], item["filter_profile_id"]): item[
-            "identity_sha256"
-        ]
+        (item["record_id"], item["filter_profile_id"]): item["identity_sha256"]
         for item in proposal["logical_tasks"]
         if item["matrix_role"] == "provisional_recovery"
     }
     current = {
-        (item["record_id"], item["filter_profile_id"]): item[
-            "identity_sha256"
-        ]
+        (item["record_id"], item["filter_profile_id"]): item["identity_sha256"]
         for item in proposal["logical_tasks"]
         if item["matrix_role"] == "same_role_current_control"
     }
     assert current == provisional
     provisional_tasks = [
-        item
-        for item in proposal["logical_tasks"]
-        if item["matrix_role"] == "provisional_recovery"
+        item for item in proposal["logical_tasks"] if item["matrix_role"] == "provisional_recovery"
     ]
     current_tasks = [
         item
@@ -830,9 +750,7 @@ def test_stage_f_proposal_rejects_baseline_metrics_that_differ_from_stage_r(
 ) -> None:
     inputs = _stage_f_inputs(tmp_path)
     baseline_metrics = deepcopy(inputs["baseline_metrics"])
-    baseline_metrics["records"][0]["metrics"][
-        "final_motion_mae_bpm"
-    ] = 9.0
+    baseline_metrics["records"][0]["metrics"]["final_motion_mae_bpm"] = 9.0
     inputs["baseline_metrics"] = baseline_metrics
 
     with pytest.raises(
@@ -879,15 +797,11 @@ def test_stage_f_proposal_requires_the_completed_audited_profile_library(
             ),
         ),
         (
-            lambda completion: completion[
-                "candidate_profile_receipt_sha256"
-            ].pop("p100-short-rate-normalized-low-40"),
+            lambda completion: completion["candidate_profile_receipt_sha256"].pop(
+                "p100-short-rate-normalized-low-40"
+            ),
         ),
-        (
-            lambda completion: completion[
-                "final_profile_receipt_sha256"
-            ].pop("p25-short-low"),
-        ),
+        (lambda completion: completion["final_profile_receipt_sha256"].pop("p25-short-low"),),
     ],
 )
 def test_stage_f_proposal_rejects_rehashed_incomplete_profile_completion(
@@ -916,9 +830,9 @@ def test_stage_f_proposal_freezes_the_profile_completion_content_hash(
     proposal = build_stage_f_proposal(**inputs)
 
     assert proposal["upstream_completion_bindings"] == {
-        "profile_library_completion_sha256": inputs[
-            "profile_library_completion"
-        ]["completion_sha256"],
+        "profile_library_completion_sha256": inputs["profile_library_completion"][
+            "completion_sha256"
+        ],
     }
 
 
@@ -974,39 +888,25 @@ def test_stage_f_proposal_requires_the_three_frozen_penalty_candidates(
     inputs = _stage_f_inputs(tmp_path)
     original_registry = dict(inputs["penalty_registry"])
     incomplete_registry = {
-        key: value
-        for key, value in original_registry.items()
-        if key != "registry_sha256"
+        key: value for key, value in original_registry.items() if key != "registry_sha256"
     }
     incomplete_registry["candidate_count"] = 1
-    incomplete_registry["candidates"] = [
-        original_registry["candidates"][0]
-    ]
-    incomplete_registry["registry_sha256"] = canonical_sha256(
-        incomplete_registry
-    )
+    incomplete_registry["candidates"] = [original_registry["candidates"][0]]
+    incomplete_registry["registry_sha256"] = canonical_sha256(incomplete_registry)
     inputs["penalty_registry"] = incomplete_registry
 
     stage_r_proposal = dict(inputs["stage_r_proposal"])
     stage_r_proposal.pop("proposal_sha256")
     stage_r_proposal["frozen_contracts"] = {
         **stage_r_proposal["frozen_contracts"],
-        "penalty_registry_hash": incomplete_registry[
-            "registry_sha256"
-        ],
+        "penalty_registry_hash": incomplete_registry["registry_sha256"],
     }
-    stage_r_proposal["proposal_sha256"] = canonical_sha256(
-        stage_r_proposal
-    )
+    stage_r_proposal["proposal_sha256"] = canonical_sha256(stage_r_proposal)
     inputs["stage_r_proposal"] = stage_r_proposal
     stage_r_completion = dict(inputs["stage_r_completion"])
     stage_r_completion.pop("completion_sha256")
-    stage_r_completion["proposal_sha256"] = stage_r_proposal[
-        "proposal_sha256"
-    ]
-    stage_r_completion["completion_sha256"] = canonical_sha256(
-        stage_r_completion
-    )
+    stage_r_completion["proposal_sha256"] = stage_r_proposal["proposal_sha256"]
+    stage_r_completion["completion_sha256"] = canonical_sha256(stage_r_completion)
     inputs["stage_r_completion"] = stage_r_completion
 
     with pytest.raises(
@@ -1024,9 +924,7 @@ def test_stage_f_proposal_publication_is_atomic_and_zero_run(
         tmp_path,
         monkeypatch,
     )
-    receipt = read_json(
-        destination / "proposal_receipt.json"
-    )
+    receipt = read_json(destination / "proposal_receipt.json")
 
     assert destination.is_dir()
     assert receipt["status"] == "ready_for_execution"
@@ -1034,9 +932,7 @@ def test_stage_f_proposal_publication_is_atomic_and_zero_run(
     assert receipt["diagnostic_solver_run_count"] == 0
     assert receipt["independent_bo_run_count"] == 0
     assert receipt["planned_unique_identity_count"] == 192
-    evaluation = read_json(
-        destination / "evaluation_source_identity.json"
-    )
+    evaluation = read_json(destination / "evaluation_source_identity.json")
     assert evaluation["root_modules"] == [
         "ppg_hr.v2.recovery_stage_f_contracts",
         "ppg_hr.v2.recovery_stage_f_execution",
@@ -1105,23 +1001,16 @@ def test_stage_f_execution_registers_two_matrices_and_is_resumable(
     expected_spectral_logical_reuse_count: int,
 ) -> None:
     inputs = _stage_f_inputs(tmp_path)
-    if (
-        provisional_recovery_id
-        == "current_fixed_floor_control_v1"
-    ):
+    if provisional_recovery_id == "current_fixed_floor_control_v1":
         completion = dict(inputs["stage_r_completion"])
         completion.pop("completion_sha256")
         completion.update(
             {
-                "provisional_recovery_id": (
-                    provisional_recovery_id
-                ),
+                "provisional_recovery_id": (provisional_recovery_id),
                 "rollback_backup_id": "relative_gap_timeout_v1",
             }
         )
-        completion["completion_sha256"] = canonical_sha256(
-            completion
-        )
+        completion["completion_sha256"] = canonical_sha256(completion)
         inputs["stage_r_completion"] = completion
     proposal_dir = _publish_stage_f_proposal(
         tmp_path,
@@ -1185,18 +1074,15 @@ def test_stage_f_execution_registers_two_matrices_and_is_resumable(
         "_numerical_runner": fake_numerical,
     }
     if expected_unique_identity_count == 192:
+
         def fake_solve(config) -> V2SolverResult:
             if not failed_once:
                 failed_once.add(str(config.data_path))
-                raise RuntimeError(
-                    "synthetic_first_attempt_failure"
-                )
+                raise RuntimeError("synthetic_first_attempt_failure")
             result = _synthetic_solver_result()
             metadata = {
                 **result.metadata,
-                "true_rise": config.data_path.name.startswith(
-                    ("kaihe", "run")
-                ),
+                "true_rise": config.data_path.name.startswith(("kaihe", "run")),
             }
             return V2SolverResult(
                 HR=result.HR,
@@ -1212,11 +1098,7 @@ def test_stage_f_execution_registers_two_matrices_and_is_resumable(
             method_names,
         ) -> RecoveryProfileMetricResult:
             del ref_data, method_names
-            return _synthetic_recovery_metrics(
-                true_rise=bool(
-                    result.metadata.get("true_rise")
-                )
-            )
+            return _synthetic_recovery_metrics(true_rise=bool(result.metadata.get("true_rise")))
 
         def fake_audit(
             profile,
@@ -1261,43 +1143,27 @@ def test_stage_f_execution_registers_two_matrices_and_is_resumable(
     assert completion["status"] == "complete"
     assert completion["logical_task_count"] == 192
     assert completion["logical_result_count"] == 192
-    assert completion["formal_result_count"] == (
-        expected_unique_identity_count
-    )
-    assert completion["formal_solver_run_count"] == (
-        expected_unique_identity_count
-    )
+    assert completion["formal_result_count"] == (expected_unique_identity_count)
+    assert completion["formal_solver_run_count"] == (expected_unique_identity_count)
     assert completion["unique_spectral_audit_count"] == 96
-    assert completion["spectral_audit_result_binding_count"] == (
-        expected_unique_identity_count
+    assert completion["spectral_audit_result_binding_count"] == (expected_unique_identity_count)
+    assert (
+        completion["spectral_audit_numerical_reuse_count"]
+        == expected_spectral_numerical_reuse_count
     )
-    assert completion[
-        "spectral_audit_numerical_reuse_count"
-    ] == expected_spectral_numerical_reuse_count
-    assert completion[
-        "spectral_audit_logical_reuse_count"
-    ] == expected_spectral_logical_reuse_count
-    assert completion["reused_logical_task_count"] == (
-        expected_spectral_logical_reuse_count
-    )
+    assert completion["spectral_audit_logical_reuse_count"] == expected_spectral_logical_reuse_count
+    assert completion["reused_logical_task_count"] == (expected_spectral_logical_reuse_count)
     assert completion["failed_attempt_count"] == 1
-    assert completion["matrix_execution_summary"][
-        "retry_count"
-    ] == 1
-    assert completion["matrix_execution_summary"][
-        "total_attempt_count"
-    ] == expected_unique_identity_count + 1
+    assert completion["matrix_execution_summary"]["retry_count"] == 1
+    assert (
+        completion["matrix_execution_summary"]["total_attempt_count"]
+        == expected_unique_identity_count + 1
+    )
     assert completion["independent_bo_run_count"] == 0
     assert writes[-1] == "stage_f_completion.json"
-    primary = read_json(
-        output_dir / "profile_enumeration_matrix.json"
-    )
-    control = read_json(
-        output_dir / "same_role_current_control_matrix.json"
-    )
-    upper = read_json(
-        output_dir / "profile_sample_in_upper_bound.json"
-    )
+    primary = read_json(output_dir / "profile_enumeration_matrix.json")
+    control = read_json(output_dir / "same_role_current_control_matrix.json")
+    upper = read_json(output_dir / "profile_sample_in_upper_bound.json")
     assert len(primary["rows"]) == 96
     assert len(control["rows"]) == 96
     assert primary["unique_spectral_audit_count"] == 96
@@ -1317,9 +1183,7 @@ def test_stage_f_execution_registers_two_matrices_and_is_resumable(
         )
     }
     expected_control_numerical_stage = (
-        "penalty_interaction"
-        if expected_unique_identity_count == 96
-        else "current_role_matrix"
+        "penalty_interaction" if expected_unique_identity_count == 96 else "current_role_matrix"
     )
     assert {
         (
@@ -1336,10 +1200,12 @@ def test_stage_f_execution_registers_two_matrices_and_is_resumable(
         )
     }
     assert len(upper["records"]) == 12
-    assert {
-        row["selected_profile_id"]
-        for row in upper["records"]
-    } == {"p25-short-low"}
+    assert upper["definition"] == "raw_coverage_best_across_all_frozen_profiles"
+    assert (
+        upper["safe_qualified_upper_bound"]["definition"]
+        == "best_across_engineering_qualified_profiles_only"
+    )
+    assert {row["selected_profile_id"] for row in upper["records"]} == {"p25-short-low"}
     rerun = execute_stage_f_proposal(
         proposal_dir=proposal_dir,
         governance_dir=governance,
@@ -1365,12 +1231,8 @@ def test_stage_f_execution_registers_two_matrices_and_is_resumable(
             governance_dir=governance,
             output_dir=output_dir,
             source_root=Path(__file__).parents[1] / "src",
-            _numerical_runner=lambda _item, _audit: (
-                _ for _ in ()
-            ).throw(
-                AssertionError(
-                    "tampered completion must fail before rerun"
-                )
+            _numerical_runner=lambda _item, _audit: (_ for _ in ()).throw(
+                AssertionError("tampered completion must fail before rerun")
             ),
         )
 
@@ -1429,10 +1291,7 @@ def test_stage_f_runner_executes_exact_proposal_and_streams_progress(
         "source_root": source_root,
         "progress_callback": captured["progress_callback"],
     }
-    output = [
-        json.loads(line)
-        for line in capsys.readouterr().out.splitlines()
-    ]
+    output = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
     assert output == [
         {
             "stage": "stage_f_filter_matrix",
@@ -1469,13 +1328,9 @@ def test_stage_f_proposal_cli_freezes_only_the_requested_inputs(
         "stage_r_proposal_path": tmp_path / "stage-r-proposal.json",
         "stage_r_completion_path": tmp_path / "stage-r-completion.json",
         "profile_library_path": tmp_path / "profiles.json",
-        "profile_library_completion_path": (
-            tmp_path / "profiles-completion.json"
-        ),
+        "profile_library_completion_path": (tmp_path / "profiles-completion.json"),
         "baseline_metrics_path": tmp_path / "baselines.json",
-        "baseline_contract_receipt_path": (
-            tmp_path / "baseline-receipt.json"
-        ),
+        "baseline_contract_receipt_path": (tmp_path / "baseline-receipt.json"),
         "recovery_registry_path": tmp_path / "recovery.json",
         "penalty_registry_path": tmp_path / "penalty.json",
         "budget_contract_path": tmp_path / "budget.json",
