@@ -83,12 +83,17 @@ def _budget_authorizations() -> list[dict[str, object]]:
         "decision_state": "awaiting_human_budget_decision",
         "independent_bo_authorized": False,
         "approved_by": "test-user",
-        "profile_design_rule_hash": "e" * 64,
-        "record_manifest_hash": "f" * 64,
+        "record_manifest_hash": (
+            "c5e7291cf2da3a6ef25a03a96d763373b9cacdaee521c0378413cee6dc9666f1"
+        ),
     }
     return [
         {
             **common,
+            "authorization_version": ("lyx_filter_audit_budget_authorization_v1"),
+            "profile_design_rule_hash": (
+                "d1744538afafe6c46291b6cc6bfa0655dd898c001f963859967d621056901024"
+            ),
             "approved_at": "2026-07-28T22:00:00+08:00",
             "stage": "filter_profile_stability_audit",
             "added_unique_identities": 32,
@@ -98,26 +103,38 @@ def _budget_authorizations() -> list[dict[str, object]]:
         },
         {
             **common,
+            "authorization_version": ("lyx_filter_audit_budget_authorization_v2"),
+            "profile_design_rule_hash": (
+                "6de9b647f2fe9f948604c1a906c8cbf6679e71833299ce540805af903141840c"
+            ),
             "approved_at": "2026-07-28T23:00:00+08:00",
             "stage": "filter_profile_stability_audit",
             "added_unique_identities": 8,
             "normal_unique_identity_limit": 712,
             "max_unique_identities": 724,
             "max_attempts": 1448,
-            "proposal_sha256": "1" * 64,
+            "proposal_sha256": ("b30fb765e651fa943c9a035f04f74e4a72184e918d7db1da231a1380fa30ca5f"),
         },
         {
             **common,
+            "authorization_version": ("lyx_filter_audit_budget_authorization_v3"),
+            "profile_design_rule_hash": (
+                "93a320eb48ca2cf7407c7c74824d5308518e1d537452627eb6ceb0603be9a5f5"
+            ),
             "approved_at": "2026-07-29T09:00:00+08:00",
             "stage": "filter_profile_stability_audit",
             "added_unique_identities": 24,
             "normal_unique_identity_limit": 736,
             "max_unique_identities": 748,
             "max_attempts": 1496,
-            "proposal_sha256": "2" * 64,
+            "proposal_sha256": ("57d402b0b471a66d6f09766886744e8a50fc5d41c0d2a06db4c94544ddb2b556"),
         },
         {
             **common,
+            "authorization_version": ("lyx_filter_rate_normalized_budget_authorization_v1"),
+            "profile_design_rule_hash": (
+                "711942f542bda86fefdebcbc82564a1eaa3b3ce5ab6289b7cf1e59496e251f26"
+            ),
             "approved_at": "2026-07-29T11:00:00+08:00",
             "stage": "filter_profile_rate_normalization_exploration",
             "added_unique_identities": 8,
@@ -126,7 +143,7 @@ def _budget_authorizations() -> list[dict[str, object]]:
             "max_attempts": 1512,
             "attempt_kind": "exploration",
             "exploration_unique_budget": 8,
-            "proposal_sha256": "3" * 64,
+            "proposal_sha256": ("3600155f2967bfa9a5c12bddad1cb7cab4d8be0fe1bfcb23f41657c2e23ea168"),
         },
     ]
 
@@ -434,6 +451,43 @@ def _evaluate(bundle: dict[str, object]) -> dict[str, object]:
     )
 
 
+def _build_report(
+    bundle: dict[str, object],
+    gate: dict[str, object],
+    *,
+    budget_contract: dict[str, object] | None = None,
+    budget_authorizations: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    return build_final_development_report(
+        gate_receipt=gate,
+        fold_replay_proposal=bundle["fold_proposal"],
+        pre_fold_gate_receipt=bundle["pre_fold_gate"],
+        fold_replay_report=bundle["fold_report"],
+        fold_selection_receipt=bundle["selection"],
+        target_audits_by_fold=bundle["target_audits"],
+        final_interaction_audit=bundle["final_audit"],
+        historical_ab_report=bundle["historical"],
+        current_role_matrix=bundle["current_role"],
+        budget_contract=(
+            BudgetContract.approved_v5().to_dict() if budget_contract is None else budget_contract
+        ),
+        attempt_registry_summary={
+            "logical_task_count": 0,
+            "planned_unique_identity_count": 0,
+            "actual_unique_run_count": 0,
+            "cache_evidence_count": 0,
+            "cache_hit_count": 0,
+            "failed_attempt_count": 0,
+            "retry_count": 0,
+            "total_attempt_count": 0,
+            "by_stage": {},
+        },
+        budget_amendment_authorizations=(
+            _budget_authorizations() if budget_authorizations is None else budget_authorizations
+        ),
+    )
+
+
 def test_post_fold_gate_has_exactly_two_false_conditions_when_all_slots_pass() -> None:
     gate = _evaluate(_bundle())
 
@@ -595,31 +649,7 @@ def test_future_bo_authorization_must_match_all_five_request_fields() -> None:
 def test_final_report_separates_five_layers_and_limits_claims() -> None:
     bundle = _bundle()
     gate = _evaluate(bundle)
-    budget = BudgetContract.approved_v5()
-    report = build_final_development_report(
-        gate_receipt=gate,
-        fold_replay_proposal=bundle["fold_proposal"],
-        pre_fold_gate_receipt=bundle["pre_fold_gate"],
-        fold_replay_report=bundle["fold_report"],
-        fold_selection_receipt=bundle["selection"],
-        target_audits_by_fold=bundle["target_audits"],
-        final_interaction_audit=bundle["final_audit"],
-        historical_ab_report=bundle["historical"],
-        current_role_matrix=bundle["current_role"],
-        budget_contract=budget.to_dict(),
-        attempt_registry_summary={
-            "logical_task_count": 0,
-            "planned_unique_identity_count": 0,
-            "actual_unique_run_count": 0,
-            "cache_evidence_count": 0,
-            "cache_hit_count": 0,
-            "failed_attempt_count": 0,
-            "retry_count": 0,
-            "total_attempt_count": 0,
-            "by_stage": {},
-        },
-        budget_amendment_authorizations=_budget_authorizations(),
-    )
+    report = _build_report(bundle, gate)
     markdown = render_final_development_report_markdown(report)
 
     assert report["status"] == "complete"
@@ -647,29 +677,10 @@ def test_final_report_separates_five_layers_and_limits_claims() -> None:
         FoldReplayError,
         match="post_fold_budget_amendment_chain_incomplete",
     ):
-        build_final_development_report(
-            gate_receipt=gate,
-            fold_replay_proposal=bundle["fold_proposal"],
-            pre_fold_gate_receipt=bundle["pre_fold_gate"],
-            fold_replay_report=bundle["fold_report"],
-            fold_selection_receipt=bundle["selection"],
-            target_audits_by_fold=bundle["target_audits"],
-            final_interaction_audit=bundle["final_audit"],
-            historical_ab_report=bundle["historical"],
-            current_role_matrix=bundle["current_role"],
-            budget_contract=budget.to_dict(),
-            attempt_registry_summary={
-                "logical_task_count": 0,
-                "planned_unique_identity_count": 0,
-                "actual_unique_run_count": 0,
-                "cache_evidence_count": 0,
-                "cache_hit_count": 0,
-                "failed_attempt_count": 0,
-                "retry_count": 0,
-                "total_attempt_count": 0,
-                "by_stage": {},
-            },
-            budget_amendment_authorizations=(_budget_authorizations()[:-1]),
+        _build_report(
+            bundle,
+            gate,
+            budget_authorizations=_budget_authorizations()[:-1],
         )
 
     handoff = build_challenge_scene_handoff(
@@ -682,6 +693,35 @@ def test_final_report_separates_five_layers_and_limits_claims() -> None:
     assert handoff["challenge_protocol"]["reserved_scene_ids"] == ["bobi"]
     assert handoff["challenge_protocol"]["challenge_result_read_count_at_freeze"] == 0
     assert "cross_person_generalization_passed" in handoff["claims_not_yet_allowed"]
+
+
+def test_budget_audit_requires_exact_contract_and_proposal_chain() -> None:
+    bundle = _bundle()
+    gate = _evaluate(bundle)
+
+    forged_authorizations = deepcopy(_budget_authorizations())
+    forged_authorizations[-1]["proposal_sha256"] = "9" * 64
+    with pytest.raises(
+        FoldReplayError,
+        match="post_fold_budget_amendment_authorization_mismatch",
+    ):
+        _build_report(
+            bundle,
+            gate,
+            budget_authorizations=forged_authorizations,
+        )
+
+    forged_contract = BudgetContract.approved_v5().to_dict()
+    forged_contract["stage_unique_limits"]["penalty_interaction"] = 287
+    with pytest.raises(
+        FoldReplayError,
+        match="post_fold_budget_contract_not_approved",
+    ):
+        _build_report(
+            bundle,
+            gate,
+            budget_contract=forged_contract,
+        )
 
 
 def _write_publisher_inputs(

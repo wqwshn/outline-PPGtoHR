@@ -19,6 +19,7 @@ from .phase2_experiment_io import atomic_write_json, file_sha256, read_json
 from .recovery_contracts import canonical_sha256
 from .recovery_experiment_governance import (
     AttemptRegistry,
+    BudgetContract,
     ExplorationRegistry,
     IndependentBORequest,
     validate_independent_bo_authorization,
@@ -46,9 +47,21 @@ _POST_FOLD_MIN_FAILED_SLOTS = 3
 _ORIGINAL_BODY_UNIQUE_LIMIT = 684
 _ORIGINAL_BODY_ATTEMPT_LIMIT = 1368
 _KNOWN_APPROVED_BUDGETS = {
-    "lyx_recovery_filter_budget_v3": (724, 1448),
-    "lyx_recovery_filter_budget_v4": (748, 1496),
-    "lyx_recovery_filter_budget_v5": (756, 1512),
+    "lyx_recovery_filter_budget_v3": (
+        724,
+        1448,
+        BudgetContract.approved_v3().sha256,
+    ),
+    "lyx_recovery_filter_budget_v4": (
+        748,
+        1496,
+        BudgetContract.approved_v4().sha256,
+    ),
+    "lyx_recovery_filter_budget_v5": (
+        756,
+        1512,
+        BudgetContract.approved_v5().sha256,
+    ),
 }
 _ORIGINAL_BODY_STAGES = frozenset(
     {
@@ -61,27 +74,63 @@ _ORIGINAL_BODY_STAGES = frozenset(
         "fold_replay",
     }
 )
+_RECORD_MANIFEST_HASH = "c5e7291cf2da3a6ef25a03a96d763373b9cacdaee521c0378413cee6dc9666f1"
+_AMENDMENT_V2 = (
+    "lyx_filter_audit_budget_authorization_v1",
+    "filter_profile_stability_audit",
+    32,
+    704,
+    716,
+    1432,
+    "d1744538afafe6c46291b6cc6bfa0655dd898c001f963859967d621056901024",
+    _RECORD_MANIFEST_HASH,
+    None,
+)
+_AMENDMENT_V3 = (
+    "lyx_filter_audit_budget_authorization_v2",
+    "filter_profile_stability_audit",
+    8,
+    712,
+    724,
+    1448,
+    "6de9b647f2fe9f948604c1a906c8cbf6679e71833299ce540805af903141840c",
+    _RECORD_MANIFEST_HASH,
+    "b30fb765e651fa943c9a035f04f74e4a72184e918d7db1da231a1380fa30ca5f",
+)
+_AMENDMENT_V4 = (
+    "lyx_filter_audit_budget_authorization_v3",
+    "filter_profile_stability_audit",
+    24,
+    736,
+    748,
+    1496,
+    "93a320eb48ca2cf7407c7c74824d5308518e1d537452627eb6ceb0603be9a5f5",
+    _RECORD_MANIFEST_HASH,
+    "57d402b0b471a66d6f09766886744e8a50fc5d41c0d2a06db4c94544ddb2b556",
+)
+_AMENDMENT_V5 = (
+    "lyx_filter_rate_normalized_budget_authorization_v1",
+    "filter_profile_rate_normalization_exploration",
+    8,
+    744,
+    756,
+    1512,
+    "711942f542bda86fefdebcbc82564a1eaa3b3ce5ab6289b7cf1e59496e251f26",
+    _RECORD_MANIFEST_HASH,
+    "3600155f2967bfa9a5c12bddad1cb7cab4d8be0fe1bfcb23f41657c2e23ea168",
+)
 _EXPECTED_BUDGET_AMENDMENTS = {
-    "lyx_recovery_filter_budget_v3": (
-        ("filter_profile_stability_audit", 32, 704, 716, 1432),
-        ("filter_profile_stability_audit", 8, 712, 724, 1448),
-    ),
+    "lyx_recovery_filter_budget_v3": (_AMENDMENT_V2, _AMENDMENT_V3),
     "lyx_recovery_filter_budget_v4": (
-        ("filter_profile_stability_audit", 32, 704, 716, 1432),
-        ("filter_profile_stability_audit", 8, 712, 724, 1448),
-        ("filter_profile_stability_audit", 24, 736, 748, 1496),
+        _AMENDMENT_V2,
+        _AMENDMENT_V3,
+        _AMENDMENT_V4,
     ),
     "lyx_recovery_filter_budget_v5": (
-        ("filter_profile_stability_audit", 32, 704, 716, 1432),
-        ("filter_profile_stability_audit", 8, 712, 724, 1448),
-        ("filter_profile_stability_audit", 24, 736, 748, 1496),
-        (
-            "filter_profile_rate_normalization_exploration",
-            8,
-            744,
-            756,
-            1512,
-        ),
+        _AMENDMENT_V2,
+        _AMENDMENT_V3,
+        _AMENDMENT_V4,
+        _AMENDMENT_V5,
     ),
 }
 _REVIEW_CONTEXT_FIELDS = {
@@ -914,6 +963,7 @@ def _budget_audit(
     if expected_limits is None or expected_limits != (
         contract.max_unique_identities,
         contract.max_attempts,
+        contract.sha256,
     ):
         raise FoldReplayError("post_fold_budget_contract_not_approved")
     expected_amendments = _EXPECTED_BUDGET_AMENDMENTS[version]
@@ -930,22 +980,29 @@ def _budget_audit(
         if limit in authorizations_by_limit:
             raise FoldReplayError("post_fold_duplicate_budget_amendment_authorization")
         authorizations_by_limit[limit] = receipt
-    if set(authorizations_by_limit) != {amendment[3] for amendment in expected_amendments}:
+    if set(authorizations_by_limit) != {amendment[4] for amendment in expected_amendments}:
         raise FoldReplayError("post_fold_budget_amendment_chain_incomplete")
     authorization_summaries: list[dict[str, Any]] = []
     for (
+        expected_authorization_version,
         expected_stage,
         expected_added,
         expected_normal_limit,
         expected_unique_limit,
         expected_attempt_limit,
+        expected_profile_design_rule_hash,
+        expected_record_manifest_hash,
+        expected_proposal_sha,
     ) in expected_amendments:
         receipt = authorizations_by_limit[expected_unique_limit]
-        for field in ("profile_design_rule_hash", "record_manifest_hash"):
-            require_hash(
-                f"post_fold_budget_amendment_{field}",
-                receipt.get(field),
-            )
+        profile_design_rule_hash = require_hash(
+            "post_fold_budget_amendment_profile_design_rule_hash",
+            receipt.get("profile_design_rule_hash"),
+        )
+        record_manifest_hash = require_hash(
+            "post_fold_budget_amendment_record_manifest_hash",
+            receipt.get("record_manifest_hash"),
+        )
         proposal_sha = receipt.get("proposal_sha256")
         if proposal_sha is not None:
             require_hash(
@@ -954,12 +1011,16 @@ def _budget_audit(
             )
         if (
             receipt.get("approved") is not True
+            or receipt.get("authorization_version") != expected_authorization_version
             or receipt.get("decision_state") != "awaiting_human_budget_decision"
             or receipt.get("independent_bo_authorized") is not False
             or receipt.get("stage") != expected_stage
             or receipt.get("added_unique_identities") != expected_added
             or receipt.get("normal_unique_identity_limit") != expected_normal_limit
             or receipt.get("max_attempts") != expected_attempt_limit
+            or profile_design_rule_hash != expected_profile_design_rule_hash
+            or record_manifest_hash != expected_record_manifest_hash
+            or proposal_sha != expected_proposal_sha
             or not isinstance(receipt.get("approved_at"), str)
             or not receipt["approved_at"]
             or not isinstance(receipt.get("approved_by"), str)
