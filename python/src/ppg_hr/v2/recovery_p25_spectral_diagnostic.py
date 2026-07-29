@@ -50,6 +50,56 @@ _P25_PROFILE_IDS = (
     "p25-short-mid",
     "p25-long-mid",
 )
+_P25_PROFILE_CONTRACTS = {
+    "p25-short-low": {
+        "fs_target": 25,
+        "physical_memory_ms": 40,
+        "actual_taps": 1,
+        "nominal_mu": 0.008,
+        "profile_sha256": ("f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100"),
+    },
+    "p25-short-mid": {
+        "fs_target": 25,
+        "physical_memory_ms": 40,
+        "actual_taps": 1,
+        "nominal_mu": 0.012,
+        "profile_sha256": ("79e6036878bc69a614082ba174f28a55bca49b9fc87745de397e68b545ecedde"),
+    },
+    "p25-long-mid": {
+        "fs_target": 25,
+        "physical_memory_ms": 200,
+        "actual_taps": 5,
+        "nominal_mu": 0.010,
+        "profile_sha256": ("4f088d4248e5a5f6f508c0d3fc3521b1a98836e4d4ff33b44041aefc5cc174f9"),
+    },
+}
+_SPECTRAL_GATE_NAMES = (
+    "prominence_db_delta_pass",
+    "visible_top3_rate_delta_pass",
+    "hr_band_share_delta_pass",
+    "pulse_power_retention_pass",
+    "residual_artifact_corr_delta_pass",
+    "complete_window_evidence_pass",
+)
+_SENTINEL_REVISION_DECISION = "stage_r_sentinel_revision_candidate"
+_MECHANISM_REVISION_DECISION = "filter_mechanism_revision_required"
+_CONTROL_AUDIT_DECISION = "spectral_metric_control_audit_required"
+_DECISION_BRANCHES = {
+    _SENTINEL_REVISION_DECISION: {
+        "description": ("at least one profile passes the complete spectral gate on all 12 records"),
+        "next_state": "awaiting_human_stage_r_revision_decision",
+    },
+    _CONTROL_AUDIT_DECISION: {
+        "description": ("all 36 coordinates fail pulse_power_retention_pass"),
+        "next_state": "awaiting_spectral_metric_control_audit",
+    },
+    _MECHANISM_REVISION_DECISION: {
+        "description": (
+            "no profile passes all 12 records and pulse-power failures are not universal"
+        ),
+        "next_state": "awaiting_filter_mechanism_revision",
+    },
+}
 _EXPECTED_SCENE_COUNTS = {
     "jianpan": 3,
     "kaihe": 3,
@@ -201,14 +251,26 @@ def _p25_profiles_from_library(
         raise P25SpectralDiagnosticError("p25_spectral_profile_set_mismatch")
     profiles = tuple(dict(profiles_by_id[profile_id]) for profile_id in _P25_PROFILE_IDS)
     for profile in profiles:
+        profile_id = str(profile["profile_id"])
         if (
             profile.get("fs_target") != 25
             or profile.get("design_role") != "core"
             or profile.get("recovery_sentinel_role") is not None
         ):
-            raise P25SpectralDiagnosticError(
-                f"p25_spectral_profile_role_mismatch:{profile['profile_id']}"
+            raise P25SpectralDiagnosticError(f"p25_spectral_profile_role_mismatch:{profile_id}")
+        expected = _P25_PROFILE_CONTRACTS[profile_id]
+        actual = {
+            name: profile.get(name)
+            for name in (
+                "fs_target",
+                "physical_memory_ms",
+                "actual_taps",
+                "nominal_mu",
+                "profile_sha256",
             )
+        }
+        if actual != expected:
+            raise P25SpectralDiagnosticError(f"p25_spectral_profile_contract_mismatch:{profile_id}")
     return profiles
 
 
@@ -354,17 +416,7 @@ def _decision_contract_v1() -> dict[str, Any]:
             "l20",
             "recovery",
         ],
-        "branches": {
-            "stage_r_sentinel_revision_candidate": (
-                "at least one profile passes the complete spectral gate on all 12 records"
-            ),
-            "spectral_metric_control_audit_required": (
-                "all 36 coordinates fail pulse_power_retention_pass"
-            ),
-            "filter_mechanism_revision_required": (
-                "no profile passes all 12 records and pulse-power failures are not universal"
-            ),
-        },
+        "branches": {name: branch["description"] for name, branch in _DECISION_BRANCHES.items()},
         "automatic_stage_r_execution": False,
         "automatic_independent_bo_execution": False,
         "may_nominate_recovery_candidate": False,
@@ -540,6 +592,8 @@ def evaluate_p25_spectral_diagnostic_decision(
             "p25_spectral_result_gates",
             spectral_gate.get("gates"),
         )
+        if set(gates) != set(_SPECTRAL_GATE_NAMES):
+            raise P25SpectralDiagnosticError("p25_spectral_decision_gate_set_mismatch")
         stability_pass = audit.get("stability_pass")
         spectral_gate_pass = spectral_gate.get("spectral_gate_pass")
         pulse_pass = gates.get("pulse_power_retention_pass")
@@ -548,10 +602,12 @@ def evaluate_p25_spectral_diagnostic_decision(
             for value in (
                 stability_pass,
                 spectral_gate_pass,
-                pulse_pass,
+                *[gates[name] for name in _SPECTRAL_GATE_NAMES],
             )
         ):
             raise P25SpectralDiagnosticError("p25_spectral_decision_gate_value_must_be_boolean")
+        if spectral_gate_pass is not all(gates[name] for name in _SPECTRAL_GATE_NAMES):
+            raise P25SpectralDiagnosticError("p25_spectral_decision_gate_summary_mismatch")
         summary = profile_summaries[profile_id]
         summary["coordinate_count"] += 1
         summary["complete_spectral_pass_count"] += int(stability_pass and spectral_gate_pass)
@@ -573,11 +629,11 @@ def evaluate_p25_spectral_diagnostic_decision(
         summary["pulse_power_retention_pass_count"] for summary in profile_summaries.values()
     )
     if complete_profiles:
-        decision = "stage_r_sentinel_revision_candidate"
+        decision = _SENTINEL_REVISION_DECISION
     elif pulse_pass_count == 0:
-        decision = "spectral_metric_control_audit_required"
+        decision = _CONTROL_AUDIT_DECISION
     else:
-        decision = "filter_mechanism_revision_required"
+        decision = _MECHANISM_REVISION_DECISION
     result: dict[str, Any] = {
         "decision_version": "lyx_p25_spectral_decision_v1",
         "decision": decision,
@@ -785,6 +841,7 @@ def prepare_p25_spectral_diagnostic_governance(
     authorization_receipt_path: Path | None,
     source_governance_dir: Path,
     governance_dir: Path,
+    source_root: Path,
 ) -> dict[str, Any]:
     """Migrate v5 governance and register 36 identities after approval."""
 
@@ -798,6 +855,11 @@ def prepare_p25_spectral_diagnostic_governance(
     validated = validate_p25_spectral_diagnostic_authorization(
         proposal,
         receipt=authorization,
+    )
+    identities_raw = _validate_p25_proposal_preflight(
+        proposal_root=proposal_root,
+        proposal=proposal,
+        source_root=source_root,
     )
     target_root = Path(governance_dir).resolve()
     if target_root.exists():
@@ -819,29 +881,23 @@ def prepare_p25_spectral_diagnostic_governance(
         or budget_request.get("budget_contract_hash") != target_budget.sha256
     ):
         raise P25SpectralDiagnosticError("p25_spectral_budget_request_mismatch")
-    identities = tuple(
-        _attempt_identity_from_item(_require_mapping("p25_spectral_identity", item))
-        for item in _require_list(
-            "p25_spectral_identities",
-            proposal.get("identities"),
-        )
-    )
+    identities = tuple(_attempt_identity_from_item(item) for item in identities_raw)
     if len(identities) != 36 or tuple(identity.sha256 for identity in identities) != tuple(
         str(value) for value in proposal["identity_sha256"]
     ):
         raise P25SpectralDiagnosticError("p25_spectral_governance_identity_matrix_mismatch")
 
-    source_root = Path(source_governance_dir).resolve()
-    source_budget_payload = read_json(source_root / "budget_contract.json")
+    source_governance_root = Path(source_governance_dir).resolve()
+    source_budget_payload = read_json(source_governance_root / "budget_contract.json")
     source_budget = BudgetContract.approved_v5()
     if source_budget_payload != source_budget.to_dict():
         raise P25SpectralDiagnosticError("p25_spectral_source_budget_mismatch")
-    exploration_payload = read_json(source_root / "exploration_registry.json")
+    exploration_payload = read_json(source_governance_root / "exploration_registry.json")
     exploration = _exploration_registry_from_payload(exploration_payload)
     if exploration.to_dict() != exploration_payload:
         raise P25SpectralDiagnosticError("p25_spectral_source_exploration_registry_mismatch")
     source_registry = AttemptRegistry.open(
-        source_root / "attempt_registry.json",
+        source_governance_root / "attempt_registry.json",
         budget_contract=source_budget,
         exploration_registry=exploration,
     )
@@ -1010,6 +1066,12 @@ def _validate_completed_p25_execution(
         or completion.get("authorization_sha256") != authorization_sha256
         or completion.get("diagnostic_result_count") != 36
         or completion.get("independent_bo_run_count") != 0
+        or completion.get("algorithm_level_holdout") is not False
+        or completion.get("evidence_class") != "development_reuse_pilot"
+        or completion.get("may_nominate_recovery_candidate") is not False
+        or completion.get("status") not in _DECISION_BRANCHES
+        or completion.get("next_state")
+        != _DECISION_BRANCHES[str(completion.get("status"))]["next_state"]
     ):
         raise P25SpectralDiagnosticError("p25_spectral_completion_identity_mismatch")
     for name, expected in _require_mapping(
@@ -1031,7 +1093,54 @@ def _validate_completed_p25_execution(
         artifact_name="p25_spectral_execution_receipt",
     ) != completion.get("governance_receipt_sha256"):
         raise P25SpectralDiagnosticError("p25_spectral_completion_governance_receipt_mismatch")
+    matching_fields = {
+        "status": completion.get("status"),
+        "proposal_sha256": completion.get("proposal_sha256"),
+        "authorization_sha256": completion.get("authorization_sha256"),
+        "matrix_execution_summary": completion.get("matrix_execution_summary"),
+        "independent_bo_run_count": 0,
+        "algorithm_level_holdout": False,
+        "evidence_class": "development_reuse_pilot",
+        "artifacts": completion.get("artifacts"),
+    }
+    if any(governance_receipt.get(name) != expected for name, expected in matching_fields.items()):
+        raise P25SpectralDiagnosticError("p25_spectral_completion_governance_receipt_mismatch")
     return completion
+
+
+def _materialize_p25_spectral_audit(
+    *,
+    result: Mapping[str, Any],
+    proposal_sha256: str,
+    spectral_audit_dir: Path,
+) -> dict[str, Any]:
+    audit = dict(
+        _require_mapping(
+            "p25_spectral_materialized_audit",
+            result.get("spectral_audit"),
+        )
+    )
+    profile_id = str(result["filter_profile_id"])
+    record_id = str(result["record_id"])
+    payload = {
+        "audit_version": "lyx_p25_materialized_spectral_audit_v1",
+        "proposal_sha256": proposal_sha256,
+        "identity_sha256": result["identity_sha256"],
+        "profile_id": profile_id,
+        "record_id": record_id,
+        "cache_hit": result["cache_hit"],
+        "audit": audit,
+    }
+    payload["materialized_audit_sha256"] = canonical_sha256(payload)
+    path = spectral_audit_dir / profile_id / f"{record_id}.json"
+    atomic_write_json(path, payload)
+    return {
+        "profile_id": profile_id,
+        "record_id": record_id,
+        "path": path.relative_to(spectral_audit_dir.parent).as_posix(),
+        "file_sha256": file_sha256(path),
+        "materialized_audit_sha256": payload["materialized_audit_sha256"],
+    }
 
 
 def execute_p25_spectral_diagnostic(
@@ -1114,6 +1223,7 @@ def execute_p25_spectral_diagnostic(
     else:
         runner = _numerical_runner
     results: list[dict[str, Any]] = []
+    materialized_audits: list[dict[str, Any]] = []
     spectral_audit_dir = destination / "spectral_audits"
     for index, item in enumerate(identities_raw, start=1):
         result = stage_r_cache.execute_stage_r_identity(
@@ -1123,6 +1233,13 @@ def execute_p25_spectral_diagnostic(
             spectral_audit_dir=spectral_audit_dir,
         )
         results.append(result)
+        materialized_audits.append(
+            _materialize_p25_spectral_audit(
+                result=result,
+                proposal_sha256=str(proposal["proposal_sha256"]),
+                spectral_audit_dir=spectral_audit_dir,
+            )
+        )
         if progress_callback is not None:
             progress_callback(
                 {
@@ -1136,6 +1253,17 @@ def execute_p25_spectral_diagnostic(
                 }
             )
     registry.assert_complete_matrix(identities)
+    spectral_audit_manifest = {
+        "manifest_version": ("lyx_p25_materialized_spectral_audit_manifest_v1"),
+        "proposal_sha256": proposal["proposal_sha256"],
+        "audit_count": 36,
+        "audits": materialized_audits,
+    }
+    spectral_audit_manifest["manifest_sha256"] = canonical_sha256(spectral_audit_manifest)
+    atomic_write_json(
+        destination / "spectral_audit_manifest.json",
+        spectral_audit_manifest,
+    )
     result_index = {
         "index_version": "lyx_p25_spectral_result_index_v1",
         "proposal_sha256": proposal["proposal_sha256"],
@@ -1176,6 +1304,7 @@ def execute_p25_spectral_diagnostic(
         for name in (
             "execution_binding.json",
             "identity_result_index.json",
+            "spectral_audit_manifest.json",
             "profile_gate_summary.json",
             "decision_receipt.json",
             "attempt_registry_p25_snapshot.json",
@@ -1189,16 +1318,13 @@ def execute_p25_spectral_diagnostic(
         "matrix_execution_summary": matrix_summary,
         "attempt_registry_snapshot_sha256": matrix_snapshot["snapshot_sha256"],
         "independent_bo_run_count": 0,
+        "algorithm_level_holdout": False,
+        "evidence_class": "development_reuse_pilot",
         "artifacts": artifacts,
     }
     execution_receipt["receipt_sha256"] = canonical_sha256(execution_receipt)
     execution_receipt_path = governance_root / "p25_spectral_execution_receipt.json"
     atomic_write_json(execution_receipt_path, execution_receipt)
-    next_states = {
-        "stage_r_sentinel_revision_candidate": ("awaiting_human_stage_r_revision_decision"),
-        "filter_mechanism_revision_required": ("awaiting_filter_mechanism_revision"),
-        "spectral_metric_control_audit_required": ("awaiting_spectral_metric_control_audit"),
-    }
     completion = {
         "completion_version": "lyx_p25_spectral_completion_v1",
         "status": decision["decision"],
@@ -1207,8 +1333,10 @@ def execute_p25_spectral_diagnostic(
         "diagnostic_result_count": 36,
         "diagnostic_solver_run_count": matrix_summary["identity_with_solver_attempt_count"],
         "independent_bo_run_count": 0,
+        "algorithm_level_holdout": False,
+        "evidence_class": "development_reuse_pilot",
         "may_nominate_recovery_candidate": False,
-        "next_state": next_states[str(decision["decision"])],
+        "next_state": _DECISION_BRANCHES[str(decision["decision"])]["next_state"],
         "matrix_execution_summary": matrix_summary,
         "artifacts": artifacts,
         "governance_receipt_sha256": execution_receipt["receipt_sha256"],

@@ -48,6 +48,7 @@ def _parser() -> argparse.ArgumentParser:
         type=Path,
     )
     prepare.add_argument("--governance-dir", required=True, type=Path)
+    prepare.add_argument("--source-root", required=True, type=Path)
 
     execute = commands.add_parser("execute")
     execute.add_argument("--proposal-dir", required=True, type=Path)
@@ -77,6 +78,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             authorization_receipt_path=args.authorization_receipt,
             source_governance_dir=args.source_governance_dir,
             governance_dir=args.governance_dir,
+            source_root=args.source_root,
         )
     else:
         result = execute_p25_spectral_diagnostic(

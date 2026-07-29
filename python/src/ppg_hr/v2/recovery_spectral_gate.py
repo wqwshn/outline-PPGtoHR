@@ -291,6 +291,14 @@ def evaluate_stage_r_spectral_gate_windows(
             "spectral_gate_pass": False,
             "valid_window_count": valid_count,
             "invalid_window_count": invalid_count,
+            "gates": {
+                "prominence_db_delta_pass": False,
+                "visible_top3_rate_delta_pass": False,
+                "hr_band_share_delta_pass": False,
+                "pulse_power_retention_pass": False,
+                "residual_artifact_corr_delta_pass": False,
+                "complete_window_evidence_pass": False,
+            },
             "failure_reasons": [
                 *failures,
                 "insufficient_valid_spectral_windows",

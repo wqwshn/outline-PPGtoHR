@@ -70,3 +70,21 @@ def test_stage_r_spectral_gate_fails_closed_on_pulse_damage_or_bad_window() -> N
         incomplete["gates"]["complete_window_evidence_pass"]
         is False
     )
+
+
+def test_stage_r_spectral_gate_keeps_six_false_gates_when_evidence_is_insufficient() -> None:
+    result = evaluate_stage_r_spectral_gate_windows(
+        [],
+        contract=StageRSpectralGateContract(),
+    )
+
+    assert result["spectral_gate_pass"] is False
+    assert set(result["gates"]) == {
+        "prominence_db_delta_pass",
+        "visible_top3_rate_delta_pass",
+        "hr_band_share_delta_pass",
+        "pulse_power_retention_pass",
+        "residual_artifact_corr_delta_pass",
+        "complete_window_evidence_pass",
+    }
+    assert not any(result["gates"].values())

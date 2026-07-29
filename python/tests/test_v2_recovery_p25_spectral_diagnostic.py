@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 import pytest
 
+from ppg_hr.v2 import recovery_p25_spectral_diagnostic as p25_module
 from ppg_hr.v2 import recovery_stage_r_experiment as stage_r_module
 from ppg_hr.v2.phase2_experiment_io import atomic_write_json, read_json
+from ppg_hr.v2.recovery_contracts import canonical_sha256
 from ppg_hr.v2.recovery_experiment_governance import (
     AttemptRegistry,
     BudgetContract,
@@ -163,6 +166,39 @@ def test_build_proposal_freezes_exact_p25_profile_record_product() -> None:
     assert proposal["may_nominate_recovery_candidate"] is False
 
 
+def test_proposal_rejects_self_consistent_but_unfrozen_p25_profile() -> None:
+    library = deepcopy(read_json(PROFILE_LIBRARY_PATH))
+    profile = next(item for item in library["profiles"] if item["profile_id"] == "p25-short-low")
+    profile["actual_taps"] = 2
+    profile["profile_sha256"] = canonical_sha256(
+        {
+            "profile_id": profile["profile_id"],
+            "design_role": profile["design_role"],
+            "fs_target": profile["fs_target"],
+            "memory_ms": profile["physical_memory_ms"],
+            "nominal_mu": profile["nominal_mu"],
+            "recovery_sentinel_role": profile["recovery_sentinel_role"],
+            "actual_taps": profile["actual_taps"],
+        }
+    )
+    library.pop("library_sha256")
+    library["library_sha256"] = canonical_sha256(library)
+
+    with pytest.raises(
+        P25SpectralDiagnosticError,
+        match="p25_spectral_profile_contract_mismatch:p25-short-low",
+    ):
+        build_p25_spectral_diagnostic_proposal(
+            stage_r_proposal=read_json(STAGE_R_PROPOSAL_PATH),
+            stage_r_completion=read_json(STAGE_R_COMPLETION_PATH),
+            profile_library=library,
+            budget_contract=_proposed_budget_v6(),
+            parent_experiment_id="lyx_recovery_filter_profile_v1",
+            solver_hash="a" * 64,
+            evaluation_hash="b" * 64,
+        )
+
+
 def test_authorization_must_bind_every_frozen_diagnostic_identity() -> None:
     proposal = build_p25_spectral_diagnostic_proposal(
         stage_r_proposal=read_json(STAGE_R_PROPOSAL_PATH),
@@ -264,6 +300,7 @@ def test_propose_publishes_zero_run_review_package(
 
 def test_prepare_governance_requires_exact_authorization_before_mutation(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     proposal_dir = _publish_proposal(tmp_path)
     proposal = read_json(proposal_dir / "p25_spectral_diagnostic_proposal.json")
@@ -294,6 +331,7 @@ def test_prepare_governance_requires_exact_authorization_before_mutation(
             authorization_receipt_path=None,
             source_governance_dir=source_governance,
             governance_dir=target_governance,
+            source_root=REPO_ROOT / "python" / "src",
         )
     assert not target_governance.exists()
 
@@ -302,11 +340,33 @@ def test_prepare_governance_requires_exact_authorization_before_mutation(
         authorization_path,
         _execution_authorization(proposal),
     )
+    monkeypatch.setattr(
+        p25_module,
+        "runtime_source_identity",
+        lambda *_args, **_kwargs: {
+            "source_bundle_sha256": "f" * 64,
+        },
+    )
+    with pytest.raises(
+        P25SpectralDiagnosticError,
+        match="p25_spectral_runtime_source_identity_mismatch",
+    ):
+        prepare_p25_spectral_diagnostic_governance(
+            proposal_dir=proposal_dir,
+            authorization_receipt_path=authorization_path,
+            source_governance_dir=source_governance,
+            governance_dir=target_governance,
+            source_root=REPO_ROOT / "python" / "src",
+        )
+    assert not target_governance.exists()
+    monkeypatch.undo()
+
     receipt = prepare_p25_spectral_diagnostic_governance(
         proposal_dir=proposal_dir,
         authorization_receipt_path=authorization_path,
         source_governance_dir=source_governance,
         governance_dir=target_governance,
+        source_root=REPO_ROOT / "python" / "src",
     )
 
     target_budget = BudgetContract.approved_v6_p25_diagnostic()
@@ -351,7 +411,12 @@ def _decision_rows(
                         "stage_r_spectral_gate": {
                             "spectral_gate_pass": full_pass,
                             "gates": {
+                                "prominence_db_delta_pass": full_pass,
+                                "visible_top3_rate_delta_pass": (full_pass),
+                                "hr_band_share_delta_pass": full_pass,
                                 "pulse_power_retention_pass": pulse_pass,
+                                "residual_artifact_corr_delta_pass": (full_pass),
+                                "complete_window_evidence_pass": (full_pass),
                             },
                         },
                     },
@@ -387,6 +452,14 @@ def test_decision_is_spectral_only_and_has_three_exclusive_branches() -> None:
         evaluate_p25_spectral_diagnostic_decision(_decision_rows())["decision"]
         == "filter_mechanism_revision_required"
     )
+    incomplete = _decision_rows()
+    gates = incomplete[0]["spectral_audit"]["stage_r_spectral_gate"]["gates"]
+    del gates["prominence_db_delta_pass"]
+    with pytest.raises(
+        P25SpectralDiagnosticError,
+        match="p25_spectral_decision_gate_set_mismatch",
+    ):
+        evaluate_p25_spectral_diagnostic_decision(incomplete)
 
 
 def _fake_p25_numerical_result(
@@ -406,7 +479,12 @@ def _fake_p25_numerical_result(
             "stage_r_spectral_gate": {
                 "spectral_gate_pass": False,
                 "gates": {
+                    "prominence_db_delta_pass": False,
+                    "visible_top3_rate_delta_pass": False,
+                    "hr_band_share_delta_pass": False,
                     "pulse_power_retention_pass": False,
+                    "residual_artifact_corr_delta_pass": False,
+                    "complete_window_evidence_pass": False,
                 },
             },
         },
@@ -445,6 +523,7 @@ def test_execute_is_resumable_and_commits_spectral_decision_last(
         authorization_receipt_path=authorization_path,
         source_governance_dir=source_governance,
         governance_dir=governance,
+        source_root=REPO_ROOT / "python" / "src",
     )
     output = tmp_path / "execution"
     progress: list[dict[str, object]] = []
@@ -462,12 +541,15 @@ def test_execute_is_resumable_and_commits_spectral_decision_last(
     assert completion["diagnostic_result_count"] == 36
     assert completion["diagnostic_solver_run_count"] == 36
     assert completion["independent_bo_run_count"] == 0
+    assert completion["algorithm_level_holdout"] is False
+    assert completion["evidence_class"] == "development_reuse_pilot"
     assert len(progress) == 36
     decision = read_json(output / "decision_receipt.json")
     assert decision["decision"] == completion["status"]
     profile_summary = read_json(output / "profile_gate_summary.json")
     assert set(profile_summary["profiles"]) == P25_PROFILE_IDS
     assert (output / "completion.json").is_file()
+    assert len(list((output / "spectral_audits").rglob("*.json"))) == 36
     rerun = execute_p25_spectral_diagnostic(
         proposal_dir=proposal_dir,
         governance_dir=governance,
@@ -478,6 +560,27 @@ def test_execute_is_resumable_and_commits_spectral_decision_last(
         ),
     )
     assert rerun == completion
+    tampered_completion = {
+        **completion,
+        "status": "stage_r_sentinel_revision_candidate",
+        "next_state": "awaiting_human_stage_r_revision_decision",
+    }
+    tampered_completion.pop("completion_sha256")
+    tampered_completion["completion_sha256"] = canonical_sha256(tampered_completion)
+    atomic_write_json(output / "completion.json", tampered_completion)
+    with pytest.raises(
+        P25SpectralDiagnosticError,
+        match="p25_spectral_completion_governance_receipt_mismatch",
+    ):
+        execute_p25_spectral_diagnostic(
+            proposal_dir=proposal_dir,
+            governance_dir=governance,
+            output_dir=output,
+            source_root=REPO_ROOT / "python" / "src",
+            _numerical_runner=_fake_p25_numerical_result,
+        )
+    atomic_write_json(output / "completion.json", completion)
+
     execution_receipt_path = governance / "p25_spectral_execution_receipt.json"
     tampered_receipt = read_json(execution_receipt_path)
     tampered_receipt["status"] = "tampered"
@@ -544,7 +647,12 @@ def test_shared_runner_audits_non_sentinel_p25_identity(
             "stage_r_spectral_gate": {
                 "spectral_gate_pass": True,
                 "gates": {
+                    "prominence_db_delta_pass": True,
+                    "visible_top3_rate_delta_pass": True,
+                    "hr_band_share_delta_pass": True,
                     "pulse_power_retention_pass": True,
+                    "residual_artifact_corr_delta_pass": True,
+                    "complete_window_evidence_pass": True,
                 },
             },
         }
