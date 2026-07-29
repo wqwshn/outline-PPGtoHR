@@ -458,6 +458,26 @@ def test_stage_r_proposal_publication_is_atomic(
     assert destination.is_dir()
     for name, expected_hash in receipt["artifacts"].items():
         assert file_sha256(destination / name) == expected_hash
+    evaluation_identity = stage_r_module.read_json(
+        destination / "evaluation_source_identity.json"
+    )
+    assert {
+        "ppg_hr/v2/recovery_stage_r_experiment.py",
+        "ppg_hr/v2/recovery_stage_r_runner.py",
+        "ppg_hr/v2/recovery_experiment_governance.py",
+        "ppg_hr/v2/recovery_spectral_gate.py",
+        "ppg_hr/v2/recovery_selection.py",
+    } <= set(evaluation_identity["source_files"])
+    spectral_contract = stage_r_module.read_json(
+        destination / "spectral_gate_contract.json"
+    )
+    assert spectral_contract["metrics"] == [
+        "visible_top3",
+        "prominence_db",
+        "hr_band_share",
+        "pulse_power_retention",
+        "residual_artifact_corr",
+    ]
     with pytest.raises(StageRPlanError, match="stage_r_output_already_exists"):
         propose_stage_r_execution(
             **inputs,
@@ -504,7 +524,7 @@ def _fake_stage_r_numerical_result(
     spectral_audit = (
         {
             "stability_pass": True,
-            "spectral_pass": True,
+            "spectral_gate_pass": True,
             "audit_sha256": canonical_sha256(
                 {
                     "profile_id": identity["filter_profile_id"],
@@ -558,6 +578,37 @@ def test_stage_r_execution_requires_authorization_before_registration(
         governance / "attempt_registry.json"
     )
     assert registry["summary"]["planned_unique_identity_count"] == 0
+
+
+def test_no_safe_selection_builds_review_only_bo_package() -> None:
+    selection = {
+        "status": "no_safe_recovery_candidate",
+        "selection_sha256": "a" * 64,
+        "eliminated_candidates": {
+            "control": ["record:spectral_gate_contract_v1"],
+        },
+    }
+
+    package = stage_r_module._independent_bo_review_package(
+        proposal_sha256="b" * 64,
+        authorization_sha256="c" * 64,
+        selection=selection,
+    )
+
+    assert package["status"] == (
+        "awaiting_human_independent_bo_decision"
+    )
+    assert package["independent_bo_authorized"] is False
+    assert package["independent_bo_run_count"] == 0
+    assert package["execution_identity_count"] is None
+    assert package["execution_budget"] is None
+    assert package["package_sha256"] == canonical_sha256(
+        {
+            key: value
+            for key, value in package.items()
+            if key != "package_sha256"
+        }
+    )
 
 
 def test_stage_r_numerical_runner_uses_frozen_config_and_metric_inputs(
@@ -615,7 +666,7 @@ def test_stage_r_numerical_runner_uses_frozen_config_and_metric_inputs(
         "_load_or_run_spectral_audit",
         lambda _item, *, spectral_audit_dir: {
             "stability_pass": True,
-            "spectral_pass": True,
+            "spectral_gate_pass": True,
             "audit_sha256": "a" * 64,
         },
     )
@@ -637,11 +688,12 @@ def test_stage_r_numerical_runner_uses_frozen_config_and_metric_inputs(
     assert result.metrics["metric_contract_version"] == (
         "lyx_recovery_profile_metric_v1"
     )
-    assert result.spectral_audit["spectral_pass"] is True
+    assert result.spectral_audit["spectral_gate_pass"] is True
 
 
 def test_stage_r_execution_registers_runs_and_selects_exact_matrix(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     inputs = _write_inputs(tmp_path)
     proposal_dir = tmp_path / "proposal"
@@ -673,6 +725,18 @@ def test_stage_r_execution_registers_runs_and_selects_exact_matrix(
     )
     governance = _write_execution_governance(tmp_path)
     progress: list[dict[str, object]] = []
+    writes: list[str] = []
+    original_writer = stage_r_module.atomic_write_json
+
+    def recording_writer(path: Path, payload: object) -> None:
+        writes.append(Path(path).name)
+        original_writer(path, payload)
+
+    monkeypatch.setattr(
+        stage_r_module,
+        "atomic_write_json",
+        recording_writer,
+    )
 
     completion = execute_stage_r_proposal(
         proposal_dir=proposal_dir,
@@ -693,6 +757,7 @@ def test_stage_r_execution_registers_runs_and_selects_exact_matrix(
         "current_fixed_floor_control_v1"
     )
     assert completion["rollback_backup_id"] == "relative_gap_timeout_v1"
+    assert writes[-1] == "stage_r_completion.json"
     assert completion["attempt_registry_summary"] == {
         "logical_task_count": 168,
         "planned_unique_identity_count": 168,
@@ -720,3 +785,34 @@ def test_stage_r_execution_registers_runs_and_selects_exact_matrix(
         80.0,
         85.0,
     ]
+    rerun = execute_stage_r_proposal(
+        proposal_dir=proposal_dir,
+        authorization_receipt_path=authorization_path,
+        governance_dir=governance,
+        output_dir=tmp_path / "execution",
+        source_root=source_root,
+        _numerical_runner=lambda _item, _audit_dir: pytest.fail(
+            "valid completion must not rerun identities"
+        ),
+    )
+    assert rerun == completion
+    governance_receipt_path = (
+        governance / "stage_r_governance_receipt.json"
+    )
+    governance_receipt = stage_r_module.read_json(
+        governance_receipt_path
+    )
+    governance_receipt["status"] = "tampered"
+    original_writer(governance_receipt_path, governance_receipt)
+    with pytest.raises(
+        StageRPlanError,
+        match="stage_r_completion_governance_receipt_mismatch",
+    ):
+        execute_stage_r_proposal(
+            proposal_dir=proposal_dir,
+            authorization_receipt_path=authorization_path,
+            governance_dir=governance,
+            output_dir=tmp_path / "execution",
+            source_root=source_root,
+            _numerical_runner=_fake_stage_r_numerical_result,
+        )

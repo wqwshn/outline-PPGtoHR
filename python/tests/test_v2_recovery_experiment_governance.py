@@ -183,6 +183,91 @@ def test_attempt_registry_rejects_unregistered_and_limits_retry(
     assert summary["retry_count"] == 1
 
 
+def test_registry_recovers_dead_owner_with_complete_cache_atomically(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    registry = AttemptRegistry.create(
+        tmp_path / "attempt_registry.json",
+        budget_contract=BudgetContract.frozen_v1(),
+        exploration_registry=ExplorationRegistry.zero_budget_v1(),
+    )
+    identity = _identity()
+    registry.register_identity(identity)
+    registry.begin_attempt(identity)
+    receipt_path = _write_cache_receipt(
+        tmp_path / "solver_cache",
+        identity=identity,
+    )
+    evidence = CacheEvidence.from_path(
+        receipt_path,
+        expected_identity=identity,
+        trusted_cache_root=tmp_path / "solver_cache",
+    )
+    monkeypatch.setattr(governance, "_process_is_alive", lambda _pid: False)
+
+    outcome = registry.reconcile_interrupted_attempt(
+        identity,
+        evidence=evidence,
+    )
+
+    assert outcome == "recovered_succeeded_attempt"
+    registry.assert_complete_matrix((identity,))
+    assert registry.matrix_execution_summary((identity,)) == {
+        "planned_identity_count": 1,
+        "identity_with_solver_attempt_count": 1,
+        "cache_only_identity_count": 0,
+        "total_attempt_count": 1,
+        "failed_attempt_count": 0,
+        "retry_count": 0,
+    }
+
+
+def test_registry_charges_dead_owner_without_cache_then_allows_retry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    registry = AttemptRegistry.create(
+        tmp_path / "attempt_registry.json",
+        budget_contract=BudgetContract.frozen_v1(),
+        exploration_registry=ExplorationRegistry.zero_budget_v1(),
+    )
+    identity = _identity()
+    registry.register_identity(identity)
+    registry.begin_attempt(identity)
+    monkeypatch.setattr(governance, "_process_is_alive", lambda _pid: False)
+
+    outcome = registry.reconcile_interrupted_attempt(
+        identity,
+        evidence=None,
+    )
+    retry = registry.begin_attempt(identity)
+    registry.finish_attempt(retry, status="succeeded")
+
+    assert outcome == "recovered_failed_attempt"
+    assert registry.matrix_execution_summary((identity,))[
+        "failed_attempt_count"
+    ] == 1
+
+
+def test_registry_refuses_to_reconcile_live_owner(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    registry = AttemptRegistry.create(
+        tmp_path / "attempt_registry.json",
+        budget_contract=BudgetContract.frozen_v1(),
+        exploration_registry=ExplorationRegistry.zero_budget_v1(),
+    )
+    identity = _identity()
+    registry.register_identity(identity)
+    registry.begin_attempt(identity)
+    monkeypatch.setattr(governance, "_process_is_alive", lambda _pid: True)
+
+    with pytest.raises(GovernanceError, match="attempt_already_running"):
+        registry.reconcile_interrupted_attempt(identity, evidence=None)
+
+
 def test_bulk_registration_is_atomic_when_budget_would_overflow(
     tmp_path: Path,
 ) -> None:
@@ -868,6 +953,48 @@ def test_cache_evidence_rejects_changed_result_bytes(tmp_path: Path) -> None:
 
     with pytest.raises(GovernanceError, match="cache_result_hash_mismatch"):
         registry.record_cache_hit(identity, evidence=evidence)
+
+
+def test_cache_binding_rejects_coherently_rewritten_evidence(
+    tmp_path: Path,
+) -> None:
+    identity = _identity()
+    registry = AttemptRegistry.create(
+        tmp_path / "attempt_registry.json",
+        budget_contract=BudgetContract.frozen_v1(),
+        exploration_registry=ExplorationRegistry.zero_budget_v1(),
+    )
+    registry.register_identity(identity)
+    receipt_path = _write_cache_receipt(
+        tmp_path / "solver_cache",
+        identity=identity,
+    )
+    original = CacheEvidence.from_path(
+        receipt_path,
+        expected_identity=identity,
+        trusted_cache_root=tmp_path / "solver_cache",
+    )
+    registry.bind_cache_evidence(identity, evidence=original)
+    result_path = original.result_path
+    rewritten = json.loads(result_path.read_text(encoding="utf-8"))
+    rewritten["mae_bpm"] = 9.75
+    result_path.write_text(json.dumps(rewritten), encoding="utf-8")
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["result_sha256"] = hashlib.sha256(
+        result_path.read_bytes()
+    ).hexdigest()
+    receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+    replacement = CacheEvidence.from_path(
+        receipt_path,
+        expected_identity=identity,
+        trusted_cache_root=tmp_path / "solver_cache",
+    )
+
+    with pytest.raises(
+        GovernanceError,
+        match="cache_evidence_(?:changed|conflict)",
+    ):
+        registry.record_cache_hit(identity, evidence=replacement)
 
 
 def test_registry_with_cache_evidence_survives_directory_move(

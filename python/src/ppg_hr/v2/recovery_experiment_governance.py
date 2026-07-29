@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import shutil
+import socket
 import time
 import uuid
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -53,6 +54,21 @@ _AUDIT_TARGET_IDENTITY_FIELDS = frozenset(
         "source_path",
     }
 )
+
+
+def _process_is_alive(pid: int) -> bool:
+    """Conservatively decide whether a same-host attempt owner may be alive."""
+
+    if pid <= 0 or pid == os.getpid():
+        return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except (PermissionError, OSError):
+        # Platform-specific failures are ambiguous, so recovery fails closed.
+        return True
+    return True
 
 
 class GovernanceError(RuntimeError):
@@ -944,6 +960,9 @@ class AttemptRegistry:
                     "token": token.token,
                     "status": "running",
                     "failure_reason": None,
+                    "owner_pid": os.getpid(),
+                    "owner_host": socket.gethostname(),
+                    "started_at_unix_ns": time.time_ns(),
                 }
             )
             entry["status"] = "running"
@@ -982,6 +1001,112 @@ class AttemptRegistry:
 
         self._transaction(mutate)
 
+    def reconcile_interrupted_attempt(
+        self,
+        identity: AttemptIdentity,
+        *,
+        evidence: CacheEvidence | None,
+    ) -> Literal[
+        "no_running_attempt",
+        "recovered_succeeded_attempt",
+        "recovered_failed_attempt",
+    ]:
+        """Close only a demonstrably orphaned running attempt under the lock."""
+
+        serialized: dict[str, Any] | None = None
+        if evidence is not None:
+            if evidence.identity_sha256 != identity.sha256:
+                raise GovernanceError(
+                    f"cache_identity_mismatch:{identity.sha256}"
+                )
+            if (
+                CacheEvidence.from_path(
+                    evidence.path,
+                    expected_identity=identity,
+                    trusted_cache_root=self.trusted_cache_root,
+                )
+                != evidence
+            ):
+                raise GovernanceError(
+                    f"cache_evidence_changed:{evidence.path}"
+                )
+            serialized = evidence.to_dict(
+                trusted_cache_root=self.trusted_cache_root
+            )
+
+        def mutate(
+            entries: dict[str, dict[str, Any]],
+        ) -> Literal[
+            "no_running_attempt",
+            "recovered_succeeded_attempt",
+            "recovered_failed_attempt",
+        ]:
+            entry = entries.get(identity.sha256)
+            if entry is None:
+                raise GovernanceError(
+                    f"unregistered_identity:{identity.sha256}"
+                )
+            if entry["identity"] != identity.to_dict():
+                raise GovernanceError(
+                    f"identity_payload_mismatch:{identity.sha256}"
+                )
+            running = [
+                attempt
+                for attempt in entry["attempts"]
+                if attempt["status"] == "running"
+            ]
+            if not running:
+                return "no_running_attempt"
+            attempt = running[0]
+            owner_host = attempt.get("owner_host")
+            owner_pid = attempt.get("owner_pid")
+            if (
+                not isinstance(owner_host, str)
+                or not owner_host
+                or owner_host != socket.gethostname()
+                or not isinstance(owner_pid, int)
+                or isinstance(owner_pid, bool)
+                or _process_is_alive(owner_pid)
+            ):
+                raise GovernanceError(
+                    f"attempt_already_running:{identity.sha256}"
+                )
+            if serialized is None:
+                attempt["status"] = "failed"
+                attempt["failure_reason"] = (
+                    "interrupted_orphaned_attempt"
+                )
+                attempt["recovered_at_unix_ns"] = time.time_ns()
+                entry["status"] = "failed"
+                return "recovered_failed_attempt"
+            self._bind_cache_into_entry(
+                entry,
+                serialized=serialized,
+                evidence_path=evidence.path,
+            )
+            attempt["status"] = "succeeded"
+            attempt["failure_reason"] = None
+            attempt["recovered_at_unix_ns"] = time.time_ns()
+            entry["status"] = "succeeded"
+            return "recovered_succeeded_attempt"
+
+        return self._transaction(mutate)
+
+    @staticmethod
+    def _bind_cache_into_entry(
+        entry: dict[str, Any],
+        *,
+        serialized: dict[str, Any],
+        evidence_path: Path,
+    ) -> None:
+        existing = entry["cache_evidence"]
+        if existing and existing != [serialized]:
+            raise GovernanceError(
+                f"cache_evidence_conflict:{evidence_path}"
+            )
+        if not existing:
+            existing.append(serialized)
+
     def bind_cache_evidence(
         self,
         identity: AttemptIdentity,
@@ -1006,8 +1131,11 @@ class AttemptRegistry:
             ):
                 raise GovernanceError(f"cache_evidence_changed:{evidence.path}")
             serialized = evidence.to_dict(trusted_cache_root=self.trusted_cache_root)
-            if serialized not in entry["cache_evidence"]:
-                entry["cache_evidence"].append(serialized)
+            self._bind_cache_into_entry(
+                entry,
+                serialized=serialized,
+                evidence_path=evidence.path,
+            )
 
         self._transaction(mutate)
 
@@ -1035,8 +1163,11 @@ class AttemptRegistry:
             ):
                 raise GovernanceError(f"cache_evidence_changed:{evidence.path}")
             serialized = evidence.to_dict(trusted_cache_root=self.trusted_cache_root)
-            if serialized not in entry["cache_evidence"]:
-                entry["cache_evidence"].append(serialized)
+            self._bind_cache_into_entry(
+                entry,
+                serialized=serialized,
+                evidence_path=evidence.path,
+            )
             entry["cache_hit_count"] += 1
 
         self._transaction(mutate)
@@ -1075,6 +1206,84 @@ class AttemptRegistry:
         has_success = any(attempt["status"] == "succeeded" for attempt in entry["attempts"])
         if not has_success and not entry["cache_evidence"]:
             raise GovernanceError(f"nomination_without_evidence:{identity.sha256}")
+
+    def assert_complete_matrix(
+        self,
+        identities: Sequence[AttemptIdentity],
+    ) -> None:
+        """Fail closed unless every planned identity is terminal and usable."""
+
+        fresh = self.open(
+            self.path,
+            budget_contract=self.budget_contract,
+            exploration_registry=self.exploration_registry,
+        )
+        hashes = [identity.sha256 for identity in identities]
+        if len(hashes) != len(set(hashes)):
+            raise GovernanceError("duplicate_matrix_identity")
+        for identity in identities:
+            entry = fresh._entries.get(identity.sha256)
+            if entry is None or entry["identity"] != identity.to_dict():
+                raise GovernanceError(
+                    f"incomplete_matrix_identity:{identity.sha256}"
+                )
+            if any(
+                attempt["status"] == "running"
+                for attempt in entry["attempts"]
+            ):
+                raise GovernanceError(
+                    f"matrix_identity_still_running:{identity.sha256}"
+                )
+            has_success = any(
+                attempt["status"] == "succeeded"
+                for attempt in entry["attempts"]
+            )
+            if not has_success and not entry["cache_evidence"]:
+                raise GovernanceError(
+                    f"nomination_without_evidence:{identity.sha256}"
+                )
+
+    def matrix_execution_summary(
+        self,
+        identities: Sequence[AttemptIdentity],
+    ) -> dict[str, int]:
+        """Return stable solver/cache provenance for one frozen matrix."""
+
+        fresh = self.open(
+            self.path,
+            budget_contract=self.budget_contract,
+            exploration_registry=self.exploration_registry,
+        )
+        entries: list[Mapping[str, Any]] = []
+        for identity in identities:
+            entry = fresh._entries.get(identity.sha256)
+            if entry is None or entry["identity"] != identity.to_dict():
+                raise GovernanceError(
+                    f"incomplete_matrix_identity:{identity.sha256}"
+                )
+            entries.append(entry)
+        return {
+            "planned_identity_count": len(entries),
+            "identity_with_solver_attempt_count": sum(
+                bool(entry["attempts"]) for entry in entries
+            ),
+            "cache_only_identity_count": sum(
+                not entry["attempts"] and bool(entry["cache_evidence"])
+                for entry in entries
+            ),
+            "total_attempt_count": sum(
+                len(entry["attempts"]) for entry in entries
+            ),
+            "failed_attempt_count": sum(
+                attempt["status"] == "failed"
+                for entry in entries
+                for attempt in entry["attempts"]
+            ),
+            "retry_count": sum(
+                max(0, len(entry["attempts"]) - 1)
+                for entry in entries
+            ),
+        }
 
     def summary(self) -> dict[str, int]:
         fresh = self.open(
@@ -1247,6 +1456,10 @@ class AttemptRegistry:
                     != evidence
                 ):
                     raise GovernanceError(f"cache_evidence_changed:{evidence.path}")
+            if len(cache_evidence) > 1:
+                raise GovernanceError(
+                    f"multiple_cache_evidence_for_identity:{identity_hash}"
+                )
             total_attempts += len(attempts)
         for stage, count in stage_counts.items():
             if count > self.budget_contract.stage_unique_limits[stage]:
@@ -1281,6 +1494,23 @@ class AttemptRegistry:
                 or (status in {"running", "succeeded"} and index != len(attempts))
             ):
                 raise GovernanceError(f"invalid_attempt_state:{identity_hash}:{index}")
+            if status == "running":
+                owner_pid = attempt.get("owner_pid")
+                owner_host = attempt.get("owner_host")
+                started_at_unix_ns = attempt.get("started_at_unix_ns")
+                if (
+                    not isinstance(owner_pid, int)
+                    or isinstance(owner_pid, bool)
+                    or owner_pid <= 0
+                    or not isinstance(owner_host, str)
+                    or not owner_host
+                    or not isinstance(started_at_unix_ns, int)
+                    or isinstance(started_at_unix_ns, bool)
+                    or started_at_unix_ns <= 0
+                ):
+                    raise GovernanceError(
+                        f"invalid_attempt_owner:{identity_hash}:{index}"
+                    )
             tokens.add(token)
         expected_status = attempts[-1]["status"] if attempts else "registered"
         if entry_status != expected_status:

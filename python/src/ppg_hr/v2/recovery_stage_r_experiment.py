@@ -35,11 +35,9 @@ from .recovery_experiment_governance import (
     FrozenExperimentContractHashes,
     validate_recovery_experiment_preflight,
 )
-from .recovery_filter_profile_experiment import _audit_profile_record
 from .recovery_filter_profiles import FilterProfile
 from .recovery_filter_stability import (
     FilterAuditRecord,
-    StabilityAuditContract,
 )
 from .recovery_profile_metrics import (
     RECOVERY_PROFILE_METRIC_VERSION,
@@ -52,6 +50,10 @@ from .recovery_selection import (
     RecoveryPanelRecord,
     RecoveryRecordEvaluation,
     select_recovery_candidate_evaluations,
+)
+from .recovery_spectral_gate import (
+    StageRSpectralGateContract,
+    audit_stage_r_profile_record,
 )
 from .solver import V2SolverResult, solve_v2
 from .types import V2RunConfig
@@ -813,32 +815,25 @@ def stage_r_metric_contract_v1() -> dict[str, Any]:
 
 
 def stage_r_spectral_gate_contract_v1() -> dict[str, Any]:
-    stability = StabilityAuditContract.corrected_v2()
-    payload = {
-        "contract_version": "lyx_stage_r_spectral_gate_v1",
-        "filter_stability_contract": stability.to_dict(),
-        "filter_stability_contract_sha256": stability.sha256,
-        "evaluation_grain": "sentinel_profile_x_record",
-        "candidate_invariant": True,
-        "reuse_within_same_sentinel_record": True,
-        "failure_rule": "any_failed_or_missing_metric_fails_closed",
-    }
+    contract = StageRSpectralGateContract()
+    payload = contract.to_dict()
     payload["contract_sha256"] = canonical_sha256(payload)
     return payload
 
 
-def _evaluation_source_identity() -> dict[str, Any]:
-    source_files = {}
-    for path in (
-        Path(__file__),
-        Path(__file__).with_name("recovery_profile_metrics.py"),
-        Path(__file__).with_name("recovery_selection.py"),
-        Path(__file__).with_name("recovery_filter_stability.py"),
-    ):
-        source_files[path.name] = file_sha256(path)
+def _evaluation_source_identity(source_root: Path) -> dict[str, Any]:
+    root_modules = (
+        "ppg_hr.v2.recovery_stage_r_experiment",
+        "ppg_hr.v2.recovery_stage_r_runner",
+    )
+    identity = runtime_source_identity(
+        Path(source_root).resolve(),
+        root_modules=root_modules,
+    )
     return {
-        "source_files": source_files,
-        "evaluation_hash": canonical_sha256(source_files),
+        "root_modules": list(root_modules),
+        **identity,
+        "evaluation_hash": identity["source_bundle_sha256"],
     }
 
 
@@ -863,7 +858,7 @@ def propose_stage_r_execution(
         raise StageRPlanError(f"stage_r_output_already_exists:{destination}")
     metric_contract = stage_r_metric_contract_v1()
     spectral_contract = stage_r_spectral_gate_contract_v1()
-    evaluation = _evaluation_source_identity()
+    evaluation = _evaluation_source_identity(source_root)
     solver = runtime_source_identity(Path(source_root).resolve())
     proposal = build_stage_r_proposal(
         baseline_manifest_path=baseline_manifest_path,
@@ -1062,7 +1057,7 @@ def _validate_stage_r_execution_preflight(
     frozen_evaluation = read_json(
         proposal_root / "evaluation_source_identity.json"
     )
-    if frozen_evaluation != _evaluation_source_identity():
+    if frozen_evaluation != _evaluation_source_identity(source_root):
         raise StageRPlanError(
             "stage_r_evaluation_source_changed_after_proposal"
         )
@@ -1179,7 +1174,7 @@ def _load_or_run_spectral_audit(
             "data_sha256": item["raw_data_sha256"],
             "reference_sha256": item["reference_sha256"],
             "audit_contract_sha256": (
-                StabilityAuditContract.corrected_v2().sha256
+                StageRSpectralGateContract().sha256
             ),
         }
         if any(payload.get(name) != value for name, value in expected.items()):
@@ -1212,8 +1207,12 @@ def _load_or_run_spectral_audit(
         data_sha256=str(item["raw_data_sha256"]),
         reference_sha256=str(item["reference_sha256"]),
     )
-    contract = StabilityAuditContract.corrected_v2()
-    audit = _audit_profile_record(profile, record, contract=contract)
+    contract = StageRSpectralGateContract()
+    audit = audit_stage_r_profile_record(
+        profile,
+        record,
+        contract=contract,
+    )
     payload = {
         "audit_version": "lyx_stage_r_spectral_record_audit_v1",
         "profile_id": profile_id,
@@ -1389,7 +1388,8 @@ def _load_stage_r_cache_result(
     ):
         path = (evidence.result_path.parent / str(trajectory[path_field])).resolve()
         if (
-            not path.is_file()
+            not path.is_relative_to(evidence.result_path.parent)
+            or not path.is_file()
             or file_sha256(path) != trajectory.get(hash_field)
         ):
             raise StageRPlanError(
@@ -1421,8 +1421,18 @@ def _execute_stage_r_identity(
             trusted_cache_root=registry.trusted_cache_root,
         )
         payload = _load_stage_r_cache_result(evidence=evidence)
-        registry.record_cache_hit(identity, evidence=evidence)
+        recovery = registry.reconcile_interrupted_attempt(
+            identity,
+            evidence=evidence,
+        )
+        if recovery == "no_running_attempt":
+            registry.record_cache_hit(identity, evidence=evidence)
     else:
+        registry.reconcile_interrupted_attempt(
+            identity,
+            evidence=None,
+        )
+
         def operation() -> dict[str, Any]:
             numerical = numerical_runner(item, spectral_audit_dir)
             return _write_stage_r_cache_result(
@@ -1439,6 +1449,10 @@ def _execute_stage_r_identity(
             trusted_cache_root=registry.trusted_cache_root,
         )
         registry.bind_cache_evidence(identity, evidence=evidence)
+    provenance = registry.matrix_execution_summary((identity,))
+    cache_hit = (
+        provenance["identity_with_solver_attempt_count"] == 0
+    )
     return {
         "identity_sha256": identity.sha256,
         "stage": item["stage"],
@@ -1632,7 +1646,7 @@ def _build_stage_r_selection(
                         scene=panel_record.scene,
                         spectral_gate_passed=bool(
                             spectral.get("stability_pass")
-                            and spectral.get("spectral_pass")
+                            and spectral.get("spectral_gate_pass")
                         ),
                         l10=float(
                             metrics["longest_e10_run_windows"]
@@ -1714,6 +1728,143 @@ def _build_stage_r_selection(
     return selection, serialized
 
 
+def _independent_bo_review_package(
+    *,
+    proposal_sha256: str,
+    authorization_sha256: str,
+    selection: Mapping[str, Any],
+) -> dict[str, Any]:
+    if selection.get("status") != "no_safe_recovery_candidate":
+        raise StageRPlanError(
+            "independent_bo_review_requires_no_safe_selection"
+        )
+    payload = {
+        "package_version": "lyx_stage_r_independent_bo_review_v1",
+        "status": "awaiting_human_independent_bo_decision",
+        "proposal_sha256": proposal_sha256,
+        "authorization_sha256": authorization_sha256,
+        "trigger": "no_safe_recovery_candidate",
+        "trigger_selection_sha256": selection[
+            "selection_sha256"
+        ],
+        "eliminated_candidates": dict(
+            _require_mapping(
+                "eliminated_candidates",
+                selection.get("eliminated_candidates"),
+            )
+        ),
+        "requested_human_decision": (
+            "whether_to_prepare_a_separate_exact_independent_bo_proposal"
+        ),
+        "independent_bo_authorized": False,
+        "independent_bo_run_count": 0,
+        "execution_identity_count": None,
+        "execution_budget": None,
+        "execution_policy": (
+            "no BO may run until identities, search budget, data scope, "
+            "source closure, and a new authorization hash are frozen"
+        ),
+    }
+    payload["package_sha256"] = canonical_sha256(payload)
+    return payload
+
+
+def _validate_completed_stage_r_execution(
+    *,
+    completion_path: Path,
+    proposal: Mapping[str, Any],
+    authorization_sha256: str,
+    governance_root: Path,
+    destination: Path,
+    registry: AttemptRegistry,
+    identities: Sequence[AttemptIdentity],
+) -> dict[str, Any]:
+    completion = read_json(completion_path)
+    _verify_embedded_hash(
+        completion,
+        hash_field="completion_sha256",
+        artifact_name="stage_r_completion",
+    )
+    if (
+        completion.get("proposal_sha256")
+        != proposal.get("proposal_sha256")
+        or completion.get("authorization_sha256")
+        != authorization_sha256
+    ):
+        raise StageRPlanError(
+            "stage_r_completion_authorization_mismatch"
+        )
+    artifacts = _require_mapping(
+        "stage_r_completion_artifacts",
+        completion.get("artifacts"),
+    )
+    for name, expected_hash in artifacts.items():
+        path = (destination / str(name)).resolve()
+        if (
+            not path.is_relative_to(destination)
+            or not path.is_file()
+            or file_sha256(path) != expected_hash
+        ):
+            raise StageRPlanError(
+                f"stage_r_completion_artifact_mismatch:{name}"
+            )
+    governance_path = (
+        governance_root / "stage_r_governance_receipt.json"
+    )
+    if (
+        not governance_path.is_file()
+        or file_sha256(governance_path)
+        != completion.get("governance_receipt_file_sha256")
+    ):
+        raise StageRPlanError(
+            "stage_r_completion_governance_receipt_mismatch"
+        )
+    governance = read_json(governance_path)
+    _verify_embedded_hash(
+        governance,
+        hash_field="receipt_sha256",
+        artifact_name="stage_r_governance_receipt",
+    )
+    if (
+        governance.get("proposal_sha256")
+        != proposal.get("proposal_sha256")
+        or governance.get("authorization_sha256")
+        != authorization_sha256
+        or governance.get("receipt_sha256")
+        != completion.get("governance_receipt_sha256")
+        or governance.get("status") != completion.get("status")
+        or governance.get("artifacts") != dict(artifacts)
+    ):
+        raise StageRPlanError(
+            "stage_r_governance_receipt_binding_mismatch"
+        )
+    registry.assert_complete_matrix(identities)
+    current_registry_summary = registry.summary()
+    current_matrix_summary = registry.matrix_execution_summary(
+        identities
+    )
+    if (
+        file_sha256(registry.path)
+        != governance.get("attempt_registry_sha256")
+        or current_registry_summary
+        != governance.get("attempt_registry_summary")
+        or current_registry_summary
+        != completion.get("attempt_registry_summary")
+        or current_matrix_summary
+        != governance.get("matrix_execution_summary")
+        or current_matrix_summary
+        != completion.get("matrix_execution_summary")
+        or governance.get("identity_matrix_sha256")
+        != canonical_sha256(
+            [identity.sha256 for identity in identities]
+        )
+    ):
+        raise StageRPlanError(
+            "stage_r_completion_attempt_registry_mismatch"
+        )
+    return completion
+
+
 def execute_stage_r_proposal(
     *,
     proposal_dir: Path,
@@ -1786,10 +1937,11 @@ def execute_stage_r_proposal(
     destination = Path(output_dir).resolve()
     destination.mkdir(parents=True, exist_ok=True)
     binding_path = destination / "execution_binding.json"
+    authorization_sha256 = canonical_sha256(authorization)
     binding = {
         "binding_version": "lyx_stage_r_execution_binding_v1",
         "proposal_sha256": proposal["proposal_sha256"],
-        "authorization_sha256": canonical_sha256(authorization),
+        "authorization_sha256": authorization_sha256,
         "solver_source_bundle_sha256": identities[0].solver_hash,
         "evaluation_hash": identities[0].evaluation_hash,
     }
@@ -1804,19 +1956,15 @@ def execute_stage_r_proposal(
 
     completion_path = destination / "stage_r_completion.json"
     if completion_path.is_file():
-        completion = read_json(completion_path)
-        _verify_embedded_hash(
-            completion,
-            hash_field="completion_sha256",
-            artifact_name="stage_r_completion",
+        return _validate_completed_stage_r_execution(
+            completion_path=completion_path,
+            proposal=proposal,
+            authorization_sha256=authorization_sha256,
+            governance_root=governance_root,
+            destination=destination,
+            registry=registry,
+            identities=identities,
         )
-        if completion.get("proposal_sha256") != proposal[
-            "proposal_sha256"
-        ]:
-            raise StageRPlanError(
-                "stage_r_completion_proposal_mismatch"
-            )
-        return completion
 
     registered = registry.register_identities(identities)
     if registered != tuple(identity.sha256 for identity in identities):
@@ -1847,6 +1995,7 @@ def execute_stage_r_proposal(
                     "cache_hit": result["cache_hit"],
                 }
             )
+    registry.assert_complete_matrix(identities)
     result_index = {
         "index_version": "lyx_stage_r_result_index_v1",
         "proposal_sha256": proposal["proposal_sha256"],
@@ -1882,26 +2031,85 @@ def execute_stage_r_proposal(
         destination / "recovery_selection.json",
         selection,
     )
+    if selection["status"] == "no_safe_recovery_candidate":
+        atomic_write_json(
+            destination / "independent_bo_review_package.json",
+            _independent_bo_review_package(
+                proposal_sha256=proposal["proposal_sha256"],
+                authorization_sha256=authorization_sha256,
+                selection=selection,
+            ),
+        )
     registry_summary = registry.summary()
-    diagnostic_runs = sum(
-        row["stage"] == _DIAGNOSTIC_STAGE
-        and not row["cache_hit"]
-        for row in results
+    diagnostic_identities = tuple(
+        identity
+        for identity in identities
+        if identity.stage == _DIAGNOSTIC_STAGE
     )
-    formal_runs = sum(
-        row["stage"] == _FORMAL_STAGE and not row["cache_hit"]
-        for row in results
+    formal_identities = tuple(
+        identity
+        for identity in identities
+        if identity.stage == _FORMAL_STAGE
     )
+    diagnostic_matrix = registry.matrix_execution_summary(
+        diagnostic_identities
+    )
+    formal_matrix = registry.matrix_execution_summary(
+        formal_identities
+    )
+    matrix_summary = registry.matrix_execution_summary(identities)
+    artifact_names = [
+        "execution_binding.json",
+        "identity_result_index.json",
+        "threshold_diagnostic_summary.json",
+        "formal_candidate_evaluations.json",
+        "recovery_selection.json",
+    ]
+    if selection["status"] == "no_safe_recovery_candidate":
+        artifact_names.append("independent_bo_review_package.json")
+    artifacts = {
+        name: file_sha256(destination / name)
+        for name in artifact_names
+    }
+    governance_receipt = {
+        "receipt_version": "lyx_stage_r_governance_receipt_v2",
+        "status": selection["status"],
+        "proposal_sha256": proposal["proposal_sha256"],
+        "authorization_sha256": authorization_sha256,
+        "identity_matrix_sha256": canonical_sha256(
+            [identity.sha256 for identity in identities]
+        ),
+        "attempt_registry_sha256": file_sha256(
+            governance_root / "attempt_registry.json"
+        ),
+        "attempt_registry_summary": registry_summary,
+        "matrix_execution_summary": matrix_summary,
+        "diagnostic_unique_identities": 60,
+        "formal_unique_identities": 108,
+        "independent_bo_run_count": 0,
+        "artifacts": artifacts,
+    }
+    governance_receipt["receipt_sha256"] = canonical_sha256(
+        governance_receipt
+    )
+    governance_receipt_path = (
+        governance_root / "stage_r_governance_receipt.json"
+    )
+    atomic_write_json(governance_receipt_path, governance_receipt)
     completion = {
-        "completion_version": "lyx_stage_r_completion_v1",
+        "completion_version": "lyx_stage_r_completion_v2",
         "status": selection["status"],
         "evidence_class": "development_reuse_pilot",
         "proposal_sha256": proposal["proposal_sha256"],
-        "authorization_sha256": canonical_sha256(authorization),
+        "authorization_sha256": authorization_sha256,
         "diagnostic_result_count": 60,
         "formal_result_count": 108,
-        "diagnostic_solver_run_count": diagnostic_runs,
-        "formal_solver_run_count": formal_runs,
+        "diagnostic_solver_run_count": diagnostic_matrix[
+            "identity_with_solver_attempt_count"
+        ],
+        "formal_solver_run_count": formal_matrix[
+            "identity_with_solver_attempt_count"
+        ],
         "independent_bo_run_count": 0,
         "provisional_recovery_id": selection[
             "provisional_recovery_id"
@@ -1913,40 +2121,27 @@ def execute_stage_r_proposal(
             else "ready_for_stage_f_filter_matrix"
         ),
         "attempt_registry_summary": registry_summary,
-        "artifacts": {
-            name: file_sha256(destination / name)
-            for name in (
-                "execution_binding.json",
-                "identity_result_index.json",
-                "threshold_diagnostic_summary.json",
-                "formal_candidate_evaluations.json",
-                "recovery_selection.json",
-            )
-        },
+        "matrix_execution_summary": matrix_summary,
+        "artifacts": artifacts,
+        "governance_receipt_sha256": governance_receipt[
+            "receipt_sha256"
+        ],
+        "governance_receipt_file_sha256": file_sha256(
+            governance_receipt_path
+        ),
     }
     completion["completion_sha256"] = canonical_sha256(completion)
+    # This is the transaction commit marker and must be written last.
     atomic_write_json(completion_path, completion)
-    governance_receipt = {
-        "receipt_version": "lyx_stage_r_governance_receipt_v1",
-        "status": selection["status"],
-        "proposal_sha256": proposal["proposal_sha256"],
-        "completion_sha256": completion["completion_sha256"],
-        "attempt_registry_sha256": file_sha256(
-            governance_root / "attempt_registry.json"
-        ),
-        "attempt_registry_summary": registry_summary,
-        "diagnostic_unique_identities": 60,
-        "formal_unique_identities": 108,
-        "independent_bo_run_count": 0,
-    }
-    governance_receipt["receipt_sha256"] = canonical_sha256(
-        governance_receipt
+    return _validate_completed_stage_r_execution(
+        completion_path=completion_path,
+        proposal=proposal,
+        authorization_sha256=authorization_sha256,
+        governance_root=governance_root,
+        destination=destination,
+        registry=registry,
+        identities=identities,
     )
-    atomic_write_json(
-        governance_root / "stage_r_governance_receipt.json",
-        governance_receipt,
-    )
-    return completion
 
 
 def _parser() -> argparse.ArgumentParser:
