@@ -1,0 +1,23 @@
+{
+  "automatic_independent_bo_execution": false,
+  "automatic_stage_r_execution": false,
+  "branches": {
+    "filter_mechanism_revision_required": "no profile passes all 12 records and pulse-power failures are not universal",
+    "spectral_metric_control_audit_required": "all 36 coordinates fail pulse_power_retention_pass",
+    "stage_r_sentinel_revision_candidate": "at least one profile passes the complete spectral gate on all 12 records"
+  },
+  "contract_sha256": "813c23353a4dbfb3cc8df83a88ee76cffda65a87e344f2caca9305337eaa1a6c",
+  "contract_version": "lyx_p25_spectral_decision_contract_v1",
+  "forbidden_decision_inputs": [
+    "metrics",
+    "mae",
+    "l10",
+    "l20",
+    "recovery"
+  ],
+  "may_nominate_recovery_candidate": false,
+  "reads_only": [
+    "spectral_audit.stability_pass",
+    "spectral_audit.stage_r_spectral_gate"
+  ]
+}
