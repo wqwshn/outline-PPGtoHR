@@ -17,7 +17,9 @@ from ppg_hr.core.lms_filter import lms_filter
 from .recovery_experiment_governance import (
     AttemptIdentity,
     BudgetAmendmentRequest,
+    ExplorationBudgetAmendmentRequest,
     validate_budget_amendment_authorization,
+    validate_exploration_budget_amendment_authorization,
 )
 from .recovery_filter_profiles import FilterProfile
 
@@ -329,6 +331,82 @@ def plan_spec_gate_supplement_identities(
     return identities
 
 
+def plan_rate_normalized_supplement_identities(
+    *,
+    profiles: tuple[FilterProfile, ...],
+    records: tuple[FilterAuditRecord, ...],
+    parent_experiment_id: str,
+    solver_hash: str,
+    metric_contract_hash: str,
+    evaluation_hash: str,
+    design_rule_sha256: str,
+    record_manifest_sha256: str,
+    authorization_receipt: dict[str, Any] | None,
+) -> tuple[AttemptIdentity, ...]:
+    """Authorize two sampling-rate-normalized profiles on four frozen records."""
+
+    if len(profiles) != 2 or len(records) != 4:
+        raise StabilityAuditError("rate_normalized_supplement_plan_must_be_two_by_four")
+    if len({profile.profile_id for profile in profiles}) != 2:
+        raise StabilityAuditError("duplicate_rate_normalized_supplement_profile")
+    if any(
+        profile.fs_target != 100
+        or profile.memory_ms != 40
+        or float(profile.nominal_mu) not in {0.003, 0.004}
+        for profile in profiles
+    ):
+        raise StabilityAuditError("invalid_rate_normalized_profile_coordinate")
+    if {record.scene for record in records} != set(_EXPECTED_SCENES):
+        raise StabilityAuditError("filter_audit_record_scene_coverage_mismatch")
+    for name, value in (
+        ("solver_hash", solver_hash),
+        ("metric_contract_hash", metric_contract_hash),
+        ("evaluation_hash", evaluation_hash),
+        ("design_rule_sha256", design_rule_sha256),
+        ("record_manifest_sha256", record_manifest_sha256),
+    ):
+        _require_sha256(name, value)
+    validate_exploration_budget_amendment_authorization(
+        ExplorationBudgetAmendmentRequest(
+            stage="filter_profile_rate_normalization_exploration",
+            profile_design_rule_hash=design_rule_sha256,
+            record_manifest_hash=record_manifest_sha256,
+            added_unique_identities=8,
+            normal_unique_identity_limit=744,
+            max_unique_identities=756,
+            max_attempts=1512,
+            exploration_unique_budget=8,
+        ),
+        receipt=authorization_receipt,
+    )
+    identities = tuple(
+        AttemptIdentity(
+            solver_hash=solver_hash,
+            config_hash=_canonical_sha256(
+                {
+                    "profile_sha256": profile.sha256,
+                    "fs_target": profile.fs_target,
+                    "memory_ms": profile.memory_ms,
+                    "actual_taps": profile.actual_taps,
+                    "nominal_mu": float(profile.nominal_mu),
+                }
+            ),
+            metric_contract_hash=metric_contract_hash,
+            evaluation_hash=evaluation_hash,
+            data_sha256=record.combined_data_sha256,
+            record_id=record.record_id,
+            stage="filter_profile_rate_normalization_exploration",
+            attempt_kind="exploration",
+            parent_experiment_id=parent_experiment_id,
+        )
+        for profile in profiles
+        for record in records
+    )
+    if len({identity.sha256 for identity in identities}) != 8:
+        raise StabilityAuditError("rate_normalized_supplement_identity_collision")
+    return identities
+
+
 def _zscore(values: np.ndarray) -> np.ndarray:
     values = np.asarray(values, dtype=float)
     std = float(np.std(values, ddof=1)) if values.size > 1 else 0.0
@@ -444,26 +522,18 @@ def audit_lms_stage(
         "nominal_mu": float(nominal_mu),
         "effective_mu": float(effective_mu),
         "input_energy": float(np.mean((desired_arr - np.mean(desired_arr)) ** 2)),
-        "reference_energy": float(
-            np.mean((reference_arr - np.mean(reference_arr)) ** 2)
-        ),
+        "reference_energy": float(np.mean((reference_arr - np.mean(reference_arr)) ** 2)),
         "input_covariance_lambda_max": lambda_max,
         "stability_load": stability_load,
         "weight_norm": float(np.linalg.norm(weights)),
         "residual_rms_ratio": residual_rms / max(desired_rms, _EPS),
         "residual_tail_head_ratio": tail_rms / max(head_rms, _EPS),
-        "true_peak_retention_ratio": residual_true_power
-        / max(desired_true_power, _EPS),
+        "true_peak_retention_ratio": residual_true_power / max(desired_true_power, _EPS),
         "motion_artifact_frequency_hz": artifact_frequency_hz,
         "motion_artifact_suppression_db": 10.0
-        * math.log10(
-            max(desired_artifact_power, _EPS)
-            / max(residual_artifact_power, _EPS)
-        ),
+        * math.log10(max(desired_artifact_power, _EPS) / max(residual_artifact_power, _EPS)),
         "residual_artifact_abs_corr": residual_corr,
-        "nonfinite_count": int(
-            numeric_values.size - np.count_nonzero(np.isfinite(numeric_values))
-        ),
+        "nonfinite_count": int(numeric_values.size - np.count_nonzero(np.isfinite(numeric_values))),
         "runtime_seconds": float(time.perf_counter() - started),
     }
 
@@ -506,28 +576,15 @@ def summarize_record_audit(
     stability_load_max = float(np.max(values("stability_load")))
     weight_norm_max = float(np.max(values("weight_norm")))
     residual_rms_ratio_p95 = float(np.quantile(values("residual_rms_ratio"), 0.95))
-    residual_tail_head_ratio_max = float(
-        np.max(values("residual_tail_head_ratio"))
-    )
-    residual_tail_head_ratio_p95 = float(
-        np.quantile(values("residual_tail_head_ratio"), 0.95)
-    )
-    nonfinite_count = int(
-        sum(int(stage["nonfinite_count"]) for stage in stage_audits)
-    )
-    true_peak_retention_median = float(
-        np.median(values("true_peak_retention_ratio"))
-    )
-    artifact_suppression_median = float(
-        np.median(values("motion_artifact_suppression_db"))
-    )
-    residual_artifact_corr_median = float(
-        np.median(values("residual_artifact_abs_corr"))
-    )
+    residual_tail_head_ratio_max = float(np.max(values("residual_tail_head_ratio")))
+    residual_tail_head_ratio_p95 = float(np.quantile(values("residual_tail_head_ratio"), 0.95))
+    nonfinite_count = int(sum(int(stage["nonfinite_count"]) for stage in stage_audits))
+    true_peak_retention_median = float(np.median(values("true_peak_retention_ratio")))
+    artifact_suppression_median = float(np.median(values("motion_artifact_suppression_db")))
+    residual_artifact_corr_median = float(np.median(values("residual_artifact_abs_corr")))
     tail_head_pass = (
         contract.tail_head_gate == "descriptive_only"
-        or residual_tail_head_ratio_max
-        <= contract.max_residual_tail_head_ratio
+        or residual_tail_head_ratio_max <= contract.max_residual_tail_head_ratio
     )
     stability_pass = (
         nonfinite_count == 0
@@ -537,12 +594,9 @@ def summarize_record_audit(
         and tail_head_pass
     )
     spectral_pass = (
-        true_peak_retention_median
-        >= contract.min_true_peak_retention_ratio_median
-        and artifact_suppression_median
-        >= contract.min_motion_artifact_suppression_db_median
-        and residual_artifact_corr_median
-        <= contract.max_residual_artifact_abs_corr_median
+        true_peak_retention_median >= contract.min_true_peak_retention_ratio_median
+        and artifact_suppression_median >= contract.min_motion_artifact_suppression_db_median
+        and residual_artifact_corr_median <= contract.max_residual_artifact_abs_corr_median
     )
     effective_mu = values("effective_mu")
     return {
@@ -551,10 +605,7 @@ def summarize_record_audit(
         "lms_stage_count": len(stage_audits),
         "configured_max_taps": int(configured_max_taps),
         "max_tap_hit_count": int(
-            sum(
-                int(stage["order"]) >= int(configured_max_taps)
-                for stage in stage_audits
-            )
+            sum(int(stage["order"]) >= int(configured_max_taps) for stage in stage_audits)
         ),
         "input_energy_median": float(np.median(values("input_energy"))),
         "reference_energy_median": float(np.median(values("reference_energy"))),
@@ -583,9 +634,7 @@ def reclassify_cached_record_audit(
     corrected_contract: StabilityAuditContract,
     source_metric_contract_sha256: str,
     source_result_sha256: str,
-    reclassification_reason: str = (
-        "remove_pathological_cold_start_tail_head_max_gate"
-    ),
+    reclassification_reason: str = ("remove_pathological_cold_start_tail_head_max_gate"),
 ) -> dict[str, Any]:
     """Reapply a corrected decision gate to immutable cached numeric summaries."""
 
@@ -607,15 +656,11 @@ def reclassify_cached_record_audit(
     }
     missing = sorted(required - cached_audit.keys())
     if missing:
-        raise StabilityAuditError(
-            "cached_audit_missing_fields:" + ",".join(missing)
-        )
+        raise StabilityAuditError("cached_audit_missing_fields:" + ",".join(missing))
     stability_pass = (
         int(cached_audit["nonfinite_count"]) == 0
-        and float(cached_audit["stability_load_max"])
-        < corrected_contract.max_stability_load
-        and float(cached_audit["weight_norm_max"])
-        <= corrected_contract.max_weight_norm
+        and float(cached_audit["stability_load_max"]) < corrected_contract.max_stability_load
+        and float(cached_audit["weight_norm_max"]) <= corrected_contract.max_weight_norm
         and float(cached_audit["residual_rms_ratio_p95"])
         <= corrected_contract.max_residual_rms_ratio_p95
     )
@@ -699,9 +744,7 @@ def build_filter_profile_receipt(
         "diagnostic_identity_sha256": sorted(
             str(item["identity_sha256"]) for item in record_audits
         ),
-        "diagnostic_result_sha256": sorted(
-            str(item["result_sha256"]) for item in record_audits
-        ),
+        "diagnostic_result_sha256": sorted(str(item["result_sha256"]) for item in record_audits),
         "record_identity_hashes": sorted(
             (
                 {
@@ -738,15 +781,11 @@ def build_filter_profile_receipt(
                 {
                     "record_id": item["record_id"],
                     "scene": item["scene"],
-                    "true_peak_retention_ratio_median": item[
-                        "true_peak_retention_ratio_median"
-                    ],
+                    "true_peak_retention_ratio_median": item["true_peak_retention_ratio_median"],
                     "motion_artifact_suppression_db_median": item[
                         "motion_artifact_suppression_db_median"
                     ],
-                    "residual_artifact_abs_corr_median": item[
-                        "residual_artifact_abs_corr_median"
-                    ],
+                    "residual_artifact_abs_corr_median": item["residual_artifact_abs_corr_median"],
                     "passed": item["spectral_pass"],
                 }
                 for item in record_audits

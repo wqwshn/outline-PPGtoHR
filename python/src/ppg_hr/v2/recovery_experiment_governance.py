@@ -86,10 +86,7 @@ class FrozenExperimentContractHashes:
             _require_sha256(name, getattr(self, name))
 
     def to_dict(self) -> dict[str, str]:
-        return {
-            name: getattr(self, name)
-            for name in RECOVERY_PREFLIGHT_HASH_FIELDS
-        }
+        return {name: getattr(self, name) for name in RECOVERY_PREFLIGHT_HASH_FIELDS}
 
 
 def validate_recovery_experiment_preflight(
@@ -103,14 +100,10 @@ def validate_recovery_experiment_preflight(
     required_keys = set(RECOVERY_PREFLIGHT_HASH_FIELDS)
     missing = sorted(required_keys - actual_keys)
     if missing:
-        raise GovernanceError(
-            f"preflight_contract_missing:{','.join(missing)}"
-        )
+        raise GovernanceError(f"preflight_contract_missing:{','.join(missing)}")
     unexpected = sorted(actual_keys - required_keys)
     if unexpected:
-        raise GovernanceError(
-            f"preflight_contract_unexpected:{','.join(unexpected)}"
-        )
+        raise GovernanceError(f"preflight_contract_unexpected:{','.join(unexpected)}")
     expected_hashes = expected.to_dict()
     verified: dict[str, str] = {}
     for name in RECOVERY_PREFLIGHT_HASH_FIELDS:
@@ -448,6 +441,30 @@ class BudgetContract:
             stage_attempt_kinds=prior.stage_attempt_kinds,
         )
 
+    @classmethod
+    def approved_v5(cls) -> BudgetContract:
+        """Return the contract for eight allowlisted rate-normalization probes."""
+
+        prior = cls.approved_v4()
+        return cls(
+            stage_unique_limits={
+                **prior.stage_unique_limits,
+                "filter_profile_rate_normalization_exploration": 8,
+            },
+            normal_unique_identity_limit=744,
+            supplemental_stage=prior.supplemental_stage,
+            max_unique_identities=756,
+            max_attempts=1512,
+            retry_limit=prior.retry_limit,
+            contract_version="lyx_recovery_filter_budget_v5",
+            stage_attempt_kinds={
+                **prior.stage_attempt_kinds,
+                "filter_profile_rate_normalization_exploration": (
+                    "exploration"
+                ),
+            },
+        )
+
     @property
     def sha256(self) -> str:
         return _canonical_sha256(self.to_dict())
@@ -627,6 +644,10 @@ class AttemptRegistry:
         amendment_request: BudgetAmendmentRequest,
         authorization_receipt: Mapping[str, Any] | None,
         new_identities: Sequence[AttemptIdentity] = (),
+        target_exploration_registry: ExplorationRegistry | None = None,
+        exploration_amendment_request: (
+            ExplorationBudgetAmendmentRequest | None
+        ) = None,
         finalize_staging: Callable[[Path, AttemptRegistry], None] | None = None,
     ) -> AttemptRegistry:
         """Clone the complete ledger and cache into one expanded budget contract."""
@@ -649,38 +670,104 @@ class AttemptRegistry:
             for stage, limit in budget_contract.stage_unique_limits.items()
             if stage != amendment_request.stage
         }
-        source_stage_kind = self.budget_contract.stage_attempt_kinds.get(
+        source_stage_kind = self.budget_contract.stage_attempt_kinds.get(amendment_request.stage)
+        target_stage_kind = budget_contract.stage_attempt_kinds.get(
             amendment_request.stage
         )
-        expected_stage_kind = source_stage_kind or "diagnostic"
+        expected_stage_kind = source_stage_kind or target_stage_kind or "diagnostic"
+        source_unchanged_stage_kinds = {
+            stage: kind
+            for stage, kind in self.budget_contract.stage_attempt_kinds.items()
+            if stage != amendment_request.stage
+        }
+        target_unchanged_stage_kinds = {
+            stage: kind
+            for stage, kind in budget_contract.stage_attempt_kinds.items()
+            if stage != amendment_request.stage
+        }
+        target_exploration = (
+            self.exploration_registry
+            if target_exploration_registry is None
+            else target_exploration_registry
+        )
         known_transitions = {
             BudgetContract.frozen_v1().sha256: BudgetContract.approved_v2().sha256,
             BudgetContract.approved_v2().sha256: BudgetContract.approved_v3().sha256,
             BudgetContract.approved_v3().sha256: BudgetContract.approved_v4().sha256,
+            BudgetContract.approved_v4().sha256: BudgetContract.approved_v5().sha256,
         }
         expected_known_target = known_transitions.get(self.budget_contract.sha256)
         if (
-            budget_contract.stage_unique_limits.get(amendment_request.stage)
-            != expected_stage_limit
+            budget_contract.stage_unique_limits.get(amendment_request.stage) != expected_stage_limit
             or target_unchanged_stages != unchanged_stages
             or budget_contract.normal_unique_identity_limit
             != amendment_request.normal_unique_identity_limit
-            or budget_contract.max_unique_identities
-            != amendment_request.max_unique_identities
+            or budget_contract.max_unique_identities != amendment_request.max_unique_identities
             or budget_contract.max_attempts != amendment_request.max_attempts
             or budget_contract.retry_limit != self.budget_contract.retry_limit
-            or budget_contract.supplemental_stage
-            != self.budget_contract.supplemental_stage
+            or budget_contract.supplemental_stage != self.budget_contract.supplemental_stage
             or budget_contract.stage_attempt_kinds.get(amendment_request.stage)
             != expected_stage_kind
-            or budget_contract.stage_attempt_kinds
-            != self.budget_contract.stage_attempt_kinds
+            or target_unchanged_stage_kinds != source_unchanged_stage_kinds
             or (
                 expected_known_target is not None
                 and budget_contract.sha256 != expected_known_target
             )
         ):
             raise GovernanceError("budget_amendment_contract_mismatch")
+        new_identity_sha256 = tuple(identity.sha256 for identity in new_identities)
+        if target_stage_kind == "exploration":
+            if (
+                exploration_amendment_request is None
+                or exploration_amendment_request.stage
+                != amendment_request.stage
+                or exploration_amendment_request.profile_design_rule_hash
+                != amendment_request.profile_design_rule_hash
+                or exploration_amendment_request.record_manifest_hash
+                != amendment_request.record_manifest_hash
+                or exploration_amendment_request.added_unique_identities
+                != amendment_request.added_unique_identities
+                or exploration_amendment_request.normal_unique_identity_limit
+                != amendment_request.normal_unique_identity_limit
+                or exploration_amendment_request.max_unique_identities
+                != amendment_request.max_unique_identities
+                or exploration_amendment_request.max_attempts
+                != amendment_request.max_attempts
+            ):
+                raise GovernanceError(
+                    "exploration_amendment_request_mismatch"
+                )
+            validate_exploration_budget_amendment_authorization(
+                exploration_amendment_request,
+                receipt=authorization_receipt,
+            )
+            expected_allowlist = {
+                *self.exploration_registry.allowed_identity_sha256,
+                *new_identity_sha256,
+            }
+            if (
+                len(new_identity_sha256)
+                != amendment_request.added_unique_identities
+                or len(set(new_identity_sha256)) != len(new_identity_sha256)
+                or target_exploration.unique_budget
+                != self.exploration_registry.unique_budget
+                + amendment_request.added_unique_identities
+                or set(target_exploration.allowed_identity_sha256)
+                != expected_allowlist
+                or len(expected_allowlist)
+                != len(target_exploration.allowed_identity_sha256)
+                or any(
+                    identity.stage != amendment_request.stage
+                    or identity.attempt_kind != "exploration"
+                    for identity in new_identities
+                )
+            ):
+                raise GovernanceError("exploration_amendment_registry_mismatch")
+        elif (
+            target_exploration.sha256 != self.exploration_registry.sha256
+            or exploration_amendment_request is not None
+        ):
+            raise GovernanceError("unexpected_exploration_registry_change")
         source = self.open(
             self.path,
             budget_contract=self.budget_contract,
@@ -703,7 +790,7 @@ class AttemptRegistry:
             migrated = type(self)(
                 migrated_path,
                 budget_contract=budget_contract,
-                exploration_registry=self.exploration_registry,
+                exploration_registry=target_exploration,
                 entries=deepcopy(source._entries),
             )
             migrated._write_entries(migrated._entries)
@@ -721,7 +808,7 @@ class AttemptRegistry:
         return self.open(
             target_dir / path.name,
             budget_contract=budget_contract,
-            exploration_registry=self.exploration_registry,
+            exploration_registry=target_exploration,
         )
 
     def register_identity(self, identity: AttemptIdentity) -> str:
@@ -1250,6 +1337,50 @@ class BudgetAmendmentRequest:
                 raise ValueError(f"{name}_must_be_positive")
 
 
+@dataclass(frozen=True)
+class ExplorationBudgetAmendmentRequest:
+    """Exact bounded exploration amendment for mechanism-derived coordinates."""
+
+    stage: str
+    profile_design_rule_hash: str
+    record_manifest_hash: str
+    added_unique_identities: int
+    normal_unique_identity_limit: int
+    max_unique_identities: int
+    max_attempts: int
+    exploration_unique_budget: int
+
+    def __post_init__(self) -> None:
+        if not self.stage:
+            raise ValueError("budget_amendment_stage_must_not_be_empty")
+        for name in ("profile_design_rule_hash", "record_manifest_hash"):
+            _require_sha256(name, getattr(self, name))
+        for name in (
+            "added_unique_identities",
+            "normal_unique_identity_limit",
+            "max_unique_identities",
+            "max_attempts",
+            "exploration_unique_budget",
+        ):
+            if not isinstance(getattr(self, name), int) or getattr(self, name) <= 0:
+                raise ValueError(f"{name}_must_be_positive")
+        if self.exploration_unique_budget != self.added_unique_identities:
+            raise ValueError("exploration_budget_must_equal_added_identities")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "stage": self.stage,
+            "profile_design_rule_hash": self.profile_design_rule_hash,
+            "record_manifest_hash": self.record_manifest_hash,
+            "added_unique_identities": self.added_unique_identities,
+            "normal_unique_identity_limit": self.normal_unique_identity_limit,
+            "max_unique_identities": self.max_unique_identities,
+            "max_attempts": self.max_attempts,
+            "attempt_kind": "exploration",
+            "exploration_unique_budget": self.exploration_unique_budget,
+        }
+
+
 def validate_human_gate(
     *,
     state: str,
@@ -1300,6 +1431,41 @@ def validate_budget_amendment_authorization(
     )
     if mismatched:
         raise GovernanceError("authorization_identity_mismatch:" + ",".join(mismatched))
+    if validated["independent_bo_authorized"] is not False:
+        raise GovernanceError("independent_bo_must_remain_unauthorized")
+    return validated
+
+
+def validate_exploration_budget_amendment_authorization(
+    request: ExplorationBudgetAmendmentRequest,
+    *,
+    receipt: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Validate the exact allowlisted exploration budget approved by the user."""
+
+    state = "awaiting_human_budget_decision"
+    validated = validate_human_gate(state=state, receipt=receipt)
+    expected = request.to_dict()
+    required = {
+        "approved",
+        "decision_state",
+        *expected.keys(),
+        "independent_bo_authorized",
+        "approved_at",
+        "approved_by",
+    }
+    missing = sorted(required - validated.keys())
+    if missing:
+        raise GovernanceError("authorization_missing_fields:" + ",".join(missing))
+    mismatched = sorted(
+        field
+        for field, expected_value in expected.items()
+        if validated.get(field) != expected_value
+    )
+    if mismatched:
+        raise GovernanceError(
+            "authorization_identity_mismatch:" + ",".join(mismatched)
+        )
     if validated["independent_bo_authorized"] is not False:
         raise GovernanceError("independent_bo_must_remain_unauthorized")
     return validated

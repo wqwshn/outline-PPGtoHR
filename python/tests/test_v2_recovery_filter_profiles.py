@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from ppg_hr.v2.phase2_experiment_io import atomic_write_json
+from ppg_hr.v2.phase2_experiment_io import atomic_write_json, file_sha256
 from ppg_hr.v2.recovery_filter_profile_experiment import (
     _canonical_sha256,
     _commit_preparation_pair,
@@ -17,7 +17,10 @@ from ppg_hr.v2.recovery_filter_profile_experiment import (
     _validate_spec_gate_audit_contract,
     _validate_spec_gate_source_artifacts,
     _write_preparation_marker,
+    build_rate_normalized_supplement_proposal,
+    prepare_rate_normalized_supplement,
     prepare_spec_gate_supplement,
+    rate_normalized_supplement_profiles_v1,
     revised_filter_profiles_v2,
     select_spec_gate_supplement_profiles,
     spec_gate_supplement_profiles_v1,
@@ -26,6 +29,7 @@ from ppg_hr.v2.recovery_filter_profiles import (
     ArchivedProfileEvidence,
     FilterProfile,
     ProfileLibraryError,
+    RateNormalizedProfileEvidence,
     freeze_filter_profile_library,
 )
 from ppg_hr.v2.recovery_filter_stability import (
@@ -35,6 +39,7 @@ from ppg_hr.v2.recovery_filter_stability import (
     audit_lms_stage,
     build_filter_profile_receipt,
     plan_filter_audit_identities,
+    plan_rate_normalized_supplement_identities,
     plan_replacement_filter_audit_identities,
     plan_spec_gate_supplement_identities,
     reclassify_cached_record_audit,
@@ -106,9 +111,7 @@ def test_freeze_profile_library_enforces_contract_and_effective_mu() -> None:
         "intermediate": "p50-long-mid",
         "aggressive": "p100-short-high",
     }
-    long_high = next(
-        item for item in receipt["profiles"] if item["profile_id"] == "p50-long-high"
-    )
+    long_high = next(item for item in receipt["profiles"] if item["profile_id"] == "p50-long-high")
     assert long_high["actual_taps"] == 10
     assert long_high["effective_mu"] == {
         "formula": "max(lms_mu_min, nominal_mu - abs_corr / 100)",
@@ -225,10 +228,7 @@ def _record_audit(
 
 def test_profile_receipt_requires_all_four_records_to_pass() -> None:
     profile = _profiles()[0]
-    records = [
-        _record_audit(scene=scene)
-        for scene in ("jianpan", "kaihe", "run", "xiezi")
-    ]
+    records = [_record_audit(scene=scene) for scene in ("jianpan", "kaihe", "run", "xiezi")]
 
     receipt = build_filter_profile_receipt(
         profile,
@@ -388,9 +388,7 @@ def test_cached_v1_result_can_be_reclassified_without_numerical_rerun() -> None:
         reclassification_reason="restore_frozen_pulse_power_retention_gate",
     )
     assert rejected["spectral_pass"] is False
-    assert rejected["reclassification_reason"] == (
-        "restore_frozen_pulse_power_retention_gate"
-    )
+    assert rejected["reclassification_reason"] == ("restore_frozen_pulse_power_retention_gate")
 
 
 def test_filter_audit_plan_requires_authorization_and_registers_32_diagnostics() -> None:
@@ -439,9 +437,7 @@ def test_filter_audit_plan_requires_authorization_and_registers_32_diagnostics()
 
     assert len(identities) == 32
     assert len({identity.sha256 for identity in identities}) == 32
-    assert {identity.stage for identity in identities} == {
-        "filter_profile_stability_audit"
-    }
+    assert {identity.stage for identity in identities} == {"filter_profile_stability_audit"}
     assert {identity.attempt_kind for identity in identities} == {"diagnostic"}
 
 
@@ -455,14 +451,12 @@ def test_revised_library_replaces_only_two_mechanistically_unsafe_profiles() -> 
     unchanged = {
         profile.profile_id: profile.coordinate
         for profile in revised
-        if profile.profile_id
-        not in {"p50-boundary-high", "p100-boundary-low"}
+        if profile.profile_id not in {"p50-boundary-high", "p100-boundary-low"}
     }
     assert unchanged == {
         profile.profile_id: profile.coordinate
         for profile in _profiles()
-        if profile.profile_id
-        not in {"p50-long-high", "p100-long-low"}
+        if profile.profile_id not in {"p50-long-high", "p100-long-low"}
     }
 
 
@@ -520,10 +514,7 @@ def test_replacement_plan_requires_exact_eight_identity_authorization() -> None:
 
 def test_spec_gate_supplement_freezes_six_profiles_and_24_identities() -> None:
     profiles = spec_gate_supplement_profiles_v1()
-    assert {
-        (profile.fs_target, profile.memory_ms, profile.nominal_mu)
-        for profile in profiles
-    } == {
+    assert {(profile.fs_target, profile.memory_ms, profile.nominal_mu) for profile in profiles} == {
         (50, 40, 0.006),
         (50, 40, 0.008),
         (100, 40, 0.006),
@@ -573,6 +564,289 @@ def test_spec_gate_supplement_freezes_six_profiles_and_24_identities() -> None:
     assert len({identity.sha256 for identity in identities}) == 24
 
 
+def test_rate_normalized_profiles_preserve_physical_update_rate() -> None:
+    profiles = rate_normalized_supplement_profiles_v1()
+
+    assert [
+        (profile.profile_id, profile.fs_target, profile.memory_ms, profile.nominal_mu)
+        for profile in profiles
+    ] == [
+        ("p100-short-rate-normalized-low-40", 100, 40, 0.003),
+        ("p100-short-rate-normalized-midlow-40", 100, 40, 0.004),
+    ]
+    assert [profile.fs_target * profile.nominal_mu for profile in profiles] == [
+        50 * 0.006,
+        50 * 0.008,
+    ]
+
+
+def test_rate_normalized_evidence_can_freeze_derived_p100_profiles() -> None:
+    profiles = [
+        FilterProfile("p25-short-low", "core", 25, 40, 0.008),
+        FilterProfile("p25-short-mid", "core", 25, 40, 0.012),
+        FilterProfile("p25-long-mid", "core", 25, 200, 0.010),
+        FilterProfile(
+            "p50-short-low",
+            "core",
+            50,
+            80,
+            0.006,
+            recovery_sentinel_role="conservative",
+        ),
+        FilterProfile(
+            "p50-short-low-40",
+            "core",
+            50,
+            40,
+            0.006,
+            recovery_sentinel_role="intermediate",
+        ),
+        FilterProfile("p50-short-midlow-40", "core", 50, 40, 0.008),
+        FilterProfile(
+            "p100-short-rate-normalized-low-40",
+            "coverage_boundary",
+            100,
+            40,
+            0.003,
+            recovery_sentinel_role="aggressive",
+        ),
+        FilterProfile(
+            "p100-short-rate-normalized-midlow-40",
+            "coverage_boundary",
+            100,
+            40,
+            0.004,
+        ),
+    ]
+    evidence: list[ArchivedProfileEvidence | RateNormalizedProfileEvidence] = [
+        ArchivedProfileEvidence(
+            fs_target=profile.fs_target,
+            memory_ms=profile.memory_ms,
+            nominal_mu=profile.nominal_mu,
+            occurrence_count=4,
+            scenes=("jianpan", "kaihe", "run", "xiezi"),
+            archive_manifest_sha256="a" * 64,
+            archive_table_sha256="b" * 64,
+        )
+        for profile in profiles[:-2]
+    ]
+    evidence.extend(
+        (
+            RateNormalizedProfileEvidence(
+                fs_target=100,
+                memory_ms=40,
+                nominal_mu=0.003,
+                source_fs_target=50,
+                source_memory_ms=40,
+                source_nominal_mu=0.006,
+                source_occurrence_count=24,
+                source_scenes=("jianpan", "kaihe", "run", "xiezi"),
+                source_archive_manifest_sha256="a" * 64,
+                source_archive_table_sha256="b" * 64,
+                source_profile_receipt_sha256="c" * 64,
+            ),
+            RateNormalizedProfileEvidence(
+                fs_target=100,
+                memory_ms=40,
+                nominal_mu=0.004,
+                source_fs_target=50,
+                source_memory_ms=40,
+                source_nominal_mu=0.008,
+                source_occurrence_count=31,
+                source_scenes=("jianpan", "kaihe", "run", "xiezi"),
+                source_archive_manifest_sha256="a" * 64,
+                source_archive_table_sha256="b" * 64,
+                source_profile_receipt_sha256="d" * 64,
+            ),
+        )
+    )
+
+    receipt = freeze_filter_profile_library(
+        tuple(profiles),
+        tuple(evidence),
+        design_rule_sha256="e" * 64,
+    )
+
+    assert receipt["receipt_version"] == "lyx_filter_profile_library_freeze_v2"
+    derived = [item for item in receipt["profiles"] if item["fs_target"] == 100]
+    assert [item["provenance"]["kind"] for item in derived] == [
+        "rate_normalized_from_archived_profile",
+        "rate_normalized_from_archived_profile",
+    ]
+
+
+def test_build_rate_normalized_proposal_is_zero_run_and_exactly_eight_identities(
+    tmp_path: Path,
+) -> None:
+    root = Path("data/experiments/lyx_recovery_filter_profile")
+    proposal_dir = tmp_path / "proposal"
+
+    proposal = build_rate_normalized_supplement_proposal(
+        source_output_dir=root / "filter_profiles_v3",
+        proposal_dir=proposal_dir,
+    )
+
+    assert proposal["new_unique_identity_count"] == 8
+    assert proposal["independent_bo_authorized"] is False
+    assert proposal["actual_hr_tracking_trajectory_count"] == 0
+    assert proposal["may_execute"] is False
+    assert proposal["proposal_sha256"] == _canonical_sha256(
+        {key: value for key, value in proposal.items() if key != "proposal_sha256"}
+    )
+    request = __import__("json").loads(
+        (proposal_dir / "budget_amendment_request.json").read_text(encoding="utf-8")
+    )
+    assert request["added_unique_identities"] == 8
+    assert request["normal_unique_identity_limit"] == 744
+    assert request["max_unique_identities"] == 756
+    assert request["max_attempts"] == 1512
+    assert request["stage"] == (
+        "filter_profile_rate_normalization_exploration"
+    )
+    assert request["attempt_kind"] == "exploration"
+    assert request["exploration_unique_budget"] == 8
+    assert request["independent_bo_authorized"] is False
+
+
+def test_rate_normalized_supplement_plans_exactly_eight_identities() -> None:
+    profiles = rate_normalized_supplement_profiles_v1()
+    records = tuple(
+        FilterAuditRecord(
+            record_id=f"{scene}-record",
+            scene=scene,
+            data_path=f"data/{scene}.csv",
+            reference_path=f"data/{scene}-ref.csv",
+            data_sha256=("a" if scene in {"jianpan", "run"} else "b") * 64,
+            reference_sha256=("c" if scene in {"jianpan", "run"} else "d") * 64,
+        )
+        for scene in ("jianpan", "kaihe", "run", "xiezi")
+    )
+    receipt = {
+        "approved": True,
+        "decision_state": "awaiting_human_budget_decision",
+        "stage": "filter_profile_rate_normalization_exploration",
+        "profile_design_rule_hash": "a" * 64,
+        "record_manifest_hash": "b" * 64,
+        "added_unique_identities": 8,
+        "normal_unique_identity_limit": 744,
+        "max_unique_identities": 756,
+        "max_attempts": 1512,
+        "attempt_kind": "exploration",
+        "exploration_unique_budget": 8,
+        "independent_bo_authorized": False,
+        "approved_at": "2026-07-29T12:00:00+08:00",
+        "approved_by": "user",
+    }
+
+    identities = plan_rate_normalized_supplement_identities(
+        profiles=profiles,
+        records=records,
+        parent_experiment_id="lyx_recovery_filter_profile_v1",
+        solver_hash="c" * 64,
+        metric_contract_hash="d" * 64,
+        evaluation_hash="e" * 64,
+        design_rule_sha256="a" * 64,
+        record_manifest_sha256="b" * 64,
+        authorization_receipt=receipt,
+    )
+
+    assert len(identities) == 8
+    assert len({identity.sha256 for identity in identities}) == 8
+
+
+def test_rate_normalized_supplement_cannot_prepare_without_external_receipt(
+    tmp_path: Path,
+) -> None:
+    root = Path("data/experiments/lyx_recovery_filter_profile")
+    proposal_dir = tmp_path / "proposal"
+    build_rate_normalized_supplement_proposal(
+        source_output_dir=root / "filter_profiles_v3",
+        proposal_dir=proposal_dir,
+    )
+    output_dir = tmp_path / "output"
+    governance_dir = tmp_path / "governance"
+
+    with pytest.raises(FileNotFoundError):
+        prepare_rate_normalized_supplement(
+            source_output_dir=root / "filter_profiles_v3",
+            source_governance_dir=root / "governance_v4",
+            proposal_dir=proposal_dir,
+            output_dir=output_dir,
+            governance_dir=governance_dir,
+            authorization_receipt_path=tmp_path / "missing-authorization.json",
+        )
+
+    assert not output_dir.exists()
+    assert not governance_dir.exists()
+
+
+def test_rate_normalized_supplement_prepare_registers_without_running(
+    tmp_path: Path,
+) -> None:
+    root = Path("data/experiments/lyx_recovery_filter_profile")
+    proposal_dir = tmp_path / "proposal"
+    proposal = build_rate_normalized_supplement_proposal(
+        source_output_dir=root / "filter_profiles_v3",
+        proposal_dir=proposal_dir,
+    )
+    design_rule = __import__("json").loads(
+        (proposal_dir / "profile_design_rule.json").read_text(encoding="utf-8")
+    )
+    authorization_path = tmp_path / "authorization.json"
+    atomic_write_json(
+        authorization_path,
+        {
+            "approved": True,
+            "decision_state": "awaiting_human_budget_decision",
+            "stage": "filter_profile_rate_normalization_exploration",
+            "profile_design_rule_hash": design_rule["design_rule_sha256"],
+            "record_manifest_hash": design_rule["record_manifest_sha256"],
+            "added_unique_identities": 8,
+            "normal_unique_identity_limit": 744,
+            "max_unique_identities": 756,
+            "max_attempts": 1512,
+            "attempt_kind": "exploration",
+            "exploration_unique_budget": 8,
+            "independent_bo_authorized": False,
+            "proposal_sha256": proposal["proposal_sha256"],
+            "approved_at": "2026-07-29T12:00:00+08:00",
+            "approved_by": "pytest",
+        },
+    )
+    output_dir = tmp_path / "output"
+    governance_dir = tmp_path / "governance"
+
+    prepared = prepare_rate_normalized_supplement(
+        source_output_dir=root / "filter_profiles_v3",
+        source_governance_dir=root / "governance_v4",
+        proposal_dir=proposal_dir,
+        output_dir=output_dir,
+        governance_dir=governance_dir,
+        authorization_receipt_path=authorization_path,
+    )
+
+    assert prepared["plan"]["status"] == "prepared_zero_new_runs"
+    assert prepared["plan"]["new_identity_count"] == 8
+    assert prepared["governance_receipt"]["attempt_registry_summary"] == {
+        "logical_task_count": 129,
+        "planned_unique_identity_count": 72,
+        "actual_unique_run_count": 64,
+        "cache_hit_count": 64,
+        "failed_attempt_count": 1,
+        "retry_count": 1,
+    }
+    assert not (output_dir / "candidate_profile_receipts").exists()
+    frozen_hashes = prepared["plan"]["frozen_artifact_sha256"]
+    for profile_id, record_hashes in frozen_hashes["frozen_p50_record_audits"].items():
+        for record_id, expected_sha256 in record_hashes.items():
+            assert (
+                file_sha256(
+                    output_dir / "frozen_p50_record_audits" / profile_id / f"{record_id}.json"
+                )
+                == expected_sha256
+            )
+
+
 def test_spec_gate_supplement_cannot_prepare_without_external_receipt(
     tmp_path: Path,
 ) -> None:
@@ -599,9 +873,7 @@ def test_spec_gate_supplement_rejects_tampered_source_record_manifest() -> None:
         "manifest_version": "lyx_filter_stability_record_manifest_v1",
         "records": [{"record_id": "run1", "data_path": "approved.csv"}],
     }
-    source_record_manifest["record_manifest_sha256"] = _canonical_sha256(
-        source_record_manifest
-    )
+    source_record_manifest["record_manifest_sha256"] = _canonical_sha256(source_record_manifest)
     source_plan = {"status": "prepared_zero_new_runs"}
     source_plan["plan_sha256"] = _canonical_sha256(source_plan)
     source_completion = {
@@ -613,9 +885,7 @@ def test_spec_gate_supplement_rejects_tampered_source_record_manifest() -> None:
         "source_completion_sha256": source_completion["completion_sha256"],
     }
     design_rule = {
-        "record_manifest_sha256": source_record_manifest[
-            "record_manifest_sha256"
-        ],
+        "record_manifest_sha256": source_record_manifest["record_manifest_sha256"],
     }
     source_record_manifest["records"][0]["data_path"] = "tampered.csv"
 
@@ -674,19 +944,11 @@ def _approved_frozen_source_chain() -> tuple[dict, ...]:
     proposal = {
         "source_completion_sha256": source_completion["completion_sha256"],
         "source_plan_artifact_sha256": _canonical_sha256(source_plan),
-        "source_completion_artifact_sha256": _canonical_sha256(
-            source_completion
-        ),
-        "source_archive_evidence_artifact_sha256": _canonical_sha256(
-            source_evidence
-        ),
-        "source_reclassification_artifact_sha256": _canonical_sha256(
-            source_reclassification
-        ),
+        "source_completion_artifact_sha256": _canonical_sha256(source_completion),
+        "source_archive_evidence_artifact_sha256": _canonical_sha256(source_evidence),
+        "source_reclassification_artifact_sha256": _canonical_sha256(source_reclassification),
         "design_rule_sha256": design_rule["design_rule_sha256"],
-        "archive_candidate_evidence_sha256": candidate_evidence[
-            "evidence_sha256"
-        ],
+        "archive_candidate_evidence_sha256": candidate_evidence["evidence_sha256"],
     }
     proposal["proposal_sha256"] = _canonical_sha256(proposal)
     authorization = {"proposal_sha256": proposal["proposal_sha256"]}
@@ -751,15 +1013,9 @@ def test_spec_gate_execution_rejects_synchronized_plan_and_source_tampering() ->
         source_reclassification,
     ) = _approved_frozen_source_chain()
     source_reclassification["records"][0]["profile_id"] = "tampered"
-    proposal["source_reclassification_artifact_sha256"] = _canonical_sha256(
-        source_reclassification
-    )
+    proposal["source_reclassification_artifact_sha256"] = _canonical_sha256(source_reclassification)
     proposal["proposal_sha256"] = _canonical_sha256(
-        {
-            key: value
-            for key, value in proposal.items()
-            if key != "proposal_sha256"
-        }
+        {key: value for key, value in proposal.items() if key != "proposal_sha256"}
     )
     plan["proposal_sha256"] = proposal["proposal_sha256"]
     plan["plan_sha256"] = _canonical_sha256(
@@ -823,8 +1079,7 @@ def test_spec_gate_supplement_selection_is_role_bounded_and_deterministic() -> N
             },
             "stability": {
                 "record_results": [
-                    {"weight_norm_max": 1.0, "runtime_seconds": 0.1}
-                    for _ in range(4)
+                    {"weight_norm_max": 1.0, "runtime_seconds": 0.1} for _ in range(4)
                 ]
             },
         }

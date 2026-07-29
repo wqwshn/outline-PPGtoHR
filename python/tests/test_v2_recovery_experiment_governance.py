@@ -22,6 +22,7 @@ from ppg_hr.v2.recovery_experiment_governance import (
     BudgetContract,
     CacheEvidence,
     DataRoleManifest,
+    ExplorationBudgetAmendmentRequest,
     ExplorationRegistry,
     FoldReadBarrier,
     FrozenExperimentContractHashes,
@@ -31,6 +32,7 @@ from ppg_hr.v2.recovery_experiment_governance import (
     RecordSource,
     initialize_recovery_experiment_governance,
     validate_budget_amendment_authorization,
+    validate_exploration_budget_amendment_authorization,
     validate_human_gate,
     validate_independent_bo_authorization,
     validate_recovery_experiment_preflight,
@@ -111,9 +113,12 @@ def test_shared_json_io_supports_windows_extended_paths(tmp_path: Path) -> None:
     atomic_write_json(deep, {"approved": True})
 
     assert read_json(deep) == {"approved": True}
-    assert file_sha256(deep) == hashlib.sha256(
-        '{\n  "approved": true\n}\n'.replace("\n", os.linesep).encode()
-    ).hexdigest()
+    assert (
+        file_sha256(deep)
+        == hashlib.sha256(
+            '{\n  "approved": true\n}\n'.replace("\n", os.linesep).encode()
+        ).hexdigest()
+    )
 
 
 def _write_cache_receipt(
@@ -965,10 +970,7 @@ def test_approved_v2_budget_adds_only_the_bounded_filter_audit() -> None:
     assert contract.max_unique_identities == 716
     assert contract.max_attempts == 1432
     assert contract.retry_limit == 1
-    assert (
-        sum(contract.stage_unique_limits.values())
-        == contract.max_unique_identities
-    )
+    assert sum(contract.stage_unique_limits.values()) == contract.max_unique_identities
 
 
 def test_filter_audit_budget_amendment_requires_exact_human_authorization() -> None:
@@ -1029,6 +1031,62 @@ def test_approved_v4_budget_adds_only_24_spec_gate_supplement_audits() -> None:
     assert contract.max_unique_identities == 748
     assert contract.max_attempts == 1496
     assert sum(contract.stage_unique_limits.values()) == 748
+
+
+def test_approved_v5_budget_adds_only_eight_rate_normalized_audits() -> None:
+    prior = BudgetContract.approved_v4()
+    contract = BudgetContract.approved_v5()
+
+    assert contract.stage_unique_limits == {
+        **prior.stage_unique_limits,
+        "filter_profile_rate_normalization_exploration": 8,
+    }
+    assert contract.stage_attempt_kinds[
+        "filter_profile_rate_normalization_exploration"
+    ] == "exploration"
+    assert contract.normal_unique_identity_limit == 744
+    assert contract.max_unique_identities == 756
+    assert contract.max_attempts == 1512
+    assert contract.retry_limit == prior.retry_limit
+    assert sum(contract.stage_unique_limits.values()) == 756
+
+
+def test_rate_normalized_exploration_authorization_is_exact() -> None:
+    request = ExplorationBudgetAmendmentRequest(
+        stage="filter_profile_rate_normalization_exploration",
+        profile_design_rule_hash="a" * 64,
+        record_manifest_hash="b" * 64,
+        added_unique_identities=8,
+        normal_unique_identity_limit=744,
+        max_unique_identities=756,
+        max_attempts=1512,
+        exploration_unique_budget=8,
+    )
+    receipt = {
+        "approved": True,
+        "decision_state": "awaiting_human_budget_decision",
+        **request.to_dict(),
+        "independent_bo_authorized": False,
+        "approved_at": "2026-07-29T12:00:00+08:00",
+        "approved_by": "user",
+    }
+
+    assert (
+        validate_exploration_budget_amendment_authorization(
+            request,
+            receipt=receipt,
+        )
+        == receipt
+    )
+    changed = {**receipt, "exploration_unique_budget": 9}
+    with pytest.raises(
+        GovernanceError,
+        match="authorization_identity_mismatch:exploration_unique_budget",
+    ):
+        validate_exploration_budget_amendment_authorization(
+            request,
+            receipt=changed,
+        )
 
 
 def test_fold_read_barrier_denies_target_performance_fields(

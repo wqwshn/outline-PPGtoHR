@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from collections import Counter
 from dataclasses import asdict, dataclass
 from typing import Any, Literal
@@ -41,9 +42,7 @@ class FilterProfile:
     fs_target: int
     memory_ms: int
     nominal_mu: float
-    recovery_sentinel_role: (
-        Literal["conservative", "intermediate", "aggressive"] | None
-    ) = None
+    recovery_sentinel_role: Literal["conservative", "intermediate", "aggressive"] | None = None
 
     def __post_init__(self) -> None:
         if not self.profile_id:
@@ -111,9 +110,77 @@ class ArchivedProfileEvidence:
         }
 
 
+@dataclass(frozen=True)
+class RateNormalizedProfileEvidence:
+    """Mechanistic provenance for a target rate derived from an archived profile."""
+
+    fs_target: int
+    memory_ms: int
+    nominal_mu: float
+    source_fs_target: int
+    source_memory_ms: int
+    source_nominal_mu: float
+    source_occurrence_count: int
+    source_scenes: tuple[str, ...]
+    source_archive_manifest_sha256: str
+    source_archive_table_sha256: str
+    source_profile_receipt_sha256: str
+
+    def __post_init__(self) -> None:
+        if self.fs_target <= self.source_fs_target:
+            raise ValueError("rate_normalization_must_increase_sample_rate")
+        if self.memory_ms != self.source_memory_ms:
+            raise ValueError("rate_normalization_must_preserve_physical_memory")
+        expected = (
+            float(self.source_nominal_mu) * float(self.source_fs_target) / float(self.fs_target)
+        )
+        if not math.isclose(float(self.nominal_mu), expected, rel_tol=0.0, abs_tol=1e-12):
+            raise ValueError("rate_normalized_mu_mismatch")
+        if self.source_occurrence_count <= 0:
+            raise ValueError("source_archive_occurrence_count_must_be_positive")
+        if len(set(self.source_scenes)) != len(self.source_scenes):
+            raise ValueError("duplicate_source_archive_scene")
+        for name in (
+            "source_archive_manifest_sha256",
+            "source_archive_table_sha256",
+            "source_profile_receipt_sha256",
+        ):
+            _require_sha256(name, getattr(self, name))
+
+    @property
+    def coordinate(self) -> tuple[int, int, float]:
+        return self.fs_target, self.memory_ms, float(self.nominal_mu)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "kind": "rate_normalized_from_archived_profile",
+            "formula": "target_mu = source_mu * source_fs_target / fs_target",
+            "preserves": [
+                "nominal_mu_updates_per_physical_second",
+                "physical_memory_ms",
+            ],
+            "source_coordinate": {
+                "fs_target": self.source_fs_target,
+                "memory_ms": self.source_memory_ms,
+                "nominal_mu": float(self.source_nominal_mu),
+            },
+            "source_nominal_mu_updates_per_second": (
+                float(self.source_nominal_mu) * self.source_fs_target
+            ),
+            "target_nominal_mu_updates_per_second": (float(self.nominal_mu) * self.fs_target),
+            "source_archived_evidence": {
+                "occurrence_count": self.source_occurrence_count,
+                "scenes": list(self.source_scenes),
+                "archive_manifest_sha256": self.source_archive_manifest_sha256,
+                "archive_table_sha256": self.source_archive_table_sha256,
+            },
+            "source_profile_receipt_sha256": self.source_profile_receipt_sha256,
+        }
+
+
 def freeze_filter_profile_library(
     profiles: tuple[FilterProfile, ...],
-    archived_evidence: tuple[ArchivedProfileEvidence, ...],
+    archived_evidence: tuple[ArchivedProfileEvidence | RateNormalizedProfileEvidence, ...],
     *,
     design_rule_sha256: str,
 ) -> dict[str, Any]:
@@ -145,7 +212,8 @@ def freeze_filter_profile_library(
         raise ProfileLibraryError("recovery_sentinel_contract_mismatch")
 
     evidence_by_coordinate: dict[
-        tuple[int, int, float], ArchivedProfileEvidence
+        tuple[int, int, float],
+        ArchivedProfileEvidence | RateNormalizedProfileEvidence,
     ] = {}
     for evidence in archived_evidence:
         if evidence.coordinate in evidence_by_coordinate:
@@ -156,46 +224,54 @@ def freeze_filter_profile_library(
     for profile in profiles:
         evidence = evidence_by_coordinate.get(profile.coordinate)
         if evidence is None:
-            raise ProfileLibraryError(
-                f"profile_without_archived_evidence:{profile.profile_id}"
-            )
-        if tuple(sorted(evidence.scenes)) != tuple(sorted(_EXPECTED_SCENES)):
-            raise ProfileLibraryError(
-                f"archive_scene_coverage_mismatch:{profile.profile_id}"
-            )
+            raise ProfileLibraryError(f"profile_without_archived_evidence:{profile.profile_id}")
+        evidence_scenes = (
+            evidence.scenes
+            if isinstance(evidence, ArchivedProfileEvidence)
+            else evidence.source_scenes
+        )
+        if tuple(sorted(evidence_scenes)) != tuple(sorted(_EXPECTED_SCENES)):
+            raise ProfileLibraryError(f"archive_scene_coverage_mismatch:{profile.profile_id}")
         effective_minimum = max(
             _LMS_MU_MIN,
             float(profile.nominal_mu) - 0.01,
         )
-        frozen_profiles.append(
-            {
-                "profile_id": profile.profile_id,
-                "design_role": profile.design_role,
-                "fs_target": profile.fs_target,
-                "physical_memory_ms": profile.memory_ms,
-                "actual_taps": profile.actual_taps,
-                "nominal_mu": float(profile.nominal_mu),
-                "effective_mu": {
-                    "formula": "max(lms_mu_min, nominal_mu - abs_corr / 100)",
-                    "lms_mu_min": _LMS_MU_MIN,
-                    "minimum": effective_minimum,
-                    "maximum": float(profile.nominal_mu),
-                },
-                "recovery_sentinel_role": profile.recovery_sentinel_role,
-                "archived_evidence": evidence.to_dict(),
-                "profile_sha256": profile.sha256,
-            }
-        )
+        profile_payload = {
+            "profile_id": profile.profile_id,
+            "design_role": profile.design_role,
+            "fs_target": profile.fs_target,
+            "physical_memory_ms": profile.memory_ms,
+            "actual_taps": profile.actual_taps,
+            "nominal_mu": float(profile.nominal_mu),
+            "effective_mu": {
+                "formula": "max(lms_mu_min, nominal_mu - abs_corr / 100)",
+                "lms_mu_min": _LMS_MU_MIN,
+                "minimum": effective_minimum,
+                "maximum": float(profile.nominal_mu),
+            },
+            "recovery_sentinel_role": profile.recovery_sentinel_role,
+            "profile_sha256": profile.sha256,
+        }
+        if isinstance(evidence, ArchivedProfileEvidence):
+            profile_payload["archived_evidence"] = evidence.to_dict()
+        else:
+            profile_payload["provenance"] = evidence.to_dict()
+        frozen_profiles.append(profile_payload)
 
+    has_rate_normalized_evidence = any(
+        isinstance(evidence, RateNormalizedProfileEvidence) for evidence in archived_evidence
+    )
     payload: dict[str, Any] = {
-        "receipt_version": "lyx_filter_profile_library_freeze_v1",
+        "receipt_version": (
+            "lyx_filter_profile_library_freeze_v2"
+            if has_rate_normalized_evidence
+            else "lyx_filter_profile_library_freeze_v1"
+        ),
         "status": "frozen_before_audit",
         "profile_count": len(frozen_profiles),
         "fs_target_quota": {str(key): value for key, value in _EXPECTED_FS_QUOTA.items()},
         "role_counts": {"core": 6, "coverage_boundary": 2},
-        "recovery_sentinels": {
-            role: sentinels[role] for role in _EXPECTED_SENTINELS
-        },
+        "recovery_sentinels": {role: sentinels[role] for role in _EXPECTED_SENTINELS},
         "design_rule_sha256": design_rule_sha256,
         "profiles": frozen_profiles,
     }
