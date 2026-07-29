@@ -76,12 +76,8 @@ _FORMAL_STAGE = "recovery_sentinel"
 _AUTHORIZATION_STATE = "awaiting_human_stage_r_execution_decision"
 
 
-_independent_bo_review_package = (
-    stage_r_reporting.build_independent_bo_review_package
-)
-_validate_completed_stage_r_execution = (
-    stage_r_reporting.validate_completed_stage_r_execution
-)
+_independent_bo_review_package = stage_r_reporting.build_independent_bo_review_package
+_validate_completed_stage_r_execution = stage_r_reporting.validate_completed_stage_r_execution
 
 
 def _json_ready(value: Any) -> Any:
@@ -148,16 +144,11 @@ def _verify_filter_profile_library(
             "fs_target": profile.get("fs_target"),
             "memory_ms": profile.get("physical_memory_ms"),
             "nominal_mu": profile.get("nominal_mu"),
-            "recovery_sentinel_role": profile.get(
-                "recovery_sentinel_role"
-            ),
+            "recovery_sentinel_role": profile.get("recovery_sentinel_role"),
             "actual_taps": profile.get("actual_taps"),
         }
         if canonical_sha256(profile_identity) != declared:
-            raise StageRPlanError(
-                "filter_profile_hash_mismatch:"
-                f"{profile.get('profile_id', '')}"
-            )
+            raise StageRPlanError(f"filter_profile_hash_mismatch:{profile.get('profile_id', '')}")
     _verify_embedded_hash(
         profile_library,
         hash_field="library_sha256",
@@ -183,10 +174,7 @@ def _verify_registry(
         _verify_embedded_hash(
             candidate,
             hash_field=candidate_hash_field,
-            artifact_name=(
-                f"{candidate_name}:"
-                f"{candidate.get(candidate_id_field, '')}"
-            ),
+            artifact_name=(f"{candidate_name}:{candidate.get(candidate_id_field, '')}"),
         )
     _verify_embedded_hash(
         registry,
@@ -242,17 +230,13 @@ def _records_from_sources(
         }
         if not required_params <= set(actual_params):
             missing = ",".join(sorted(required_params - set(actual_params)))
-            raise StageRPlanError(
-                f"baseline_actual_params_missing:{record_id}:{missing}"
-            )
+            raise StageRPlanError(f"baseline_actual_params_missing:{record_id}:{missing}")
         if (
             actual_params["analysis_scope"] != "full"
             or actual_params["smooth_win_len"] != RECOVERY_PROFILE_SMOOTH_WIN_LEN
             or float(actual_params["time_bias"]) != RECOVERY_PROFILE_TIME_BIAS_S
         ):
-            raise StageRPlanError(
-                f"baseline_metric_contract_not_frozen:{record_id}"
-            )
+            raise StageRPlanError(f"baseline_metric_contract_not_frozen:{record_id}")
         data_sha256 = _require_hash("data_sha256", item.get("data_sha256"))
         reference_sha256 = _require_hash(
             "reference_sha256",
@@ -262,14 +246,9 @@ def _records_from_sources(
         if (
             not isinstance(raw_method_names, list)
             or not raw_method_names
-            or not all(
-                isinstance(method, str) and method
-                for method in raw_method_names
-            )
+            or not all(isinstance(method, str) and method for method in raw_method_names)
         ):
-            raise StageRPlanError(
-                f"baseline_method_names_invalid:{record_id}"
-            )
+            raise StageRPlanError(f"baseline_method_names_invalid:{record_id}")
         rise_count = int(metrics.get("physiological_rise_episode_count", 0))
         records.append(
             {
@@ -298,8 +277,7 @@ def _records_from_sources(
     ):
         raise StageRPlanError("stage_r_scene_panel_mismatch")
     if any(
-        record["true_rise_applicable"]
-        and record["scene"] not in {"run", "kaihe"}
+        record["true_rise_applicable"] and record["scene"] not in {"run", "kaihe"}
         for record in records
     ):
         raise StageRPlanError("true_rise_applicability_scene_mismatch")
@@ -368,9 +346,7 @@ def _candidates_from_registry(
                     "candidate_sha256",
                     candidate.get("candidate_sha256"),
                 ),
-                "mechanism_complexity": int(
-                    candidate["mechanism_complexity"]
-                ),
+                "mechanism_complexity": int(candidate["mechanism_complexity"]),
                 "constants": dict(
                     _require_mapping(
                         "recovery_candidate_constants",
@@ -538,19 +514,14 @@ def build_stage_r_proposal(
     sentinels = _sentinels_from_library(profile_library)
     candidates = _candidates_from_registry(recovery_registry)
     anchor = sentinels[threshold_anchor_role]
-    control_penalty_id = str(
-        penalty_registry.get("control_penalty_id", "")
-    )
+    control_penalty_id = str(penalty_registry.get("control_penalty_id", ""))
     if not control_penalty_id:
         raise StageRPlanError("control_penalty_id_missing")
     stage_limits = _require_mapping(
         "stage_unique_limits",
         budget_contract.get("stage_unique_limits"),
     )
-    if (
-        stage_limits.get(_DIAGNOSTIC_STAGE) != 60
-        or stage_limits.get(_FORMAL_STAGE) != 108
-    ):
+    if stage_limits.get(_DIAGNOSTIC_STAGE) != 60 or stage_limits.get(_FORMAL_STAGE) != 108:
         raise StageRPlanError("stage_r_budget_contract_mismatch")
 
     identities: list[dict[str, Any]] = []
@@ -581,10 +552,11 @@ def build_stage_r_proposal(
                         "threshold_anchor_role": threshold_anchor_role,
                         "filter_profile_id": anchor["profile_id"],
                         "filter_profile_sha256": anchor["profile_sha256"],
+                        "physical_memory_ms": anchor["physical_memory_ms"],
+                        "actual_taps": anchor["actual_taps"],
+                        "nominal_mu": anchor["nominal_mu"],
                         "candidate_min_bpm": floor_bpm,
-                        "recovery_candidate_id": (
-                            "fixed_floor_diagnostic_control"
-                        ),
+                        "recovery_candidate_id": ("fixed_floor_diagnostic_control"),
                         "penalty_candidate_id": control_penalty_id,
                     },
                 )
@@ -598,9 +570,7 @@ def build_stage_r_proposal(
                     profile=profile,
                     control_penalty_id=control_penalty_id,
                 )
-                config["parameters"]["recovery_candidate_id"] = candidate[
-                    "candidate_id"
-                ]
+                config["parameters"]["recovery_candidate_id"] = candidate["candidate_id"]
                 identities.append(
                     _identity_item(
                         parent_experiment_id=parent_experiment_id,
@@ -615,16 +585,13 @@ def build_stage_r_proposal(
                             "sentinel_role": role,
                             "filter_profile_id": profile["profile_id"],
                             "filter_profile_sha256": profile["profile_sha256"],
-                            "candidate_min_bpm": candidate["constants"].get(
-                                "candidate_min_bpm"
-                            ),
+                            "physical_memory_ms": profile["physical_memory_ms"],
+                            "actual_taps": profile["actual_taps"],
+                            "nominal_mu": profile["nominal_mu"],
+                            "candidate_min_bpm": candidate["constants"].get("candidate_min_bpm"),
                             "recovery_candidate_id": candidate["candidate_id"],
-                            "recovery_candidate_sha256": candidate[
-                                "candidate_sha256"
-                            ],
-                            "mechanism_complexity": candidate[
-                                "mechanism_complexity"
-                            ],
+                            "recovery_candidate_sha256": candidate["candidate_sha256"],
+                            "mechanism_complexity": candidate["mechanism_complexity"],
                             "penalty_candidate_id": control_penalty_id,
                         },
                     )
@@ -722,9 +689,7 @@ def validate_stage_r_execution_authorization(
     if canonical_sha256(canonical_proposal) != declared_proposal_hash:
         raise StageRAuthorizationError("stage_r_proposal_hash_mismatch")
     if receipt is None or receipt.get("approved") is not True:
-        raise StageRAuthorizationError(
-            "stage_r_execution_authorization_required"
-        )
+        raise StageRAuthorizationError("stage_r_execution_authorization_required")
     required = {
         "approved",
         "decision_state",
@@ -739,44 +704,28 @@ def validate_stage_r_execution_authorization(
     }
     missing = sorted(required - set(receipt))
     if missing:
-        raise StageRAuthorizationError(
-            "stage_r_authorization_missing_fields:" + ",".join(missing)
-        )
+        raise StageRAuthorizationError("stage_r_authorization_missing_fields:" + ",".join(missing))
     expected = {
         "decision_state": _AUTHORIZATION_STATE,
         "proposal_sha256": proposal.get("proposal_sha256"),
         "diagnostic_unique_budget": proposal.get("diagnostic_unique_budget"),
         "formal_unique_budget": proposal.get("formal_unique_budget"),
         "unique_budget": proposal.get("unique_budget"),
-        "threshold_anchor_profile_id": proposal.get(
-            "threshold_anchor_profile_id"
-        ),
+        "threshold_anchor_profile_id": proposal.get("threshold_anchor_profile_id"),
     }
     mismatched = sorted(
-        name
-        for name, expected_value in expected.items()
-        if receipt.get(name) != expected_value
+        name for name, expected_value in expected.items() if receipt.get(name) != expected_value
     )
     if mismatched:
         raise StageRAuthorizationError(
             "stage_r_authorization_identity_mismatch:" + ",".join(mismatched)
         )
     if receipt.get("independent_bo_authorized") is not False:
-        raise StageRAuthorizationError(
-            "stage_r_independent_bo_must_remain_unauthorized"
-        )
-    if not isinstance(receipt.get("approved_at"), str) or not receipt.get(
-        "approved_at"
-    ):
-        raise StageRAuthorizationError(
-            "stage_r_authorization_approved_at_invalid"
-        )
-    if not isinstance(receipt.get("approved_by"), str) or not receipt.get(
-        "approved_by"
-    ):
-        raise StageRAuthorizationError(
-            "stage_r_authorization_approved_by_invalid"
-        )
+        raise StageRAuthorizationError("stage_r_independent_bo_must_remain_unauthorized")
+    if not isinstance(receipt.get("approved_at"), str) or not receipt.get("approved_at"):
+        raise StageRAuthorizationError("stage_r_authorization_approved_at_invalid")
+    if not isinstance(receipt.get("approved_by"), str) or not receipt.get("approved_by"):
+        raise StageRAuthorizationError("stage_r_authorization_approved_by_invalid")
     return dict(receipt)
 
 
@@ -864,9 +813,7 @@ def propose_stage_r_execution(
         evaluation_hash=evaluation["evaluation_hash"],
         threshold_anchor_role=threshold_anchor_role,
     )
-    staging = destination.with_name(
-        f".{destination.name}.{uuid.uuid4().hex}.staging"
-    )
+    staging = destination.with_name(f".{destination.name}.{uuid.uuid4().hex}.staging")
     try:
         staging.mkdir(parents=True)
         atomic_write_json(staging / "metric_contract.json", metric_contract)
@@ -916,9 +863,7 @@ def _budget_contract_from_payload(
                 payload.get("stage_unique_limits"),
             )
         ),
-        normal_unique_identity_limit=payload.get(
-            "normal_unique_identity_limit"
-        ),
+        normal_unique_identity_limit=payload.get("normal_unique_identity_limit"),
         supplemental_stage=payload.get("supplemental_stage"),
         stage_attempt_kinds=dict(
             _require_mapping(
@@ -965,17 +910,13 @@ def _verify_proposal_source_artifacts(
         source = _require_mapping(f"source_artifact:{name}", raw)
         path = Path(str(source.get("path", ""))).resolve()
         if not path.is_file():
-            raise StageRPlanError(
-                f"stage_r_execution_source_missing:{name}:{path}"
-            )
+            raise StageRPlanError(f"stage_r_execution_source_missing:{name}:{path}")
         expected = _require_hash(
             f"source_artifact_sha256:{name}",
             source.get("sha256"),
         )
         if file_sha256(path) != expected:
-            raise StageRPlanError(
-                f"stage_r_execution_source_hash_mismatch:{name}"
-            )
+            raise StageRPlanError(f"stage_r_execution_source_hash_mismatch:{name}")
         paths[str(name)] = path
     expected_names = {
         "baseline_manifest",
@@ -987,9 +928,7 @@ def _verify_proposal_source_artifacts(
         "budget_contract",
     }
     if set(paths) != expected_names:
-        raise StageRPlanError(
-            "stage_r_execution_source_set_mismatch"
-        )
+        raise StageRPlanError("stage_r_execution_source_set_mismatch")
     return paths
 
 
@@ -1001,16 +940,13 @@ def _validate_stage_r_execution_preflight(
 ) -> tuple[dict[str, Path], BudgetContract]:
     proposal_root = Path(proposal_dir).resolve()
     metric_contract = read_json(proposal_root / "metric_contract.json")
-    spectral_contract = read_json(
-        proposal_root / "spectral_gate_contract.json"
-    )
+    spectral_contract = read_json(proposal_root / "spectral_gate_contract.json")
     proposal_receipt = read_json(proposal_root / "proposal_receipt.json")
-    if (
-        proposal_receipt.get("status")
-        != "awaiting_human_execution_authorization"
-        or proposal_receipt.get("proposal_sha256")
-        != proposal.get("proposal_sha256")
-    ):
+    if proposal_receipt.get(
+        "status"
+    ) != "awaiting_human_execution_authorization" or proposal_receipt.get(
+        "proposal_sha256"
+    ) != proposal.get("proposal_sha256"):
         raise StageRPlanError("stage_r_proposal_receipt_mismatch")
     receipt_artifacts = _require_mapping(
         "proposal_receipt_artifacts",
@@ -1018,13 +954,8 @@ def _validate_stage_r_execution_preflight(
     )
     for name, expected_hash in receipt_artifacts.items():
         artifact_path = proposal_root / str(name)
-        if (
-            not artifact_path.is_file()
-            or file_sha256(artifact_path) != expected_hash
-        ):
-            raise StageRPlanError(
-                f"stage_r_proposal_artifact_hash_mismatch:{name}"
-            )
+        if not artifact_path.is_file() or file_sha256(artifact_path) != expected_hash:
+            raise StageRPlanError(f"stage_r_proposal_artifact_hash_mismatch:{name}")
     _verify_embedded_hash(
         metric_contract,
         hash_field="contract_sha256",
@@ -1035,21 +966,13 @@ def _validate_stage_r_execution_preflight(
         hash_field="contract_sha256",
         artifact_name="stage_r_spectral_contract",
     )
-    frozen_solver = read_json(
-        proposal_root / "solver_source_identity.json"
-    )
+    frozen_solver = read_json(proposal_root / "solver_source_identity.json")
     current_solver = runtime_source_identity(Path(source_root).resolve())
     if frozen_solver != current_solver:
-        raise StageRPlanError(
-            "stage_r_solver_source_changed_after_proposal"
-        )
-    frozen_evaluation = read_json(
-        proposal_root / "evaluation_source_identity.json"
-    )
+        raise StageRPlanError("stage_r_solver_source_changed_after_proposal")
+    frozen_evaluation = read_json(proposal_root / "evaluation_source_identity.json")
     if frozen_evaluation != _evaluation_source_identity(source_root):
-        raise StageRPlanError(
-            "stage_r_evaluation_source_changed_after_proposal"
-        )
+        raise StageRPlanError("stage_r_evaluation_source_changed_after_proposal")
 
     source_paths = _verify_proposal_source_artifacts(proposal)
     profile_library = read_json(source_paths["profile_library"])
@@ -1081,19 +1004,11 @@ def _validate_stage_r_execution_preflight(
     )
     actual_contracts = {
         "metric_contract_hash": metric_contract["contract_sha256"],
-        "spectral_gate_contract_hash": spectral_contract[
-            "contract_sha256"
-        ],
-        "recovery_candidate_registry_hash": recovery_registry[
-            "registry_sha256"
-        ],
-        "recovery_selection_contract_hash": recovery_selection[
-            "contract_sha256"
-        ],
+        "spectral_gate_contract_hash": spectral_contract["contract_sha256"],
+        "recovery_candidate_registry_hash": recovery_registry["registry_sha256"],
+        "recovery_selection_contract_hash": recovery_selection["contract_sha256"],
         "penalty_registry_hash": penalty_registry["registry_sha256"],
-        "filter_profile_design_rule_hash": profile_library[
-            "design_rule_sha256"
-        ],
+        "filter_profile_design_rule_hash": profile_library["design_rule_sha256"],
         "budget_contract_hash": canonical_sha256(budget_payload),
     }
     frozen_contracts = dict(
@@ -1123,11 +1038,7 @@ def _stage_r_run_config(
         )
     )
     field_names = {field.name for field in fields(V2RunConfig)}
-    values = {
-        name: value
-        for name, value in parameters.items()
-        if name in field_names
-    }
+    values = {name: value for name, value in parameters.items() if name in field_names}
     values["data_path"] = Path(str(config["data_path"])).resolve()
     values["ref_path"] = Path(str(config["reference_path"])).resolve()
     for name in (
@@ -1146,9 +1057,7 @@ def _load_or_run_spectral_audit(
 ) -> dict[str, Any]:
     profile_id = str(item["filter_profile_id"])
     record_id = str(item["record_id"])
-    audit_path = (
-        spectral_audit_dir / profile_id / f"{record_id}.json"
-    )
+    audit_path = spectral_audit_dir / profile_id / f"{record_id}.json"
     if audit_path.is_file():
         payload = read_json(audit_path)
         _verify_embedded_hash(
@@ -1162,9 +1071,7 @@ def _load_or_run_spectral_audit(
             "record_id": record_id,
             "data_sha256": item["raw_data_sha256"],
             "reference_sha256": item["reference_sha256"],
-            "audit_contract_sha256": (
-                StageRSpectralGateContract().sha256
-            ),
+            "audit_contract_sha256": (StageRSpectralGateContract().sha256),
         }
         if any(payload.get(name) != value for name, value in expected.items()):
             raise StageRPlanError(
@@ -1225,13 +1132,9 @@ def _run_stage_r_numerical_identity(
     data_path = Path(str(item["data_path"])).resolve()
     reference_path = Path(str(item["reference_path"])).resolve()
     if file_sha256(data_path) != item["raw_data_sha256"]:
-        raise StageRPlanError(
-            f"stage_r_data_hash_mismatch:{item['record_id']}"
-        )
+        raise StageRPlanError(f"stage_r_data_hash_mismatch:{item['record_id']}")
     if file_sha256(reference_path) != item["reference_sha256"]:
-        raise StageRPlanError(
-            f"stage_r_reference_hash_mismatch:{item['record_id']}"
-        )
+        raise StageRPlanError(f"stage_r_reference_hash_mismatch:{item['record_id']}")
     config = _stage_r_run_config(item)
     result = solve_v2(config)
     metadata = dict(result.metadata)
@@ -1283,37 +1186,20 @@ def _threshold_diagnostic_summary(
         metrics = [
             _require_mapping("diagnostic_metrics", row["metrics"])
             for row in result_rows
-            if row["stage"] == _DIAGNOSTIC_STAGE
-            and float(row["candidate_min_bpm"]) == floor_bpm
+            if row["stage"] == _DIAGNOSTIC_STAGE and float(row["candidate_min_bpm"]) == floor_bpm
         ]
         if len(metrics) != 12:
-            raise StageRPlanError(
-                f"stage_r_diagnostic_result_count_mismatch:{floor_bpm}"
-            )
+            raise StageRPlanError(f"stage_r_diagnostic_result_count_mismatch:{floor_bpm}")
         rows.append(
             {
                 "candidate_min_bpm": floor_bpm,
                 "record_count": 12,
-                "worst_l10": max(
-                    int(item["longest_e10_run_windows"])
-                    for item in metrics
-                ),
-                "worst_l20": max(
-                    int(item["longest_e20_run_windows"])
-                    for item in metrics
-                ),
-                "worst_mae": max(
-                    float(item["final_motion_mae_bpm"])
-                    for item in metrics
-                ),
-                "mean_mae": sum(
-                    float(item["final_motion_mae_bpm"])
-                    for item in metrics
-                )
-                / 12.0,
+                "worst_l10": max(int(item["longest_e10_run_windows"]) for item in metrics),
+                "worst_l20": max(int(item["longest_e20_run_windows"]) for item in metrics),
+                "worst_mae": max(float(item["final_motion_mae_bpm"]) for item in metrics),
+                "mean_mae": sum(float(item["final_motion_mae_bpm"]) for item in metrics) / 12.0,
                 "right_censored_recovery_count": sum(
-                    int(item["right_censored_recovery_count"])
-                    for item in metrics
+                    int(item["right_censored_recovery_count"]) for item in metrics
                 ),
                 "nominatable": False,
             }
@@ -1347,9 +1233,7 @@ def _build_stage_r_selection(
         )
         for item in baseline_records
     }
-    formal = [
-        row for row in result_rows if row["stage"] == _FORMAL_STAGE
-    ]
+    formal = [row for row in result_rows if row["stage"] == _FORMAL_STAGE]
     if len(formal) != 108:
         raise StageRPlanError("stage_r_formal_result_count_mismatch")
     by_coordinate = {
@@ -1380,13 +1264,8 @@ def _build_stage_r_selection(
                 spectral.get("audit_sha256"),
             )
         )
-    if (
-        len(spectral_hashes) != 36
-        or any(len(hashes) != 1 for hashes in spectral_hashes.values())
-    ):
-        raise StageRPlanError(
-            "stage_r_spectral_audit_candidate_invariance_mismatch"
-        )
+    if len(spectral_hashes) != 36 or any(len(hashes) != 1 for hashes in spectral_hashes.values()):
+        raise StageRPlanError("stage_r_spectral_audit_candidate_invariance_mismatch")
     control_id = "current_fixed_floor_control_v1"
     panel = [
         RecoveryPanelRecord(
@@ -1399,10 +1278,7 @@ def _build_stage_r_selection(
             proposal.get("record_panel"),
         )
     ]
-    sentinel_ids = [
-        str(proposal["sentinels"][role]["profile_id"])
-        for role in _SENTINEL_ROLES
-    ]
+    sentinel_ids = [str(proposal["sentinels"][role]["profile_id"]) for role in _SENTINEL_ROLES]
     evaluations: list[RecoveryCandidateEvaluation] = []
     serialized: list[dict[str, Any]] = []
     for candidate in _require_list(
@@ -1413,12 +1289,8 @@ def _build_stage_r_selection(
         records: list[RecoveryRecordEvaluation] = []
         for panel_record in panel:
             for sentinel_id in sentinel_ids:
-                row = by_coordinate[
-                    (candidate_id, sentinel_id, panel_record.record_id)
-                ]
-                current = by_coordinate[
-                    (control_id, sentinel_id, panel_record.record_id)
-                ]
+                row = by_coordinate[(candidate_id, sentinel_id, panel_record.record_id)]
+                current = by_coordinate[(control_id, sentinel_id, panel_record.record_id)]
                 metrics = _require_mapping(
                     "formal_metrics",
                     row["metrics"],
@@ -1438,70 +1310,31 @@ def _build_stage_r_selection(
                         sentinel_id=sentinel_id,
                         scene=panel_record.scene,
                         spectral_gate_passed=bool(
-                            spectral.get("stability_pass")
-                            and spectral.get("spectral_gate_pass")
+                            spectral.get("stability_pass") and spectral.get("spectral_gate_pass")
                         ),
-                        l10=float(
-                            metrics["longest_e10_run_windows"]
-                        ),
-                        l20=float(
-                            metrics["longest_e20_run_windows"]
-                        ),
+                        l10=float(metrics["longest_e10_run_windows"]),
+                        l20=float(metrics["longest_e20_run_windows"]),
                         mae=float(metrics["final_motion_mae_bpm"]),
-                        independent_l10=float(
-                            independent_metrics[
-                                "longest_e10_run_windows"
-                            ]
-                        ),
-                        independent_l20=float(
-                            independent_metrics[
-                                "longest_e20_run_windows"
-                            ]
-                        ),
-                        independent_mae=float(
-                            independent_metrics["final_motion_mae_bpm"]
-                        ),
-                        current_l10=float(
-                            current_metrics[
-                                "longest_e10_run_windows"
-                            ]
-                        ),
-                        current_mae=float(
-                            current_metrics["final_motion_mae_bpm"]
-                        ),
-                        recovery_delay=_selection_recovery_delay(
-                            metrics
-                        ),
-                        right_censored_recovery_count=int(
-                            metrics["right_censored_recovery_count"]
-                        ),
+                        independent_l10=float(independent_metrics["longest_e10_run_windows"]),
+                        independent_l20=float(independent_metrics["longest_e20_run_windows"]),
+                        independent_mae=float(independent_metrics["final_motion_mae_bpm"]),
+                        current_l10=float(current_metrics["longest_e10_run_windows"]),
+                        current_mae=float(current_metrics["final_motion_mae_bpm"]),
+                        recovery_delay=_selection_recovery_delay(metrics),
+                        right_censored_recovery_count=int(metrics["right_censored_recovery_count"]),
                         current_right_censored_recovery_count=int(
-                            current_metrics[
-                                "right_censored_recovery_count"
-                            ]
+                            current_metrics["right_censored_recovery_count"]
                         ),
                         true_rise_underestimate=(
-                            float(
-                                metrics["max_rise_underestimate_bpm"]
-                            )
+                            float(metrics["max_rise_underestimate_bpm"])
                             if panel_record.true_rise_applicable
-                            and metrics.get(
-                                "max_rise_underestimate_bpm"
-                            )
-                            is not None
+                            and metrics.get("max_rise_underestimate_bpm") is not None
                             else None
                         ),
                         current_true_rise_underestimate=(
-                            float(
-                                current_metrics[
-                                    "max_rise_underestimate_bpm"
-                                ]
-                            )
+                            float(current_metrics["max_rise_underestimate_bpm"])
                             if panel_record.true_rise_applicable
-                            and current_metrics.get(
-                                "max_rise_underestimate_bpm"
-                            )
-                            is not None
+                            and current_metrics.get("max_rise_underestimate_bpm") is not None
                             else None
                         ),
                     )
@@ -1512,7 +1345,7 @@ def _build_stage_r_selection(
             records=tuple(records),
         )
         evaluations.append(evaluation)
-        serialized.append(asdict(evaluation))
+        serialized.append(_json_ready(asdict(evaluation)))
     selection = select_recovery_candidate_evaluations(
         evaluations,
         expected_records=panel,
@@ -1534,9 +1367,7 @@ def execute_stage_r_proposal(
     """Execute only the exact authorized Stage R proposal, resumably."""
 
     proposal_root = Path(proposal_dir).resolve()
-    proposal = read_json(
-        proposal_root / "stage_r_execution_proposal.json"
-    )
+    proposal = read_json(proposal_root / "stage_r_execution_proposal.json")
     receipt = (
         None
         if authorization_receipt_path is None
@@ -1552,12 +1383,8 @@ def execute_stage_r_proposal(
         source_root=source_root,
     )
     governance_root = Path(governance_dir).resolve()
-    governance_budget_payload = read_json(
-        governance_root / "budget_contract.json"
-    )
-    governance_budget = _budget_contract_from_payload(
-        governance_budget_payload
-    )
+    governance_budget_payload = read_json(governance_root / "budget_contract.json")
+    governance_budget = _budget_contract_from_payload(governance_budget_payload)
     if (
         governance_budget.sha256 != source_budget.sha256
         or governance_budget.to_dict() != source_budget.to_dict()
@@ -1576,19 +1403,13 @@ def execute_stage_r_proposal(
         proposal.get("identities"),
     )
     identities = tuple(
-        _attempt_identity_from_item(
-            _require_mapping("stage_r_identity", item)
-        )
+        _attempt_identity_from_item(_require_mapping("stage_r_identity", item))
         for item in raw_identities
     )
-    if (
-        len(identities) != 168
-        or [identity.sha256 for identity in identities]
-        != [str(item["identity_sha256"]) for item in raw_identities]
-    ):
-        raise StageRPlanError(
-            "stage_r_execution_identity_matrix_mismatch"
-        )
+    if len(identities) != 168 or [identity.sha256 for identity in identities] != [
+        str(item["identity_sha256"]) for item in raw_identities
+    ]:
+        raise StageRPlanError("stage_r_execution_identity_matrix_mismatch")
 
     destination = Path(output_dir).resolve()
     destination.mkdir(parents=True, exist_ok=True)
@@ -1604,9 +1425,7 @@ def execute_stage_r_proposal(
     binding["binding_sha256"] = canonical_sha256(binding)
     if binding_path.is_file():
         if read_json(binding_path) != binding:
-            raise StageRPlanError(
-                "stage_r_execution_binding_mismatch"
-            )
+            raise StageRPlanError("stage_r_execution_binding_mismatch")
     else:
         atomic_write_json(binding_path, binding)
 
@@ -1632,9 +1451,7 @@ def execute_stage_r_proposal(
     for index, raw_item in enumerate(raw_identities, start=1):
         result = stage_r_cache.execute_stage_r_identity(
             registry=registry,
-            item=dict(
-                _require_mapping("stage_r_identity", raw_item)
-            ),
+            item=dict(_require_mapping("stage_r_identity", raw_item)),
             numerical_runner=runner,
             spectral_audit_dir=spectral_audit_dir,
         )
@@ -1676,9 +1493,7 @@ def execute_stage_r_proposal(
         "proposal_sha256": proposal["proposal_sha256"],
         "candidate_evaluations": evaluations,
     }
-    evaluation_payload["evaluation_sha256"] = canonical_sha256(
-        evaluation_payload
-    )
+    evaluation_payload["evaluation_sha256"] = canonical_sha256(evaluation_payload)
     atomic_write_json(
         destination / "formal_candidate_evaluations.json",
         evaluation_payload,
@@ -1699,21 +1514,13 @@ def execute_stage_r_proposal(
         )
     registry_summary = registry.summary()
     diagnostic_identities = tuple(
-        identity
-        for identity in identities
-        if identity.stage == _DIAGNOSTIC_STAGE
+        identity for identity in identities if identity.stage == _DIAGNOSTIC_STAGE
     )
     formal_identities = tuple(
-        identity
-        for identity in identities
-        if identity.stage == _FORMAL_STAGE
+        identity for identity in identities if identity.stage == _FORMAL_STAGE
     )
-    diagnostic_matrix = registry.matrix_execution_summary(
-        diagnostic_identities
-    )
-    formal_matrix = registry.matrix_execution_summary(
-        formal_identities
-    )
+    diagnostic_matrix = registry.matrix_execution_summary(diagnostic_identities)
+    formal_matrix = registry.matrix_execution_summary(formal_identities)
     matrix_summary = registry.matrix_execution_summary(identities)
     matrix_snapshot = registry.matrix_snapshot(identities)
     atomic_write_json(
@@ -1730,37 +1537,26 @@ def execute_stage_r_proposal(
     ]
     if selection["status"] == "no_safe_recovery_candidate":
         artifact_names.append("independent_bo_review_package.json")
-    artifacts = {
-        name: file_sha256(destination / name)
-        for name in artifact_names
-    }
+    artifacts = {name: file_sha256(destination / name) for name in artifact_names}
     governance_receipt = {
         "receipt_version": "lyx_stage_r_governance_receipt_v2",
         "status": selection["status"],
         "proposal_sha256": proposal["proposal_sha256"],
         "authorization_sha256": authorization_sha256,
-        "identity_matrix_sha256": canonical_sha256(
-            [identity.sha256 for identity in identities]
-        ),
+        "identity_matrix_sha256": canonical_sha256([identity.sha256 for identity in identities]),
         "attempt_registry_file_sha256_at_completion": file_sha256(
             governance_root / "attempt_registry.json"
         ),
         "attempt_registry_summary_at_completion": registry_summary,
-        "attempt_registry_matrix_snapshot_sha256": matrix_snapshot[
-            "snapshot_sha256"
-        ],
+        "attempt_registry_matrix_snapshot_sha256": matrix_snapshot["snapshot_sha256"],
         "matrix_execution_summary": matrix_summary,
         "diagnostic_unique_identities": 60,
         "formal_unique_identities": 108,
         "independent_bo_run_count": 0,
         "artifacts": artifacts,
     }
-    governance_receipt["receipt_sha256"] = canonical_sha256(
-        governance_receipt
-    )
-    governance_receipt_path = (
-        governance_root / "stage_r_governance_receipt.json"
-    )
+    governance_receipt["receipt_sha256"] = canonical_sha256(governance_receipt)
+    governance_receipt_path = governance_root / "stage_r_governance_receipt.json"
     atomic_write_json(governance_receipt_path, governance_receipt)
     completion = {
         "completion_version": "lyx_stage_r_completion_v2",
@@ -1770,16 +1566,10 @@ def execute_stage_r_proposal(
         "authorization_sha256": authorization_sha256,
         "diagnostic_result_count": 60,
         "formal_result_count": 108,
-        "diagnostic_solver_run_count": diagnostic_matrix[
-            "identity_with_solver_attempt_count"
-        ],
-        "formal_solver_run_count": formal_matrix[
-            "identity_with_solver_attempt_count"
-        ],
+        "diagnostic_solver_run_count": diagnostic_matrix["identity_with_solver_attempt_count"],
+        "formal_solver_run_count": formal_matrix["identity_with_solver_attempt_count"],
         "independent_bo_run_count": 0,
-        "provisional_recovery_id": selection[
-            "provisional_recovery_id"
-        ],
+        "provisional_recovery_id": selection["provisional_recovery_id"],
         "rollback_backup_id": selection["rollback_backup_id"],
         "next_state": (
             "awaiting_human_independent_bo_decision"
@@ -1789,12 +1579,8 @@ def execute_stage_r_proposal(
         "attempt_registry_summary_at_completion": registry_summary,
         "matrix_execution_summary": matrix_summary,
         "artifacts": artifacts,
-        "governance_receipt_sha256": governance_receipt[
-            "receipt_sha256"
-        ],
-        "governance_receipt_file_sha256": file_sha256(
-            governance_receipt_path
-        ),
+        "governance_receipt_sha256": governance_receipt["receipt_sha256"],
+        "governance_receipt_file_sha256": file_sha256(governance_receipt_path),
     }
     completion["completion_sha256"] = canonical_sha256(completion)
     # This is the transaction commit marker and must be written last.

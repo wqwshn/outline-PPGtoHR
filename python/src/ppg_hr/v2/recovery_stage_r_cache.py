@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import uuid
 from collections.abc import Mapping
 from dataclasses import fields
 from pathlib import Path
@@ -13,8 +12,10 @@ import numpy as np
 
 from .bo_space_generalization import _cache_json_ready
 from .phase2_experiment_io import (
+    atomic_temp_path,
     atomic_write_json,
     file_sha256,
+    filesystem_path,
     read_json,
 )
 from .recovery_contracts import canonical_sha256
@@ -34,10 +35,7 @@ def _json_ready(value: Any) -> Any:
     if isinstance(value, Path):
         return str(value)
     if isinstance(value, Mapping):
-        return {
-            str(key): _json_ready(item)
-            for key, item in value.items()
-        }
+        return {str(key): _json_ready(item) for key, item in value.items()}
     if isinstance(value, tuple | list):
         return [_json_ready(item) for item in value]
     return value
@@ -65,15 +63,16 @@ def _write_stage_r_cache_result(
 ) -> dict[str, Any]:
     result_dir.mkdir(parents=True, exist_ok=True)
     trajectory_path = result_dir / "trajectory.npz"
-    trajectory_temp = result_dir / (
-        f".trajectory.{uuid.uuid4().hex}.tmp"
-    )
-    with trajectory_temp.open("wb") as handle:
+    trajectory_temp = atomic_temp_path(trajectory_path)
+    with open(filesystem_path(trajectory_temp), "wb") as handle:
         np.savez_compressed(
             handle,
             HR=np.asarray(numerical.solver_result.HR, dtype=float),
         )
-    os.replace(trajectory_temp, trajectory_path)
+    os.replace(
+        filesystem_path(trajectory_temp),
+        filesystem_path(trajectory_path),
+    )
     details_path = result_dir / "solver_details.json"
     atomic_write_json(
         details_path,
@@ -153,14 +152,10 @@ def _load_stage_r_cache_result(
         "stage_r_cached_data_identity",
         payload.get("data_identity"),
     )
-    if (
-        canonical_sha256(config) != identity.get("config_hash")
-        or data_identity.get("combined_data_sha256")
-        != identity.get("data_sha256")
-    ):
-        raise StageRPlanError(
-            "stage_r_cached_result_identity_mismatch"
-        )
+    if canonical_sha256(config) != identity.get("config_hash") or data_identity.get(
+        "combined_data_sha256"
+    ) != identity.get("data_sha256"):
+        raise StageRPlanError("stage_r_cached_result_identity_mismatch")
     trajectory = _require_mapping(
         "stage_r_trajectory",
         payload.get("trajectory"),
@@ -169,18 +164,13 @@ def _load_stage_r_cache_result(
         ("path", "sha256"),
         ("solver_details_path", "solver_details_sha256"),
     ):
-        path = (
-            evidence.result_path.parent
-            / str(trajectory[path_field])
-        ).resolve()
+        path = (evidence.result_path.parent / str(trajectory[path_field])).resolve()
         if (
             not path.is_relative_to(evidence.result_path.parent)
             or not path.is_file()
             or file_sha256(path) != trajectory.get(hash_field)
         ):
-            raise StageRPlanError(
-                f"stage_r_cached_trajectory_hash_mismatch:{path_field}"
-            )
+            raise StageRPlanError(f"stage_r_cached_trajectory_hash_mismatch:{path_field}")
     _require_mapping("stage_r_cached_metrics", payload.get("metrics"))
     return payload
 
@@ -196,9 +186,7 @@ def execute_stage_r_identity(
 
     identity = _attempt_identity_from_item(item)
     if canonical_sha256(_json_ready(item["config"])) != identity.config_hash:
-        raise StageRPlanError(
-            f"stage_r_identity_config_hash_mismatch:{identity.sha256}"
-        )
+        raise StageRPlanError(f"stage_r_identity_config_hash_mismatch:{identity.sha256}")
     result_dir = registry.trusted_cache_root / identity.sha256
     receipt_path = result_dir / "cache_receipt.json"
     cache_hit = receipt_path.is_file()
@@ -238,9 +226,7 @@ def execute_stage_r_identity(
         )
         registry.bind_cache_evidence(identity, evidence=evidence)
     provenance = registry.matrix_execution_summary((identity,))
-    cache_hit = (
-        provenance["identity_with_solver_attempt_count"] == 0
-    )
+    cache_hit = provenance["identity_with_solver_attempt_count"] == 0
     return {
         "identity_sha256": identity.sha256,
         "stage": item["stage"],

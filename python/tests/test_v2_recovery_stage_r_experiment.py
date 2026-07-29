@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+import ppg_hr.v2.recovery_stage_r_cache as stage_r_cache
 from ppg_hr.v2 import recovery_stage_r_experiment as stage_r_module
 from ppg_hr.v2.phase2_experiment_io import (
     atomic_write_json,
@@ -86,14 +87,10 @@ def _write_inputs(tmp_path: Path) -> dict[str, Path]:
                         "longest_e10_run_windows": 4,
                         "longest_e20_run_windows": 1,
                         "final_motion_mae_bpm": 3.0,
-                        "physiological_rise_episode_count": (
-                            1 if scene in {"kaihe", "run"} else 0
-                        ),
+                        "physiological_rise_episode_count": (1 if scene in {"kaihe", "run"} else 0),
                         "right_censored_recovery_count": 0,
                         "max_recovered_delay_s": 2.0,
-                        "max_rise_underestimate_bpm": (
-                            1.0 if scene in {"kaihe", "run"} else None
-                        ),
+                        "max_rise_underestimate_bpm": (1.0 if scene in {"kaihe", "run"} else None),
                     },
                 }
             )
@@ -152,9 +149,7 @@ def _write_inputs(tmp_path: Path) -> dict[str, Path]:
             "fs_target": profile["fs_target"],
             "memory_ms": profile["physical_memory_ms"],
             "nominal_mu": profile["nominal_mu"],
-            "recovery_sentinel_role": profile[
-                "recovery_sentinel_role"
-            ],
+            "recovery_sentinel_role": profile["recovery_sentinel_role"],
             "actual_taps": profile["actual_taps"],
         }
         profiles.append(
@@ -274,10 +269,7 @@ def test_stage_r_proposal_freezes_exact_60_plus_108_identities(
     assert isinstance(identities, list)
     assert len(identities) == 168
     assert len({item["identity_sha256"] for item in identities}) == 168
-    assert sum(
-        item["stage"] == "fixed_lower_bound_diagnostic"
-        for item in identities
-    ) == 60
+    assert sum(item["stage"] == "fixed_lower_bound_diagnostic" for item in identities) == 60
     assert sum(item["stage"] == "recovery_sentinel" for item in identities) == 108
     assert {
         item["candidate_min_bpm"]
@@ -285,14 +277,21 @@ def test_stage_r_proposal_freezes_exact_60_plus_108_identities(
         if item["stage"] == "fixed_lower_bound_diagnostic"
     } == {85.0, 80.0, 70.0, 60.0, 50.0}
     assert {
-        item["recovery_candidate_id"]
-        for item in identities
-        if item["stage"] == "recovery_sentinel"
+        item["recovery_candidate_id"] for item in identities if item["stage"] == "recovery_sentinel"
     } == {
         "current_fixed_floor_control_v1",
         "relative_gap_timeout_v1",
         "relative_gap_rise_guard_v1",
     }
+    for item in identities:
+        profile = (
+            proposal["sentinels"][item["sentinel_role"]]
+            if item["stage"] == "recovery_sentinel"
+            else proposal["sentinels"]["conservative"]
+        )
+        assert item["physical_memory_ms"] == profile["physical_memory_ms"]
+        assert item["actual_taps"] == profile["actual_taps"]
+        assert item["nominal_mu"] == profile["nominal_mu"]
 
 
 def test_stage_r_proposal_binds_anchor_and_frozen_contracts(tmp_path: Path) -> None:
@@ -317,29 +316,23 @@ def test_stage_r_proposal_binds_anchor_and_frozen_contracts(tmp_path: Path) -> N
     )
 
     assert conservative["proposal_sha256"] != intermediate["proposal_sha256"]
-    expected_recovery_registry_hash = stage_r_module.read_json(
-        inputs["recovery_registry_path"]
-    )["registry_sha256"]
-    expected_recovery_selection_hash = stage_r_module.read_json(
-        inputs["recovery_selection_path"]
-    )["contract_sha256"]
-    expected_penalty_registry_hash = stage_r_module.read_json(
-        inputs["penalty_registry_path"]
-    )["registry_sha256"]
+    expected_recovery_registry_hash = stage_r_module.read_json(inputs["recovery_registry_path"])[
+        "registry_sha256"
+    ]
+    expected_recovery_selection_hash = stage_r_module.read_json(inputs["recovery_selection_path"])[
+        "contract_sha256"
+    ]
+    expected_penalty_registry_hash = stage_r_module.read_json(inputs["penalty_registry_path"])[
+        "registry_sha256"
+    ]
     assert conservative["frozen_contracts"] == {
         "metric_contract_hash": "d" * 64,
         "spectral_gate_contract_hash": "e" * 64,
-        "recovery_candidate_registry_hash": (
-            expected_recovery_registry_hash
-        ),
-        "recovery_selection_contract_hash": (
-            expected_recovery_selection_hash
-        ),
+        "recovery_candidate_registry_hash": (expected_recovery_registry_hash),
+        "recovery_selection_contract_hash": (expected_recovery_selection_hash),
         "penalty_registry_hash": expected_penalty_registry_hash,
         "filter_profile_design_rule_hash": "5" * 64,
-        "budget_contract_hash": conservative["frozen_contracts"][
-            "budget_contract_hash"
-        ],
+        "budget_contract_hash": conservative["frozen_contracts"]["budget_contract_hash"],
     }
 
 
@@ -459,9 +452,7 @@ def test_stage_r_proposal_publication_is_atomic(
     assert destination.is_dir()
     for name, expected_hash in receipt["artifacts"].items():
         assert file_sha256(destination / name) == expected_hash
-    evaluation_identity = stage_r_module.read_json(
-        destination / "evaluation_source_identity.json"
-    )
+    evaluation_identity = stage_r_module.read_json(destination / "evaluation_source_identity.json")
     assert {
         "ppg_hr/v2/recovery_stage_r_experiment.py",
         "ppg_hr/v2/recovery_stage_r_runner.py",
@@ -469,9 +460,7 @@ def test_stage_r_proposal_publication_is_atomic(
         "ppg_hr/v2/recovery_spectral_gate.py",
         "ppg_hr/v2/recovery_selection.py",
     } <= set(evaluation_identity["source_files"])
-    spectral_contract = stage_r_module.read_json(
-        destination / "spectral_gate_contract.json"
-    )
+    spectral_contract = stage_r_module.read_json(destination / "spectral_gate_contract.json")
     assert spectral_contract["metrics"] == [
         "visible_top3",
         "prominence_db",
@@ -548,6 +537,50 @@ def _fake_stage_r_numerical_result(
     )
 
 
+def test_stage_r_cache_writes_trajectory_beyond_legacy_max_path(
+    tmp_path: Path,
+) -> None:
+    result_dir = tmp_path.resolve()
+    while len(str(result_dir)) < 233:
+        result_dir /= "cache-path-padding-" + "x" * 31
+    identity = AttemptIdentity(
+        solver_hash="1" * 64,
+        config_hash="2" * 64,
+        metric_contract_hash="3" * 64,
+        evaluation_hash="4" * 64,
+        data_sha256="5" * 64,
+        record_id="run1",
+        stage="recovery_sentinel",
+        attempt_kind="formal",
+        parent_experiment_id="parent",
+    )
+    item = {
+        "config": {},
+        "raw_data_sha256": "6" * 64,
+        "reference_sha256": "7" * 64,
+        "data_sha256": identity.data_sha256,
+        "stage": identity.stage,
+        "scene": "run",
+        "record_id": identity.record_id,
+        "filter_profile_id": "profile",
+        "recovery_candidate_id": "candidate",
+        "candidate_min_bpm": 60.0,
+        "penalty_candidate_id": "penalty",
+        "true_rise_applicable": True,
+    }
+
+    payload = stage_r_cache._write_stage_r_cache_result(
+        result_dir=result_dir,
+        identity=identity,
+        item=item,
+        numerical=_fake_stage_r_numerical_result(item, tmp_path),
+    )
+
+    assert len(str(result_dir / f".trajectory.{'0' * 32}.tmp")) > 259
+    assert payload["status"] == "complete"
+    assert file_sha256(result_dir / "trajectory.npz")
+
+
 def test_stage_r_execution_requires_authorization_before_registration(
     tmp_path: Path,
 ) -> None:
@@ -575,9 +608,7 @@ def test_stage_r_execution_requires_authorization_before_registration(
             _numerical_runner=_fake_stage_r_numerical_result,
         )
 
-    registry = stage_r_module.read_json(
-        governance / "attempt_registry.json"
-    )
+    registry = stage_r_module.read_json(governance / "attempt_registry.json")
     assert registry["summary"]["planned_unique_identity_count"] == 0
 
 
@@ -586,9 +617,7 @@ def test_no_safe_selection_builds_review_only_bo_package() -> None:
         "status": "no_safe_recovery_candidate",
         "selection_sha256": "a" * 64,
         "eliminated_candidates": {
-            "control": [
-                "p50/record:spectral_gate_contract_v1"
-            ],
+            "control": ["p50/record:spectral_gate_contract_v1"],
         },
     }
     evaluations = [
@@ -614,23 +643,15 @@ def test_no_safe_selection_builds_review_only_bo_package() -> None:
         candidate_evaluations=evaluations,
     )
 
-    assert package["status"] == (
-        "awaiting_human_independent_bo_decision"
-    )
+    assert package["status"] == ("awaiting_human_independent_bo_decision")
     assert package["independent_bo_authorized"] is False
     assert package["independent_bo_run_count"] == 0
     assert package["execution_identity_count"] == 150
-    assert package["execution_budget"][
-        "maximum_unique_solver_config_record_identities"
-    ] == 150
+    assert package["execution_budget"]["maximum_unique_solver_config_record_identities"] == 150
     assert package["trigger_records"][0]["record_id"] == "record"
     assert package["recommendation"]["automatic_execution"] is False
     assert package["package_sha256"] == canonical_sha256(
-        {
-            key: value
-            for key, value in package.items()
-            if key != "package_sha256"
-        }
+        {key: value for key, value in package.items() if key != "package_sha256"}
     )
 
 
@@ -643,8 +664,7 @@ def test_stage_r_numerical_runner_uses_frozen_config_and_metric_inputs(
         item
         for item in proposal["identities"]
         if item["stage"] == "recovery_sentinel"
-        and item["recovery_candidate_id"]
-        == "relative_gap_timeout_v1"
+        and item["recovery_candidate_id"] == "relative_gap_timeout_v1"
     )
     observed: dict[str, object] = {}
 
@@ -702,15 +722,11 @@ def test_stage_r_numerical_runner_uses_frozen_config_and_metric_inputs(
     config = observed["config"]
     assert config.fs_target == identity["config"]["parameters"]["fs_target"]
     assert config.recovery_candidate_id == "relative_gap_timeout_v1"
-    assert config.penalty_candidate_id == (
-        "current_soft_penalty_control_v1"
-    )
+    assert config.penalty_candidate_id == ("current_soft_penalty_control_v1")
     assert observed["metric_metadata"]["smooth_win_len"] == 5
     assert observed["method_names"] == ("reset FFT", "LMS+H")
     assert observed["reference_shape"] == (2, 2)
-    assert result.metrics["metric_contract_version"] == (
-        "lyx_recovery_profile_metric_v1"
-    )
+    assert result.metrics["metric_contract_version"] == ("lyx_recovery_profile_metric_v1")
     assert result.spectral_audit["spectral_gate_pass"] is True
 
 
@@ -727,9 +743,7 @@ def test_stage_r_execution_registers_runs_and_selects_exact_matrix(
         source_root=source_root,
         parent_experiment_id="parent",
     )
-    proposal = stage_r_module.read_json(
-        proposal_dir / "stage_r_execution_proposal.json"
-    )
+    proposal = stage_r_module.read_json(proposal_dir / "stage_r_execution_proposal.json")
     authorization_path = tmp_path / "authorization.json"
     atomic_write_json(
         authorization_path,
@@ -776,9 +790,7 @@ def test_stage_r_execution_registers_runs_and_selects_exact_matrix(
     assert completion["diagnostic_solver_run_count"] == 60
     assert completion["formal_solver_run_count"] == 108
     assert completion["independent_bo_run_count"] == 0
-    assert completion["provisional_recovery_id"] == (
-        "current_fixed_floor_control_v1"
-    )
+    assert completion["provisional_recovery_id"] == ("current_fixed_floor_control_v1")
     assert completion["rollback_backup_id"] == "relative_gap_timeout_v1"
     assert writes[-1] == "stage_r_completion.json"
     assert completion["attempt_registry_summary_at_completion"] == {
@@ -792,12 +804,8 @@ def test_stage_r_execution_registers_runs_and_selects_exact_matrix(
     }
     assert len(progress) == 168
     assert progress[-1]["completed"] == 168
-    selection = stage_r_module.read_json(
-        tmp_path / "execution" / "recovery_selection.json"
-    )
-    assert selection["provisional_recovery_id"] == (
-        "current_fixed_floor_control_v1"
-    )
+    selection = stage_r_module.read_json(tmp_path / "execution" / "recovery_selection.json")
+    assert selection["provisional_recovery_id"] == ("current_fixed_floor_control_v1")
     diagnostic = stage_r_module.read_json(
         tmp_path / "execution" / "threshold_diagnostic_summary.json"
     )
@@ -837,12 +845,8 @@ def test_stage_r_execution_registers_runs_and_selects_exact_matrix(
         ),
     )
     assert rerun == completion
-    governance_receipt_path = (
-        governance / "stage_r_governance_receipt.json"
-    )
-    governance_receipt = stage_r_module.read_json(
-        governance_receipt_path
-    )
+    governance_receipt_path = governance / "stage_r_governance_receipt.json"
+    governance_receipt = stage_r_module.read_json(governance_receipt_path)
     governance_receipt["status"] = "tampered"
     original_writer(governance_receipt_path, governance_receipt)
     with pytest.raises(
@@ -857,3 +861,65 @@ def test_stage_r_execution_registers_runs_and_selects_exact_matrix(
             source_root=source_root,
             _numerical_runner=_fake_stage_r_numerical_result,
         )
+
+
+def test_stage_r_no_safe_selection_serializes_into_human_bo_review_package(
+    tmp_path: Path,
+) -> None:
+    inputs = _write_inputs(tmp_path)
+    proposal = build_stage_r_proposal(
+        **inputs,
+        parent_experiment_id="parent",
+        solver_hash="c" * 64,
+        metric_contract_hash="d" * 64,
+        spectral_gate_contract_hash="e" * 64,
+        evaluation_hash="f" * 64,
+        threshold_anchor_role="conservative",
+    )
+    metrics = {
+        "longest_e10_run_windows": 4,
+        "longest_e20_run_windows": 1,
+        "final_motion_mae_bpm": 3.0,
+        "recovery_episode_count": 1,
+        "right_censored_recovery_count": 0,
+        "max_recovered_delay_s": 2.0,
+        "physiological_rise_episode_count": 1,
+        "max_rise_underestimate_bpm": 1.0,
+        "total_window_count": 10,
+    }
+    formal_rows = [
+        {
+            **item,
+            "metrics": metrics,
+            "spectral_audit": {
+                "stability_pass": True,
+                "spectral_gate_pass": False,
+                "audit_sha256": canonical_sha256(
+                    {
+                        "filter_profile_id": item["filter_profile_id"],
+                        "record_id": item["record_id"],
+                    }
+                ),
+            },
+        }
+        for item in proposal["identities"]
+        if item["stage"] == "recovery_sentinel"
+    ]
+
+    selection, evaluations = stage_r_module._build_stage_r_selection(
+        proposal=proposal,
+        result_rows=formal_rows,
+        baseline_metrics_path=inputs["baseline_metrics_path"],
+    )
+
+    assert selection["status"] == "no_safe_recovery_candidate"
+    assert all(isinstance(candidate["records"], list) for candidate in evaluations)
+    package = stage_r_module._independent_bo_review_package(
+        proposal_sha256=proposal["proposal_sha256"],
+        authorization_sha256="a" * 64,
+        selection=selection,
+        candidate_evaluations=evaluations,
+    )
+    assert package["status"] == ("awaiting_human_independent_bo_decision")
+    assert package["independent_bo_authorized"] is False
+    assert package["execution_identity_count"] == 5_400
