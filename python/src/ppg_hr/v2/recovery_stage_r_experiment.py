@@ -1087,13 +1087,18 @@ def _load_or_run_spectral_audit(
             "audit_sha256": payload["audit_sha256"],
         }
 
+    raw_sentinel_role = item.get("sentinel_role")
     profile = FilterProfile(
         profile_id=profile_id,
         design_role="core",
         fs_target=int(item["config"]["parameters"]["fs_target"]),
         memory_ms=int(item["physical_memory_ms"]),
         nominal_mu=float(item["config"]["parameters"]["lms_mu_base"]),
-        recovery_sentinel_role=str(item["sentinel_role"]),
+        recovery_sentinel_role=(
+            None
+            if raw_sentinel_role is None
+            else str(raw_sentinel_role)
+        ),
     )
     record = FilterAuditRecord(
         record_id=record_id,
@@ -1125,7 +1130,7 @@ def _load_or_run_spectral_audit(
     return {**audit, "audit_sha256": payload["audit_sha256"]}
 
 
-def _run_stage_r_numerical_identity(
+def run_stage_r_numerical_identity(
     item: dict[str, Any],
     spectral_audit_dir: Path,
 ) -> StageRNumericalResult:
@@ -1155,7 +1160,10 @@ def _run_stage_r_numerical_identity(
             item,
             spectral_audit_dir=spectral_audit_dir,
         )
-        if item["stage"] == _FORMAL_STAGE
+        if (
+            item.get("spectral_audit_required") is True
+            or item["stage"] == _FORMAL_STAGE
+        )
         else None
     )
     return StageRNumericalResult(
@@ -1163,6 +1171,9 @@ def _run_stage_r_numerical_identity(
         metrics=asdict(metrics),
         spectral_audit=spectral_audit,
     )
+
+
+_run_stage_r_numerical_identity = run_stage_r_numerical_identity
 
 
 def _selection_recovery_delay(metrics: Mapping[str, Any]) -> float:
@@ -1445,7 +1456,7 @@ def execute_stage_r_proposal(
     if registered != tuple(identity.sha256 for identity in identities):
         raise StageRPlanError("stage_r_bulk_registration_mismatch")
 
-    runner = _numerical_runner or _run_stage_r_numerical_identity
+    runner = _numerical_runner or run_stage_r_numerical_identity
     spectral_audit_dir = destination / "spectral_audits"
     results: list[dict[str, Any]] = []
     for index, raw_item in enumerate(raw_identities, start=1):
