@@ -1081,6 +1081,10 @@ def _validate_completed_p25_execution(
         path = output_dir / str(name)
         if not path.is_file() or file_sha256(path) != expected:
             raise P25SpectralDiagnosticError(f"p25_spectral_completion_artifact_mismatch:{name}")
+    _validate_materialized_p25_spectral_audits(
+        output_dir=output_dir,
+        proposal_sha256=str(completion["proposal_sha256"]),
+    )
     governance_receipt_path = governance_dir / "p25_spectral_execution_receipt.json"
     if not governance_receipt_path.is_file() or file_sha256(
         governance_receipt_path
@@ -1106,6 +1110,71 @@ def _validate_completed_p25_execution(
     if any(governance_receipt.get(name) != expected for name, expected in matching_fields.items()):
         raise P25SpectralDiagnosticError("p25_spectral_completion_governance_receipt_mismatch")
     return completion
+
+
+def _validate_materialized_p25_spectral_audits(
+    *,
+    output_dir: Path,
+    proposal_sha256: str,
+) -> None:
+    manifest = read_json(output_dir / "spectral_audit_manifest.json")
+    _verify_embedded_hash(
+        manifest,
+        hash_field="manifest_sha256",
+        artifact_name="p25_spectral_audit_manifest",
+    )
+    raw_audits = _require_list(
+        "p25_spectral_audit_manifest_entries",
+        manifest.get("audits"),
+    )
+    if (
+        manifest.get("proposal_sha256") != proposal_sha256
+        or manifest.get("audit_count") != 36
+        or len(raw_audits) != 36
+    ):
+        raise P25SpectralDiagnosticError("p25_spectral_materialized_audit_manifest_mismatch")
+    coordinates: set[tuple[str, str]] = set()
+    for raw in raw_audits:
+        entry = _require_mapping(
+            "p25_spectral_audit_manifest_entry",
+            raw,
+        )
+        profile_id = str(entry.get("profile_id", ""))
+        record_id = str(entry.get("record_id", ""))
+        coordinate = (profile_id, record_id)
+        expected_relative = Path("spectral_audits") / profile_id / f"{record_id}.json"
+        relative = Path(str(entry.get("path", "")))
+        audit_path = (output_dir / relative).resolve()
+        if (
+            coordinate in coordinates
+            or relative.as_posix() != expected_relative.as_posix()
+            or not audit_path.is_relative_to(output_dir)
+            or not audit_path.is_file()
+            or file_sha256(audit_path) != entry.get("file_sha256")
+        ):
+            raise P25SpectralDiagnosticError("p25_spectral_materialized_audit_file_mismatch")
+        coordinates.add(coordinate)
+        payload = read_json(audit_path)
+        audit_sha256 = _verify_embedded_hash(
+            payload,
+            hash_field="materialized_audit_sha256",
+            artifact_name="p25_spectral_materialized_audit",
+        )
+        if (
+            audit_sha256 != entry.get("materialized_audit_sha256")
+            or payload.get("proposal_sha256") != proposal_sha256
+            or payload.get("identity_sha256") != entry.get("identity_sha256")
+            or payload.get("profile_id") != profile_id
+            or payload.get("record_id") != record_id
+        ):
+            raise P25SpectralDiagnosticError("p25_spectral_materialized_audit_file_mismatch")
+    expected_coordinates = {
+        (profile_id, record_id)
+        for profile_id in _P25_PROFILE_IDS
+        for record_id in _EXPECTED_RECORD_IDS
+    }
+    if coordinates != expected_coordinates:
+        raise P25SpectralDiagnosticError("p25_spectral_materialized_audit_manifest_mismatch")
 
 
 def _materialize_p25_spectral_audit(
@@ -1137,6 +1206,7 @@ def _materialize_p25_spectral_audit(
     return {
         "profile_id": profile_id,
         "record_id": record_id,
+        "identity_sha256": result["identity_sha256"],
         "path": path.relative_to(spectral_audit_dir.parent).as_posix(),
         "file_sha256": file_sha256(path),
         "materialized_audit_sha256": payload["materialized_audit_sha256"],

@@ -581,6 +581,28 @@ def test_execute_is_resumable_and_commits_spectral_decision_last(
         )
     atomic_write_json(output / "completion.json", completion)
 
+    audit_path = next((output / "spectral_audits").rglob("*.json"))
+    audit_payload = read_json(audit_path)
+    tampered_audit = {
+        **audit_payload,
+        "record_id": "tampered-record",
+    }
+    tampered_audit.pop("materialized_audit_sha256")
+    tampered_audit["materialized_audit_sha256"] = canonical_sha256(tampered_audit)
+    atomic_write_json(audit_path, tampered_audit)
+    with pytest.raises(
+        P25SpectralDiagnosticError,
+        match="p25_spectral_materialized_audit_file_mismatch",
+    ):
+        execute_p25_spectral_diagnostic(
+            proposal_dir=proposal_dir,
+            governance_dir=governance,
+            output_dir=output,
+            source_root=REPO_ROOT / "python" / "src",
+            _numerical_runner=_fake_p25_numerical_result,
+        )
+    atomic_write_json(audit_path, audit_payload)
+
     execution_receipt_path = governance / "p25_spectral_execution_receipt.json"
     tampered_receipt = read_json(execution_receipt_path)
     tampered_receipt["status"] = "tampered"
