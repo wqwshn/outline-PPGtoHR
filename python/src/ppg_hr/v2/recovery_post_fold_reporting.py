@@ -11,6 +11,7 @@ import os
 import shutil
 import uuid
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -48,6 +49,40 @@ _KNOWN_APPROVED_BUDGETS = {
     "lyx_recovery_filter_budget_v3": (724, 1448),
     "lyx_recovery_filter_budget_v4": (748, 1496),
     "lyx_recovery_filter_budget_v5": (756, 1512),
+}
+_ORIGINAL_BODY_STAGES = frozenset(
+    {
+        "fixed_lower_bound_diagnostic",
+        "historical_recovery_ab",
+        "recovery_sentinel",
+        "penalty_interaction",
+        "current_role_matrix",
+        "rollback_backup_matrix",
+        "fold_replay",
+    }
+)
+_EXPECTED_BUDGET_AMENDMENTS = {
+    "lyx_recovery_filter_budget_v3": (
+        ("filter_profile_stability_audit", 32, 704, 716, 1432),
+        ("filter_profile_stability_audit", 8, 712, 724, 1448),
+    ),
+    "lyx_recovery_filter_budget_v4": (
+        ("filter_profile_stability_audit", 32, 704, 716, 1432),
+        ("filter_profile_stability_audit", 8, 712, 724, 1448),
+        ("filter_profile_stability_audit", 24, 736, 748, 1496),
+    ),
+    "lyx_recovery_filter_budget_v5": (
+        ("filter_profile_stability_audit", 32, 704, 716, 1432),
+        ("filter_profile_stability_audit", 8, 712, 724, 1448),
+        ("filter_profile_stability_audit", 24, 736, 748, 1496),
+        (
+            "filter_profile_rate_normalization_exploration",
+            8,
+            744,
+            756,
+            1512,
+        ),
+    ),
 }
 _REVIEW_CONTEXT_FIELDS = {
     "solver_hash",
@@ -201,6 +236,49 @@ def default_challenge_scene_manifest() -> dict[str, Any]:
     )
 
 
+def _validate_pre_fold_provenance(
+    *,
+    fold_replay_proposal: Mapping[str, Any],
+    pre_fold_gate_receipt: Mapping[str, Any],
+    fold_replay_report: Mapping[str, Any],
+    final_interaction_audit: Mapping[str, Any],
+) -> None:
+    """Prove the post-fold gate is downstream of a non-triggered pre-fold gate."""
+
+    proposal_sha = verify_embedded_hash(
+        fold_replay_proposal,
+        hash_field="proposal_sha256",
+        artifact_name="post_fold_replay_proposal",
+    )
+    gate_sha = verify_embedded_hash(
+        pre_fold_gate_receipt,
+        hash_field="receipt_sha256",
+        artifact_name="post_fold_pre_fold_gate_receipt",
+    )
+    if (
+        fold_replay_proposal.get("proposal_version") != "lyx_fold_replay_execution_proposal_v1"
+        or fold_replay_proposal.get("status") != "ready_for_execution"
+        or fold_replay_proposal.get("evidence_class") != "development_replay_audit"
+        or fold_replay_proposal.get("algorithm_level_holdout") is not False
+        or fold_replay_proposal.get("final_interaction_audit_sha256")
+        != final_interaction_audit.get("audit_sha256")
+        or fold_replay_proposal.get("pre_fold_gate_receipt_sha256") != gate_sha
+        or fold_replay_proposal.get("pre_fold_gate_resolution") != "pre_fold_gate_not_triggered"
+        or fold_replay_proposal.get("pre_fold_human_decision_sha256") is not None
+        or fold_replay_proposal.get("independent_bo_run_count") != 0
+        or fold_replay_report.get("proposal_sha256") != proposal_sha
+        or pre_fold_gate_receipt.get("receipt_version") != "lyx_pre_fold_independent_bo_gate_v1"
+        or pre_fold_gate_receipt.get("triggered") is not False
+        or pre_fold_gate_receipt.get("status") != "ready_for_fold_replay"
+        or pre_fold_gate_receipt.get("next_state") != "ready_for_fold_replay"
+        or pre_fold_gate_receipt.get("final_interaction_audit_sha256")
+        != final_interaction_audit.get("audit_sha256")
+        or pre_fold_gate_receipt.get("independent_bo_authorized") is not False
+        or pre_fold_gate_receipt.get("independent_bo_run_count") != 0
+    ):
+        raise FoldReplayError("post_fold_pre_fold_gate_provenance_mismatch")
+
+
 def _validate_fold_sources(
     *,
     fold_replay_report: Mapping[str, Any],
@@ -236,6 +314,8 @@ def _validate_fold_sources(
         or fold_replay_report.get("next_state") != "ready_for_post_fold_independent_bo_gate"
         or fold_replay_report.get("fold_selection_receipt_sha256")
         != fold_selection_receipt.get("receipt_sha256")
+        or fold_selection_receipt.get("proposal_sha256")
+        != fold_replay_report.get("proposal_sha256")
         or fold_selection_receipt.get("folds") != summaries
         or fold_selection_receipt.get("evidence_class") != "development_replay_audit"
         or fold_selection_receipt.get("algorithm_level_holdout") is not False
@@ -356,6 +436,68 @@ def _validate_final_interaction(
         for record in expected_upper["sample_in_upper_bound"]["records"]
     }
     return rows, independent, sample_by_record
+
+
+def _build_provenance(
+    *,
+    final_profile_rows: Sequence[Mapping[str, Any]],
+    fold_replay_proposal: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Retain the reimplementation-critical identity fields required by spec."""
+
+    parent_experiment_ids: set[str] = set()
+    solver_hashes: set[str] = set()
+    metric_contract_hashes: set[str] = set()
+    evaluation_hashes: set[str] = set()
+    config_hashes: set[str] = set()
+    data_hashes_by_record: dict[str, set[str]] = {}
+    for row in final_profile_rows:
+        parent_experiment_id = str(row.get("parent_experiment_id", ""))
+        if not parent_experiment_id:
+            raise FoldReplayError("post_fold_parent_experiment_id_missing")
+        parent_experiment_ids.add(parent_experiment_id)
+        for field, destination in (
+            ("solver_hash", solver_hashes),
+            ("metric_contract_hash", metric_contract_hashes),
+            ("evaluation_hash", evaluation_hashes),
+            ("config_hash", config_hashes),
+        ):
+            destination.add(
+                require_hash(
+                    f"post_fold_provenance_{field}",
+                    row.get(field),
+                )
+            )
+        record_id = str(row["record_id"])
+        data_hashes_by_record.setdefault(record_id, set()).add(
+            require_hash(
+                "post_fold_provenance_data_sha256",
+                row.get("data_sha256"),
+            )
+        )
+    proposal_parent = str(fold_replay_proposal.get("parent_experiment_id", ""))
+    proposal_evaluation_hash = require_hash(
+        "post_fold_proposal_evaluation_hash",
+        fold_replay_proposal.get("evaluation_hash"),
+    )
+    if (
+        parent_experiment_ids != {proposal_parent}
+        or len(data_hashes_by_record) != EXPECTED_RECORD_COUNT
+        or any(len(hashes) != 1 for hashes in data_hashes_by_record.values())
+    ):
+        raise FoldReplayError("post_fold_provenance_identity_mismatch")
+    return {
+        "parent_experiment_id": proposal_parent,
+        "solver_hashes": sorted(solver_hashes),
+        "configuration_hashes": sorted(config_hashes),
+        "metric_contract_hashes": sorted(metric_contract_hashes),
+        "code_evaluation_hashes": sorted(evaluation_hashes),
+        "fold_replay_evaluation_hash": proposal_evaluation_hash,
+        "data_sha256_by_record": {
+            record_id: next(iter(hashes))
+            for record_id, hashes in sorted(data_hashes_by_record.items())
+        },
+    }
 
 
 def _validate_historical_report(
@@ -538,8 +680,58 @@ def _comparison_rows(
     return rows
 
 
+@dataclass(frozen=True)
+class _ValidatedEvidence:
+    comparison_rows: tuple[dict[str, Any], ...]
+    provenance: Mapping[str, Any]
+
+
+def _validate_evidence_bundle(
+    *,
+    fold_replay_proposal: Mapping[str, Any],
+    pre_fold_gate_receipt: Mapping[str, Any],
+    fold_replay_report: Mapping[str, Any],
+    fold_selection_receipt: Mapping[str, Any],
+    target_audits_by_fold: Mapping[str, Mapping[str, Any]],
+    final_interaction_audit: Mapping[str, Any],
+    historical_ab_report: Mapping[str, Any],
+    current_role_matrix: Mapping[str, Any],
+) -> _ValidatedEvidence:
+    _validate_pre_fold_provenance(
+        fold_replay_proposal=fold_replay_proposal,
+        pre_fold_gate_receipt=pre_fold_gate_receipt,
+        fold_replay_report=fold_replay_report,
+        final_interaction_audit=final_interaction_audit,
+    )
+    summaries, audits = _validate_fold_sources(
+        fold_replay_report=fold_replay_report,
+        fold_selection_receipt=fold_selection_receipt,
+        target_audits_by_fold=target_audits_by_fold,
+    )
+    final_rows, independent, sample = _validate_final_interaction(final_interaction_audit)
+    historical = _validate_historical_report(historical_ab_report)
+    current_role = _validate_current_role_matrix(current_role_matrix)
+    comparisons = _comparison_rows(
+        summaries=summaries,
+        target_audits_by_fold=audits,
+        independent_by_record=independent,
+        sample_by_record=sample,
+        historical_by_record=historical,
+        current_role_by_coordinate=current_role,
+    )
+    return _ValidatedEvidence(
+        comparison_rows=tuple(comparisons),
+        provenance=_build_provenance(
+            final_profile_rows=final_rows,
+            fold_replay_proposal=fold_replay_proposal,
+        ),
+    )
+
+
 def evaluate_post_fold_independent_bo_gate(
     *,
+    fold_replay_proposal: Mapping[str, Any],
+    pre_fold_gate_receipt: Mapping[str, Any],
     fold_replay_report: Mapping[str, Any],
     fold_selection_receipt: Mapping[str, Any],
     target_audits_by_fold: Mapping[str, Mapping[str, Any]],
@@ -550,22 +742,17 @@ def evaluate_post_fold_independent_bo_gate(
 ) -> dict[str, Any]:
     """Evaluate exactly the two preregistered post-fold Boolean conditions."""
 
-    summaries, audits = _validate_fold_sources(
+    evidence = _validate_evidence_bundle(
+        fold_replay_proposal=fold_replay_proposal,
+        pre_fold_gate_receipt=pre_fold_gate_receipt,
         fold_replay_report=fold_replay_report,
         fold_selection_receipt=fold_selection_receipt,
         target_audits_by_fold=target_audits_by_fold,
+        final_interaction_audit=final_interaction_audit,
+        historical_ab_report=historical_ab_report,
+        current_role_matrix=current_role_matrix,
     )
-    _, independent, sample = _validate_final_interaction(final_interaction_audit)
-    historical = _validate_historical_report(historical_ab_report)
-    current_role = _validate_current_role_matrix(current_role_matrix)
-    comparison_rows = _comparison_rows(
-        summaries=summaries,
-        target_audits_by_fold=audits,
-        independent_by_record=independent,
-        sample_by_record=sample,
-        historical_by_record=historical,
-        current_role_by_coordinate=current_role,
-    )
+    comparison_rows = list(evidence.comparison_rows)
     gap_rows = [
         row
         for row in comparison_rows
@@ -661,6 +848,8 @@ def evaluate_post_fold_independent_bo_gate(
                 },
             }
         ),
+        "fold_replay_proposal_sha256": fold_replay_proposal["proposal_sha256"],
+        "pre_fold_gate_receipt_sha256": pre_fold_gate_receipt["receipt_sha256"],
         "fold_replay_report_sha256": fold_replay_report["report_sha256"],
         "final_interaction_audit_sha256": final_interaction_audit["audit_sha256"],
         "historical_ab_report_sha256": historical_ab_report["report_sha256"],
@@ -717,6 +906,7 @@ def _budget_audit(
     *,
     budget_contract: Mapping[str, Any],
     attempt_registry_summary: Mapping[str, Any],
+    budget_amendment_authorizations: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
     contract = budget_contract_from_payload(budget_contract)
     version = str(budget_contract.get("contract_version", ""))
@@ -726,6 +916,73 @@ def _budget_audit(
         contract.max_attempts,
     ):
         raise FoldReplayError("post_fold_budget_contract_not_approved")
+    expected_amendments = _EXPECTED_BUDGET_AMENDMENTS[version]
+    authorizations_by_limit: dict[int, Mapping[str, Any]] = {}
+    for raw in budget_amendment_authorizations:
+        receipt = require_mapping(
+            "post_fold_budget_amendment_authorization",
+            raw,
+        )
+        limit = nonnegative_int(
+            "post_fold_amendment_max_unique_identities",
+            receipt.get("max_unique_identities"),
+        )
+        if limit in authorizations_by_limit:
+            raise FoldReplayError("post_fold_duplicate_budget_amendment_authorization")
+        authorizations_by_limit[limit] = receipt
+    if set(authorizations_by_limit) != {amendment[3] for amendment in expected_amendments}:
+        raise FoldReplayError("post_fold_budget_amendment_chain_incomplete")
+    authorization_summaries: list[dict[str, Any]] = []
+    for (
+        expected_stage,
+        expected_added,
+        expected_normal_limit,
+        expected_unique_limit,
+        expected_attempt_limit,
+    ) in expected_amendments:
+        receipt = authorizations_by_limit[expected_unique_limit]
+        for field in ("profile_design_rule_hash", "record_manifest_hash"):
+            require_hash(
+                f"post_fold_budget_amendment_{field}",
+                receipt.get(field),
+            )
+        proposal_sha = receipt.get("proposal_sha256")
+        if proposal_sha is not None:
+            require_hash(
+                "post_fold_budget_amendment_proposal_sha256",
+                proposal_sha,
+            )
+        if (
+            receipt.get("approved") is not True
+            or receipt.get("decision_state") != "awaiting_human_budget_decision"
+            or receipt.get("independent_bo_authorized") is not False
+            or receipt.get("stage") != expected_stage
+            or receipt.get("added_unique_identities") != expected_added
+            or receipt.get("normal_unique_identity_limit") != expected_normal_limit
+            or receipt.get("max_attempts") != expected_attempt_limit
+            or not isinstance(receipt.get("approved_at"), str)
+            or not receipt["approved_at"]
+            or not isinstance(receipt.get("approved_by"), str)
+            or not receipt["approved_by"]
+        ):
+            raise FoldReplayError("post_fold_budget_amendment_authorization_mismatch")
+        if expected_stage == "filter_profile_rate_normalization_exploration":
+            if (
+                receipt.get("attempt_kind") != "exploration"
+                or receipt.get("exploration_unique_budget") != expected_added
+            ):
+                raise FoldReplayError("post_fold_exploration_amendment_authorization_mismatch")
+        authorization_summaries.append(
+            {
+                "stage": expected_stage,
+                "added_unique_identities": expected_added,
+                "max_unique_identities": expected_unique_limit,
+                "max_attempts": expected_attempt_limit,
+                "proposal_sha256": proposal_sha,
+                "approved_at": receipt["approved_at"],
+                "approved_by": receipt["approved_by"],
+            }
+        )
     planned = nonnegative_int(
         "post_fold_planned_unique_identity_count",
         attempt_registry_summary.get("planned_unique_identity_count"),
@@ -741,16 +998,45 @@ def _budget_audit(
         "post_fold_cache_hit_count",
         attempt_registry_summary.get("cache_hit_count"),
     )
+    declared_attempts = nonnegative_int(
+        "post_fold_total_attempt_count",
+        attempt_registry_summary.get("total_attempt_count"),
+    )
+    by_stage = require_mapping(
+        "post_fold_attempt_registry_by_stage",
+        attempt_registry_summary.get("by_stage"),
+    )
+    body_unique = 0
+    body_attempts = 0
+    for stage in _ORIGINAL_BODY_STAGES:
+        summary = require_mapping(
+            f"post_fold_body_stage_summary:{stage}",
+            by_stage.get(stage, {}),
+        )
+        body_unique += nonnegative_int(
+            f"post_fold_body_stage_unique:{stage}",
+            summary.get("planned_unique_identity_count", 0),
+        )
+        body_attempts += nonnegative_int(
+            f"post_fold_body_stage_attempts:{stage}",
+            summary.get("total_attempt_count", 0),
+        )
     if (
         planned > contract.max_unique_identities
         or actual > planned
+        or attempts != declared_attempts
         or attempts > contract.max_attempts
+        or body_unique > _ORIGINAL_BODY_UNIQUE_LIMIT
+        or body_attempts > _ORIGINAL_BODY_ATTEMPT_LIMIT
     ):
         raise FoldReplayError("post_fold_budget_limit_exceeded")
     return {
         "original_mechanism_body_contract": {
             "max_unique_identities": _ORIGINAL_BODY_UNIQUE_LIMIT,
             "max_attempts": _ORIGINAL_BODY_ATTEMPT_LIMIT,
+            "actual_unique_identity_count": body_unique,
+            "actual_attempt_count": body_attempts,
+            "within_original_body_contract": True,
         },
         "active_approved_amended_contract": {
             "contract_version": version,
@@ -758,6 +1044,7 @@ def _budget_audit(
             "max_unique_identities": contract.max_unique_identities,
             "max_attempts": contract.max_attempts,
             "retry_limit": contract.retry_limit,
+            "amendment_authorizations": authorization_summaries,
         },
         "execution_summary": dict(attempt_registry_summary),
         "within_active_approved_contract": True,
@@ -768,6 +1055,8 @@ def _budget_audit(
 def build_final_development_report(
     *,
     gate_receipt: Mapping[str, Any],
+    fold_replay_proposal: Mapping[str, Any],
+    pre_fold_gate_receipt: Mapping[str, Any],
     fold_replay_report: Mapping[str, Any],
     fold_selection_receipt: Mapping[str, Any],
     target_audits_by_fold: Mapping[str, Mapping[str, Any]],
@@ -776,6 +1065,7 @@ def build_final_development_report(
     current_role_matrix: Mapping[str, Any],
     budget_contract: Mapping[str, Any],
     attempt_registry_summary: Mapping[str, Any],
+    budget_amendment_authorizations: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
     """Build the five-layer, claim-bounded development replay report."""
 
@@ -784,24 +1074,23 @@ def build_final_development_report(
         hash_field="receipt_sha256",
         artifact_name="post_fold_gate_receipt",
     )
-    summaries, audits = _validate_fold_sources(
+    evidence = _validate_evidence_bundle(
+        fold_replay_proposal=fold_replay_proposal,
+        pre_fold_gate_receipt=pre_fold_gate_receipt,
         fold_replay_report=fold_replay_report,
         fold_selection_receipt=fold_selection_receipt,
         target_audits_by_fold=target_audits_by_fold,
+        final_interaction_audit=final_interaction_audit,
+        historical_ab_report=historical_ab_report,
+        current_role_matrix=current_role_matrix,
     )
-    _, independent, sample = _validate_final_interaction(final_interaction_audit)
-    historical = _validate_historical_report(historical_ab_report)
-    current_role = _validate_current_role_matrix(current_role_matrix)
-    rows = _comparison_rows(
-        summaries=summaries,
-        target_audits_by_fold=audits,
-        independent_by_record=independent,
-        sample_by_record=sample,
-        historical_by_record=historical,
-        current_role_by_coordinate=current_role,
-    )
+    rows = list(evidence.comparison_rows)
     if (
         gate_receipt.get("receipt_version") != "lyx_post_fold_independent_bo_gate_v1"
+        or gate_receipt.get("fold_replay_proposal_sha256")
+        != fold_replay_proposal.get("proposal_sha256")
+        or gate_receipt.get("pre_fold_gate_receipt_sha256")
+        != pre_fold_gate_receipt.get("receipt_sha256")
         or gate_receipt.get("fold_replay_report_sha256") != fold_replay_report.get("report_sha256")
         or gate_receipt.get("final_interaction_audit_sha256")
         != final_interaction_audit.get("audit_sha256")
@@ -825,6 +1114,7 @@ def build_final_development_report(
         "status": status,
         "evidence_class": "development_replay_audit",
         "algorithm_level_holdout": False,
+        "provenance": dict(evidence.provenance),
         "central_argument": (
             "本轮证据只回答冻结恢复、惩罚、档位库与场景内选择器在四个开发场景"
             "上的可重复工程表现；它不构成未见场景或跨个体泛化证据。"
@@ -879,6 +1169,7 @@ def build_final_development_report(
         "budget_audit": _budget_audit(
             budget_contract=budget_contract,
             attempt_registry_summary=attempt_registry_summary,
+            budget_amendment_authorizations=(budget_amendment_authorizations),
         ),
         "trace_rescue_treatment": {
             "role": "historical_exploration_background_only",
@@ -936,8 +1227,8 @@ def render_final_development_report_markdown(
         "",
         "## 五层公平比较",
         "",
-        "| 记录 | 场景 | 历史独立 BO MAE | 历史参数新恢复 MAE | 同角色当前机制 MAE | 样本内上限 MAE | 场景共享重放 MAE | 重放通过 |",
-        "|---|---|---:|---:|---:|---:|---:|---|",
+        "| 记录 | 场景 | 历史独立 BO MAE | 同身份当前恢复 MAE | 同身份新恢复 MAE | 同角色当前机制 MAE | 样本内上限 MAE | 场景共享重放 MAE | 重放通过 |",
+        "|---|---|---:|---:|---:|---:|---:|---:|---|",
     ]
     for raw in require_list(
         "post_fold_markdown_record_comparisons",
@@ -945,8 +1236,9 @@ def render_final_development_report_markdown(
     ):
         row = require_mapping("post_fold_markdown_record_row", raw)
         lines.append(
-            "| {record} | {scene} | {independent} | {historical_final} | "
-            "{current_role} | {sample} | {shared} | {passed} |".format(
+            "| {record} | {scene} | {independent} | {historical_current} | "
+            "{historical_final} | {current_role} | {sample} | {shared} | "
+            "{passed} |".format(
                 record=row["record_id"],
                 scene=row["scene"],
                 independent=_format_metric(
@@ -955,6 +1247,10 @@ def render_final_development_report_markdown(
                 ),
                 historical_final=_format_metric(
                     row["same_identity_recovery_ab"]["final_recovery_mechanism"],
+                    "final_motion_mae_bpm",
+                ),
+                historical_current=_format_metric(
+                    row["same_identity_recovery_ab"]["current_mechanism"],
                     "final_motion_mae_bpm",
                 ),
                 current_role=_format_metric(
@@ -1204,8 +1500,72 @@ def _load_target_audits(
     return audits, sources
 
 
+def _registry_summary_with_stages(
+    *,
+    registry_payload: Mapping[str, Any],
+    validated_summary: Mapping[str, Any],
+) -> dict[str, Any]:
+    entries = require_mapping(
+        "post_fold_attempt_registry_entries",
+        registry_payload.get("entries"),
+    )
+    by_stage: dict[str, dict[str, int]] = {}
+    total_attempt_count = 0
+    for identity_hash, raw_entry in entries.items():
+        entry = require_mapping(
+            f"post_fold_attempt_registry_entry:{identity_hash}",
+            raw_entry,
+        )
+        identity = require_mapping(
+            f"post_fold_attempt_registry_identity:{identity_hash}",
+            entry.get("identity"),
+        )
+        stage = str(identity.get("stage", ""))
+        if not stage:
+            raise FoldReplayError("post_fold_attempt_registry_stage_missing")
+        attempts = require_list(
+            f"post_fold_attempt_registry_attempts:{identity_hash}",
+            entry.get("attempts"),
+        )
+        stage_summary = by_stage.setdefault(
+            stage,
+            {
+                "planned_unique_identity_count": 0,
+                "actual_unique_run_count": 0,
+                "total_attempt_count": 0,
+                "failed_attempt_count": 0,
+                "retry_count": 0,
+                "cache_hit_count": 0,
+            },
+        )
+        stage_summary["planned_unique_identity_count"] += 1
+        stage_summary["actual_unique_run_count"] += bool(attempts)
+        stage_summary["total_attempt_count"] += len(attempts)
+        stage_summary["failed_attempt_count"] += sum(
+            require_mapping(
+                f"post_fold_attempt_registry_attempt:{identity_hash}",
+                attempt,
+            ).get("status")
+            == "failed"
+            for attempt in attempts
+        )
+        stage_summary["retry_count"] += max(0, len(attempts) - 1)
+        stage_summary["cache_hit_count"] += nonnegative_int(
+            f"post_fold_attempt_registry_cache_hits:{identity_hash}",
+            entry.get("cache_hit_count"),
+        )
+        total_attempt_count += len(attempts)
+    return {
+        **dict(validated_summary),
+        "total_attempt_count": total_attempt_count,
+        "by_stage": {stage: by_stage[stage] for stage in sorted(by_stage)},
+    }
+
+
 def publish_post_fold_package(
     *,
+    fold_replay_proposal_path: Path,
+    pre_fold_gate_receipt_path: Path,
     fold_replay_report_path: Path,
     fold_selection_receipt_path: Path,
     final_interaction_audit_path: Path,
@@ -1215,12 +1575,15 @@ def publish_post_fold_package(
     budget_contract_path: Path,
     exploration_registry_path: Path,
     attempt_registry_path: Path,
+    budget_amendment_authorization_paths: Sequence[Path],
     challenge_scene_manifest_path: Path,
     output_dir: Path,
 ) -> dict[str, Any]:
     """Atomically publish the post-fold gate and bounded report package."""
 
     source_paths = {
+        "fold_replay_proposal": Path(fold_replay_proposal_path).resolve(),
+        "pre_fold_gate_receipt": Path(pre_fold_gate_receipt_path).resolve(),
         "fold_replay_report": Path(fold_replay_report_path).resolve(),
         "fold_selection_receipt": Path(fold_selection_receipt_path).resolve(),
         "final_interaction_audit": Path(final_interaction_audit_path).resolve(),
@@ -1232,12 +1595,22 @@ def publish_post_fold_package(
         "attempt_registry": Path(attempt_registry_path).resolve(),
         "challenge_scene_manifest": Path(challenge_scene_manifest_path).resolve(),
     }
+    amendment_paths = tuple(Path(path).resolve() for path in budget_amendment_authorization_paths)
+    if not amendment_paths:
+        raise FoldReplayError("post_fold_budget_amendment_authorizations_missing")
     for name, path in source_paths.items():
         if not path.is_file():
             raise FoldReplayError(f"post_fold_source_missing:{name}:{path}")
+    for index, path in enumerate(amendment_paths):
+        if not path.is_file():
+            raise FoldReplayError(
+                f"post_fold_source_missing:budget_amendment_authorization_{index}:{path}"
+            )
     destination = Path(output_dir).resolve()
     if destination.exists():
         raise FoldReplayError(f"post_fold_output_already_exists:{destination}")
+    fold_proposal = read_json(source_paths["fold_replay_proposal"])
+    pre_fold_gate = read_json(source_paths["pre_fold_gate_receipt"])
     fold_report = read_json(source_paths["fold_replay_report"])
     fold_selection = read_json(source_paths["fold_selection_receipt"])
     final_audit = read_json(source_paths["final_interaction_audit"])
@@ -1247,6 +1620,7 @@ def publish_post_fold_package(
     budget_payload = read_json(source_paths["budget_contract"])
     exploration_payload = read_json(source_paths["exploration_registry"])
     challenge_manifest = read_json(source_paths["challenge_scene_manifest"])
+    budget_authorizations = [read_json(path) for path in amendment_paths]
     target_audits, target_sources = _load_target_audits(
         fold_replay_report=fold_report,
         fold_output_root=source_paths["fold_replay_report"].parent,
@@ -1268,8 +1642,13 @@ def publish_post_fold_package(
         budget_contract=budget,
         exploration_registry=exploration,
     )
-    registry_summary = registry.summary()
+    registry_summary = _registry_summary_with_stages(
+        registry_payload=read_json(source_paths["attempt_registry"]),
+        validated_summary=registry.summary(),
+    )
     gate = evaluate_post_fold_independent_bo_gate(
+        fold_replay_proposal=fold_proposal,
+        pre_fold_gate_receipt=pre_fold_gate,
         fold_replay_report=fold_report,
         fold_selection_receipt=fold_selection,
         target_audits_by_fold=target_audits,
@@ -1283,6 +1662,8 @@ def publish_post_fold_package(
     )
     report = build_final_development_report(
         gate_receipt=gate,
+        fold_replay_proposal=fold_proposal,
+        pre_fold_gate_receipt=pre_fold_gate,
         fold_replay_report=fold_report,
         fold_selection_receipt=fold_selection,
         target_audits_by_fold=target_audits,
@@ -1291,6 +1672,7 @@ def publish_post_fold_package(
         current_role_matrix=current_role,
         budget_contract=budget_payload,
         attempt_registry_summary=registry_summary,
+        budget_amendment_authorizations=budget_authorizations,
     )
     handoff = None
     if report["conclusion"]["candidate_freeze_allowed"]:
@@ -1340,6 +1722,13 @@ def publish_post_fold_package(
                 }
                 for name, path in source_paths.items()
             },
+            **{
+                f"budget_amendment_authorization:{index}": {
+                    "path": str(path),
+                    "sha256": file_sha256(path),
+                }
+                for index, path in enumerate(amendment_paths)
+            },
             **target_sources,
         }
         artifact_files = sorted(path for path in staging.iterdir() if path.is_file())
@@ -1354,6 +1743,7 @@ def publish_post_fold_package(
             "completion_version": "lyx_post_fold_completion_v1",
             "status": report["status"],
             "evidence_class": "development_replay_audit",
+            "provenance": report["provenance"],
             "gate_receipt_sha256": gate["receipt_sha256"],
             "final_report_sha256": report["report_sha256"],
             "challenge_handoff_sha256": (None if handoff is None else handoff["handoff_sha256"]),
