@@ -1,0 +1,11 @@
+{
+  "diagnostic_solver_run_count": 0,
+  "formal_solver_run_count": 0,
+  "independent_bo_run_count": 0,
+  "reason": "evaluation_source_closure_and_fail_closed_executor_contract_were_strengthened_before_human_authorization",
+  "replacement_directory": "../stage_r_v3",
+  "replacement_proposal_sha256": "a661915b93b884cfaddc09ad00c43fb812bc64ea8878ed933e030e8f97947d1b",
+  "status": "superseded_zero_run",
+  "superseded_proposal_sha256": "53a812f993d14b247bf81fa8fa7d7ed5cc4610158e0f421294b8cc43de5ef4d7",
+  "supersession_version": "lyx_stage_r_proposal_supersession_v1"
+}

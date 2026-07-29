@@ -1,0 +1,42 @@
+{
+  "analysis_band_high_bpm": 210.0,
+  "analysis_band_low_bpm": 30.0,
+  "candidate_invariant": true,
+  "contract_sha256": "46ccbaebe3f7eafcc14853066a5173cb3ff5ce0b8400b2a1fc1c8e6f59f0ee08",
+  "contract_version": "lyx_stage_r_spectral_gate_v1",
+  "cross_record_window_pooling": false,
+  "evaluation_grain": "sentinel_profile_x_record",
+  "fail_on_any_uncomputable_window": true,
+  "failure_rule": "any_uncomputable_metric_or_insufficient_window_fails_closed",
+  "filter_stability_contract": {
+    "contract_version": "lyx_filter_stability_audit_v2",
+    "max_residual_artifact_abs_corr_median": 0.95,
+    "max_residual_rms_ratio_p95": 2.0,
+    "max_residual_tail_head_ratio": 2.0,
+    "max_stability_load": 1.0,
+    "max_weight_norm": 25.0,
+    "min_motion_artifact_suppression_db_median": -1.0,
+    "min_true_peak_retention_ratio_median": 0.8,
+    "tail_head_gate": "descriptive_only"
+  },
+  "filter_stability_contract_sha256": "8e46582997dc08db81a7430d4443c0b84bdbc2558c4f638afce1fbd67a667ac4",
+  "max_residual_artifact_corr_delta_median": 0.05,
+  "metrics": [
+    "visible_top3",
+    "prominence_db",
+    "hr_band_share",
+    "pulse_power_retention",
+    "residual_artifact_corr"
+  ],
+  "min_hr_band_share_delta_median": -0.02,
+  "min_prominence_db_delta_median": -0.5,
+  "min_pulse_power_retention_median": 0.8,
+  "min_visible_top3_rate_delta": -0.05,
+  "minimum_valid_window_count": 3,
+  "motion_reference_rule": "largest_archive_style_absolute_correlation_after_frozen_choose_delay",
+  "record_aggregation": "equal_weight_window_then_record",
+  "reference_neighborhood_half_width_bpm": 10.0,
+  "relative_control": "same_window_pre_filter_signal_shared_by_the_same_sentinel_current_recovery_control",
+  "reuse_within_same_sentinel_record": true,
+  "visible_top_k": 3
+}
