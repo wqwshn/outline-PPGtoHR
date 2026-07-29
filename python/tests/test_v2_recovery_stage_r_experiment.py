@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from ppg_hr.v2 import recovery_stage_r_experiment as stage_r_module
@@ -10,13 +12,21 @@ from ppg_hr.v2.phase2_experiment_io import (
     file_sha256,
 )
 from ppg_hr.v2.recovery_contracts import canonical_sha256
+from ppg_hr.v2.recovery_experiment_governance import (
+    AttemptRegistry,
+    BudgetContract,
+    ExplorationRegistry,
+)
 from ppg_hr.v2.recovery_stage_r_experiment import (
     StageRAuthorizationError,
+    StageRNumericalResult,
     StageRPlanError,
     build_stage_r_proposal,
+    execute_stage_r_proposal,
     propose_stage_r_execution,
     validate_stage_r_execution_authorization,
 )
+from ppg_hr.v2.solver import V2SolverResult
 
 
 def _with_hash(
@@ -34,18 +44,27 @@ def _write_inputs(tmp_path: Path) -> dict[str, Path]:
     for scene in ("jianpan", "kaihe", "run", "xiezi"):
         for index in range(1, 4):
             record_id = f"{scene}{index}"
-            data_sha256 = canonical_sha256({"record": record_id, "kind": "data"})
-            reference_sha256 = canonical_sha256(
-                {"record": record_id, "kind": "reference"}
+            sensor_path = tmp_path / f"{record_id}.csv"
+            reference_path = tmp_path / f"{record_id}_ref.csv"
+            sensor_path.write_text(
+                f"record,kind\n{record_id},data\n",
+                encoding="utf-8",
             )
+            reference_path.write_text(
+                "time,hr\n0,60\n1,61\n",
+                encoding="utf-8",
+            )
+            data_sha256 = file_sha256(sensor_path)
+            reference_sha256 = file_sha256(reference_path)
             records.append(
                 {
                     "sample_id": record_id,
                     "scene": scene,
                     "data_sha256": data_sha256,
                     "reference_sha256": reference_sha256,
-                    "sensor_path": str(tmp_path / f"{record_id}.csv"),
-                    "reference_path": str(tmp_path / f"{record_id}_ref.csv"),
+                    "sensor_path": str(sensor_path),
+                    "reference_path": str(reference_path),
+                    "method_names": ["reset FFT", "LMS+H"],
                 }
             )
             baseline_records.append(
@@ -68,6 +87,11 @@ def _write_inputs(tmp_path: Path) -> dict[str, Path]:
                         "final_motion_mae_bpm": 3.0,
                         "physiological_rise_episode_count": (
                             1 if scene in {"kaihe", "run"} else 0
+                        ),
+                        "right_censored_recovery_count": 0,
+                        "max_recovered_delay_s": 2.0,
+                        "max_rise_underestimate_bpm": (
+                            1.0 if scene in {"kaihe", "run"} else None
                         ),
                     },
                 }
@@ -209,13 +233,7 @@ def _write_inputs(tmp_path: Path) -> dict[str, Path]:
     )
     atomic_write_json(
         budget_contract,
-        {
-            "contract_version": "lyx_recovery_filter_budget_v5",
-            "stage_unique_limits": {
-                "fixed_lower_bound_diagnostic": 60,
-                "recovery_sentinel": 108,
-            },
-        },
+        BudgetContract.approved_v5().to_dict(),
     )
     return {
         "baseline_manifest_path": baseline_manifest,
@@ -447,3 +465,258 @@ def test_stage_r_proposal_publication_is_atomic(
             source_root=source_root,
             parent_experiment_id="parent",
         )
+
+
+def _write_execution_governance(tmp_path: Path) -> Path:
+    governance = tmp_path / "governance"
+    budget = BudgetContract.approved_v5()
+    exploration = ExplorationRegistry.zero_budget_v1()
+    atomic_write_json(governance / "budget_contract.json", budget.to_dict())
+    atomic_write_json(
+        governance / "exploration_registry.json",
+        exploration.to_dict(),
+    )
+    AttemptRegistry.create(
+        governance / "attempt_registry.json",
+        budget_contract=budget,
+        exploration_registry=exploration,
+    )
+    return governance
+
+
+def _fake_stage_r_numerical_result(
+    identity: dict[str, object],
+    _spectral_audit_dir: Path,
+) -> StageRNumericalResult:
+    true_rise = bool(identity["true_rise_applicable"])
+    metrics = {
+        "metric_contract_version": "lyx_recovery_profile_metric_v1",
+        "longest_e10_run_windows": 4,
+        "longest_e20_run_windows": 1,
+        "final_motion_mae_bpm": 3.0,
+        "recovery_episode_count": 1,
+        "right_censored_recovery_count": 0,
+        "max_recovered_delay_s": 2.0,
+        "physiological_rise_episode_count": 1 if true_rise else 0,
+        "max_rise_underestimate_bpm": 1.0 if true_rise else None,
+        "total_window_count": 10,
+    }
+    spectral_audit = (
+        {
+            "stability_pass": True,
+            "spectral_pass": True,
+            "audit_sha256": canonical_sha256(
+                {
+                    "profile_id": identity["filter_profile_id"],
+                    "record_id": identity["record_id"],
+                }
+            ),
+        }
+        if identity["stage"] == "recovery_sentinel"
+        else None
+    )
+    return StageRNumericalResult(
+        solver_result=V2SolverResult(
+            HR=np.asarray([[0.0, 60.0, 60.0, 60.0, 1.0, 0.0]]),
+            err_stats={},
+            metadata={"time_bias": 5.0, "smooth_win_len": 5},
+            window_table=[],
+        ),
+        metrics=metrics,
+        spectral_audit=spectral_audit,
+    )
+
+
+def test_stage_r_execution_requires_authorization_before_registration(
+    tmp_path: Path,
+) -> None:
+    inputs = _write_inputs(tmp_path)
+    proposal_dir = tmp_path / "proposal"
+    source_root = Path(__file__).parents[1] / "src"
+    propose_stage_r_execution(
+        **inputs,
+        output_dir=proposal_dir,
+        source_root=source_root,
+        parent_experiment_id="parent",
+    )
+    governance = _write_execution_governance(tmp_path)
+
+    with pytest.raises(
+        StageRAuthorizationError,
+        match="stage_r_execution_authorization_required",
+    ):
+        execute_stage_r_proposal(
+            proposal_dir=proposal_dir,
+            authorization_receipt_path=None,
+            governance_dir=governance,
+            output_dir=tmp_path / "execution",
+            source_root=source_root,
+            _numerical_runner=_fake_stage_r_numerical_result,
+        )
+
+    registry = stage_r_module.read_json(
+        governance / "attempt_registry.json"
+    )
+    assert registry["summary"]["planned_unique_identity_count"] == 0
+
+
+def test_stage_r_numerical_runner_uses_frozen_config_and_metric_inputs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    proposal = _proposal(tmp_path)
+    identity = next(
+        item
+        for item in proposal["identities"]
+        if item["stage"] == "recovery_sentinel"
+        and item["recovery_candidate_id"]
+        == "relative_gap_timeout_v1"
+    )
+    observed: dict[str, object] = {}
+
+    def fake_solve(config: object) -> V2SolverResult:
+        observed["config"] = config
+        return V2SolverResult(
+            HR=np.asarray([[0.0, 60.0, 60.0, 60.0, 1.0, 0.0]]),
+            err_stats={},
+            metadata={"time_bias": 5.0},
+            window_table=[],
+        )
+
+    @dataclass(frozen=True)
+    class DummyMetrics:
+        metric_contract_version: str = "lyx_recovery_profile_metric_v1"
+        longest_e10_run_windows: int = 0
+
+    def fake_metrics(
+        result: V2SolverResult,
+        *,
+        ref_data: np.ndarray,
+        method_names: tuple[str, ...],
+    ) -> DummyMetrics:
+        observed["metric_metadata"] = result.metadata
+        observed["method_names"] = method_names
+        observed["reference_shape"] = ref_data.shape
+        return DummyMetrics()
+
+    monkeypatch.setattr(stage_r_module, "solve_v2", fake_solve)
+    monkeypatch.setattr(
+        stage_r_module,
+        "load_v2_reference",
+        lambda _path: np.asarray([[0.0, 60.0], [1.0, 61.0]]),
+    )
+    monkeypatch.setattr(
+        stage_r_module,
+        "evaluate_recovery_profile_metrics",
+        fake_metrics,
+    )
+    monkeypatch.setattr(
+        stage_r_module,
+        "_load_or_run_spectral_audit",
+        lambda _item, *, spectral_audit_dir: {
+            "stability_pass": True,
+            "spectral_pass": True,
+            "audit_sha256": "a" * 64,
+        },
+    )
+
+    result = stage_r_module._run_stage_r_numerical_identity(
+        dict(identity),
+        tmp_path / "spectral",
+    )
+
+    config = observed["config"]
+    assert config.fs_target == identity["config"]["parameters"]["fs_target"]
+    assert config.recovery_candidate_id == "relative_gap_timeout_v1"
+    assert config.penalty_candidate_id == (
+        "current_soft_penalty_control_v1"
+    )
+    assert observed["metric_metadata"]["smooth_win_len"] == 5
+    assert observed["method_names"] == ("reset FFT", "LMS+H")
+    assert observed["reference_shape"] == (2, 2)
+    assert result.metrics["metric_contract_version"] == (
+        "lyx_recovery_profile_metric_v1"
+    )
+    assert result.spectral_audit["spectral_pass"] is True
+
+
+def test_stage_r_execution_registers_runs_and_selects_exact_matrix(
+    tmp_path: Path,
+) -> None:
+    inputs = _write_inputs(tmp_path)
+    proposal_dir = tmp_path / "proposal"
+    source_root = Path(__file__).parents[1] / "src"
+    proposal_receipt = propose_stage_r_execution(
+        **inputs,
+        output_dir=proposal_dir,
+        source_root=source_root,
+        parent_experiment_id="parent",
+    )
+    proposal = stage_r_module.read_json(
+        proposal_dir / "stage_r_execution_proposal.json"
+    )
+    authorization_path = tmp_path / "authorization.json"
+    atomic_write_json(
+        authorization_path,
+        {
+            "approved": True,
+            "decision_state": "awaiting_human_stage_r_execution_decision",
+            "proposal_sha256": proposal_receipt["proposal_sha256"],
+            "diagnostic_unique_budget": 60,
+            "formal_unique_budget": 108,
+            "unique_budget": 168,
+            "threshold_anchor_profile_id": "p50-short-low",
+            "independent_bo_authorized": False,
+            "approved_at": "2026-07-29T00:00:00+08:00",
+            "approved_by": "user",
+        },
+    )
+    governance = _write_execution_governance(tmp_path)
+    progress: list[dict[str, object]] = []
+
+    completion = execute_stage_r_proposal(
+        proposal_dir=proposal_dir,
+        authorization_receipt_path=authorization_path,
+        governance_dir=governance,
+        output_dir=tmp_path / "execution",
+        source_root=source_root,
+        _numerical_runner=_fake_stage_r_numerical_result,
+        progress_callback=progress.append,
+    )
+
+    assert completion["status"] == "selected"
+    assert completion["proposal_sha256"] == proposal["proposal_sha256"]
+    assert completion["diagnostic_solver_run_count"] == 60
+    assert completion["formal_solver_run_count"] == 108
+    assert completion["independent_bo_run_count"] == 0
+    assert completion["provisional_recovery_id"] == (
+        "current_fixed_floor_control_v1"
+    )
+    assert completion["rollback_backup_id"] == "relative_gap_timeout_v1"
+    assert completion["attempt_registry_summary"] == {
+        "logical_task_count": 168,
+        "planned_unique_identity_count": 168,
+        "actual_unique_run_count": 168,
+        "cache_evidence_count": 168,
+        "cache_hit_count": 0,
+        "failed_attempt_count": 0,
+        "retry_count": 0,
+    }
+    assert len(progress) == 168
+    assert progress[-1]["completed"] == 168
+    selection = stage_r_module.read_json(
+        tmp_path / "execution" / "recovery_selection.json"
+    )
+    assert selection["provisional_recovery_id"] == (
+        "current_fixed_floor_control_v1"
+    )
+    diagnostic = stage_r_module.read_json(
+        tmp_path / "execution" / "threshold_diagnostic_summary.json"
+    )
+    assert [row["candidate_min_bpm"] for row in diagnostic["thresholds"]] == [
+        50.0,
+        60.0,
+        70.0,
+        80.0,
+        85.0,
+    ]

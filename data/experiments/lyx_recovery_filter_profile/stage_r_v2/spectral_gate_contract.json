@@ -1,0 +1,20 @@
+{
+  "candidate_invariant": true,
+  "contract_sha256": "fb3dd0e89df057ba55be5557e4609358a2fe330caf8429887c43f77b7020cfbb",
+  "contract_version": "lyx_stage_r_spectral_gate_v1",
+  "evaluation_grain": "sentinel_profile_x_record",
+  "failure_rule": "any_failed_or_missing_metric_fails_closed",
+  "filter_stability_contract": {
+    "contract_version": "lyx_filter_stability_audit_v2",
+    "max_residual_artifact_abs_corr_median": 0.95,
+    "max_residual_rms_ratio_p95": 2.0,
+    "max_residual_tail_head_ratio": 2.0,
+    "max_stability_load": 1.0,
+    "max_weight_norm": 25.0,
+    "min_motion_artifact_suppression_db_median": -1.0,
+    "min_true_peak_retention_ratio_median": 0.8,
+    "tail_head_gate": "descriptive_only"
+  },
+  "filter_stability_contract_sha256": "8e46582997dc08db81a7430d4443c0b84bdbc2558c4f638afce1fbd67a667ac4",
+  "reuse_within_same_sentinel_record": true
+}

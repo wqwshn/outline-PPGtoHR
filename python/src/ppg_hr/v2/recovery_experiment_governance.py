@@ -829,55 +829,91 @@ class AttemptRegistry:
         )
 
     def register_identity(self, identity: AttemptIdentity) -> str:
-        def mutate(entries: dict[str, dict[str, Any]]) -> str:
-            identity_hash = identity.sha256
-            if identity_hash in entries:
-                return identity_hash
-            if identity.attempt_kind == "exploration" and (
-                self.exploration_registry.unique_budget == 0
-                or identity_hash not in self.exploration_registry.allowed_identity_sha256
-            ):
-                raise GovernanceError(f"exploration_not_authorized:{identity_hash}")
-            expected_kind = self.budget_contract.stage_attempt_kinds.get(identity.stage)
-            if expected_kind is None:
-                raise GovernanceError(f"unbudgeted_stage:{identity.stage}")
-            if identity.attempt_kind != expected_kind:
-                raise GovernanceError(
-                    f"stage_attempt_kind_mismatch:{identity.stage}:{identity.attempt_kind}"
-                )
-            stage_count = sum(
-                entry["identity"]["stage"] == identity.stage for entry in entries.values()
+        return self.register_identities((identity,))[0]
+
+    def register_identities(
+        self,
+        identities: Sequence[AttemptIdentity],
+    ) -> tuple[str, ...]:
+        """Atomically register a complete bounded matrix or no new identity."""
+
+        frozen = tuple(identities)
+
+        def mutate(
+            entries: dict[str, dict[str, Any]],
+        ) -> tuple[str, ...]:
+            return tuple(
+                self._register_into_entries(entries, identity)
+                for identity in frozen
             )
-            stage_limit = self.budget_contract.stage_unique_limits[identity.stage]
-            normal_limit = self.budget_contract.normal_unique_identity_limit
-            normal_count = sum(
-                entry["identity"]["stage"] != self.budget_contract.supplemental_stage
-                for entry in entries.values()
-            )
-            normal_overflow = (
-                normal_limit is not None
-                and identity.stage != self.budget_contract.supplemental_stage
-                and normal_count >= normal_limit
-            )
-            if (
-                stage_count >= stage_limit
-                or len(entries) >= self.budget_contract.max_unique_identities
-                or normal_overflow
-            ):
-                raise HumanGateRequiredError(
-                    "awaiting_human_budget_decision",
-                    f"unique_budget_exceeded:{identity.stage}",
-                )
-            entries[identity_hash] = {
-                "identity": identity.to_dict(),
-                "attempts": [],
-                "cache_evidence": [],
-                "cache_hit_count": 0,
-                "status": "registered",
-            }
-            return identity_hash
 
         return self._transaction(mutate)
+
+    def _register_into_entries(
+        self,
+        entries: dict[str, dict[str, Any]],
+        identity: AttemptIdentity,
+    ) -> str:
+        identity_hash = identity.sha256
+        if identity_hash in entries:
+            if entries[identity_hash].get("identity") != identity.to_dict():
+                raise GovernanceError(
+                    f"identity_payload_mismatch:{identity_hash}"
+                )
+            return identity_hash
+        if identity.attempt_kind == "exploration" and (
+            self.exploration_registry.unique_budget == 0
+            or identity_hash
+            not in self.exploration_registry.allowed_identity_sha256
+        ):
+            raise GovernanceError(
+                f"exploration_not_authorized:{identity_hash}"
+            )
+        expected_kind = self.budget_contract.stage_attempt_kinds.get(
+            identity.stage
+        )
+        if expected_kind is None:
+            raise GovernanceError(f"unbudgeted_stage:{identity.stage}")
+        if identity.attempt_kind != expected_kind:
+            raise GovernanceError(
+                "stage_attempt_kind_mismatch:"
+                f"{identity.stage}:{identity.attempt_kind}"
+            )
+        stage_count = sum(
+            entry["identity"]["stage"] == identity.stage
+            for entry in entries.values()
+        )
+        stage_limit = self.budget_contract.stage_unique_limits[
+            identity.stage
+        ]
+        normal_limit = self.budget_contract.normal_unique_identity_limit
+        normal_count = sum(
+            entry["identity"]["stage"]
+            != self.budget_contract.supplemental_stage
+            for entry in entries.values()
+        )
+        normal_overflow = (
+            normal_limit is not None
+            and identity.stage != self.budget_contract.supplemental_stage
+            and normal_count >= normal_limit
+        )
+        if (
+            stage_count >= stage_limit
+            or len(entries) >= self.budget_contract.max_unique_identities
+            or normal_overflow
+        ):
+            raise HumanGateRequiredError(
+                "awaiting_human_budget_decision",
+                f"unique_budget_exceeded:{identity.stage}",
+            )
+        entries[identity_hash] = {
+            "identity": identity.to_dict(),
+            "attempts": [],
+            "cache_evidence": [],
+            "cache_hit_count": 0,
+            "status": "registered",
+        }
+        return identity_hash
 
     def begin_attempt(self, identity: AttemptIdentity) -> AttemptToken:
         def mutate(entries: dict[str, dict[str, Any]]) -> AttemptToken:

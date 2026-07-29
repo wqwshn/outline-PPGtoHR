@@ -1,0 +1,11 @@
+{
+  "diagnostic_solver_run_count": 0,
+  "formal_solver_run_count": 0,
+  "independent_bo_run_count": 0,
+  "reason": "execution_orchestrator_was_not_frozen_before_human_authorization",
+  "replacement_directory": "../stage_r_v2",
+  "replacement_proposal_sha256": "53a812f993d14b247bf81fa8fa7d7ed5cc4610158e0f421294b8cc43de5ef4d7",
+  "status": "superseded_zero_run",
+  "superseded_proposal_sha256": "7443c702b923cff3d6ab50799673792d24ee0cc43b0f23117285afb52ddcf312",
+  "supersession_version": "lyx_stage_r_proposal_supersession_v1"
+}

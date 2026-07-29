@@ -1,0 +1,15 @@
+{
+  "artifacts": {
+    "evaluation_source_identity.json": "8dd8e08be883070a2fc62114f09309d51a191f30e3cf8b0d76546eae6d631d18",
+    "metric_contract.json": "8cc5b2b7706dd49dbe4d151b4dfcf077be2e0c082ba4828718c78d2f1ae9a65f",
+    "solver_source_identity.json": "b0774733275cedbafb8c7b9b7a6b07a32f4db77fe4893655679a258aded44b89",
+    "spectral_gate_contract.json": "11a87d9d1521f75c277c4b516c1af0e73d6a9bb34a6265da81e8663cd038d215",
+    "stage_r_execution_proposal.json": "c0ece2212239876a82f688d253741678e362f9bec54a8c36cd2c64c227bb3b43"
+  },
+  "diagnostic_solver_run_count": 0,
+  "formal_solver_run_count": 0,
+  "independent_bo_run_count": 0,
+  "proposal_sha256": "53a812f993d14b247bf81fa8fa7d7ed5cc4610158e0f421294b8cc43de5ef4d7",
+  "receipt_version": "lyx_stage_r_proposal_receipt_v1",
+  "status": "awaiting_human_execution_authorization"
+}

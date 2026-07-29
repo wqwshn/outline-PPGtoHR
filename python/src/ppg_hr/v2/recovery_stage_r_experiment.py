@@ -1,32 +1,60 @@
-"""Pre-register the bounded LYX Stage R diagnostic and sentinel matrices.
+"""Pre-register and execute the bounded LYX Stage R experiment.
 
-This module deliberately stops before numerical execution.  It freezes the
-exact 60 diagnostic and 108 formal identities, then requires an exact human
-authorization receipt before a later executor may register or solve them.
+The proposal freezes exactly 60 diagnostic and 108 formal identities.  The
+executor remains unavailable until an exact human authorization receipt is
+validated, then atomically registers the whole matrix before any solve.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import shutil
 import uuid
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
+from .bo_space_generalization import _cache_json_ready
 from .experiment_freeze_utils import runtime_source_identity
 from .phase2_experiment_io import atomic_write_json, file_sha256, read_json
+from .preprocess import load_v2_reference
 from .recovery_contracts import canonical_sha256, require_sha256
-from .recovery_experiment_governance import AttemptIdentity
-from .recovery_filter_stability import StabilityAuditContract
+from .recovery_experiment_governance import (
+    AttemptIdentity,
+    AttemptRegistry,
+    BudgetContract,
+    CacheEvidence,
+    ExplorationRegistry,
+    FrozenExperimentContractHashes,
+    validate_recovery_experiment_preflight,
+)
+from .recovery_filter_profile_experiment import _audit_profile_record
+from .recovery_filter_profiles import FilterProfile
+from .recovery_filter_stability import (
+    FilterAuditRecord,
+    StabilityAuditContract,
+)
 from .recovery_profile_metrics import (
     RECOVERY_PROFILE_METRIC_VERSION,
     RECOVERY_PROFILE_SMOOTH_WIN_LEN,
     RECOVERY_PROFILE_TIME_BIAS_S,
+    evaluate_recovery_profile_metrics,
 )
+from .recovery_selection import (
+    RecoveryCandidateEvaluation,
+    RecoveryPanelRecord,
+    RecoveryRecordEvaluation,
+    select_recovery_candidate_evaluations,
+)
+from .solver import V2SolverResult, solve_v2
+from .types import V2RunConfig
 
 _EXPECTED_SCENE_COUNTS = {
     "jianpan": 3,
@@ -47,6 +75,22 @@ class StageRPlanError(RuntimeError):
 
 class StageRAuthorizationError(StageRPlanError):
     """The exact 168-identity execution proposal has not been approved."""
+
+
+@dataclass(frozen=True)
+class StageRNumericalResult:
+    """One solved trajectory plus its frozen offline Stage R evidence."""
+
+    solver_result: V2SolverResult
+    metrics: Mapping[str, Any]
+    spectral_audit: Mapping[str, Any] | None
+
+
+StageRNumericalRunner = Callable[
+    [dict[str, Any], Path],
+    StageRNumericalResult,
+]
+StageRProgressCallback = Callable[[Mapping[str, Any]], None]
 
 
 def _json_ready(value: Any) -> Any:
@@ -223,6 +267,18 @@ def _records_from_sources(
             "reference_sha256",
             item.get("reference_sha256"),
         )
+        raw_method_names = item.get("method_names")
+        if (
+            not isinstance(raw_method_names, list)
+            or not raw_method_names
+            or not all(
+                isinstance(method, str) and method
+                for method in raw_method_names
+            )
+        ):
+            raise StageRPlanError(
+                f"baseline_method_names_invalid:{record_id}"
+            )
         rise_count = int(metrics.get("physiological_rise_episode_count", 0))
         records.append(
             {
@@ -240,6 +296,7 @@ def _records_from_sources(
                 ),
                 "historical_actual_params": dict(actual_params),
                 "independent_metrics": dict(metrics),
+                "method_names": list(raw_method_names),
                 "true_rise_applicable": rise_count > 0,
             }
         )
@@ -372,6 +429,7 @@ def _base_config(
     return {
         "data_path": record["data_path"],
         "reference_path": record["reference_path"],
+        "method_names": list(record["method_names"]),
         "parameters": _json_ready(historical),
     }
 
@@ -407,6 +465,7 @@ def _identity_item(
         "reference_path": record["reference_path"],
         "raw_data_sha256": record["data_sha256"],
         "reference_sha256": record["reference_sha256"],
+        "method_names": list(record["method_names"]),
         "true_rise_applicable": record["true_rise_applicable"],
         "config": _json_ready(config),
         **_json_ready(coordinate),
@@ -642,6 +701,7 @@ def build_stage_r_proposal(
                     "data_sha256",
                     "reference_sha256",
                     "combined_data_sha256",
+                    "method_names",
                     "true_rise_applicable",
                 )
             }
@@ -740,6 +800,10 @@ def stage_r_metric_contract_v1() -> dict[str, Any]:
             "first later start of 3 consecutive windows with absolute_error_bpm < 10"
         ),
         "right_censored_recovery_is_failure": True,
+        "selection_recovery_delay_s": (
+            "max_recovered_delay_s when present; 0 when no recovery episode; "
+            "total_window_count * 1 s when every observed episode is right-censored"
+        ),
         "true_rise_min_windows": 10,
         "true_rise_min_gain_bpm": 15.0,
         "uses_offline_future_dependency": True,
@@ -855,6 +919,1034 @@ def propose_stage_r_execution(
         if staging.exists():
             shutil.rmtree(staging)
         raise
+
+
+def _budget_contract_from_payload(
+    payload: Mapping[str, Any],
+) -> BudgetContract:
+    return BudgetContract(
+        contract_version=str(payload["contract_version"]),
+        stage_unique_limits=dict(
+            _require_mapping(
+                "stage_unique_limits",
+                payload.get("stage_unique_limits"),
+            )
+        ),
+        normal_unique_identity_limit=payload.get(
+            "normal_unique_identity_limit"
+        ),
+        supplemental_stage=payload.get("supplemental_stage"),
+        stage_attempt_kinds=dict(
+            _require_mapping(
+                "stage_attempt_kinds",
+                payload.get("stage_attempt_kinds"),
+            )
+        ),
+        max_unique_identities=int(payload["max_unique_identities"]),
+        max_attempts=int(payload["max_attempts"]),
+        retry_limit=int(payload["retry_limit"]),
+    )
+
+
+def _exploration_registry_from_payload(
+    payload: Mapping[str, Any],
+) -> ExplorationRegistry:
+    raw_allowlist = _require_list(
+        "allowed_identity_sha256",
+        payload.get("allowed_identity_sha256"),
+    )
+    return ExplorationRegistry(
+        registry_version=str(payload["registry_version"]),
+        unique_budget=int(payload["unique_budget"]),
+        allowed_identity_sha256=tuple(str(item) for item in raw_allowlist),
+    )
+
+
+def _attempt_identity_from_item(
+    item: Mapping[str, Any],
+) -> AttemptIdentity:
+    names = {field.name for field in fields(AttemptIdentity)}
+    return AttemptIdentity(**{name: item[name] for name in names})
+
+
+def _verify_proposal_source_artifacts(
+    proposal: Mapping[str, Any],
+) -> dict[str, Path]:
+    raw_sources = _require_mapping(
+        "source_artifacts",
+        proposal.get("source_artifacts"),
+    )
+    paths: dict[str, Path] = {}
+    for name, raw in raw_sources.items():
+        source = _require_mapping(f"source_artifact:{name}", raw)
+        path = Path(str(source.get("path", ""))).resolve()
+        if not path.is_file():
+            raise StageRPlanError(
+                f"stage_r_execution_source_missing:{name}:{path}"
+            )
+        expected = _require_hash(
+            f"source_artifact_sha256:{name}",
+            source.get("sha256"),
+        )
+        if file_sha256(path) != expected:
+            raise StageRPlanError(
+                f"stage_r_execution_source_hash_mismatch:{name}"
+            )
+        paths[str(name)] = path
+    expected_names = {
+        "baseline_manifest",
+        "baseline_metrics",
+        "profile_library",
+        "recovery_registry",
+        "recovery_selection",
+        "penalty_registry",
+        "budget_contract",
+    }
+    if set(paths) != expected_names:
+        raise StageRPlanError(
+            "stage_r_execution_source_set_mismatch"
+        )
+    return paths
+
+
+def _validate_stage_r_execution_preflight(
+    *,
+    proposal_dir: Path,
+    proposal: Mapping[str, Any],
+    source_root: Path,
+) -> tuple[dict[str, Path], BudgetContract]:
+    proposal_root = Path(proposal_dir).resolve()
+    metric_contract = read_json(proposal_root / "metric_contract.json")
+    spectral_contract = read_json(
+        proposal_root / "spectral_gate_contract.json"
+    )
+    proposal_receipt = read_json(proposal_root / "proposal_receipt.json")
+    if (
+        proposal_receipt.get("status")
+        != "awaiting_human_execution_authorization"
+        or proposal_receipt.get("proposal_sha256")
+        != proposal.get("proposal_sha256")
+    ):
+        raise StageRPlanError("stage_r_proposal_receipt_mismatch")
+    receipt_artifacts = _require_mapping(
+        "proposal_receipt_artifacts",
+        proposal_receipt.get("artifacts"),
+    )
+    for name, expected_hash in receipt_artifacts.items():
+        artifact_path = proposal_root / str(name)
+        if (
+            not artifact_path.is_file()
+            or file_sha256(artifact_path) != expected_hash
+        ):
+            raise StageRPlanError(
+                f"stage_r_proposal_artifact_hash_mismatch:{name}"
+            )
+    _verify_embedded_hash(
+        metric_contract,
+        hash_field="contract_sha256",
+        artifact_name="stage_r_metric_contract",
+    )
+    _verify_embedded_hash(
+        spectral_contract,
+        hash_field="contract_sha256",
+        artifact_name="stage_r_spectral_contract",
+    )
+    frozen_solver = read_json(
+        proposal_root / "solver_source_identity.json"
+    )
+    current_solver = runtime_source_identity(Path(source_root).resolve())
+    if frozen_solver != current_solver:
+        raise StageRPlanError(
+            "stage_r_solver_source_changed_after_proposal"
+        )
+    frozen_evaluation = read_json(
+        proposal_root / "evaluation_source_identity.json"
+    )
+    if frozen_evaluation != _evaluation_source_identity():
+        raise StageRPlanError(
+            "stage_r_evaluation_source_changed_after_proposal"
+        )
+
+    source_paths = _verify_proposal_source_artifacts(proposal)
+    profile_library = read_json(source_paths["profile_library"])
+    recovery_registry = read_json(source_paths["recovery_registry"])
+    recovery_selection = read_json(source_paths["recovery_selection"])
+    penalty_registry = read_json(source_paths["penalty_registry"])
+    budget_payload = read_json(source_paths["budget_contract"])
+    _verify_filter_profile_library(profile_library)
+    _verify_registry(
+        recovery_registry,
+        candidates_field="candidates",
+        candidate_name="recovery_candidate",
+        candidate_id_field="candidate_id",
+        candidate_hash_field="candidate_sha256",
+        artifact_name="recovery_candidate_registry",
+    )
+    _verify_embedded_hash(
+        recovery_selection,
+        hash_field="contract_sha256",
+        artifact_name="recovery_selection_contract",
+    )
+    _verify_registry(
+        penalty_registry,
+        candidates_field="candidates",
+        candidate_name="penalty_candidate",
+        candidate_id_field="penalty_id",
+        candidate_hash_field="candidate_sha256",
+        artifact_name="penalty_candidate_registry",
+    )
+    actual_contracts = {
+        "metric_contract_hash": metric_contract["contract_sha256"],
+        "spectral_gate_contract_hash": spectral_contract[
+            "contract_sha256"
+        ],
+        "recovery_candidate_registry_hash": recovery_registry[
+            "registry_sha256"
+        ],
+        "recovery_selection_contract_hash": recovery_selection[
+            "contract_sha256"
+        ],
+        "penalty_registry_hash": penalty_registry["registry_sha256"],
+        "filter_profile_design_rule_hash": profile_library[
+            "design_rule_sha256"
+        ],
+        "budget_contract_hash": canonical_sha256(budget_payload),
+    }
+    frozen_contracts = dict(
+        _require_mapping(
+            "frozen_contracts",
+            proposal.get("frozen_contracts"),
+        )
+    )
+    validate_recovery_experiment_preflight(
+        expected=FrozenExperimentContractHashes(**frozen_contracts),
+        actual=actual_contracts,
+    )
+    budget = _budget_contract_from_payload(budget_payload)
+    if budget.sha256 != actual_contracts["budget_contract_hash"]:
+        raise StageRPlanError("stage_r_budget_contract_payload_mismatch")
+    return source_paths, budget
+
+
+def _stage_r_run_config(
+    item: Mapping[str, Any],
+) -> V2RunConfig:
+    config = _require_mapping("identity_config", item.get("config"))
+    parameters = dict(
+        _require_mapping(
+            "identity_config_parameters",
+            config.get("parameters"),
+        )
+    )
+    field_names = {field.name for field in fields(V2RunConfig)}
+    values = {
+        name: value
+        for name, value in parameters.items()
+        if name in field_names
+    }
+    values["data_path"] = Path(str(config["data_path"])).resolve()
+    values["ref_path"] = Path(str(config["reference_path"])).resolve()
+    for name in (
+        "reference_groups_order",
+        "motion_gate_filter_allowlist",
+    ):
+        if name in values and isinstance(values[name], list):
+            values[name] = tuple(values[name])
+    return V2RunConfig(**values)
+
+
+def _load_or_run_spectral_audit(
+    item: Mapping[str, Any],
+    *,
+    spectral_audit_dir: Path,
+) -> dict[str, Any]:
+    profile_id = str(item["filter_profile_id"])
+    record_id = str(item["record_id"])
+    audit_path = (
+        spectral_audit_dir / profile_id / f"{record_id}.json"
+    )
+    if audit_path.is_file():
+        payload = read_json(audit_path)
+        _verify_embedded_hash(
+            payload,
+            hash_field="audit_sha256",
+            artifact_name=f"stage_r_spectral_audit:{profile_id}:{record_id}",
+        )
+        expected = {
+            "profile_id": profile_id,
+            "profile_sha256": item["filter_profile_sha256"],
+            "record_id": record_id,
+            "data_sha256": item["raw_data_sha256"],
+            "reference_sha256": item["reference_sha256"],
+            "audit_contract_sha256": (
+                StabilityAuditContract.corrected_v2().sha256
+            ),
+        }
+        if any(payload.get(name) != value for name, value in expected.items()):
+            raise StageRPlanError(
+                f"stage_r_spectral_audit_identity_mismatch:{profile_id}:{record_id}"
+            )
+        return {
+            **dict(
+                _require_mapping(
+                    "stage_r_spectral_audit",
+                    payload.get("audit"),
+                )
+            ),
+            "audit_sha256": payload["audit_sha256"],
+        }
+
+    profile = FilterProfile(
+        profile_id=profile_id,
+        design_role="core",
+        fs_target=int(item["config"]["parameters"]["fs_target"]),
+        memory_ms=int(item["physical_memory_ms"]),
+        nominal_mu=float(item["config"]["parameters"]["lms_mu_base"]),
+        recovery_sentinel_role=str(item["sentinel_role"]),
+    )
+    record = FilterAuditRecord(
+        record_id=record_id,
+        scene=str(item["scene"]),
+        data_path=str(item["data_path"]),
+        reference_path=str(item["reference_path"]),
+        data_sha256=str(item["raw_data_sha256"]),
+        reference_sha256=str(item["reference_sha256"]),
+    )
+    contract = StabilityAuditContract.corrected_v2()
+    audit = _audit_profile_record(profile, record, contract=contract)
+    payload = {
+        "audit_version": "lyx_stage_r_spectral_record_audit_v1",
+        "profile_id": profile_id,
+        "profile_sha256": item["filter_profile_sha256"],
+        "record_id": record_id,
+        "data_sha256": item["raw_data_sha256"],
+        "reference_sha256": item["reference_sha256"],
+        "audit_contract_sha256": contract.sha256,
+        "candidate_invariant": True,
+        "audit": audit,
+    }
+    payload["audit_sha256"] = canonical_sha256(payload)
+    atomic_write_json(audit_path, payload)
+    return {**audit, "audit_sha256": payload["audit_sha256"]}
+
+
+def _run_stage_r_numerical_identity(
+    item: dict[str, Any],
+    spectral_audit_dir: Path,
+) -> StageRNumericalResult:
+    data_path = Path(str(item["data_path"])).resolve()
+    reference_path = Path(str(item["reference_path"])).resolve()
+    if file_sha256(data_path) != item["raw_data_sha256"]:
+        raise StageRPlanError(
+            f"stage_r_data_hash_mismatch:{item['record_id']}"
+        )
+    if file_sha256(reference_path) != item["reference_sha256"]:
+        raise StageRPlanError(
+            f"stage_r_reference_hash_mismatch:{item['record_id']}"
+        )
+    config = _stage_r_run_config(item)
+    result = solve_v2(config)
+    metadata = dict(result.metadata)
+    metadata["smooth_win_len"] = config.smooth_win_len
+    result = V2SolverResult(
+        HR=result.HR,
+        err_stats=result.err_stats,
+        metadata=metadata,
+        window_table=result.window_table,
+    )
+    metrics = evaluate_recovery_profile_metrics(
+        result,
+        ref_data=load_v2_reference(reference_path),
+        method_names=tuple(str(name) for name in item["method_names"]),
+    )
+    spectral_audit = (
+        _load_or_run_spectral_audit(
+            item,
+            spectral_audit_dir=spectral_audit_dir,
+        )
+        if item["stage"] == _FORMAL_STAGE
+        else None
+    )
+    return StageRNumericalResult(
+        solver_result=result,
+        metrics=asdict(metrics),
+        spectral_audit=spectral_audit,
+    )
+
+
+def _write_stage_r_cache_result(
+    *,
+    result_dir: Path,
+    identity: AttemptIdentity,
+    item: Mapping[str, Any],
+    numerical: StageRNumericalResult,
+) -> dict[str, Any]:
+    result_dir.mkdir(parents=True, exist_ok=True)
+    trajectory_path = result_dir / "trajectory.npz"
+    trajectory_temp = result_dir / (
+        f".trajectory.{uuid.uuid4().hex}.tmp"
+    )
+    with trajectory_temp.open("wb") as handle:
+        np.savez_compressed(
+            handle,
+            HR=np.asarray(numerical.solver_result.HR, dtype=float),
+        )
+    os.replace(trajectory_temp, trajectory_path)
+    details_path = result_dir / "solver_details.json"
+    atomic_write_json(
+        details_path,
+        _cache_json_ready(
+            {
+                "err_stats": numerical.solver_result.err_stats,
+                "metadata": numerical.solver_result.metadata,
+                "window_table": numerical.solver_result.window_table,
+            }
+        ),
+    )
+    result_path = result_dir / "result.json"
+    payload = {
+        "producer": "content_addressed_solver_cache_v1",
+        "result_version": "lyx_stage_r_solver_result_v1",
+        "status": "complete",
+        "valid": True,
+        "identity": identity.to_dict(),
+        "config": _json_ready(item["config"]),
+        "data_identity": {
+            "raw_data_sha256": item["raw_data_sha256"],
+            "reference_sha256": item["reference_sha256"],
+            "combined_data_sha256": item["data_sha256"],
+        },
+        "coordinate": {
+            key: item[key]
+            for key in (
+                "stage",
+                "scene",
+                "record_id",
+                "filter_profile_id",
+                "recovery_candidate_id",
+                "candidate_min_bpm",
+                "penalty_candidate_id",
+            )
+        },
+        "metrics": _json_ready(dict(numerical.metrics)),
+        "spectral_audit": (
+            None
+            if numerical.spectral_audit is None
+            else _json_ready(dict(numerical.spectral_audit))
+        ),
+        "trajectory": {
+            "path": trajectory_path.name,
+            "sha256": file_sha256(trajectory_path),
+            "solver_details_path": details_path.name,
+            "solver_details_sha256": file_sha256(details_path),
+        },
+    }
+    atomic_write_json(result_path, payload)
+    receipt_path = result_dir / "cache_receipt.json"
+    atomic_write_json(
+        receipt_path,
+        {
+            "identity_sha256": identity.sha256,
+            "result_path": result_path.name,
+            "result_sha256": file_sha256(result_path),
+        },
+    )
+    return payload
+
+
+def _load_stage_r_cache_result(
+    *,
+    evidence: CacheEvidence,
+) -> dict[str, Any]:
+    payload = read_json(evidence.result_path)
+    identity = _require_mapping(
+        "stage_r_cached_identity",
+        payload.get("identity"),
+    )
+    config = _require_mapping(
+        "stage_r_cached_config",
+        payload.get("config"),
+    )
+    data_identity = _require_mapping(
+        "stage_r_cached_data_identity",
+        payload.get("data_identity"),
+    )
+    if (
+        canonical_sha256(config) != identity.get("config_hash")
+        or data_identity.get("combined_data_sha256")
+        != identity.get("data_sha256")
+    ):
+        raise StageRPlanError(
+            "stage_r_cached_result_identity_mismatch"
+        )
+    trajectory = _require_mapping(
+        "stage_r_trajectory",
+        payload.get("trajectory"),
+    )
+    for path_field, hash_field in (
+        ("path", "sha256"),
+        ("solver_details_path", "solver_details_sha256"),
+    ):
+        path = (evidence.result_path.parent / str(trajectory[path_field])).resolve()
+        if (
+            not path.is_file()
+            or file_sha256(path) != trajectory.get(hash_field)
+        ):
+            raise StageRPlanError(
+                f"stage_r_cached_trajectory_hash_mismatch:{path_field}"
+            )
+    _require_mapping("stage_r_cached_metrics", payload.get("metrics"))
+    return payload
+
+
+def _execute_stage_r_identity(
+    *,
+    registry: AttemptRegistry,
+    item: dict[str, Any],
+    numerical_runner: StageRNumericalRunner,
+    spectral_audit_dir: Path,
+) -> dict[str, Any]:
+    identity = _attempt_identity_from_item(item)
+    if canonical_sha256(_json_ready(item["config"])) != identity.config_hash:
+        raise StageRPlanError(
+            f"stage_r_identity_config_hash_mismatch:{identity.sha256}"
+        )
+    result_dir = registry.trusted_cache_root / identity.sha256
+    receipt_path = result_dir / "cache_receipt.json"
+    cache_hit = receipt_path.is_file()
+    if cache_hit:
+        evidence = CacheEvidence.from_path(
+            receipt_path,
+            expected_identity=identity,
+            trusted_cache_root=registry.trusted_cache_root,
+        )
+        payload = _load_stage_r_cache_result(evidence=evidence)
+        registry.record_cache_hit(identity, evidence=evidence)
+    else:
+        def operation() -> dict[str, Any]:
+            numerical = numerical_runner(item, spectral_audit_dir)
+            return _write_stage_r_cache_result(
+                result_dir=result_dir,
+                identity=identity,
+                item=item,
+                numerical=numerical,
+            )
+
+        payload = registry.execute_registered(identity, operation)
+        evidence = CacheEvidence.from_path(
+            receipt_path,
+            expected_identity=identity,
+            trusted_cache_root=registry.trusted_cache_root,
+        )
+        registry.bind_cache_evidence(identity, evidence=evidence)
+    return {
+        "identity_sha256": identity.sha256,
+        "stage": item["stage"],
+        "record_id": item["record_id"],
+        "scene": item["scene"],
+        "filter_profile_id": item["filter_profile_id"],
+        "recovery_candidate_id": item["recovery_candidate_id"],
+        "candidate_min_bpm": item["candidate_min_bpm"],
+        "cache_hit": cache_hit,
+        "cache_receipt_sha256": evidence.receipt_sha256,
+        "result_sha256": evidence.result_sha256,
+        "metrics": dict(payload["metrics"]),
+        "spectral_audit": payload.get("spectral_audit"),
+    }
+
+
+def _selection_recovery_delay(metrics: Mapping[str, Any]) -> float:
+    raw = metrics.get("max_recovered_delay_s")
+    if raw is not None:
+        value = float(raw)
+    elif int(metrics.get("recovery_episode_count", 0)) == 0:
+        value = 0.0
+    else:
+        value = float(metrics["total_window_count"])
+    if not math.isfinite(value) or value < 0.0:
+        raise StageRPlanError("stage_r_recovery_delay_invalid")
+    return value
+
+
+def _threshold_diagnostic_summary(
+    result_rows: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    rows: list[dict[str, Any]] = []
+    for floor_bpm in sorted(_FIXED_FLOOR_BPM):
+        metrics = [
+            _require_mapping("diagnostic_metrics", row["metrics"])
+            for row in result_rows
+            if row["stage"] == _DIAGNOSTIC_STAGE
+            and float(row["candidate_min_bpm"]) == floor_bpm
+        ]
+        if len(metrics) != 12:
+            raise StageRPlanError(
+                f"stage_r_diagnostic_result_count_mismatch:{floor_bpm}"
+            )
+        rows.append(
+            {
+                "candidate_min_bpm": floor_bpm,
+                "record_count": 12,
+                "worst_l10": max(
+                    int(item["longest_e10_run_windows"])
+                    for item in metrics
+                ),
+                "worst_l20": max(
+                    int(item["longest_e20_run_windows"])
+                    for item in metrics
+                ),
+                "worst_mae": max(
+                    float(item["final_motion_mae_bpm"])
+                    for item in metrics
+                ),
+                "mean_mae": sum(
+                    float(item["final_motion_mae_bpm"])
+                    for item in metrics
+                )
+                / 12.0,
+                "right_censored_recovery_count": sum(
+                    int(item["right_censored_recovery_count"])
+                    for item in metrics
+                ),
+                "nominatable": False,
+            }
+        )
+    payload = {
+        "summary_version": "lyx_stage_r_threshold_diagnostic_v1",
+        "diagnostic_only": True,
+        "may_modify_formal_candidates": False,
+        "fifty_bpm_endpoint_nominatable": False,
+        "thresholds": rows,
+    }
+    payload["summary_sha256"] = canonical_sha256(payload)
+    return payload
+
+
+def _build_stage_r_selection(
+    *,
+    proposal: Mapping[str, Any],
+    result_rows: Sequence[Mapping[str, Any]],
+    baseline_metrics_path: Path,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    baseline_payload = read_json(baseline_metrics_path)
+    baseline_records = _require_list(
+        "baseline_metric_records",
+        baseline_payload.get("records"),
+    )
+    independent = {
+        str(item["sample_id"]): _require_mapping(
+            "independent_metrics",
+            _require_mapping("baseline_metric_record", item).get("metrics"),
+        )
+        for item in baseline_records
+    }
+    formal = [
+        row for row in result_rows if row["stage"] == _FORMAL_STAGE
+    ]
+    if len(formal) != 108:
+        raise StageRPlanError("stage_r_formal_result_count_mismatch")
+    by_coordinate = {
+        (
+            str(row["recovery_candidate_id"]),
+            str(row["filter_profile_id"]),
+            str(row["record_id"]),
+        ): row
+        for row in formal
+    }
+    if len(by_coordinate) != 108:
+        raise StageRPlanError("stage_r_formal_result_coordinate_mismatch")
+    spectral_hashes: dict[tuple[str, str], set[str]] = {}
+    for row in formal:
+        spectral = _require_mapping(
+            "formal_spectral_audit",
+            row.get("spectral_audit"),
+        )
+        spectral_hashes.setdefault(
+            (
+                str(row["filter_profile_id"]),
+                str(row["record_id"]),
+            ),
+            set(),
+        ).add(
+            _require_hash(
+                "spectral_audit_sha256",
+                spectral.get("audit_sha256"),
+            )
+        )
+    if (
+        len(spectral_hashes) != 36
+        or any(len(hashes) != 1 for hashes in spectral_hashes.values())
+    ):
+        raise StageRPlanError(
+            "stage_r_spectral_audit_candidate_invariance_mismatch"
+        )
+    control_id = "current_fixed_floor_control_v1"
+    panel = [
+        RecoveryPanelRecord(
+            record_id=str(item["record_id"]),
+            scene=str(item["scene"]),
+            true_rise_applicable=bool(item["true_rise_applicable"]),
+        )
+        for item in _require_list(
+            "record_panel",
+            proposal.get("record_panel"),
+        )
+    ]
+    sentinel_ids = [
+        str(proposal["sentinels"][role]["profile_id"])
+        for role in _SENTINEL_ROLES
+    ]
+    evaluations: list[RecoveryCandidateEvaluation] = []
+    serialized: list[dict[str, Any]] = []
+    for candidate in _require_list(
+        "recovery_candidates",
+        proposal.get("recovery_candidates"),
+    ):
+        candidate_id = str(candidate["candidate_id"])
+        records: list[RecoveryRecordEvaluation] = []
+        for panel_record in panel:
+            for sentinel_id in sentinel_ids:
+                row = by_coordinate[
+                    (candidate_id, sentinel_id, panel_record.record_id)
+                ]
+                current = by_coordinate[
+                    (control_id, sentinel_id, panel_record.record_id)
+                ]
+                metrics = _require_mapping(
+                    "formal_metrics",
+                    row["metrics"],
+                )
+                current_metrics = _require_mapping(
+                    "current_formal_metrics",
+                    current["metrics"],
+                )
+                independent_metrics = independent[panel_record.record_id]
+                spectral = _require_mapping(
+                    "formal_spectral_audit",
+                    row["spectral_audit"],
+                )
+                records.append(
+                    RecoveryRecordEvaluation(
+                        record_id=panel_record.record_id,
+                        sentinel_id=sentinel_id,
+                        scene=panel_record.scene,
+                        spectral_gate_passed=bool(
+                            spectral.get("stability_pass")
+                            and spectral.get("spectral_pass")
+                        ),
+                        l10=float(
+                            metrics["longest_e10_run_windows"]
+                        ),
+                        l20=float(
+                            metrics["longest_e20_run_windows"]
+                        ),
+                        mae=float(metrics["final_motion_mae_bpm"]),
+                        independent_l10=float(
+                            independent_metrics[
+                                "longest_e10_run_windows"
+                            ]
+                        ),
+                        independent_l20=float(
+                            independent_metrics[
+                                "longest_e20_run_windows"
+                            ]
+                        ),
+                        independent_mae=float(
+                            independent_metrics["final_motion_mae_bpm"]
+                        ),
+                        current_l10=float(
+                            current_metrics[
+                                "longest_e10_run_windows"
+                            ]
+                        ),
+                        current_mae=float(
+                            current_metrics["final_motion_mae_bpm"]
+                        ),
+                        recovery_delay=_selection_recovery_delay(
+                            metrics
+                        ),
+                        right_censored_recovery_count=int(
+                            metrics["right_censored_recovery_count"]
+                        ),
+                        current_right_censored_recovery_count=int(
+                            current_metrics[
+                                "right_censored_recovery_count"
+                            ]
+                        ),
+                        true_rise_underestimate=(
+                            float(
+                                metrics["max_rise_underestimate_bpm"]
+                            )
+                            if panel_record.true_rise_applicable
+                            and metrics.get(
+                                "max_rise_underestimate_bpm"
+                            )
+                            is not None
+                            else None
+                        ),
+                        current_true_rise_underestimate=(
+                            float(
+                                current_metrics[
+                                    "max_rise_underestimate_bpm"
+                                ]
+                            )
+                            if panel_record.true_rise_applicable
+                            and current_metrics.get(
+                                "max_rise_underestimate_bpm"
+                            )
+                            is not None
+                            else None
+                        ),
+                    )
+                )
+        evaluation = RecoveryCandidateEvaluation(
+            candidate_id=candidate_id,
+            mechanism_complexity=int(candidate["mechanism_complexity"]),
+            records=tuple(records),
+        )
+        evaluations.append(evaluation)
+        serialized.append(asdict(evaluation))
+    selection = select_recovery_candidate_evaluations(
+        evaluations,
+        expected_records=panel,
+        expected_sentinel_ids=sentinel_ids,
+    )
+    return selection, serialized
+
+
+def execute_stage_r_proposal(
+    *,
+    proposal_dir: Path,
+    authorization_receipt_path: Path | None,
+    governance_dir: Path,
+    output_dir: Path,
+    source_root: Path,
+    _numerical_runner: StageRNumericalRunner | None = None,
+    progress_callback: StageRProgressCallback | None = None,
+) -> dict[str, Any]:
+    """Execute only the exact authorized Stage R proposal, resumably."""
+
+    proposal_root = Path(proposal_dir).resolve()
+    proposal = read_json(
+        proposal_root / "stage_r_execution_proposal.json"
+    )
+    receipt = (
+        None
+        if authorization_receipt_path is None
+        else read_json(Path(authorization_receipt_path).resolve())
+    )
+    authorization = validate_stage_r_execution_authorization(
+        proposal,
+        receipt=receipt,
+    )
+    source_paths, source_budget = _validate_stage_r_execution_preflight(
+        proposal_dir=proposal_root,
+        proposal=proposal,
+        source_root=source_root,
+    )
+    governance_root = Path(governance_dir).resolve()
+    governance_budget_payload = read_json(
+        governance_root / "budget_contract.json"
+    )
+    governance_budget = _budget_contract_from_payload(
+        governance_budget_payload
+    )
+    if (
+        governance_budget.sha256 != source_budget.sha256
+        or governance_budget.to_dict() != source_budget.to_dict()
+    ):
+        raise StageRPlanError("stage_r_governance_budget_mismatch")
+    exploration = _exploration_registry_from_payload(
+        read_json(governance_root / "exploration_registry.json")
+    )
+    registry = AttemptRegistry.open(
+        governance_root / "attempt_registry.json",
+        budget_contract=governance_budget,
+        exploration_registry=exploration,
+    )
+    raw_identities = _require_list(
+        "stage_r_identities",
+        proposal.get("identities"),
+    )
+    identities = tuple(
+        _attempt_identity_from_item(
+            _require_mapping("stage_r_identity", item)
+        )
+        for item in raw_identities
+    )
+    if (
+        len(identities) != 168
+        or [identity.sha256 for identity in identities]
+        != [str(item["identity_sha256"]) for item in raw_identities]
+    ):
+        raise StageRPlanError(
+            "stage_r_execution_identity_matrix_mismatch"
+        )
+
+    destination = Path(output_dir).resolve()
+    destination.mkdir(parents=True, exist_ok=True)
+    binding_path = destination / "execution_binding.json"
+    binding = {
+        "binding_version": "lyx_stage_r_execution_binding_v1",
+        "proposal_sha256": proposal["proposal_sha256"],
+        "authorization_sha256": canonical_sha256(authorization),
+        "solver_source_bundle_sha256": identities[0].solver_hash,
+        "evaluation_hash": identities[0].evaluation_hash,
+    }
+    binding["binding_sha256"] = canonical_sha256(binding)
+    if binding_path.is_file():
+        if read_json(binding_path) != binding:
+            raise StageRPlanError(
+                "stage_r_execution_binding_mismatch"
+            )
+    else:
+        atomic_write_json(binding_path, binding)
+
+    completion_path = destination / "stage_r_completion.json"
+    if completion_path.is_file():
+        completion = read_json(completion_path)
+        _verify_embedded_hash(
+            completion,
+            hash_field="completion_sha256",
+            artifact_name="stage_r_completion",
+        )
+        if completion.get("proposal_sha256") != proposal[
+            "proposal_sha256"
+        ]:
+            raise StageRPlanError(
+                "stage_r_completion_proposal_mismatch"
+            )
+        return completion
+
+    registered = registry.register_identities(identities)
+    if registered != tuple(identity.sha256 for identity in identities):
+        raise StageRPlanError("stage_r_bulk_registration_mismatch")
+
+    runner = _numerical_runner or _run_stage_r_numerical_identity
+    spectral_audit_dir = destination / "spectral_audits"
+    results: list[dict[str, Any]] = []
+    for index, raw_item in enumerate(raw_identities, start=1):
+        result = _execute_stage_r_identity(
+            registry=registry,
+            item=dict(
+                _require_mapping("stage_r_identity", raw_item)
+            ),
+            numerical_runner=runner,
+            spectral_audit_dir=spectral_audit_dir,
+        )
+        results.append(result)
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "event": "stage_r_identity_complete",
+                    "completed": index,
+                    "total": len(raw_identities),
+                    "identity_sha256": result["identity_sha256"],
+                    "stage": result["stage"],
+                    "record_id": result["record_id"],
+                    "cache_hit": result["cache_hit"],
+                }
+            )
+    result_index = {
+        "index_version": "lyx_stage_r_result_index_v1",
+        "proposal_sha256": proposal["proposal_sha256"],
+        "result_count": len(results),
+        "results": results,
+    }
+    result_index["index_sha256"] = canonical_sha256(result_index)
+    atomic_write_json(destination / "identity_result_index.json", result_index)
+
+    diagnostic = _threshold_diagnostic_summary(results)
+    atomic_write_json(
+        destination / "threshold_diagnostic_summary.json",
+        diagnostic,
+    )
+    selection, evaluations = _build_stage_r_selection(
+        proposal=proposal,
+        result_rows=results,
+        baseline_metrics_path=source_paths["baseline_metrics"],
+    )
+    evaluation_payload = {
+        "evaluation_version": "lyx_stage_r_formal_evaluations_v1",
+        "proposal_sha256": proposal["proposal_sha256"],
+        "candidate_evaluations": evaluations,
+    }
+    evaluation_payload["evaluation_sha256"] = canonical_sha256(
+        evaluation_payload
+    )
+    atomic_write_json(
+        destination / "formal_candidate_evaluations.json",
+        evaluation_payload,
+    )
+    atomic_write_json(
+        destination / "recovery_selection.json",
+        selection,
+    )
+    registry_summary = registry.summary()
+    diagnostic_runs = sum(
+        row["stage"] == _DIAGNOSTIC_STAGE
+        and not row["cache_hit"]
+        for row in results
+    )
+    formal_runs = sum(
+        row["stage"] == _FORMAL_STAGE and not row["cache_hit"]
+        for row in results
+    )
+    completion = {
+        "completion_version": "lyx_stage_r_completion_v1",
+        "status": selection["status"],
+        "evidence_class": "development_reuse_pilot",
+        "proposal_sha256": proposal["proposal_sha256"],
+        "authorization_sha256": canonical_sha256(authorization),
+        "diagnostic_result_count": 60,
+        "formal_result_count": 108,
+        "diagnostic_solver_run_count": diagnostic_runs,
+        "formal_solver_run_count": formal_runs,
+        "independent_bo_run_count": 0,
+        "provisional_recovery_id": selection[
+            "provisional_recovery_id"
+        ],
+        "rollback_backup_id": selection["rollback_backup_id"],
+        "next_state": (
+            "awaiting_human_independent_bo_decision"
+            if selection["status"] == "no_safe_recovery_candidate"
+            else "ready_for_stage_f_filter_matrix"
+        ),
+        "attempt_registry_summary": registry_summary,
+        "artifacts": {
+            name: file_sha256(destination / name)
+            for name in (
+                "execution_binding.json",
+                "identity_result_index.json",
+                "threshold_diagnostic_summary.json",
+                "formal_candidate_evaluations.json",
+                "recovery_selection.json",
+            )
+        },
+    }
+    completion["completion_sha256"] = canonical_sha256(completion)
+    atomic_write_json(completion_path, completion)
+    governance_receipt = {
+        "receipt_version": "lyx_stage_r_governance_receipt_v1",
+        "status": selection["status"],
+        "proposal_sha256": proposal["proposal_sha256"],
+        "completion_sha256": completion["completion_sha256"],
+        "attempt_registry_sha256": file_sha256(
+            governance_root / "attempt_registry.json"
+        ),
+        "attempt_registry_summary": registry_summary,
+        "diagnostic_unique_identities": 60,
+        "formal_unique_identities": 108,
+        "independent_bo_run_count": 0,
+    }
+    governance_receipt["receipt_sha256"] = canonical_sha256(
+        governance_receipt
+    )
+    atomic_write_json(
+        governance_root / "stage_r_governance_receipt.json",
+        governance_receipt,
+    )
+    return completion
 
 
 def _parser() -> argparse.ArgumentParser:

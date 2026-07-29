@@ -183,6 +183,39 @@ def test_attempt_registry_rejects_unregistered_and_limits_retry(
     assert summary["retry_count"] == 1
 
 
+def test_bulk_registration_is_atomic_when_budget_would_overflow(
+    tmp_path: Path,
+) -> None:
+    budget = BudgetContract(
+        stage_unique_limits={"diagnostic": 2},
+        max_unique_identities=2,
+        max_attempts=4,
+        retry_limit=1,
+    )
+    exploration = ExplorationRegistry.zero_budget_v1()
+    registry = AttemptRegistry.create(
+        tmp_path / "attempt_registry.json",
+        budget_contract=budget,
+        exploration_registry=exploration,
+    )
+    identities = tuple(
+        _identity(
+            record_id=f"record-{index}",
+            stage="diagnostic",
+            attempt_kind="diagnostic",
+        )
+        for index in range(3)
+    )
+
+    with pytest.raises(
+        HumanGateRequiredError,
+        match="unique_budget_exceeded:diagnostic",
+    ):
+        registry.register_identities(identities)
+
+    assert registry.summary()["planned_unique_identity_count"] == 0
+
+
 def test_registered_execution_is_only_nominatable_after_evidence(
     tmp_path: Path,
 ) -> None:
