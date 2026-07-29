@@ -8,11 +8,15 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from ppg_hr.v2 import recovery_stage_f_execution as stage_f_execution
 from ppg_hr.v2 import recovery_stage_f_experiment as stage_f_module
+from ppg_hr.v2 import recovery_stage_f_plan as stage_f_plan
+from ppg_hr.v2 import recovery_stage_f_reporting as stage_f_reporting
 from ppg_hr.v2 import recovery_stage_f_runner as stage_f_runner
 from ppg_hr.v2.phase2_experiment_io import (
     atomic_write_json,
     file_sha256,
+    read_json,
 )
 from ppg_hr.v2.recovery_contracts import canonical_sha256
 from ppg_hr.v2.recovery_experiment_governance import (
@@ -524,13 +528,14 @@ def _patch_stage_f_runtime(monkeypatch) -> None:
             "source_bundle_sha256": bundle,
         }
 
+    for module in (stage_f_plan, stage_f_execution):
+        monkeypatch.setattr(
+            module,
+            "runtime_source_identity",
+            fake_runtime_identity,
+        )
     monkeypatch.setattr(
-        stage_f_module,
-        "runtime_source_identity",
-        fake_runtime_identity,
-    )
-    monkeypatch.setattr(
-        stage_f_module,
+        stage_f_plan,
         "stage_r_metric_contract_v1",
         lambda: {
             "contract_version": "test_metric",
@@ -540,7 +545,7 @@ def _patch_stage_f_runtime(monkeypatch) -> None:
         },
     )
     monkeypatch.setattr(
-        stage_f_module,
+        stage_f_plan,
         "stage_r_spectral_gate_contract_v1",
         lambda: {
             "contract_version": "test_spectral",
@@ -1019,7 +1024,7 @@ def test_stage_f_proposal_publication_is_atomic_and_zero_run(
         tmp_path,
         monkeypatch,
     )
-    receipt = stage_f_module.read_json(
+    receipt = read_json(
         destination / "proposal_receipt.json"
     )
 
@@ -1029,6 +1034,17 @@ def test_stage_f_proposal_publication_is_atomic_and_zero_run(
     assert receipt["diagnostic_solver_run_count"] == 0
     assert receipt["independent_bo_run_count"] == 0
     assert receipt["planned_unique_identity_count"] == 192
+    evaluation = read_json(
+        destination / "evaluation_source_identity.json"
+    )
+    assert evaluation["root_modules"] == [
+        "ppg_hr.v2.recovery_stage_f_contracts",
+        "ppg_hr.v2.recovery_stage_f_execution",
+        "ppg_hr.v2.recovery_stage_f_experiment",
+        "ppg_hr.v2.recovery_stage_f_plan",
+        "ppg_hr.v2.recovery_stage_f_reporting",
+        "ppg_hr.v2.recovery_stage_f_runner",
+    ]
     for name, expected_hash in receipt["artifacts"].items():
         assert file_sha256(destination / name) == expected_hash
 
@@ -1039,7 +1055,7 @@ def test_stage_f_execution_rejects_tampered_proposal_receipt_before_governance_a
 ) -> None:
     proposal_dir = _publish_stage_f_proposal(tmp_path, monkeypatch)
     receipt_path = proposal_dir / "proposal_receipt.json"
-    receipt = stage_f_module.read_json(receipt_path)
+    receipt = read_json(receipt_path)
     receipt["proposal_sha256"] = "f" * 64
     atomic_write_json(receipt_path, receipt)
     output_dir = tmp_path / "stage_f_execution"
@@ -1129,14 +1145,14 @@ def test_stage_f_execution_registers_two_matrices_and_is_resumable(
         exploration_registry=exploration,
     )
     writes: list[str] = []
-    original_writer = stage_f_module.atomic_write_json
+    original_writer = stage_f_reporting.atomic_write_json
 
     def recording_writer(path: Path, payload: object) -> None:
         writes.append(Path(path).name)
         original_writer(path, payload)
 
     monkeypatch.setattr(
-        stage_f_module,
+        stage_f_reporting,
         "atomic_write_json",
         recording_writer,
     )
@@ -1215,19 +1231,19 @@ def test_stage_f_execution_registers_two_matrices_and_is_resumable(
                 include_audit_hash=False,
             )
 
-        monkeypatch.setattr(stage_f_module, "solve_v2", fake_solve)
+        monkeypatch.setattr(stage_f_execution, "solve_v2", fake_solve)
         monkeypatch.setattr(
-            stage_f_module,
+            stage_f_execution,
             "load_v2_reference",
             lambda _path: np.asarray([[0.0, 60.0]]),
         )
         monkeypatch.setattr(
-            stage_f_module,
+            stage_f_execution,
             "evaluate_recovery_profile_metrics",
             fake_evaluate,
         )
         monkeypatch.setattr(
-            stage_f_module,
+            stage_f_execution,
             "audit_stage_r_profile_record",
             fake_audit,
         )
@@ -1273,13 +1289,13 @@ def test_stage_f_execution_registers_two_matrices_and_is_resumable(
     ] == expected_unique_identity_count + 1
     assert completion["independent_bo_run_count"] == 0
     assert writes[-1] == "stage_f_completion.json"
-    primary = stage_f_module.read_json(
+    primary = read_json(
         output_dir / "profile_enumeration_matrix.json"
     )
-    control = stage_f_module.read_json(
+    control = read_json(
         output_dir / "same_role_current_control_matrix.json"
     )
-    upper = stage_f_module.read_json(
+    upper = read_json(
         output_dir / "profile_sample_in_upper_bound.json"
     )
     assert len(primary["rows"]) == 96
@@ -1335,7 +1351,7 @@ def test_stage_f_execution_registers_two_matrices_and_is_resumable(
     )
     assert rerun == completion
     completion_path = output_dir / "stage_f_completion.json"
-    tampered = stage_f_module.read_json(completion_path)
+    tampered = read_json(completion_path)
     tampered.pop("completion_sha256")
     tampered["independent_bo_run_count"] = 1
     tampered["completion_sha256"] = canonical_sha256(tampered)
