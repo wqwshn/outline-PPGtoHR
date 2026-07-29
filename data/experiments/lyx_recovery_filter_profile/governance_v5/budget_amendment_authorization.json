@@ -1,0 +1,19 @@
+{
+  "added_unique_identities": 8,
+  "approval_source": "codex_thread_user_message",
+  "approved": true,
+  "approved_at": "2026-07-29T10:57:12.3736985+08:00",
+  "approved_by": "user",
+  "attempt_kind": "exploration",
+  "authorization_version": "lyx_filter_rate_normalized_budget_authorization_v1",
+  "decision_state": "awaiting_human_budget_decision",
+  "exploration_unique_budget": 8,
+  "independent_bo_authorized": false,
+  "max_attempts": 1512,
+  "max_unique_identities": 756,
+  "normal_unique_identity_limit": 744,
+  "profile_design_rule_hash": "711942f542bda86fefdebcbc82564a1eaa3b3ce5ab6289b7cf1e59496e251f26",
+  "proposal_sha256": "3600155f2967bfa9a5c12bddad1cb7cab4d8be0fe1bfcb23f41657c2e23ea168",
+  "record_manifest_hash": "c5e7291cf2da3a6ef25a03a96d763373b9cacdaee521c0378413cee6dc9666f1",
+  "stage": "filter_profile_rate_normalization_exploration"
+}

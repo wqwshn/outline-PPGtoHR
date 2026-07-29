@@ -695,9 +695,12 @@ def build_filter_profile_receipt(
     evaluation_hash: str,
     design_rule_sha256: str,
     record_manifest_sha256: str,
+    attempt_kind: Literal["diagnostic", "exploration"] = "diagnostic",
 ) -> dict[str, Any]:
     """Aggregate four pre-registered record diagnostics into one fail-closed receipt."""
 
+    if attempt_kind not in {"diagnostic", "exploration"}:
+        raise StabilityAuditError(f"unsupported_profile_receipt_attempt_kind:{attempt_kind}")
     for name, value in (
         ("library_sha256", library_sha256),
         ("solver_hash", solver_hash),
@@ -723,8 +726,14 @@ def build_filter_profile_receipt(
     stability_pass = all(bool(item.get("stability_pass")) for item in record_audits)
     spectral_pass = all(bool(item.get("spectral_pass")) for item in record_audits)
     eligible = stability_pass and spectral_pass
+    identity_field = f"{attempt_kind}_identity_sha256"
+    result_field = f"{attempt_kind}_result_sha256"
     payload: dict[str, Any] = {
-        "receipt_version": "lyx_filter_profile_receipt_v1",
+        "receipt_version": (
+            "lyx_filter_profile_receipt_v1"
+            if attempt_kind == "diagnostic"
+            else "lyx_filter_profile_receipt_v2"
+        ),
         "profile_id": profile.profile_id,
         "profile_sha256": profile.sha256,
         "design_role": profile.design_role,
@@ -741,18 +750,18 @@ def build_filter_profile_receipt(
         "evaluation_hash": evaluation_hash,
         "design_rule_sha256": design_rule_sha256,
         "record_manifest_sha256": record_manifest_sha256,
-        "diagnostic_identity_sha256": sorted(
+        identity_field: sorted(
             str(item["identity_sha256"]) for item in record_audits
         ),
-        "diagnostic_result_sha256": sorted(str(item["result_sha256"]) for item in record_audits),
+        result_field: sorted(str(item["result_sha256"]) for item in record_audits),
         "record_identity_hashes": sorted(
             (
                 {
                     "record_id": str(item["record_id"]),
                     "data_sha256": str(item["data_sha256"]),
                     "reference_sha256": str(item["reference_sha256"]),
-                    "diagnostic_identity_sha256": str(item["identity_sha256"]),
-                    "diagnostic_result_sha256": str(item["result_sha256"]),
+                    identity_field: str(item["identity_sha256"]),
+                    result_field: str(item["result_sha256"]),
                 }
                 for item in record_audits
             ),
@@ -794,5 +803,7 @@ def build_filter_profile_receipt(
         "status": "eligible" if eligible else "rejected",
         "may_enter_formal_matrix": eligible,
     }
+    if attempt_kind == "exploration":
+        payload["attempt_kind"] = attempt_kind
     payload["receipt_sha256"] = _canonical_sha256(payload)
     return payload

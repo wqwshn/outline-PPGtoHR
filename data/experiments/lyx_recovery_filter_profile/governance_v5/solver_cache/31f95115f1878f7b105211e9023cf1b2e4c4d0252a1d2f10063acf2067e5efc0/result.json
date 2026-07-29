@@ -1,0 +1,43 @@
+{
+  "audit": {
+    "configured_max_taps": 5,
+    "effective_mu_max": 0.00999815093995182,
+    "effective_mu_median": 0.007901417876413443,
+    "effective_mu_min": 0.0005380463736899838,
+    "input_energy_median": 123.15910317486777,
+    "lms_stage_count": 402,
+    "max_tap_hit_count": 52,
+    "motion_artifact_suppression_db_median": 0.6948568090698772,
+    "nonfinite_count": 0,
+    "record_id": "kaihe3_LYX_0613",
+    "reference_energy_median": 0.032064617953118955,
+    "residual_artifact_abs_corr_median": 0.06781900855181723,
+    "residual_rms_ratio_p95": 0.9983900715320305,
+    "residual_tail_head_ratio_max": 12.406253661967108,
+    "runtime_seconds": 1.1101454000017839,
+    "scene": "kaihe",
+    "spectral_pass": true,
+    "stability_load_max": 0.04058482920217247,
+    "stability_pass": false,
+    "true_peak_retention_ratio_median": 0.914187084464235,
+    "weight_norm_max": 0.6092049782298787
+  },
+  "identity": {
+    "attempt_kind": "diagnostic",
+    "cache_identity_sha256": "31f95115f1878f7b105211e9023cf1b2e4c4d0252a1d2f10063acf2067e5efc0",
+    "config_hash": "d55523d52d1e8cd3d03d25a07b7bcbb15d13a6260844911b582cb1f5e3f1d71a",
+    "data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+    "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+    "identity_sha256": "31f95115f1878f7b105211e9023cf1b2e4c4d0252a1d2f10063acf2067e5efc0",
+    "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+    "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+    "record_id": "kaihe3_LYX_0613",
+    "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+    "stage": "filter_profile_stability_audit"
+  },
+  "producer": "content_addressed_solver_cache_v1",
+  "profile_id": "p25-long-mid",
+  "record_id": "kaihe3_LYX_0613",
+  "status": "complete",
+  "valid": true
+}

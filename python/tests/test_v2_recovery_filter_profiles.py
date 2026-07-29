@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import os
+import shutil
 from dataclasses import replace
 from pathlib import Path
 
@@ -8,10 +10,17 @@ import numpy as np
 import pytest
 
 from ppg_hr.v2.phase2_experiment_io import atomic_write_json, file_sha256
+from ppg_hr.v2.recovery_experiment_governance import (
+    AttemptRegistry,
+    BudgetContract,
+    ExplorationRegistry,
+)
 from ppg_hr.v2.recovery_filter_profile_experiment import (
+    _build_rate_normalized_audit_binding_manifest,
     _canonical_sha256,
     _commit_preparation_pair,
     _path_exists,
+    _publish_rate_normalized_reconciliation_pair,
     _require_committed_preparation_pair,
     _validate_frozen_spec_gate_sources,
     _validate_spec_gate_audit_contract,
@@ -266,6 +275,160 @@ def test_profile_receipt_requires_all_four_records_to_pass() -> None:
     )
     assert failed["status"] == "rejected"
     assert failed["may_enter_formal_matrix"] is False
+
+
+def test_exploration_profile_receipt_uses_exploration_identity_terms() -> None:
+    profile = _profiles()[0]
+    records = [_record_audit(scene=scene) for scene in ("jianpan", "kaihe", "run", "xiezi")]
+
+    receipt = build_filter_profile_receipt(
+        profile,
+        records,
+        audit_contract=StabilityAuditContract.frozen_v1(),
+        library_sha256="a" * 64,
+        solver_hash="b" * 64,
+        code_hash="c" * 64,
+        evaluation_hash="d" * 64,
+        design_rule_sha256="e" * 64,
+        record_manifest_sha256="f" * 64,
+        attempt_kind="exploration",
+    )
+
+    assert receipt["receipt_version"] == "lyx_filter_profile_receipt_v2"
+    assert receipt["attempt_kind"] == "exploration"
+    assert len(receipt["exploration_identity_sha256"]) == 4
+    assert len(receipt["exploration_result_sha256"]) == 4
+    assert "diagnostic_identity_sha256" not in receipt
+    assert "diagnostic_result_sha256" not in receipt
+    assert all(
+        "exploration_identity_sha256" in item
+        and "exploration_result_sha256" in item
+        and "diagnostic_identity_sha256" not in item
+        and "diagnostic_result_sha256" not in item
+        for item in receipt["record_identity_hashes"]
+    )
+
+
+def test_rate_normalized_audit_binding_rejects_materialized_audit_tampering(
+    tmp_path: Path,
+) -> None:
+    root = Path("data/experiments/lyx_recovery_filter_profile")
+    output_dir = tmp_path / "filter_profiles_v4"
+    governance_dir = tmp_path / "governance_v5"
+    shutil.copytree(root / "filter_profiles_v4", output_dir)
+    shutil.copytree(root / "governance_v5", governance_dir)
+    plan = json.loads(
+        (output_dir / "rate_normalized_supplement_plan.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    audit_path = (
+        output_dir
+        / "record_audits"
+        / "p100-short-rate-normalized-low-40"
+        / "jianpan2_LYX_0708.json"
+    )
+    tampered = json.loads(audit_path.read_text(encoding="utf-8"))
+    tampered["stability_pass"] = False
+    atomic_write_json(audit_path, tampered)
+    registry = AttemptRegistry.open(
+        governance_dir / "attempt_registry.json",
+        budget_contract=BudgetContract.approved_v5(),
+        exploration_registry=ExplorationRegistry(
+            unique_budget=8,
+            allowed_identity_sha256=tuple(plan["exploration_identity_sha256"]),
+        ),
+    )
+    profiles = tuple(
+        FilterProfile(
+            profile_id=str(item["profile_id"]),
+            design_role=str(item["design_role"]),  # type: ignore[arg-type]
+            fs_target=int(item["fs_target"]),
+            memory_ms=int(item["memory_ms"]),
+            nominal_mu=float(item["nominal_mu"]),
+            recovery_sentinel_role=item.get("recovery_sentinel_role"),  # type: ignore[arg-type]
+        )
+        for item in plan["candidate_profiles"]
+    )
+    records = tuple(FilterAuditRecord(**item) for item in plan["records"])
+
+    with pytest.raises(
+        StabilityAuditError,
+        match="reconciliation_record_audit_cache_mismatch",
+    ):
+        _build_rate_normalized_audit_binding_manifest(
+            output_dir=output_dir,
+            registry=registry,
+            registry_payload=json.loads(
+                (governance_dir / "attempt_registry.json").read_text(
+                    encoding="utf-8"
+                )
+            ),
+            plan=plan,
+            profiles=profiles,
+            records=records,
+        )
+
+
+def test_rate_reconciliation_pair_rolls_back_and_commits_as_one_unit(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "output"
+    governance_dir = tmp_path / "governance"
+    output_dir.mkdir()
+    governance_dir.mkdir()
+    atomic_write_json(output_dir / "state.json", {"value": "old-output"})
+    atomic_write_json(governance_dir / "state.json", {"value": "old-governance"})
+
+    def fail(staged_output: Path, staged_governance: Path) -> dict[str, object]:
+        atomic_write_json(staged_output / "state.json", {"value": "new-output"})
+        atomic_write_json(
+            staged_governance / "state.json",
+            {"value": "new-governance"},
+        )
+        raise RuntimeError("injected-staging-failure")
+
+    with pytest.raises(RuntimeError, match="injected-staging-failure"):
+        _publish_rate_normalized_reconciliation_pair(
+            output_dir=output_dir,
+            governance_dir=governance_dir,
+            build=fail,
+        )
+    assert json.loads((output_dir / "state.json").read_text()) == {
+        "value": "old-output"
+    }
+    assert json.loads((governance_dir / "state.json").read_text()) == {
+        "value": "old-governance"
+    }
+    assert not (
+        tmp_path / ".rate_normalized_reconciliation_transaction.json"
+    ).exists()
+    assert not list(tmp_path.glob(".rate-normalized-reconciliation-*"))
+
+    def succeed(staged_output: Path, staged_governance: Path) -> dict[str, object]:
+        atomic_write_json(staged_output / "state.json", {"value": "new-output"})
+        atomic_write_json(
+            staged_governance / "state.json",
+            {"value": "new-governance"},
+        )
+        return {"status": "complete"}
+
+    result = _publish_rate_normalized_reconciliation_pair(
+        output_dir=output_dir,
+        governance_dir=governance_dir,
+        build=succeed,
+    )
+    assert result == {"status": "complete"}
+    assert json.loads((output_dir / "state.json").read_text()) == {
+        "value": "new-output"
+    }
+    assert json.loads((governance_dir / "state.json").read_text()) == {
+        "value": "new-governance"
+    }
+    assert not (
+        tmp_path / ".rate_normalized_reconciliation_transaction.json"
+    ).exists()
+    assert not list(tmp_path.glob(".rate-normalized-reconciliation-*"))
 
 
 def test_record_audit_applies_frozen_thresholds_without_weighted_score() -> None:
@@ -828,10 +991,11 @@ def test_rate_normalized_supplement_prepare_registers_without_running(
     assert prepared["plan"]["status"] == "prepared_zero_new_runs"
     assert prepared["plan"]["new_identity_count"] == 8
     assert prepared["governance_receipt"]["attempt_registry_summary"] == {
-        "logical_task_count": 129,
+        "logical_task_count": 65,
         "planned_unique_identity_count": 72,
         "actual_unique_run_count": 64,
-        "cache_hit_count": 64,
+        "cache_evidence_count": 64,
+        "cache_hit_count": 0,
         "failed_attempt_count": 1,
         "retry_count": 1,
     }
@@ -1101,3 +1265,181 @@ def test_spec_gate_supplement_selection_is_role_bounded_and_deterministic() -> N
         "selected_p100_profile_ids": ["p100-a", "p100-b"],
         "selected_profile_ids": ["p50-a", "p50-b", "p100-a", "p100-b"],
     }
+
+
+def test_committed_rate_normalized_completion_is_hash_closed_and_complete() -> None:
+    root = Path("data/experiments/lyx_recovery_filter_profile")
+    output_dir = root / "filter_profiles_v4"
+    governance_dir = root / "governance_v5"
+
+    def read(path: Path) -> dict:
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def verify_embedded(path: Path, field: str) -> str:
+        payload = read(path)
+        expected = str(payload.pop(field))
+        assert _canonical_sha256(payload) == expected
+        return expected
+
+    completion_path = output_dir / "rate_normalized_supplement_completion.json"
+    completion = read(completion_path)
+    assert verify_embedded(completion_path, "completion_sha256") == (
+        "50ae6259b0335009ebbab53a6c5f65528a973b0f60d71e9ba56db0954677f85b"
+    )
+    assert completion["status"] == "complete"
+    assert completion["new_rate_normalized_run_count"] == 8
+    assert completion["exploration_run_count"] == 8
+    assert completion["independent_bo_run_count"] == 0
+    assert completion["actual_hr_tracking_trajectory_count"] == 0
+    assert completion["evidence_class"] == "development_reuse_pilot"
+    assert completion["algorithm_level_holdout"] is False
+    assert completion["metadata_reconciliation"] == {
+        "kind": "zero_numerical_run_semantic_correction",
+        "source_completion_sha256": (
+            "ee27a889e4a73715af8235d0bda68b0d4f8a4749f5847cff95efcb477b825808"
+        ),
+        "attempt_registry_schema_from": "lyx_recovery_attempt_registry_v2",
+        "attempt_registry_schema_to": "lyx_recovery_attempt_registry_v3",
+        "cache_audit_binding_count": 8,
+        "cache_audit_binding_manifest_sha256": (
+            "79ac4111ac4ecc358632d366de4bbd422fcb779ec943a6d4eca927236da5e547"
+        ),
+        "publication_mode": "staged_pair_transaction_v1",
+        "new_solver_run_count": 0,
+        "new_exploration_run_count": 0,
+        "new_independent_bo_run_count": 0,
+        "new_hr_tracking_trajectory_count": 0,
+    }
+    assert completion["attempt_registry_summary"] == {
+        "logical_task_count": 73,
+        "planned_unique_identity_count": 72,
+        "actual_unique_run_count": 72,
+        "cache_evidence_count": 72,
+        "cache_hit_count": 0,
+        "failed_attempt_count": 1,
+        "retry_count": 1,
+    }
+
+    library_path = output_dir / "filter_profile_library_freeze.json"
+    library = read(library_path)
+    assert verify_embedded(library_path, "library_sha256") == completion[
+        "final_library_sha256"
+    ]
+    assert library["fs_target_quota"] == {"25": 3, "50": 3, "100": 2}
+    assert library["role_counts"] == {"core": 6, "coverage_boundary": 2}
+    assert library["recovery_sentinels"] == {
+        "conservative": "p50-short-low",
+        "intermediate": "p50-short-low-40",
+        "aggressive": "p100-short-rate-normalized-low-40",
+    }
+
+    plan = read(output_dir / "rate_normalized_supplement_plan.json")
+    exploration_registry = read(governance_dir / "exploration_registry.json")
+    assert exploration_registry["unique_budget"] == 8
+    assert exploration_registry["allowed_identity_sha256"] == plan[
+        "exploration_identity_sha256"
+    ]
+
+    record_audit_paths = sorted((output_dir / "record_audits").glob("*/*.json"))
+    record_audits = [read(path) for path in record_audit_paths]
+    assert len(record_audits) == 8
+    assert all(
+        audit["stability_pass"] is True and audit["spectral_pass"] is True
+        for audit in record_audits
+    )
+    assert {audit["identity_sha256"] for audit in record_audits} == set(
+        plan["exploration_identity_sha256"]
+    )
+
+    for profile_id, expected in completion[
+        "candidate_profile_receipt_sha256"
+    ].items():
+        path = output_dir / "candidate_profile_receipts" / f"{profile_id}.json"
+        assert verify_embedded(path, "receipt_sha256") == expected
+        receipt = read(path)
+        assert receipt["receipt_version"] == "lyx_filter_profile_receipt_v2"
+        assert receipt["attempt_kind"] == "exploration"
+        assert "diagnostic_identity_sha256" not in receipt
+        assert set(receipt["exploration_identity_sha256"]) <= set(
+            plan["exploration_identity_sha256"]
+        )
+    for profile_id, expected in completion["final_profile_receipt_sha256"].items():
+        path = output_dir / "filter_profile_receipts" / f"{profile_id}.json"
+        assert verify_embedded(path, "receipt_sha256") == expected
+        if profile_id.startswith("p100-short-rate-normalized"):
+            receipt = read(path)
+            assert receipt["receipt_version"] == "lyx_filter_profile_receipt_v2"
+            assert receipt["attempt_kind"] == "exploration"
+            assert "diagnostic_identity_sha256" not in receipt
+            assert set(receipt["exploration_identity_sha256"]) <= set(
+                plan["exploration_identity_sha256"]
+            )
+
+    governance = read(governance_dir / "governance_receipt.json")
+    assert governance["evidence_class"] == "development_reuse_pilot"
+    assert governance["algorithm_level_holdout"] is False
+    for name, expected in governance["artifacts"].items():
+        assert file_sha256(governance_dir / name) == expected
+    assert file_sha256(completion_path) == governance[
+        "rate_normalized_supplement_completion_sha256"
+    ]
+    reconciliation_path = output_dir / "rate_normalized_metadata_reconciliation.json"
+    reconciliation = read(reconciliation_path)
+    assert verify_embedded(reconciliation_path, "reconciliation_sha256") == (
+        "1280a4533a0aad74d12312acde41e267fa408469562ab5ce01119047c9d19702"
+    )
+    assert reconciliation["receipt_version"] == (
+        "lyx_rate_normalized_metadata_reconciliation_v2"
+    )
+    assert reconciliation["numeric_result_artifact_count"] == 72
+    assert reconciliation["cache_audit_binding_count"] == 8
+    assert reconciliation["cache_audit_binding_manifest_sha256"] == (
+        "79ac4111ac4ecc358632d366de4bbd422fcb779ec943a6d4eca927236da5e547"
+    )
+    assert reconciliation["publication_mode"] == "staged_pair_transaction_v1"
+    assert reconciliation["upgrades_reconciliation_sha256"] == (
+        "d48f7b0e1c19683b938e8baf3fa0463b9e6d81ba07cd9d355576f387ac4a781d"
+    )
+    assert reconciliation["new_solver_run_count"] == 0
+    assert reconciliation["new_exploration_run_count"] == 0
+    assert reconciliation["new_independent_bo_run_count"] == 0
+    assert reconciliation["new_hr_tracking_trajectory_count"] == 0
+    assert file_sha256(reconciliation_path) == governance[
+        "rate_normalized_metadata_reconciliation_sha256"
+    ]
+    frozen_completion_path = (
+        output_dir / "frozen_pre_reconciliation_rate_normalized_completion.json"
+    )
+    frozen_completion = read(frozen_completion_path)
+    assert frozen_completion["completion_sha256"] == (
+        "ee27a889e4a73715af8235d0bda68b0d4f8a4749f5847cff95efcb477b825808"
+    )
+    assert file_sha256(frozen_completion_path) == governance[
+        "frozen_pre_reconciliation_completion_sha256"
+    ]
+
+    attempt_registry = read(governance_dir / "attempt_registry.json")
+    assert attempt_registry["registry_version"] == "lyx_recovery_attempt_registry_v3"
+    exploration_entries = [
+        entry
+        for entry in attempt_registry["entries"].values()
+        if entry["identity"]["stage"]
+        == "filter_profile_rate_normalization_exploration"
+    ]
+    assert len(exploration_entries) == 8
+    assert all(
+        entry["identity"]["attempt_kind"] == "exploration"
+        and entry["status"] == "succeeded"
+        and len(entry["attempts"]) == 1
+        for entry in exploration_entries
+    )
+
+    reopened = AttemptRegistry.open(
+        governance_dir / "attempt_registry.json",
+        budget_contract=BudgetContract.approved_v5(),
+        exploration_registry=ExplorationRegistry(
+            unique_budget=8,
+            allowed_identity_sha256=tuple(plan["exploration_identity_sha256"]),
+        ),
+    )
+    assert reopened.summary() == completion["attempt_registry_summary"]

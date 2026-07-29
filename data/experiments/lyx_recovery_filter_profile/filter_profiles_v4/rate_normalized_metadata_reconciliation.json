@@ -1,0 +1,41 @@
+{
+  "algorithm_level_holdout": false,
+  "cache_audit_binding_count": 8,
+  "cache_audit_binding_manifest_sha256": "79ac4111ac4ecc358632d366de4bbd422fcb779ec943a6d4eca927236da5e547",
+  "corrected_attempt_registry_file_sha256": "6409c7947e1b6ceb207ffc26cf3c34e1b17c6929720f402fc73be1e44d18f045",
+  "corrected_attempt_registry_summary": {
+    "actual_unique_run_count": 72,
+    "cache_evidence_count": 72,
+    "cache_hit_count": 0,
+    "failed_attempt_count": 1,
+    "logical_task_count": 73,
+    "planned_unique_identity_count": 72,
+    "retry_count": 1
+  },
+  "corrected_completion_sha256": "50ae6259b0335009ebbab53a6c5f65528a973b0f60d71e9ba56db0954677f85b",
+  "evidence_class": "development_reuse_pilot",
+  "frozen_source_completion_file_sha256": "993b5d6b26cba0b275cf27b2234470c35cb2f2dc2b4374dabd3c759c67b5fe36",
+  "new_exploration_run_count": 0,
+  "new_hr_tracking_trajectory_count": 0,
+  "new_independent_bo_run_count": 0,
+  "new_solver_run_count": 0,
+  "numeric_result_artifact_count": 72,
+  "numeric_result_artifact_manifest_sha256": "e550882b182437670827fd5043ba04667ecb37baa767284153f37c9760419f2c",
+  "publication_mode": "staged_pair_transaction_v1",
+  "reason": "separate cache evidence from cache reuse, use exploration receipt terminology, and declare development-reuse evidence class",
+  "receipt_version": "lyx_rate_normalized_metadata_reconciliation_v2",
+  "reconciliation_sha256": "1280a4533a0aad74d12312acde41e267fa408469562ab5ce01119047c9d19702",
+  "source_attempt_registry_file_sha256": "2123b0ff99fb4ffda216709b13b84e47cb5f2896ddbdb9da603d89b498f7f560",
+  "source_attempt_registry_summary": {
+    "actual_unique_run_count": 72,
+    "cache_hit_count": 72,
+    "failed_attempt_count": 1,
+    "logical_task_count": 145,
+    "planned_unique_identity_count": 72,
+    "retry_count": 1
+  },
+  "source_completion_sha256": "ee27a889e4a73715af8235d0bda68b0d4f8a4749f5847cff95efcb477b825808",
+  "source_governance_receipt_file_sha256": "4eb708de2afb772a80850536aa3ac4ec9ff1d899ca110e886c629c6853691dba",
+  "status": "complete",
+  "upgrades_reconciliation_sha256": "d48f7b0e1c19683b938e8baf3fa0463b9e6d81ba07cd9d355576f387ac4a781d"
+}

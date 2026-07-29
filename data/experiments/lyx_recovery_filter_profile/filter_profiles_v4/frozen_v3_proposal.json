@@ -1,0 +1,22 @@
+{
+  "actual_hr_tracking_trajectory_count": 0,
+  "archive_candidate_evidence_sha256": "9e24c110adeebd9354c1c147bcb52aa0d96efade5408e6d0c4625e852949c369",
+  "audit_contract_sha256": "8e46582997dc08db81a7430d4443c0b84bdbc2558c4f638afce1fbd67a667ac4",
+  "budget_request_sha256": "73a29a3dfb4fdbf54455d74859bae120ce057833e1bfc23c4b970d8f1abb006b",
+  "cached_result_reclassification_count": 0,
+  "candidate_profile_count": 6,
+  "candidate_record_count": 4,
+  "design_rule_sha256": "93a320eb48ca2cf7407c7c74824d5308518e1d537452627eb6ceb0603be9a5f5",
+  "exploration_run_count": 0,
+  "independent_bo_authorized": false,
+  "may_execute": false,
+  "new_unique_identity_count": 24,
+  "proposal_sha256": "57d402b0b471a66d6f09766886744e8a50fc5d41c0d2a06db4c94544ddb2b556",
+  "proposal_version": "lyx_filter_spec_gate_supplement_proposal_v1",
+  "source_archive_evidence_artifact_sha256": "431e1424e8ad5f586e02447aa885b7835bf848890f2c4fbcc02a5788d9931cfe",
+  "source_completion_artifact_sha256": "a5b00a9cbd65f986e0ce85696e278173c6f2668afb223c90053f3d68da1dae42",
+  "source_completion_sha256": "0ce2802bf09dfc7caf4082710df683fef90bccb45d47fbac1992fff42a84fecf",
+  "source_plan_artifact_sha256": "3596e0829d2ae3d778060300ec83af529e7e38cfa5d523ad82fd5485ce6b406c",
+  "source_reclassification_artifact_sha256": "72502e137c9825c9e9ff3ce08bd7da262cf43ce29e210b648f537d8a7d3e5a5c",
+  "status": "awaiting_human_budget_decision"
+}

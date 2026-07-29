@@ -1,0 +1,36 @@
+{
+  "algorithm_level_holdout": false,
+  "artifacts": {
+    "attempt_registry.json": "6409c7947e1b6ceb207ffc26cf3c34e1b17c6929720f402fc73be1e44d18f045",
+    "budget_amendment_authorization.json": "8c46a878c7c40f9a58f71fc2546c2b7c4f202bcf855bc18756a545475021401c",
+    "budget_contract.json": "668af52f457882c0328ac8b51d819fc321e5ae854157b4d02462fcae4b58cfb7",
+    "exploration_registry.json": "7f414ebb2deb29e659cc2cb5a777d9a5146f1d362586a3e6f48531ee767b2cbd",
+    "frozen_pre_reconciliation_attempt_registry.json": "2123b0ff99fb4ffda216709b13b84e47cb5f2896ddbdb9da603d89b498f7f560",
+    "frozen_pre_reconciliation_governance_receipt.json": "4eb708de2afb772a80850536aa3ac4ec9ff1d899ca110e886c629c6853691dba"
+  },
+  "attempt_registry_summary": {
+    "actual_unique_run_count": 72,
+    "cache_evidence_count": 72,
+    "cache_hit_count": 0,
+    "failed_attempt_count": 1,
+    "logical_task_count": 73,
+    "planned_unique_identity_count": 72,
+    "retry_count": 1
+  },
+  "evidence_class": "development_reuse_pilot",
+  "exploration_unique_budget": 8,
+  "filter_profile_rate_normalization_exploration_unique_identities": 8,
+  "filter_profile_stability_audit_unique_identities": 64,
+  "frozen_pre_reconciliation_completion_sha256": "993b5d6b26cba0b275cf27b2234470c35cb2f2dc2b4374dabd3c759c67b5fe36",
+  "independent_bo_authorized": false,
+  "new_rate_normalized_unique_identities": 8,
+  "normal_unique_identity_limit": 744,
+  "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+  "parent_governance_receipt_sha256": "b3b1a4861d0d018648d4c0525e3240ae72a6499980dc50d56d5eaf526ffee0ca",
+  "planned_unique_identity_limit": 756,
+  "rate_normalized_metadata_reconciliation_sha256": "c532b3a509ba9085498549e40f4746b95bc2ccc80134bf579701765aef4fcb00",
+  "rate_normalized_supplement_completion_sha256": "1b819b206f5ac94483ee94d122b08c0954d8c81602154c70a2c2ec39dfc7d517",
+  "receipt_version": "lyx_recovery_governance_receipt_v5_reconciled_v1",
+  "status": "complete",
+  "worst_case_attempt_limit": 1512
+}

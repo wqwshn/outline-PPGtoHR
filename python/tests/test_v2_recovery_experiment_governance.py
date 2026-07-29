@@ -328,7 +328,46 @@ def test_attempt_registry_reopens_with_bound_contract_and_counts_cache(
         "logical_task_count": 1,
         "planned_unique_identity_count": 1,
         "actual_unique_run_count": 0,
+        "cache_evidence_count": 1,
         "cache_hit_count": 1,
+        "failed_attempt_count": 0,
+        "retry_count": 0,
+    }
+
+
+def test_fresh_attempt_cache_evidence_is_not_counted_as_cache_hit(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "attempt_registry.json"
+    contract = BudgetContract.frozen_v1()
+    exploration = ExplorationRegistry.zero_budget_v1()
+    registry = AttemptRegistry.create(
+        path,
+        budget_contract=contract,
+        exploration_registry=exploration,
+    )
+    identity = _identity()
+    registry.register_identity(identity)
+    registry.execute_registered(identity, lambda: 1)
+    cache_path = _write_cache_receipt(
+        tmp_path / "solver_cache",
+        identity=identity,
+    )
+    registry.bind_cache_evidence(
+        identity,
+        evidence=CacheEvidence.from_path(
+            cache_path,
+            expected_identity=identity,
+            trusted_cache_root=tmp_path / "solver_cache",
+        ),
+    )
+
+    assert registry.summary() == {
+        "logical_task_count": 1,
+        "planned_unique_identity_count": 1,
+        "actual_unique_run_count": 1,
+        "cache_evidence_count": 1,
+        "cache_hit_count": 0,
         "failed_attempt_count": 0,
         "retry_count": 0,
     }

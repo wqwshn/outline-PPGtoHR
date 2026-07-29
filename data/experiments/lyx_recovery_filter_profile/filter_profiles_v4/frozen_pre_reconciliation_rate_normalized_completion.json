@@ -1,0 +1,66 @@
+{
+  "actual_hr_tracking_trajectory_count": 0,
+  "attempt_registry_summary": {
+    "actual_unique_run_count": 72,
+    "cache_hit_count": 72,
+    "failed_attempt_count": 1,
+    "logical_task_count": 145,
+    "planned_unique_identity_count": 72,
+    "retry_count": 1
+  },
+  "candidate_eligible_profile_ids": [
+    "p100-short-rate-normalized-low-40",
+    "p100-short-rate-normalized-midlow-40"
+  ],
+  "candidate_profile_count": 2,
+  "candidate_profile_receipt_sha256": {
+    "p100-short-rate-normalized-low-40": "ede1950b74fbdfaa7a08c36ad747e570f224ab573919bf7412dfcb41e84f094a",
+    "p100-short-rate-normalized-midlow-40": "ec02e034803863f28d761cb16d983fec71bdf71c2a9a4caffa747db90fee1e91"
+  },
+  "completion_sha256": "ee27a889e4a73715af8235d0bda68b0d4f8a4749f5847cff95efcb477b825808",
+  "exploration_run_count": 8,
+  "final_library_sha256": "4f7b08192c4672d8f9e8f6852dd4d05f22b7f842cdda2155269b339c047e6bfd",
+  "final_profile_count": 8,
+  "final_profile_ids": [
+    "p25-short-low",
+    "p25-short-mid",
+    "p25-long-mid",
+    "p50-short-low-40",
+    "p50-short-midlow-40",
+    "p50-short-low",
+    "p100-short-rate-normalized-low-40",
+    "p100-short-rate-normalized-midlow-40"
+  ],
+  "final_profile_receipt_sha256": {
+    "p100-short-rate-normalized-low-40": "ba5107af33a6a0b7b13abba91c7bfa7051a369301a01183dacca0a5402ebe2d8",
+    "p100-short-rate-normalized-midlow-40": "d64edef3990d9f16c2780c5a5fd28e9b43486ed1367e1ade04ae37e9ff3e74f1",
+    "p25-long-mid": "c7f5c16ce585c5bf61025bf8eaa638d3bece220c3c030d0b42d21cd77c04be05",
+    "p25-short-low": "093e5e339bd34a91f71939e7ac1915f5e9651933a559e4dfcbb663c4ccb0cebd",
+    "p25-short-mid": "887801dab8eb1b56a8f21b8b2b9701be4ab3385abba56e6a969984a4add52aa5",
+    "p50-short-low": "4c15e909eeb6af4e8b21e010233f8c06b99a077901d2e6a5020988447259a176",
+    "p50-short-low-40": "de6a2f2971c1b49ef8aec3db1b70418e38d4a4e1d7de3a50239a08643c07898e",
+    "p50-short-midlow-40": "d8b3824fe77963e35bc5bb81e9362e9dc16b78de5f5032be4f896a706f20f54e"
+  },
+  "independent_bo_run_count": 0,
+  "new_rate_normalized_run_count": 8,
+  "receipt_version": "lyx_filter_rate_normalized_supplement_completion_v1",
+  "reused_p50_numeric_result_count": 8,
+  "selection": {
+    "selected_p100_profile_ids": [
+      "p100-short-rate-normalized-low-40",
+      "p100-short-rate-normalized-midlow-40"
+    ],
+    "selected_p50_profile_ids": [
+      "p50-short-low-40",
+      "p50-short-midlow-40"
+    ],
+    "selected_profile_ids": [
+      "p50-short-low-40",
+      "p50-short-midlow-40",
+      "p100-short-rate-normalized-low-40",
+      "p100-short-rate-normalized-midlow-40"
+    ],
+    "status": "complete"
+  },
+  "status": "complete"
+}

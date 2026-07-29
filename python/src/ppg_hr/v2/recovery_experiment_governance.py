@@ -614,7 +614,11 @@ class AttemptRegistry:
         exploration_registry: ExplorationRegistry,
     ) -> AttemptRegistry:
         payload = read_json(path)
-        if payload.get("registry_version") != ("lyx_recovery_attempt_registry_v2"):
+        registry_version = payload.get("registry_version")
+        if registry_version not in {
+            "lyx_recovery_attempt_registry_v2",
+            "lyx_recovery_attempt_registry_v3",
+        }:
             raise GovernanceError("attempt_registry_version_mismatch")
         if payload.get("budget_contract_sha256") != budget_contract.sha256:
             raise GovernanceError("budget_contract_mismatch")
@@ -622,9 +626,19 @@ class AttemptRegistry:
             raise GovernanceError("exploration_registry_mismatch")
         if payload.get("trusted_cache_root_relative") != "solver_cache":
             raise GovernanceError("trusted_cache_root_mismatch")
-        entries = payload.get("entries")
-        if not isinstance(entries, dict):
+        raw_entries = payload.get("entries")
+        if not isinstance(raw_entries, dict):
             raise GovernanceError("invalid_attempt_registry_entries")
+        entries = deepcopy(raw_entries)
+        if registry_version == "lyx_recovery_attempt_registry_v2":
+            if payload.get("summary") != cls._legacy_summary_v2(entries):
+                raise GovernanceError("attempt_registry_summary_mismatch")
+            for entry in entries.values():
+                entry["cache_hit_count"] = (
+                    len(entry.get("cache_evidence", []))
+                    if not entry.get("attempts")
+                    else 0
+                )
         registry = cls(
             path,
             budget_contract=budget_contract,
@@ -632,7 +646,10 @@ class AttemptRegistry:
             entries=entries,
         )
         registry._validate_entries(entries)
-        if payload.get("summary") != registry._summary(entries):
+        if (
+            registry_version == "lyx_recovery_attempt_registry_v3"
+            and payload.get("summary") != registry._summary(entries)
+        ):
             raise GovernanceError("attempt_registry_summary_mismatch")
         return registry
 
@@ -855,6 +872,7 @@ class AttemptRegistry:
                 "identity": identity.to_dict(),
                 "attempts": [],
                 "cache_evidence": [],
+                "cache_hit_count": 0,
                 "status": "registered",
             }
             return identity_hash
@@ -928,6 +946,35 @@ class AttemptRegistry:
 
         self._transaction(mutate)
 
+    def bind_cache_evidence(
+        self,
+        identity: AttemptIdentity,
+        *,
+        evidence: CacheEvidence,
+    ) -> None:
+        def mutate(entries: dict[str, dict[str, Any]]) -> None:
+            entry = entries.get(identity.sha256)
+            if entry is None:
+                raise GovernanceError(f"unregistered_identity:{identity.sha256}")
+            if entry["identity"] != identity.to_dict():
+                raise GovernanceError(f"identity_payload_mismatch:{identity.sha256}")
+            if evidence.identity_sha256 != identity.sha256:
+                raise GovernanceError(f"cache_identity_mismatch:{identity.sha256}")
+            if (
+                CacheEvidence.from_path(
+                    evidence.path,
+                    expected_identity=identity,
+                    trusted_cache_root=self.trusted_cache_root,
+                )
+                != evidence
+            ):
+                raise GovernanceError(f"cache_evidence_changed:{evidence.path}")
+            serialized = evidence.to_dict(trusted_cache_root=self.trusted_cache_root)
+            if serialized not in entry["cache_evidence"]:
+                entry["cache_evidence"].append(serialized)
+
+        self._transaction(mutate)
+
     def record_cache_hit(
         self,
         identity: AttemptIdentity,
@@ -954,6 +1001,7 @@ class AttemptRegistry:
             serialized = evidence.to_dict(trusted_cache_root=self.trusted_cache_root)
             if serialized not in entry["cache_evidence"]:
                 entry["cache_evidence"].append(serialized)
+            entry["cache_hit_count"] += 1
 
         self._transaction(mutate)
 
@@ -1001,17 +1049,52 @@ class AttemptRegistry:
         self._entries = fresh._entries
         return self._summary(self._entries)
 
+    def rewrite_current_schema(self) -> dict[str, int]:
+        """Persist a validated legacy ledger using the current accounting schema."""
+
+        with _exclusive_registry_lock(self.path):
+            fresh = self.open(
+                self.path,
+                budget_contract=self.budget_contract,
+                exploration_registry=self.exploration_registry,
+            )
+            entries = deepcopy(fresh._entries)
+            self._validate_entries(entries)
+            self._write_entries(entries)
+            self._entries = entries
+        return self._summary(self._entries)
+
     @staticmethod
     def _summary(
         entries: Mapping[str, Mapping[str, Any]],
     ) -> dict[str, int]:
         attempts = [attempt for entry in entries.values() for attempt in entry["attempts"]]
+        cache_hit_count = sum(int(entry["cache_hit_count"]) for entry in entries.values())
         return {
-            "logical_task_count": len(attempts)
-            + sum(len(entry["cache_evidence"]) for entry in entries.values()),
+            "logical_task_count": len(attempts) + cache_hit_count,
             "planned_unique_identity_count": len(entries),
             "actual_unique_run_count": sum(bool(entry["attempts"]) for entry in entries.values()),
-            "cache_hit_count": sum(len(entry["cache_evidence"]) for entry in entries.values()),
+            "cache_evidence_count": sum(
+                len(entry["cache_evidence"]) for entry in entries.values()
+            ),
+            "cache_hit_count": cache_hit_count,
+            "failed_attempt_count": sum(attempt["status"] == "failed" for attempt in attempts),
+            "retry_count": sum(max(0, len(entry["attempts"]) - 1) for entry in entries.values()),
+        }
+
+    @staticmethod
+    def _legacy_summary_v2(
+        entries: Mapping[str, Mapping[str, Any]],
+    ) -> dict[str, int]:
+        attempts = [attempt for entry in entries.values() for attempt in entry["attempts"]]
+        cache_evidence_count = sum(
+            len(entry["cache_evidence"]) for entry in entries.values()
+        )
+        return {
+            "logical_task_count": len(attempts) + cache_evidence_count,
+            "planned_unique_identity_count": len(entries),
+            "actual_unique_run_count": sum(bool(entry["attempts"]) for entry in entries.values()),
+            "cache_hit_count": cache_evidence_count,
             "failed_attempt_count": sum(attempt["status"] == "failed" for attempt in attempts),
             "retry_count": sum(max(0, len(entry["attempts"]) - 1) for entry in entries.values()),
         }
@@ -1037,7 +1120,7 @@ class AttemptRegistry:
         atomic_write_json(
             self.path,
             {
-                "registry_version": "lyx_recovery_attempt_registry_v2",
+                "registry_version": "lyx_recovery_attempt_registry_v3",
                 "budget_contract_sha256": self.budget_contract.sha256,
                 "exploration_registry_sha256": (self.exploration_registry.sha256),
                 "trusted_cache_root_relative": "solver_cache",
@@ -1063,6 +1146,7 @@ class AttemptRegistry:
                 identity = AttemptIdentity(**identity_payload)
                 attempts = entry["attempts"]
                 cache_evidence = entry["cache_evidence"]
+                cache_hit_count = entry["cache_hit_count"]
                 entry_status = entry["status"]
             except (KeyError, TypeError, ValueError) as error:
                 raise GovernanceError(f"invalid_attempt_registry_entry:{identity_hash}") from error
@@ -1084,6 +1168,13 @@ class AttemptRegistry:
                 normal_count += 1
             if not isinstance(attempts, list) or not isinstance(cache_evidence, list):
                 raise GovernanceError(f"invalid_attempt_registry_entry:{identity_hash}")
+            if (
+                not isinstance(cache_hit_count, int)
+                or isinstance(cache_hit_count, bool)
+                or cache_hit_count < 0
+                or (cache_hit_count > 0 and not cache_evidence)
+            ):
+                raise GovernanceError(f"invalid_cache_hit_count:{identity_hash}")
             self._validate_attempt_state(
                 identity_hash,
                 attempts,

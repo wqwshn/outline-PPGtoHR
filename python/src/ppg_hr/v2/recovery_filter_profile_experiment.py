@@ -11,6 +11,7 @@ import os
 import shutil
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any
@@ -878,7 +879,8 @@ def _execute_registered_profile_audits(
             )
             return audit
 
-        if _path_exists(cache_receipt_path):
+        cache_reused = _path_exists(cache_receipt_path)
+        if cache_reused:
             result_payload = read_json(result_path)
             audit = dict(result_payload["audit"])
         else:
@@ -888,7 +890,10 @@ def _execute_registered_profile_audits(
             expected_identity=identity,
             trusted_cache_root=registry.trusted_cache_root,
         )
-        registry.record_cache_hit(identity, evidence=evidence)
+        if cache_reused:
+            registry.record_cache_hit(identity, evidence=evidence)
+        else:
+            registry.bind_cache_evidence(identity, evidence=evidence)
         completed = {
             **audit,
             "identity_sha256": identity.sha256,
@@ -1315,7 +1320,7 @@ def execute_filter_profile_audit(
             expected_identity=identity,
             trusted_cache_root=registry.trusted_cache_root,
         )
-        registry.record_cache_hit(identity, evidence=evidence)
+        registry.bind_cache_evidence(identity, evidence=evidence)
         audit = {
             **audit,
             "identity_sha256": identity.sha256,
@@ -3133,6 +3138,7 @@ def execute_rate_normalized_supplement(
             evaluation_hash=str(plan["evaluation_hash"]),
             design_rule_sha256=str(plan["design_rule_sha256"]),
             record_manifest_sha256=str(plan["record_manifest_sha256"]),
+            attempt_kind="exploration",
         )
         p100_receipts.append(receipt)
         atomic_write_json(
@@ -3321,6 +3327,11 @@ def execute_rate_normalized_supplement(
                 evaluation_hash=str(plan["evaluation_hash"]),
                 design_rule_sha256=str(plan["design_rule_sha256"]),
                 record_manifest_sha256=str(plan["record_manifest_sha256"]),
+                attempt_kind=(
+                    "exploration"
+                    if profile.profile_id in selection["selected_p100_profile_ids"]
+                    else "diagnostic"
+                ),
             )
             final_receipts.append(receipt)
             atomic_write_json(
@@ -3379,6 +3390,608 @@ def execute_rate_normalized_supplement(
     )
     atomic_write_json(governance_receipt_path, governance_receipt)
     return final
+
+
+def _build_rate_normalized_audit_binding_manifest(
+    *,
+    output_dir: Path,
+    registry: AttemptRegistry,
+    registry_payload: dict[str, Any],
+    plan: dict[str, Any],
+    profiles: tuple[FilterProfile, ...],
+    records: tuple[FilterAuditRecord, ...],
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, dict[str, str]]]:
+    """Bind each materialized record audit byte-for-byte to its cache result."""
+
+    cached_results: dict[str, dict[str, Any]] = {}
+    for identity_sha256, entry in registry_payload["entries"].items():
+        if (
+            entry["identity"]["stage"]
+            != "filter_profile_rate_normalization_exploration"
+        ):
+            continue
+        if len(entry["cache_evidence"]) != 1:
+            raise StabilityAuditError(
+                f"reconciliation_cache_evidence_count:{identity_sha256}"
+            )
+        evidence = entry["cache_evidence"][0]
+        result_path = registry.trusted_cache_root / Path(
+            str(evidence["result_path"])
+        )
+        result_payload = read_json(result_path)
+        if (
+            result_payload.get("producer") != "content_addressed_solver_cache_v1"
+            or result_payload.get("status") != "complete"
+            or result_payload.get("valid") is not True
+            or result_payload.get("identity") != entry["identity"]
+            or result_payload.get("record_id") != entry["identity"]["record_id"]
+            or file_sha256(result_path) != evidence["result_sha256"]
+            or not isinstance(result_payload.get("audit"), dict)
+        ):
+            raise StabilityAuditError(
+                f"reconciliation_cache_result_binding_mismatch:{identity_sha256}"
+            )
+        cached_results[identity_sha256] = result_payload
+    if set(cached_results) != set(plan["exploration_identity_sha256"]):
+        raise StabilityAuditError("reconciliation_cache_result_identity_mismatch")
+
+    candidate_results: dict[str, list[dict[str, Any]]] = {}
+    binding_manifest: dict[str, dict[str, str]] = {}
+    for profile_index, profile in enumerate(profiles):
+        audits = [
+            read_json(
+                output_dir
+                / "record_audits"
+                / profile.profile_id
+                / f"{record.record_id}.json"
+            )
+            for record in records
+        ]
+        expected_identities = set(
+            plan["exploration_identity_sha256"][
+                profile_index * len(records) : (profile_index + 1) * len(records)
+            ]
+        )
+        if {audit["identity_sha256"] for audit in audits} != expected_identities:
+            raise StabilityAuditError(
+                f"rate_normalized_reconciliation_identity_mismatch:{profile.profile_id}"
+            )
+        for audit, record in zip(audits, records, strict=True):
+            identity_sha256 = str(audit["identity_sha256"])
+            cached = cached_results[identity_sha256]
+            evidence = registry_payload["entries"][identity_sha256][
+                "cache_evidence"
+            ][0]
+            expected_audit = {
+                **cached["audit"],
+                "identity_sha256": identity_sha256,
+                "result_sha256": evidence["result_sha256"],
+                "data_sha256": record.data_sha256,
+                "reference_sha256": record.reference_sha256,
+            }
+            if (
+                cached.get("profile_id") != profile.profile_id
+                or cached.get("record_id") != record.record_id
+                or audit != expected_audit
+            ):
+                raise StabilityAuditError(
+                    f"reconciliation_record_audit_cache_mismatch:{identity_sha256}"
+                )
+            binding_manifest[identity_sha256] = {
+                "cache_result_sha256": str(evidence["result_sha256"]),
+                "cache_audit_sha256": _canonical_sha256(cached["audit"]),
+                "record_audit_sha256": _canonical_sha256(audit),
+            }
+        candidate_results[profile.profile_id] = audits
+    if len(binding_manifest) != 8:
+        raise StabilityAuditError("reconciliation_audit_binding_count_mismatch")
+    return candidate_results, dict(sorted(binding_manifest.items()))
+
+
+def _reconcile_rate_normalized_supplement_metadata_in_place(
+    *,
+    output_dir: Path,
+    governance_dir: Path,
+) -> dict[str, Any]:
+    """Build corrected artifacts inside an isolated transaction workspace."""
+
+    reconciliation_path = output_dir / "rate_normalized_metadata_reconciliation.json"
+    completion_path = output_dir / "rate_normalized_supplement_completion.json"
+    plan_path = output_dir / "rate_normalized_supplement_plan.json"
+    library_path = output_dir / "filter_profile_library_freeze.json"
+    selection_path = output_dir / "rate_normalized_selection_receipt.json"
+    registry_path = governance_dir / "attempt_registry.json"
+    governance_receipt_path = governance_dir / "governance_receipt.json"
+
+    existing_reconciliation = (
+        read_json(reconciliation_path) if _path_exists(reconciliation_path) else None
+    )
+    if existing_reconciliation is not None:
+        _verify_embedded_sha256(existing_reconciliation, "reconciliation_sha256")
+        if (
+            existing_reconciliation.get("receipt_version")
+            != "lyx_rate_normalized_metadata_reconciliation_v1"
+        ):
+            raise StabilityAuditError("rate_normalized_metadata_already_reconciled")
+        source_completion = read_json(
+            output_dir
+            / "frozen_pre_reconciliation_rate_normalized_completion.json"
+        )
+        source_registry_payload = read_json(
+            governance_dir / "frozen_pre_reconciliation_attempt_registry.json"
+        )
+        source_governance_receipt = read_json(
+            governance_dir
+            / "frozen_pre_reconciliation_governance_receipt.json"
+        )
+    else:
+        source_completion = read_json(completion_path)
+        source_registry_payload = read_json(registry_path)
+        source_governance_receipt = read_json(governance_receipt_path)
+    plan = read_json(plan_path)
+    library = read_json(library_path)
+    selection = read_json(selection_path)
+    _verify_embedded_sha256(source_completion, "completion_sha256")
+    _verify_embedded_sha256(plan, "plan_sha256")
+    _verify_embedded_sha256(library, "library_sha256")
+    if (
+        source_completion.get("status") != "complete"
+        or source_completion.get("new_rate_normalized_run_count") != 8
+        or source_completion.get("exploration_run_count") != 8
+        or source_completion.get("independent_bo_run_count") != 0
+        or source_completion.get("actual_hr_tracking_trajectory_count") != 0
+        or selection.get("status") != "complete"
+        or plan.get("new_identity_count") != 8
+    ):
+        raise StabilityAuditError("unexpected_rate_normalized_completion_state")
+
+    exploration_registry = ExplorationRegistry(
+        unique_budget=8,
+        allowed_identity_sha256=tuple(
+            str(value) for value in plan["exploration_identity_sha256"]
+        ),
+    )
+    registry = AttemptRegistry.open(
+        registry_path,
+        budget_contract=BudgetContract.approved_v5(),
+        exploration_registry=exploration_registry,
+    )
+
+    def numeric_result_artifacts(
+        registry_payload: dict[str, Any],
+    ) -> dict[str, str]:
+        artifacts: dict[str, str] = {}
+        for entry in registry_payload["entries"].values():
+            for evidence in entry["cache_evidence"]:
+                relative_path = Path(str(evidence["result_path"]))
+                artifact_path = registry.trusted_cache_root / relative_path
+                declared = str(evidence["result_sha256"])
+                actual = file_sha256(artifact_path)
+                if actual != declared:
+                    raise StabilityAuditError(
+                        f"reconciliation_numeric_result_changed:{relative_path}"
+                    )
+                portable_path = (Path("solver_cache") / relative_path).as_posix()
+                artifacts[portable_path] = actual
+        return dict(sorted(artifacts.items()))
+
+    source_numeric_artifacts = numeric_result_artifacts(source_registry_payload)
+    if len(source_numeric_artifacts) != 72:
+        raise StabilityAuditError("reconciliation_numeric_result_count_mismatch")
+
+    frozen_completion_path = (
+        output_dir / "frozen_pre_reconciliation_rate_normalized_completion.json"
+    )
+    frozen_registry_path = governance_dir / "frozen_pre_reconciliation_attempt_registry.json"
+    frozen_governance_path = (
+        governance_dir / "frozen_pre_reconciliation_governance_receipt.json"
+    )
+    if existing_reconciliation is None:
+        atomic_write_json(frozen_completion_path, source_completion)
+        atomic_write_json(frozen_registry_path, source_registry_payload)
+        atomic_write_json(frozen_governance_path, source_governance_receipt)
+    elif (
+        file_sha256(frozen_completion_path)
+        != existing_reconciliation.get("frozen_source_completion_file_sha256")
+        or file_sha256(frozen_registry_path)
+        != existing_reconciliation.get("source_attempt_registry_file_sha256")
+        or file_sha256(frozen_governance_path)
+        != existing_reconciliation.get("source_governance_receipt_file_sha256")
+    ):
+        raise StabilityAuditError("reconciliation_frozen_source_changed")
+
+    corrected_summary = registry.rewrite_current_schema()
+    corrected_registry_payload = read_json(registry_path)
+    corrected_numeric_artifacts = numeric_result_artifacts(corrected_registry_payload)
+    if corrected_numeric_artifacts != source_numeric_artifacts:
+        raise StabilityAuditError("reconciliation_modified_numeric_results")
+
+    contract = StabilityAuditContract(**plan["audit_contract"])
+    if (
+        contract.sha256 != plan.get("audit_contract_sha256")
+        or contract.sha256 != StabilityAuditContract.corrected_v2().sha256
+    ):
+        raise StabilityAuditError("rate_normalized_reconciliation_contract_mismatch")
+    records = tuple(FilterAuditRecord(**item) for item in plan["records"])
+    candidate_profiles = tuple(
+        _profile_from_dict(item) for item in plan["candidate_profiles"]
+    )
+    candidate_results, audit_binding_manifest = (
+        _build_rate_normalized_audit_binding_manifest(
+            output_dir=output_dir,
+            registry=registry,
+            registry_payload=corrected_registry_payload,
+            plan=plan,
+            profiles=candidate_profiles,
+            records=records,
+        )
+    )
+    audit_binding_manifest_sha256 = _canonical_sha256(
+        audit_binding_manifest
+    )
+    candidate_set_sha256 = _canonical_sha256(
+        {
+            "design_rule_sha256": plan["design_rule_sha256"],
+            "candidate_profiles": plan["candidate_profiles"],
+        }
+    )
+    candidate_receipts: dict[str, dict[str, Any]] = {}
+    for profile in candidate_profiles:
+        audits = candidate_results[profile.profile_id]
+        receipt = build_filter_profile_receipt(
+            profile,
+            audits,
+            audit_contract=contract,
+            library_sha256=candidate_set_sha256,
+            solver_hash=str(plan["solver_hash"]),
+            code_hash=str(plan["code_hash"]),
+            evaluation_hash=str(plan["evaluation_hash"]),
+            design_rule_sha256=str(plan["design_rule_sha256"]),
+            record_manifest_sha256=str(plan["record_manifest_sha256"]),
+            attempt_kind="exploration",
+        )
+        candidate_receipts[profile.profile_id] = receipt
+        atomic_write_json(
+            output_dir / "candidate_profile_receipts" / f"{profile.profile_id}.json",
+            receipt,
+        )
+
+    library_profiles = {
+        str(item["profile_id"]): item for item in library["profiles"]
+    }
+    final_receipts_by_id = dict(source_completion["final_profile_receipt_sha256"])
+    for profile_id in selection["selected_p100_profile_ids"]:
+        item = library_profiles[str(profile_id)]
+        profile = FilterProfile(
+            profile_id=str(item["profile_id"]),
+            design_role=str(item["design_role"]),  # type: ignore[arg-type]
+            fs_target=int(item["fs_target"]),
+            memory_ms=int(item["physical_memory_ms"]),
+            nominal_mu=float(item["nominal_mu"]),
+            recovery_sentinel_role=item.get("recovery_sentinel_role"),  # type: ignore[arg-type]
+        )
+        receipt = build_filter_profile_receipt(
+            profile,
+            candidate_results[profile.profile_id],
+            audit_contract=contract,
+            library_sha256=str(library["library_sha256"]),
+            solver_hash=str(plan["solver_hash"]),
+            code_hash=str(plan["code_hash"]),
+            evaluation_hash=str(plan["evaluation_hash"]),
+            design_rule_sha256=str(plan["design_rule_sha256"]),
+            record_manifest_sha256=str(plan["record_manifest_sha256"]),
+            attempt_kind="exploration",
+        )
+        final_receipts_by_id[profile.profile_id] = receipt["receipt_sha256"]
+        atomic_write_json(
+            output_dir / "filter_profile_receipts" / f"{profile.profile_id}.json",
+            receipt,
+        )
+
+    corrected_completion = {
+        key: value
+        for key, value in source_completion.items()
+        if key != "completion_sha256"
+    }
+    corrected_completion.update(
+        {
+            "receipt_version": "lyx_filter_rate_normalized_supplement_completion_v2",
+            "attempt_registry_summary": corrected_summary,
+            "evidence_class": "development_reuse_pilot",
+            "algorithm_level_holdout": False,
+            "candidate_profile_receipt_sha256": {
+                profile_id: receipt["receipt_sha256"]
+                for profile_id, receipt in sorted(candidate_receipts.items())
+            },
+            "final_profile_receipt_sha256": dict(
+                sorted(final_receipts_by_id.items())
+            ),
+            "metadata_reconciliation": {
+                "kind": "zero_numerical_run_semantic_correction",
+                "source_completion_sha256": source_completion["completion_sha256"],
+                "attempt_registry_schema_from": source_registry_payload[
+                    "registry_version"
+                ],
+                "attempt_registry_schema_to": corrected_registry_payload[
+                    "registry_version"
+                ],
+                "cache_audit_binding_count": len(audit_binding_manifest),
+                "cache_audit_binding_manifest_sha256": (
+                    audit_binding_manifest_sha256
+                ),
+                "publication_mode": "staged_pair_transaction_v1",
+                "new_solver_run_count": 0,
+                "new_exploration_run_count": 0,
+                "new_independent_bo_run_count": 0,
+                "new_hr_tracking_trajectory_count": 0,
+            },
+        }
+    )
+    corrected_completion["completion_sha256"] = _canonical_sha256(
+        corrected_completion
+    )
+    atomic_write_json(completion_path, corrected_completion)
+
+    reconciliation: dict[str, Any] = {
+        "receipt_version": "lyx_rate_normalized_metadata_reconciliation_v2",
+        "status": "complete",
+        "reason": (
+            "separate cache evidence from cache reuse, use exploration receipt "
+            "terminology, and declare development-reuse evidence class"
+        ),
+        "source_completion_sha256": source_completion["completion_sha256"],
+        "corrected_completion_sha256": corrected_completion["completion_sha256"],
+        "source_attempt_registry_file_sha256": file_sha256(frozen_registry_path),
+        "corrected_attempt_registry_file_sha256": file_sha256(registry_path),
+        "source_governance_receipt_file_sha256": file_sha256(
+            frozen_governance_path
+        ),
+        "frozen_source_completion_file_sha256": file_sha256(
+            frozen_completion_path
+        ),
+        "source_attempt_registry_summary": source_registry_payload["summary"],
+        "corrected_attempt_registry_summary": corrected_summary,
+        "numeric_result_artifact_count": len(corrected_numeric_artifacts),
+        "numeric_result_artifact_manifest_sha256": _canonical_sha256(
+            corrected_numeric_artifacts
+        ),
+        "cache_audit_binding_count": len(audit_binding_manifest),
+        "cache_audit_binding_manifest_sha256": audit_binding_manifest_sha256,
+        "publication_mode": "staged_pair_transaction_v1",
+        "new_solver_run_count": 0,
+        "new_exploration_run_count": 0,
+        "new_independent_bo_run_count": 0,
+        "new_hr_tracking_trajectory_count": 0,
+        "evidence_class": "development_reuse_pilot",
+        "algorithm_level_holdout": False,
+    }
+    if existing_reconciliation is not None:
+        reconciliation["upgrades_reconciliation_sha256"] = (
+            existing_reconciliation["reconciliation_sha256"]
+        )
+    reconciliation["reconciliation_sha256"] = _canonical_sha256(reconciliation)
+    atomic_write_json(reconciliation_path, reconciliation)
+
+    governance_receipt = dict(source_governance_receipt)
+    governance_receipt.update(
+        {
+            "receipt_version": "lyx_recovery_governance_receipt_v5_reconciled_v1",
+            "status": "complete",
+            "attempt_registry_summary": corrected_summary,
+            "evidence_class": "development_reuse_pilot",
+            "algorithm_level_holdout": False,
+            "rate_normalized_supplement_completion_sha256": file_sha256(
+                completion_path
+            ),
+            "rate_normalized_metadata_reconciliation_sha256": file_sha256(
+                reconciliation_path
+            ),
+            "frozen_pre_reconciliation_completion_sha256": file_sha256(
+                frozen_completion_path
+            ),
+        }
+    )
+    governance_receipt["artifacts"] = {
+        **source_governance_receipt["artifacts"],
+        "attempt_registry.json": file_sha256(registry_path),
+        "frozen_pre_reconciliation_attempt_registry.json": file_sha256(
+            frozen_registry_path
+        ),
+        "frozen_pre_reconciliation_governance_receipt.json": file_sha256(
+            frozen_governance_path
+        ),
+    }
+    atomic_write_json(governance_receipt_path, governance_receipt)
+    return {
+        "completion": corrected_completion,
+        "reconciliation": reconciliation,
+        "governance_receipt": governance_receipt,
+    }
+
+
+def _recover_rate_normalized_reconciliation_transaction(
+    *,
+    output_dir: Path,
+    governance_dir: Path,
+    transaction_path: Path,
+) -> str | None:
+    if not _path_exists(transaction_path):
+        return None
+    transaction = read_json(transaction_path)
+    transaction_id = str(transaction.get("transaction_id", ""))
+    if (
+        len(transaction_id) != 32
+        or any(char not in "0123456789abcdef" for char in transaction_id)
+        or transaction.get("output_directory_name") != output_dir.name
+        or transaction.get("governance_directory_name") != governance_dir.name
+    ):
+        raise StabilityAuditError("invalid_rate_reconciliation_transaction")
+    parent = output_dir.parent
+    staging_root = parent / (
+        f".rate-normalized-reconciliation-{transaction_id}.staging"
+    )
+    backup_root = parent / (
+        f".rate-normalized-reconciliation-{transaction_id}.backup"
+    )
+    staged_output = staging_root / output_dir.name
+    staged_governance = staging_root / governance_dir.name
+    backup_output = backup_root / output_dir.name
+    backup_governance = backup_root / governance_dir.name
+    phase = transaction.get("phase")
+
+    if phase == "committed":
+        if not os.path.isdir(_long_path(output_dir)) or not os.path.isdir(
+            _long_path(governance_dir)
+        ):
+            raise StabilityAuditError("committed_rate_reconciliation_pair_missing")
+        if _path_exists(staging_root):
+            shutil.rmtree(_long_path(staging_root))
+        if _path_exists(backup_root):
+            shutil.rmtree(_long_path(backup_root))
+        os.unlink(_long_path(transaction_path))
+        return "committed"
+
+    for current, backup in (
+        (governance_dir, backup_governance),
+        (output_dir, backup_output),
+    ):
+        if _path_exists(backup):
+            if _path_exists(current):
+                shutil.rmtree(_long_path(current))
+            os.replace(_long_path(backup), _long_path(current))
+        elif not _path_exists(current):
+            raise StabilityAuditError("rate_reconciliation_rollback_source_missing")
+    if (
+        _path_exists(staged_output)
+        or _path_exists(staged_governance)
+        or _path_exists(staging_root)
+    ):
+        shutil.rmtree(_long_path(staging_root))
+    if _path_exists(backup_root):
+        shutil.rmtree(_long_path(backup_root))
+    os.unlink(_long_path(transaction_path))
+    return "rolled_back"
+
+
+def _publish_rate_normalized_reconciliation_pair(
+    *,
+    output_dir: Path,
+    governance_dir: Path,
+    build: Callable[[Path, Path], dict[str, Any]],
+) -> dict[str, Any]:
+    """Run a builder in staging and publish its directory pair with rollback."""
+
+    output_dir = output_dir.resolve()
+    governance_dir = governance_dir.resolve()
+    if output_dir.parent != governance_dir.parent:
+        raise StabilityAuditError("rate_reconciliation_requires_sibling_directories")
+    parent = output_dir.parent
+    transaction_path = parent / ".rate_normalized_reconciliation_transaction.json"
+    recovered = _recover_rate_normalized_reconciliation_transaction(
+        output_dir=output_dir,
+        governance_dir=governance_dir,
+        transaction_path=transaction_path,
+    )
+    if recovered == "committed":
+        return {
+            "completion": read_json(
+                output_dir / "rate_normalized_supplement_completion.json"
+            ),
+            "reconciliation": read_json(
+                output_dir / "rate_normalized_metadata_reconciliation.json"
+            ),
+            "governance_receipt": read_json(
+                governance_dir / "governance_receipt.json"
+            ),
+        }
+    transaction_id = uuid.uuid4().hex
+    staging_root = parent / (
+        f".rate-normalized-reconciliation-{transaction_id}.staging"
+    )
+    backup_root = parent / (
+        f".rate-normalized-reconciliation-{transaction_id}.backup"
+    )
+    staged_output = staging_root / output_dir.name
+    staged_governance = staging_root / governance_dir.name
+    backup_output = backup_root / output_dir.name
+    backup_governance = backup_root / governance_dir.name
+    transaction = {
+        "transaction_version": "lyx_rate_normalized_reconciliation_transaction_v1",
+        "transaction_id": transaction_id,
+        "output_directory_name": output_dir.name,
+        "governance_directory_name": governance_dir.name,
+        "phase": "initializing",
+    }
+
+    def set_phase(phase: str) -> None:
+        transaction["phase"] = phase
+        atomic_write_json(transaction_path, transaction)
+
+    result: dict[str, Any] | None = None
+    set_phase("copying")
+    try:
+        os.makedirs(_long_path(staging_root))
+        shutil.copytree(
+            _long_path(output_dir),
+            _long_path(staged_output),
+        )
+        shutil.copytree(
+            _long_path(governance_dir),
+            _long_path(staged_governance),
+            ignore=shutil.ignore_patterns("*.lock"),
+        )
+        set_phase("validating_staging")
+        result = build(staged_output, staged_governance)
+        os.makedirs(_long_path(backup_root))
+        set_phase("staging_validated")
+
+        os.replace(_long_path(output_dir), _long_path(backup_output))
+        set_phase("output_backed_up")
+        os.replace(_long_path(staged_output), _long_path(output_dir))
+        set_phase("output_installed")
+        os.replace(_long_path(governance_dir), _long_path(backup_governance))
+        set_phase("governance_backed_up")
+        os.replace(_long_path(staged_governance), _long_path(governance_dir))
+        set_phase("governance_installed")
+        set_phase("committed")
+
+        if _path_exists(staging_root):
+            shutil.rmtree(_long_path(staging_root))
+        if _path_exists(backup_root):
+            shutil.rmtree(_long_path(backup_root))
+        os.unlink(_long_path(transaction_path))
+    except Exception:
+        recovery = _recover_rate_normalized_reconciliation_transaction(
+            output_dir=output_dir,
+            governance_dir=governance_dir,
+            transaction_path=transaction_path,
+        )
+        if recovery == "committed" and result is not None:
+            return result
+        raise
+    if result is None:
+        raise StabilityAuditError("rate_reconciliation_missing_staged_result")
+    return result
+
+
+def reconcile_rate_normalized_supplement_metadata(
+    *,
+    output_dir: Path,
+    governance_dir: Path,
+) -> dict[str, Any]:
+    """Correct metadata through a validated, recoverable directory-pair transaction."""
+
+    def build(staged_output: Path, staged_governance: Path) -> dict[str, Any]:
+        return _reconcile_rate_normalized_supplement_metadata_in_place(
+            output_dir=staged_output,
+            governance_dir=staged_governance,
+        )
+
+    return _publish_rate_normalized_reconciliation_pair(
+        output_dir=output_dir,
+        governance_dir=governance_dir,
+        build=build,
+    )
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -3444,6 +4057,11 @@ def _parser() -> argparse.ArgumentParser:
     execute_rate = subparsers.add_parser("execute-rate-normalized-supplement")
     execute_rate.add_argument("--output-dir", type=Path, required=True)
     execute_rate.add_argument("--governance-dir", type=Path, required=True)
+    reconcile_rate = subparsers.add_parser(
+        "reconcile-rate-normalized-supplement-metadata"
+    )
+    reconcile_rate.add_argument("--output-dir", type=Path, required=True)
+    reconcile_rate.add_argument("--governance-dir", type=Path, required=True)
     return parser
 
 
@@ -3518,8 +4136,13 @@ def main(argv: list[str] | None = None) -> int:
             governance_dir=args.governance_dir,
             authorization_receipt_path=args.authorization_receipt,
         )
-    else:
+    elif args.command == "execute-rate-normalized-supplement":
         result = execute_rate_normalized_supplement(
+            output_dir=args.output_dir,
+            governance_dir=args.governance_dir,
+        )
+    else:
+        result = reconcile_rate_normalized_supplement_metadata(
             output_dir=args.output_dir,
             governance_dir=args.governance_dir,
         )

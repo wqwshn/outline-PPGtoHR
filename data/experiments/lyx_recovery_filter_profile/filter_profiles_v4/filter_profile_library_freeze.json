@@ -1,0 +1,271 @@
+{
+  "design_rule_sha256": "711942f542bda86fefdebcbc82564a1eaa3b3ce5ab6289b7cf1e59496e251f26",
+  "fs_target_quota": {
+    "100": 2,
+    "25": 3,
+    "50": 3
+  },
+  "library_sha256": "4f7b08192c4672d8f9e8f6852dd4d05f22b7f842cdda2155269b339c047e6bfd",
+  "profile_count": 8,
+  "profiles": [
+    {
+      "actual_taps": 1,
+      "archived_evidence": {
+        "archive_manifest_sha256": "0b695ccb31d0a945d5e1d2281bfc0c70deaa7db7bbda751c857df152ec43ed5c",
+        "archive_table_sha256": "cc6d9bcca7a03e97b98844a173cd2ad02b9f3427ea33609485878ee3cd049607",
+        "occurrence_count": 22,
+        "scenes": [
+          "jianpan",
+          "kaihe",
+          "run",
+          "xiezi"
+        ]
+      },
+      "design_role": "core",
+      "effective_mu": {
+        "formula": "max(lms_mu_min, nominal_mu - abs_corr / 100)",
+        "lms_mu_min": 1e-06,
+        "maximum": 0.008,
+        "minimum": 1e-06
+      },
+      "fs_target": 25,
+      "nominal_mu": 0.008,
+      "physical_memory_ms": 40,
+      "profile_id": "p25-short-low",
+      "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+      "recovery_sentinel_role": null
+    },
+    {
+      "actual_taps": 1,
+      "archived_evidence": {
+        "archive_manifest_sha256": "0b695ccb31d0a945d5e1d2281bfc0c70deaa7db7bbda751c857df152ec43ed5c",
+        "archive_table_sha256": "cc6d9bcca7a03e97b98844a173cd2ad02b9f3427ea33609485878ee3cd049607",
+        "occurrence_count": 19,
+        "scenes": [
+          "jianpan",
+          "kaihe",
+          "run",
+          "xiezi"
+        ]
+      },
+      "design_role": "core",
+      "effective_mu": {
+        "formula": "max(lms_mu_min, nominal_mu - abs_corr / 100)",
+        "lms_mu_min": 1e-06,
+        "maximum": 0.012,
+        "minimum": 0.002
+      },
+      "fs_target": 25,
+      "nominal_mu": 0.012,
+      "physical_memory_ms": 40,
+      "profile_id": "p25-short-mid",
+      "profile_sha256": "79e6036878bc69a614082ba174f28a55bca49b9fc87745de397e68b545ecedde",
+      "recovery_sentinel_role": null
+    },
+    {
+      "actual_taps": 5,
+      "archived_evidence": {
+        "archive_manifest_sha256": "0b695ccb31d0a945d5e1d2281bfc0c70deaa7db7bbda751c857df152ec43ed5c",
+        "archive_table_sha256": "cc6d9bcca7a03e97b98844a173cd2ad02b9f3427ea33609485878ee3cd049607",
+        "occurrence_count": 21,
+        "scenes": [
+          "jianpan",
+          "kaihe",
+          "run",
+          "xiezi"
+        ]
+      },
+      "design_role": "core",
+      "effective_mu": {
+        "formula": "max(lms_mu_min, nominal_mu - abs_corr / 100)",
+        "lms_mu_min": 1e-06,
+        "maximum": 0.01,
+        "minimum": 1e-06
+      },
+      "fs_target": 25,
+      "nominal_mu": 0.01,
+      "physical_memory_ms": 200,
+      "profile_id": "p25-long-mid",
+      "profile_sha256": "4f088d4248e5a5f6f508c0d3fc3521b1a98836e4d4ff33b44041aefc5cc174f9",
+      "recovery_sentinel_role": null
+    },
+    {
+      "actual_taps": 2,
+      "archived_evidence": {
+        "archive_manifest_sha256": "0b695ccb31d0a945d5e1d2281bfc0c70deaa7db7bbda751c857df152ec43ed5c",
+        "archive_table_sha256": "9e24c110adeebd9354c1c147bcb52aa0d96efade5408e6d0c4625e852949c369",
+        "occurrence_count": 24,
+        "scenes": [
+          "jianpan",
+          "kaihe",
+          "run",
+          "xiezi"
+        ]
+      },
+      "design_role": "core",
+      "effective_mu": {
+        "formula": "max(lms_mu_min, nominal_mu - abs_corr / 100)",
+        "lms_mu_min": 1e-06,
+        "maximum": 0.006,
+        "minimum": 1e-06
+      },
+      "fs_target": 50,
+      "nominal_mu": 0.006,
+      "physical_memory_ms": 40,
+      "profile_id": "p50-short-low-40",
+      "profile_sha256": "f930087e95237ba5712f19021f21e8f7241b056dae3190a2d4e68ba51a9b6df1",
+      "recovery_sentinel_role": "intermediate"
+    },
+    {
+      "actual_taps": 2,
+      "archived_evidence": {
+        "archive_manifest_sha256": "0b695ccb31d0a945d5e1d2281bfc0c70deaa7db7bbda751c857df152ec43ed5c",
+        "archive_table_sha256": "9e24c110adeebd9354c1c147bcb52aa0d96efade5408e6d0c4625e852949c369",
+        "occurrence_count": 31,
+        "scenes": [
+          "jianpan",
+          "kaihe",
+          "run",
+          "xiezi"
+        ]
+      },
+      "design_role": "core",
+      "effective_mu": {
+        "formula": "max(lms_mu_min, nominal_mu - abs_corr / 100)",
+        "lms_mu_min": 1e-06,
+        "maximum": 0.008,
+        "minimum": 1e-06
+      },
+      "fs_target": 50,
+      "nominal_mu": 0.008,
+      "physical_memory_ms": 40,
+      "profile_id": "p50-short-midlow-40",
+      "profile_sha256": "bc1d6c5644466ffe48593352662ad1620e591674221348176bbd9b7faac90aef",
+      "recovery_sentinel_role": null
+    },
+    {
+      "actual_taps": 4,
+      "archived_evidence": {
+        "archive_manifest_sha256": "0b695ccb31d0a945d5e1d2281bfc0c70deaa7db7bbda751c857df152ec43ed5c",
+        "archive_table_sha256": "cc6d9bcca7a03e97b98844a173cd2ad02b9f3427ea33609485878ee3cd049607",
+        "occurrence_count": 44,
+        "scenes": [
+          "jianpan",
+          "kaihe",
+          "run",
+          "xiezi"
+        ]
+      },
+      "design_role": "core",
+      "effective_mu": {
+        "formula": "max(lms_mu_min, nominal_mu - abs_corr / 100)",
+        "lms_mu_min": 1e-06,
+        "maximum": 0.006,
+        "minimum": 1e-06
+      },
+      "fs_target": 50,
+      "nominal_mu": 0.006,
+      "physical_memory_ms": 80,
+      "profile_id": "p50-short-low",
+      "profile_sha256": "37b6fe1eaea916e9d4011be7c37e044a59630ca0ee4ed995eb305c802479ea54",
+      "recovery_sentinel_role": "conservative"
+    },
+    {
+      "actual_taps": 4,
+      "design_role": "coverage_boundary",
+      "effective_mu": {
+        "formula": "max(lms_mu_min, nominal_mu - abs_corr / 100)",
+        "lms_mu_min": 1e-06,
+        "maximum": 0.003,
+        "minimum": 1e-06
+      },
+      "fs_target": 100,
+      "nominal_mu": 0.003,
+      "physical_memory_ms": 40,
+      "profile_id": "p100-short-rate-normalized-low-40",
+      "profile_sha256": "e68578a16138f121b12a7668677fdd9920ff4a89aba1d1224ab484fea8640dd3",
+      "provenance": {
+        "formula": "target_mu = source_mu * source_fs_target / fs_target",
+        "kind": "rate_normalized_from_archived_profile",
+        "preserves": [
+          "nominal_mu_updates_per_physical_second",
+          "physical_memory_ms"
+        ],
+        "source_archived_evidence": {
+          "archive_manifest_sha256": "0b695ccb31d0a945d5e1d2281bfc0c70deaa7db7bbda751c857df152ec43ed5c",
+          "archive_table_sha256": "9e24c110adeebd9354c1c147bcb52aa0d96efade5408e6d0c4625e852949c369",
+          "occurrence_count": 24,
+          "scenes": [
+            "jianpan",
+            "kaihe",
+            "run",
+            "xiezi"
+          ]
+        },
+        "source_coordinate": {
+          "fs_target": 50,
+          "memory_ms": 40,
+          "nominal_mu": 0.006
+        },
+        "source_nominal_mu_updates_per_second": 0.3,
+        "source_profile_receipt_sha256": "a80f10d5c1037b47819018a7fff5864ea9851cf010184eb2a34efe68bfb67033",
+        "target_nominal_mu_updates_per_second": 0.3
+      },
+      "recovery_sentinel_role": "aggressive"
+    },
+    {
+      "actual_taps": 4,
+      "design_role": "coverage_boundary",
+      "effective_mu": {
+        "formula": "max(lms_mu_min, nominal_mu - abs_corr / 100)",
+        "lms_mu_min": 1e-06,
+        "maximum": 0.004,
+        "minimum": 1e-06
+      },
+      "fs_target": 100,
+      "nominal_mu": 0.004,
+      "physical_memory_ms": 40,
+      "profile_id": "p100-short-rate-normalized-midlow-40",
+      "profile_sha256": "643ebd89b6c42caf723edd87314cbaa477163b2745d0e18f10ea13cc18147ff7",
+      "provenance": {
+        "formula": "target_mu = source_mu * source_fs_target / fs_target",
+        "kind": "rate_normalized_from_archived_profile",
+        "preserves": [
+          "nominal_mu_updates_per_physical_second",
+          "physical_memory_ms"
+        ],
+        "source_archived_evidence": {
+          "archive_manifest_sha256": "0b695ccb31d0a945d5e1d2281bfc0c70deaa7db7bbda751c857df152ec43ed5c",
+          "archive_table_sha256": "9e24c110adeebd9354c1c147bcb52aa0d96efade5408e6d0c4625e852949c369",
+          "occurrence_count": 31,
+          "scenes": [
+            "jianpan",
+            "kaihe",
+            "run",
+            "xiezi"
+          ]
+        },
+        "source_coordinate": {
+          "fs_target": 50,
+          "memory_ms": 40,
+          "nominal_mu": 0.008
+        },
+        "source_nominal_mu_updates_per_second": 0.4,
+        "source_profile_receipt_sha256": "cc94a059bf572a403c0fc102a3a9535b14f580f738351120d0c1e2b82809d210",
+        "target_nominal_mu_updates_per_second": 0.4
+      },
+      "recovery_sentinel_role": null
+    }
+  ],
+  "receipt_version": "lyx_filter_profile_library_freeze_v2",
+  "recovery_sentinels": {
+    "aggressive": "p100-short-rate-normalized-low-40",
+    "conservative": "p50-short-low",
+    "intermediate": "p50-short-low-40"
+  },
+  "role_counts": {
+    "core": 6,
+    "coverage_boundary": 2
+  },
+  "status": "frozen_before_audit"
+}

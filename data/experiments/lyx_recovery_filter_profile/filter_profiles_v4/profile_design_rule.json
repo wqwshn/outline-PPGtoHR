@@ -1,0 +1,73 @@
+{
+  "attempt_kind": "exploration",
+  "audit_contract_sha256": "8e46582997dc08db81a7430d4443c0b84bdbc2558c4f638afce1fbd67a667ac4",
+  "candidate_profiles": [
+    {
+      "design_role": "coverage_boundary",
+      "fs_target": 100,
+      "memory_ms": 40,
+      "nominal_mu": 0.003,
+      "profile_id": "p100-short-rate-normalized-low-40",
+      "recovery_sentinel_role": null
+    },
+    {
+      "design_role": "coverage_boundary",
+      "fs_target": 100,
+      "memory_ms": 40,
+      "nominal_mu": 0.004,
+      "profile_id": "p100-short-rate-normalized-midlow-40",
+      "recovery_sentinel_role": null
+    }
+  ],
+  "design_rule_sha256": "711942f542bda86fefdebcbc82564a1eaa3b3ce5ab6289b7cf1e59496e251f26",
+  "design_rule_version": "lyx_filter_rate_normalized_supplement_design_v1",
+  "exploration_registry_policy": "exact_identity_allowlist_created_only_after_human_authorization",
+  "independent_bo_authorized": false,
+  "mechanistic_evidence_sha256": "4640422f2ebe68ee728f82c2b3f5d811c269442ec35adc7e01769db6f9127199",
+  "new_unique_identity_count": 8,
+  "produces_hr_tracking_trajectory": false,
+  "record_manifest_sha256": "c5e7291cf2da3a6ef25a03a96d763373b9cacdaee521c0378413cee6dc9666f1",
+  "reused_eligible_p50_profile_ids": [
+    "p50-short-low-40",
+    "p50-short-midlow-40"
+  ],
+  "reused_numeric_result_count": 8,
+  "selection_rule": {
+    "eligibility": "both_new_p100_profiles_pass_all_four_stability_and_frozen_spectral_gates",
+    "insufficient_role_policy": "fail_closed_without_automatic_expansion",
+    "p100_policy": "select_both_rate_normalized_profiles",
+    "p50_policy": "reuse_two_previously_eligible_p50_profiles"
+  },
+  "sentinel_rule": {
+    "aggressive": "highest_ranked_eligible_p100_replacement",
+    "conservative": "retain_p50-short-low",
+    "intermediate": "highest_ranked_eligible_p50_replacement"
+  },
+  "source_archive_evidence_artifact_sha256": "c3623d094dbcd58c9f374ce710ee4f412c9f2792e39d8399ca86d73ead9f781a",
+  "source_completion_artifact_sha256": "f1de068cf60d88cdb6662386e74cf7af8348aaa3c38ae5f32d5dc971dd639a7c",
+  "source_completion_sha256": "9ccd10f5c6a0cbc590c7907f755624e01c997e8762f567f8c6848941f38a34f3",
+  "source_design_rule_artifact_sha256": "33048a7543739cdc07f1d0dcee5ba2334d7dd58087f5ef51170e01172a2f27c1",
+  "source_p50_profile_receipt_artifact_sha256": {
+    "p50-short-low-40": "6aa4b6562d766e4a7cfa943240915dd7af1341f901551bd18b97b5782c1c367f",
+    "p50-short-midlow-40": "d73f5d5e43db695c6f2130a94b1c4b99b55b9a8113b70a20ae11ecef899e94a3"
+  },
+  "source_p50_record_audit_artifact_sha256": {
+    "p50-short-low-40": {
+      "jianpan2_LYX_0708": "3e9a3c208f1a5f625b30c8fbb0f7dcc5acc106c6bc93ccde68199902d3ee3153",
+      "kaihe3_LYX_0613": "353133eddf45cd4564c8ca9792bd2da7d8bb54f2357c4567dfb26c329c684f54",
+      "run1_LYX_0708": "8afd3d49d5a52ea7fb17e745ec13e63eeb52b9ff7fa665943f0bdfab4841fa55",
+      "xiezi4_LYX_0708": "56aa9f67b46d0f29906b0ac64cdce7a151f9bb09c061d1970e8bdeaee0d9904b"
+    },
+    "p50-short-midlow-40": {
+      "jianpan2_LYX_0708": "1b9f6681c5ffcd9a811f140a917f0cdec95f830cce9c94fe2291b4f2767ef755",
+      "kaihe3_LYX_0613": "7148d7593633a66b89b2bed5cfc862e90f190c960851cd016c829026a90e9ded",
+      "run1_LYX_0708": "edf62f4be21dbb3524dd8c2a53561deea2c081e2a84d128d2967dd48bb089c1c",
+      "xiezi4_LYX_0708": "3e884cbfb24ccff77a40dbc19343b2520268e46953705a0f38c95d75413522b4"
+    }
+  },
+  "source_plan_artifact_sha256": "3d0f29e796fc6106f25e69956bb03cf30af2c4186f14389e78b2fca2a4986f59",
+  "source_proposal_artifact_sha256": "c9eb0827cb70e6a9ee869f98d9c6dacaad2fb0d4946eb8debe4c3953a7b730de",
+  "source_record_manifest_artifact_sha256": "42d055f9ac2a7676382c304287a5c090594d03c2c1482c98095c3660af677a79",
+  "source_selection_artifact_sha256": "b9d57aedac09b1f79f03f4793243c29e94c257ef651a94b57d3f3f033ecb57af",
+  "status": "proposed_awaiting_human_budget_decision"
+}
