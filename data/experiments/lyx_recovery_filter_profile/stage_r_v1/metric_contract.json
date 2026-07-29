@@ -1,0 +1,13 @@
+{
+  "contract_sha256": "05f0665c2ac82c1a081c65d48f96e970978e77c0a3488bc14b9e812aceb4112b",
+  "contract_version": "lyx_recovery_profile_metric_v1",
+  "e10_definition": "absolute_error_bpm >= 10",
+  "e20_definition": "absolute_error_bpm >= 20",
+  "recovery_definition": "first later start of 3 consecutive windows with absolute_error_bpm < 10",
+  "right_censored_recovery_is_failure": true,
+  "smooth_win_len": 5,
+  "time_bias_s": 5.0,
+  "true_rise_min_gain_bpm": 15.0,
+  "true_rise_min_windows": 10,
+  "uses_offline_future_dependency": true
+}
