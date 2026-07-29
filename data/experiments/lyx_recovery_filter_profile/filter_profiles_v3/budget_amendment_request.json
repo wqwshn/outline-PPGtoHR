@@ -1,0 +1,18 @@
+{
+  "added_unique_identities": 24,
+  "approved": false,
+  "candidate_profile_count": 6,
+  "candidate_record_count": 4,
+  "decision_state": "awaiting_human_budget_decision",
+  "independent_bo_authorized": false,
+  "max_attempts": 1496,
+  "max_unique_identities": 748,
+  "normal_unique_identity_limit": 736,
+  "profile_design_rule_hash": "93a320eb48ca2cf7407c7c74824d5308518e1d537452627eb6ceb0603be9a5f5",
+  "reclassifies_cached_identity_count": 0,
+  "record_manifest_hash": "c5e7291cf2da3a6ef25a03a96d763373b9cacdaee521c0378413cee6dc9666f1",
+  "request_sha256": "73a29a3dfb4fdbf54455d74859bae120ce057833e1bfc23c4b970d8f1abb006b",
+  "request_version": "lyx_filter_audit_budget_amendment_request_v3",
+  "stage": "filter_profile_stability_audit",
+  "status": "awaiting_human_budget_decision"
+}

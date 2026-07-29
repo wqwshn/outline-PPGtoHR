@@ -706,6 +706,7 @@ class AttemptRegistry:
                 exploration_registry=self.exploration_registry,
                 entries=deepcopy(source._entries),
             )
+            migrated._write_entries(migrated._entries)
             for identity in new_identities:
                 migrated.register_identity(identity)
             migrated._validate_entries(migrated._entries)

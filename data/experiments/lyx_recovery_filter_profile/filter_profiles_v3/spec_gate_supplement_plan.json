@@ -1,0 +1,166 @@
+{
+  "audit_contract": {
+    "contract_version": "lyx_filter_stability_audit_v2",
+    "max_residual_artifact_abs_corr_median": 0.95,
+    "max_residual_rms_ratio_p95": 2.0,
+    "max_residual_tail_head_ratio": 2.0,
+    "max_stability_load": 1.0,
+    "max_weight_norm": 25.0,
+    "min_motion_artifact_suppression_db_median": -1.0,
+    "min_true_peak_retention_ratio_median": 0.8,
+    "tail_head_gate": "descriptive_only"
+  },
+  "audit_contract_sha256": "8e46582997dc08db81a7430d4443c0b84bdbc2558c4f638afce1fbd67a667ac4",
+  "candidate_profiles": [
+    {
+      "design_role": "core",
+      "fs_target": 50,
+      "memory_ms": 40,
+      "nominal_mu": 0.006,
+      "profile_id": "p50-short-low-40",
+      "recovery_sentinel_role": null
+    },
+    {
+      "design_role": "core",
+      "fs_target": 50,
+      "memory_ms": 40,
+      "nominal_mu": 0.008,
+      "profile_id": "p50-short-midlow-40",
+      "recovery_sentinel_role": null
+    },
+    {
+      "design_role": "coverage_boundary",
+      "fs_target": 100,
+      "memory_ms": 40,
+      "nominal_mu": 0.006,
+      "profile_id": "p100-short-low-40",
+      "recovery_sentinel_role": null
+    },
+    {
+      "design_role": "coverage_boundary",
+      "fs_target": 100,
+      "memory_ms": 40,
+      "nominal_mu": 0.008,
+      "profile_id": "p100-short-midlow-40",
+      "recovery_sentinel_role": null
+    },
+    {
+      "design_role": "coverage_boundary",
+      "fs_target": 100,
+      "memory_ms": 80,
+      "nominal_mu": 0.006,
+      "profile_id": "p100-medium-low-80",
+      "recovery_sentinel_role": null
+    },
+    {
+      "design_role": "coverage_boundary",
+      "fs_target": 100,
+      "memory_ms": 80,
+      "nominal_mu": 0.008,
+      "profile_id": "p100-medium-midlow-80",
+      "recovery_sentinel_role": null
+    }
+  ],
+  "code_hash": "5d534fc2da367d891f877f8d6ff6c5268809bec7dea752ab01b59c07e7696093",
+  "design_rule_sha256": "93a320eb48ca2cf7407c7c74824d5308518e1d537452627eb6ceb0603be9a5f5",
+  "evaluation_hash": "27aa65e8296a787b7ca265ff4333cbba29c892088d0b5c9725697fa366003bda",
+  "frozen_source_archive_evidence_sha256": "431e1424e8ad5f586e02447aa885b7835bf848890f2c4fbcc02a5788d9931cfe",
+  "frozen_source_completion_sha256": "a5b00a9cbd65f986e0ce85696e278173c6f2668afb223c90053f3d68da1dae42",
+  "frozen_source_plan_sha256": "3596e0829d2ae3d778060300ec83af529e7e38cfa5d523ad82fd5485ce6b406c",
+  "frozen_source_reclassification_sha256": "72502e137c9825c9e9ff3ce08bd7da262cf43ce29e210b648f537d8a7d3e5a5c",
+  "independent_bo_authorized": false,
+  "new_identity_count": 24,
+  "new_identity_sha256": [
+    "3234eca4e58d0dbbad55583c7450a3d12fc8d5186fc02e9d57e15f4f0ca31139",
+    "ad24b3f7e0bd7a6433bdb77661e277eacd525dddc41f29e9c172ba40c6dcf22e",
+    "24850014cd97fb208406b6646c5ee9ee1e6d92af14fafd3cf717bc6ae539fa1d",
+    "20d9fdb70644e8d0561a390b6c39680bda3b241a3c85975d077106c46dc09046",
+    "89992a697b66f0446ac2008c8649d8f11aa231dd86d0c31752f2cce1e4d1f0a2",
+    "35b8874634cdeabda63a8579ba48f812706efffc6795e554106e21cd58386524",
+    "f305c5fd6f22959434395ddabbaa55b47f776720cc4ca1d02e75240c2192f3ee",
+    "d68ee6a5f285787c82ac69b8e150ffc0fdb51815276520fc53f5394c3de50364",
+    "3c7aa400a39d9549a64c407caa950ecff9aec40231d3bb20e243b9fc2784cee5",
+    "d229a14b67a2620552ef9200569646e90a1fd647fe11e9d71132449bc907864f",
+    "710b494dc4d4359ac3b67a8d466e2553d2cb9176bf85bb938df86624e4ac1986",
+    "09f65a21fde6bb26847f88fdcbbf892457713af5bc66c84e3ba50f630b226ca4",
+    "fd7d9e4c5dfb4eb177a1a381c522cad2bd99658c0d18b3b1893558a46a6c7b98",
+    "95b47fd083de074a763d3804d3b0fa10d50e6d433d767667e85a1bbe098a138c",
+    "928ddf53eeb999f19c542e5d9e49a70043a40de1b4fae4cabe59166bff1dbf9d",
+    "d85616dd5c7e9c6f94bfd19f406692bbc735a5375ed2d1838860da09f0a78b63",
+    "9e48f94aaf858bdc469099cecd96ac00fea2617a9140baac1d9c2eea9e8d922b",
+    "6675cf301f42a91efed5bf8550f4052e5cdfb95af424b65c89e29d5858cbd0a8",
+    "9f08133bffc974a16ddc5c7d2d59c377a53966a4cde96c690c6e68bd7d2dcdf8",
+    "aaaa2a7907de94a0bdb7ac60433c695d4c24dc5e9b35fc150e87083eacc6740e",
+    "e93d1bff5d1720f48367f691eb707df0ccbc499b004d951997722df06ba421d6",
+    "c01c33bba200d39ad0134f4969aa63fec52931ae780f100ea7430a97e895a99b",
+    "51c1638c041593b9b3ab6ddaf194caa218c92246f2ccc218e2a2e6d73de1033d",
+    "903592689580e0d99c70dd0b9b6ebd18cb9ecfdac40ef836660cd7cafa9de40d"
+  ],
+  "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+  "plan_sha256": "023547ea7d2030deef6fa2b2b7f5b961e0bf0cbb30f45c6ce09dcfee04d8bcd5",
+  "plan_version": "lyx_filter_spec_gate_supplement_plan_v1",
+  "produces_hr_tracking_trajectory": false,
+  "proposal_sha256": "57d402b0b471a66d6f09766886744e8a50fc5d41c0d2a06db4c94544ddb2b556",
+  "record_manifest_sha256": "c5e7291cf2da3a6ef25a03a96d763373b9cacdaee521c0378413cee6dc9666f1",
+  "records": [
+    {
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708.csv",
+      "data_sha256": "b4aaafa531d731c81d7e8da0e5dac4f8c6e360bda6c7520c34ae78e023dd8bb7",
+      "record_id": "jianpan2_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "c7a98e54da83d6310430276b33b88bf2306ade91ac81d5b9dd3f5d18ecf5a270",
+      "scene": "jianpan"
+    },
+    {
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613.csv",
+      "data_sha256": "778f75d02d47a134a5999a5641de201dfc613da915b43876398792c6833c6e84",
+      "record_id": "kaihe3_LYX_0613",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613_HR_ref.csv",
+      "reference_sha256": "5cb40473d1793f8ff91eeed993f4a1b9a59c44b7fefcfd57a0314ad34c626050",
+      "scene": "kaihe"
+    },
+    {
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708.csv",
+      "data_sha256": "4e53e93fb94a8ecd17d319af41d6d010c1424baf9c0151099cb417fb0a2d6af0",
+      "record_id": "run1_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708_HR_ref.csv",
+      "reference_sha256": "c8677ec1f0e22b25100c20ab83b8faf22ddea730a973b41b1b43673acf1443a0",
+      "scene": "run"
+    },
+    {
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708.csv",
+      "data_sha256": "1d18872f230a8ed75fdf9653196193557da946dcdb6b6375afe220ad9c71bdf4",
+      "record_id": "xiezi4_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708_HR_ref.csv",
+      "reference_sha256": "9db5f78f018e87128771f45cc3af8004e51ef7530ae1358dcf873b8f547cb0f7",
+      "scene": "xiezi"
+    }
+  ],
+  "selection_rule": {
+    "eligibility": "all_four_records_pass_stability_and_frozen_spectral_gates",
+    "insufficient_role_policy": "fail_closed_without_automatic_expansion",
+    "p100_slots": 2,
+    "p50_slots": 2,
+    "ranking": [
+      "minimum_record_pulse_power_retention_desc",
+      "maximum_record_weight_norm_asc",
+      "median_runtime_seconds_asc",
+      "profile_id_asc"
+    ]
+  },
+  "sentinel_rule": {
+    "aggressive": "highest_ranked_eligible_p100_replacement",
+    "conservative": "retain_p50-short-low",
+    "intermediate": "highest_ranked_eligible_p50_replacement"
+  },
+  "solver_hash": "5cd97d6420037167548d2bf93f23eb40eaaf2f90b125be61ee1e39be0a145868",
+  "source_completion_sha256": "0ce2802bf09dfc7caf4082710df683fef90bccb45d47fbac1992fff42a84fecf",
+  "source_eligible_profile_ids": [
+    "p25-short-low",
+    "p25-short-mid",
+    "p25-long-mid",
+    "p50-short-low"
+  ],
+  "source_plan_sha256": "ae7dc7041459c3248ac6be96b5ac1286ae242c1f56fdcd0be6acb7610d2c782a",
+  "status": "prepared_zero_new_runs"
+}

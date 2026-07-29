@@ -397,6 +397,62 @@ def test_attempt_registry_migration_preserves_attempts_and_cache_evidence(
     assert (migrated.trusted_cache_root / cache_path.name).is_file()
 
 
+def test_attempt_registry_migration_registers_new_identities_atomically(
+    tmp_path: Path,
+) -> None:
+    source_contract = BudgetContract(
+        stage_unique_limits={"tiny": 0},
+        normal_unique_identity_limit=0,
+        max_unique_identities=0,
+        max_attempts=0,
+        retry_limit=1,
+    )
+    target_contract = BudgetContract(
+        stage_unique_limits={"tiny": 1},
+        normal_unique_identity_limit=1,
+        max_unique_identities=1,
+        max_attempts=2,
+        retry_limit=1,
+        contract_version="expanded",
+    )
+    exploration = ExplorationRegistry.zero_budget_v1()
+    source = AttemptRegistry.create(
+        tmp_path / "source" / "attempt_registry.json",
+        budget_contract=source_contract,
+        exploration_registry=exploration,
+    )
+    request = BudgetAmendmentRequest(
+        stage="tiny",
+        profile_design_rule_hash="a" * 64,
+        record_manifest_hash="b" * 64,
+        added_unique_identities=1,
+        normal_unique_identity_limit=1,
+        max_unique_identities=1,
+        max_attempts=2,
+    )
+    authorization = {
+        "approved": True,
+        "decision_state": "awaiting_human_budget_decision",
+        **request.__dict__,
+        "independent_bo_authorized": False,
+        "approved_at": "2026-07-29T09:07:19+08:00",
+        "approved_by": "user",
+    }
+    identity = _identity(record_id="new-record", stage="tiny")
+
+    migrated = source.migrate_to(
+        tmp_path / "target" / "attempt_registry.json",
+        budget_contract=target_contract,
+        amendment_request=request,
+        authorization_receipt=authorization,
+        new_identities=(identity,),
+    )
+
+    assert migrated.summary()["planned_unique_identity_count"] == 1
+    payload = read_json(tmp_path / "target" / "attempt_registry.json")
+    assert payload["entries"][identity.sha256]["status"] == "registered"
+
+
 def test_attempt_registry_migration_rejects_changed_unamended_stage_kind(
     tmp_path: Path,
 ) -> None:
