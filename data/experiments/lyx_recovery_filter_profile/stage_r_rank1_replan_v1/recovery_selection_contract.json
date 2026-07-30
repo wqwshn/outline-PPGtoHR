@@ -1,0 +1,65 @@
+{
+  "automatic_stage_f_execution": false,
+  "continuation_of": "lyx_recovery_selection_contract_v1",
+  "contract_sha256": "f2530c8ebda4af0ff5189a68f2a57ccdbda8cdbfa90f444ba182c9d9a400b76f",
+  "contract_version": "lyx_recovery_selection_contract_rank1_replan_v1",
+  "control_receives_no_preference": true,
+  "evaluation_panel_contract": {
+    "coordinate_identity": [
+      "candidate_id",
+      "sentinel_id",
+      "record_id",
+      "scene"
+    ],
+    "record_count": 12,
+    "result_count_per_candidate": 12,
+    "scene_record_counts": {
+      "jianpan": 3,
+      "kaihe": 3,
+      "run": 3,
+      "xiezi": 3
+    },
+    "sentinel_count": 1,
+    "true_rise_not_applicable": "candidate and current must both be None exactly when the frozen panel marks the record not_applicable"
+  },
+  "filter_revision_id": "p25-short-low-rank1-v1",
+  "formal_solver_run_count": 0,
+  "hard_gate_formulas": {
+    "current_l10_catastrophic_regression_gate": "if current_l10 <= 10 then candidate_l10 < 20",
+    "l10_engineering_gate": "candidate_l10 <= max(10, independent_l10 + 2)",
+    "l20_engineering_gate": "candidate_l20 <= max(2, independent_l20)",
+    "loo_training_pair_mean_independent_mae_delta_le_1_bpm": "for the fixed rank-1 profile, each scene and held-out record, mean(candidate_mae - independent_mae) over the other two scene records <= 1 BPM",
+    "mae_current_delta_le_2_bpm": "candidate_mae - current_mae <= 2 BPM",
+    "mae_independent_delta_le_2_bpm": "candidate_mae - independent_mae <= 2 BPM",
+    "no_new_right_censored_recovery": "candidate_right_censored <= current_right_censored",
+    "true_rise_underestimate_delta_le_2_bpm": "run/kaihe candidate underestimate - current underestimate <= 2 BPM"
+  },
+  "independent_bo_authorized": false,
+  "motion_scene_additional_gate": "run_or_kaihe_must_not_add_right_censored_recovery",
+  "no_candidate_state": "no_safe_recovery_candidate",
+  "parameter_search_authorized": false,
+  "per_record_hard_gates": [
+    "spectral_gate_contract_v2",
+    "l10_engineering_gate",
+    "l20_engineering_gate",
+    "mae_independent_delta_le_2_bpm",
+    "no_new_right_censored_recovery",
+    "true_rise_underestimate_delta_le_2_bpm",
+    "current_l10_catastrophic_regression_gate",
+    "mae_current_delta_le_2_bpm",
+    "loo_training_pair_mean_independent_mae_delta_le_1_bpm"
+  ],
+  "ranking_key": [
+    "worst_l10",
+    "right_censored_recovery_count",
+    "worst_recovery_delay",
+    "worst_mae",
+    "mean_mae",
+    "mechanism_complexity",
+    "candidate_id"
+  ],
+  "single_candidate_rollback_backup_id": null,
+  "sort_direction": "ascending_all_fields",
+  "status": "frozen_zero_formal_runs",
+  "tie_rule": "candidate_id_ascending"
+}
