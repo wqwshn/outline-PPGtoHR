@@ -69,6 +69,13 @@ _CONTROL_PROFILE = FilterProfile(
     memory_ms=40,
     nominal_mu=0.008,
 )
+_PROPOSAL_ARTIFACT_NAMES = {
+    "budget_amendment_request.json",
+    "budget_contract_v7.json",
+    "control_contract.json",
+    "source_identity.json",
+    "spectral_metric_control_proposal.json",
+}
 
 
 @dataclass(frozen=True)
@@ -171,6 +178,19 @@ def _verify_embedded_hash(
     return declared
 
 
+def _repository_root_from_source_root(source_root: Path) -> Path:
+    resolved = Path(source_root).resolve()
+    if (
+        resolved.name != "src"
+        or resolved.parent.name != "python"
+        or not (resolved / "ppg_hr").is_dir()
+    ):
+        raise SpectralMetricControlError(
+            "spectral_metric_control_source_root_mismatch"
+        )
+    return resolved.parent.parent
+
+
 def _spectral_window(
     prepared: StageRPreparedWindow,
     *,
@@ -184,6 +204,32 @@ def _spectral_window(
         "fs": prepared.fs,
         "reference_hr_bpm": prepared.reference_hr_bpm,
         "window_center_s": prepared.window_center_s,
+    }
+
+
+def _control_profile_payload() -> dict[str, Any]:
+    return {
+        **asdict(_CONTROL_PROFILE),
+        "actual_taps": _CONTROL_PROFILE.actual_taps,
+        "profile_sha256": _CONTROL_PROFILE.sha256,
+    }
+
+
+def _control_identity_config() -> dict[str, Any]:
+    return {
+        "control_version": "lyx_spectral_metric_scale_control_v1",
+        "profile_id": _CONTROL_PROFILE.profile_id,
+        "profile_sha256": _CONTROL_PROFILE.sha256,
+        "fs_target": _CONTROL_PROFILE.fs_target,
+        "memory_ms": _CONTROL_PROFILE.memory_ms,
+        "actual_taps": _CONTROL_PROFILE.actual_taps,
+        "forced_mu": 0.0,
+        "lanes": [
+            "direct_raw_bypass",
+            "legacy_raw_vs_zero_update_lms",
+            "same_scale_zero_update_lms",
+        ],
+        "parameter_search": False,
     }
 
 
@@ -453,21 +499,7 @@ def _identity_item(
     evaluation_hash: str,
     metric_contract_hash: str,
 ) -> dict[str, Any]:
-    config = {
-        "control_version": "lyx_spectral_metric_scale_control_v1",
-        "profile_id": _CONTROL_PROFILE.profile_id,
-        "profile_sha256": _CONTROL_PROFILE.sha256,
-        "fs_target": _CONTROL_PROFILE.fs_target,
-        "memory_ms": _CONTROL_PROFILE.memory_ms,
-        "actual_taps": _CONTROL_PROFILE.actual_taps,
-        "forced_mu": 0.0,
-        "lanes": [
-            "direct_raw_bypass",
-            "legacy_raw_vs_zero_update_lms",
-            "same_scale_zero_update_lms",
-        ],
-        "parameter_search": False,
-    }
+    config = _control_identity_config()
     identity = AttemptIdentity(
         solver_hash=solver_hash,
         config_hash=canonical_sha256(config),
@@ -569,11 +601,7 @@ def build_spectral_metric_control_proposal(
             "control_profile_hash": _CONTROL_PROFILE.sha256,
         },
         "control_contract": control.to_dict(),
-        "control_profile": {
-            **asdict(_CONTROL_PROFILE),
-            "actual_taps": _CONTROL_PROFILE.actual_taps,
-            "profile_sha256": _CONTROL_PROFILE.sha256,
-        },
+        "control_profile": _control_profile_payload(),
         "decision_branches": {
             "spectral_evaluator_invalid": "direct bypass or complete-window control fails",
             "zero_update_path_invalid": "direct bypass passes but same-scale zero-update fails",
@@ -631,6 +659,15 @@ def propose_spectral_metric_control(
         raise SpectralMetricControlError("spectral_metric_control_spectral_contract_mismatch")
 
     source_root = Path(source_root).resolve()
+    repository_root = _repository_root_from_source_root(source_root)
+    relative_artifacts: dict[str, Path] = {}
+    for name, path in artifacts.items():
+        try:
+            relative_artifacts[name] = path.relative_to(repository_root)
+        except ValueError as error:
+            raise SpectralMetricControlError(
+                f"spectral_metric_control_source_outside_repository:{name}"
+            ) from error
     source_identity = runtime_source_identity(
         source_root,
         root_modules=("ppg_hr.v2.recovery_spectral_metric_control",),
@@ -646,7 +683,11 @@ def propose_spectral_metric_control(
     )
     proposal.pop("proposal_sha256")
     proposal["source_artifacts"] = {
-        name: {"path": str(path), "file_sha256": file_sha256(path)}
+        name: {
+            "path": relative_artifacts[name].as_posix(),
+            "path_base": "repository_root",
+            "file_sha256": file_sha256(path),
+        }
         for name, path in artifacts.items()
     }
     proposal["proposal_sha256"] = canonical_sha256(proposal)
@@ -808,28 +849,76 @@ def _validate_proposal_preflight(
     )
     if receipt.get("proposal_sha256") != proposal_sha:
         raise SpectralMetricControlError("spectral_metric_control_proposal_receipt_mismatch")
-    for name, expected in _require_mapping(
+    artifact_hashes = _require_mapping(
         "spectral_metric_control_artifacts",
         receipt.get("artifact_sha256"),
-    ).items():
+    )
+    if set(artifact_hashes) != _PROPOSAL_ARTIFACT_NAMES:
+        raise SpectralMetricControlError(
+            "spectral_metric_control_artifact_set_mismatch"
+        )
+    for name, expected in artifact_hashes.items():
         path = proposal_dir / str(name)
         if not path.is_file() or file_sha256(path) != expected:
             raise SpectralMetricControlError(
                 f"spectral_metric_control_artifact_mismatch:{name}"
             )
+    repository_root = _repository_root_from_source_root(source_root)
     for name, raw in _require_mapping(
         "spectral_metric_control_source_artifacts",
         proposal.get("source_artifacts"),
     ).items():
         artifact = _require_mapping(f"source_artifact:{name}", raw)
-        path = Path(str(artifact.get("path", ""))).resolve()
-        if not path.is_file() or file_sha256(path) != artifact.get("file_sha256"):
+        relative = Path(str(artifact.get("path", "")))
+        path = (repository_root / relative).resolve()
+        if (
+            artifact.get("path_base") != "repository_root"
+            or relative.is_absolute()
+            or not path.is_relative_to(repository_root)
+            or not path.is_file()
+            or file_sha256(path) != artifact.get("file_sha256")
+        ):
             raise SpectralMetricControlError(
                 f"spectral_metric_control_source_artifact_mismatch:{name}"
             )
     current = runtime_source_identity(
         Path(source_root).resolve(),
         root_modules=("ppg_hr.v2.recovery_spectral_metric_control",),
+    )
+    if read_json(proposal_dir / "source_identity.json") != current:
+        raise SpectralMetricControlError(
+            "spectral_metric_control_source_identity_artifact_mismatch"
+        )
+    control = SpectralMetricScaleControlContract()
+    spectral = StageRSpectralGateContract()
+    budget = BudgetContract.proposed_v7_spectral_metric_control()
+    control_artifact = read_json(proposal_dir / "control_contract.json")
+    if (
+        _verify_embedded_hash(
+            control_artifact,
+            hash_field="contract_sha256",
+            artifact_name="spectral_metric_control_contract",
+        )
+        != control.sha256
+        or {
+            key: value
+            for key, value in control_artifact.items()
+            if key != "contract_sha256"
+        }
+        != control.to_dict()
+    ):
+        raise SpectralMetricControlError(
+            "spectral_metric_control_contract_artifact_mismatch"
+        )
+    if read_json(proposal_dir / "budget_contract_v7.json") != budget.to_dict():
+        raise SpectralMetricControlError(
+            "spectral_metric_control_budget_artifact_mismatch"
+        )
+    budget_request = read_json(proposal_dir / "budget_amendment_request.json")
+    _verify_embedded_hash(
+        budget_request,
+        hash_field="request_sha256",
+        artifact_name="spectral_metric_control_budget_request",
     )
     frozen = _require_mapping(
         "spectral_metric_control_frozen_contracts",
@@ -838,9 +927,54 @@ def _validate_proposal_preflight(
     if (
         current.get("source_bundle_sha256") != frozen.get("solver_hash")
         or current.get("source_bundle_sha256") != frozen.get("evaluation_hash")
+        or frozen.get("control_contract_hash") != control.sha256
+        or frozen.get("spectral_gate_contract_hash") != spectral.sha256
+        or frozen.get("budget_contract_hash") != budget.sha256
+        or frozen.get("control_profile_hash") != _CONTROL_PROFILE.sha256
     ):
         raise SpectralMetricControlError(
-            "spectral_metric_control_runtime_source_identity_mismatch"
+            "spectral_metric_control_frozen_contract_mismatch"
+        )
+    if (
+        proposal.get("status") != "awaiting_human_execution_authorization"
+        or proposal.get("authorization_state") != _AUTHORIZATION_STATE
+        or proposal.get("stage") != _STAGE
+        or proposal.get("attempt_kind") != _ATTEMPT_KIND
+        or proposal.get("unique_budget") != 12
+        or proposal.get("retry_limit") != 1
+        or proposal.get("worst_case_attempt_budget") != 24
+        or proposal.get("deterministic_lane_count_per_identity") != 3
+        or proposal.get("parameter_search_authorized") is not False
+        or proposal.get("independent_bo_authorized") is not False
+        or proposal.get("may_nominate_recovery_candidate") is not False
+        or proposal.get("automatic_stage_r_execution") is not False
+        or proposal.get("control_contract") != control.to_dict()
+        or proposal.get("control_profile") != _control_profile_payload()
+    ):
+        raise SpectralMetricControlError(
+            "spectral_metric_control_proposal_contract_mismatch"
+        )
+    expected_budget_request = {
+        "proposal_sha256": proposal_sha,
+        "stage": _STAGE,
+        "attempt_kind": _ATTEMPT_KIND,
+        "added_unique_identities": 12,
+        "normal_unique_identity_limit": 792,
+        "max_unique_identities": 804,
+        "max_attempts": 1608,
+        "retry_limit": 1,
+        "budget_contract_hash": budget.sha256,
+        "identity_panel_sha256": proposal.get("identity_panel_sha256"),
+        "record_panel_sha256": proposal.get("record_panel_sha256"),
+        "parameter_search_authorized": False,
+        "independent_bo_authorized": False,
+    }
+    if any(
+        budget_request.get(name) != value
+        for name, value in expected_budget_request.items()
+    ):
+        raise SpectralMetricControlError(
+            "spectral_metric_control_budget_request_mismatch"
         )
     identities = tuple(
         dict(_require_mapping("spectral_metric_control_identity", item))
@@ -850,10 +984,53 @@ def _validate_proposal_preflight(
         )
     )
     hashes = [str(item["identity_sha256"]) for item in identities]
+    actual_hashes: list[str] = []
+    record_panel: list[dict[str, Any]] = []
+    scenes: Counter[str] = Counter()
+    for item in identities:
+        identity = _identity_from_item(item)
+        actual_hashes.append(identity.sha256)
+        config = _require_mapping(
+            "spectral_metric_control_identity_config",
+            item.get("config"),
+        )
+        if (
+            item.get("identity_sha256") != identity.sha256
+            or item.get("cache_identity_sha256") != identity.sha256
+            or canonical_sha256(config) != identity.config_hash
+            or dict(config) != _control_identity_config()
+            or identity.stage != _STAGE
+            or identity.attempt_kind != _ATTEMPT_KIND
+            or identity.metric_contract_hash != control.sha256
+            or identity.solver_hash
+            != current.get("source_bundle_sha256")
+            or identity.evaluation_hash
+            != current.get("source_bundle_sha256")
+            or item.get("scene") not in _EXPECTED_SCENE_COUNTS
+        ):
+            raise SpectralMetricControlError(
+                "spectral_metric_control_identity_contract_mismatch"
+            )
+        scenes[str(item["scene"])] += 1
+        record_panel.append(
+            {
+                "record_id": identity.record_id,
+                "scene": item["scene"],
+                "raw_data_sha256": item["raw_data_sha256"],
+                "reference_sha256": item["reference_sha256"],
+                "data_sha256": identity.data_sha256,
+            }
+        )
     if (
         len(identities) != 12
+        or len(set(actual_hashes)) != 12
         or hashes != proposal.get("identity_sha256")
+        or hashes != actual_hashes
         or canonical_sha256(hashes) != proposal.get("identity_panel_sha256")
+        or dict(scenes) != _EXPECTED_SCENE_COUNTS
+        or record_panel != proposal.get("record_panel")
+        or canonical_sha256(record_panel)
+        != proposal.get("record_panel_sha256")
     ):
         raise SpectralMetricControlError("spectral_metric_control_identity_matrix_mismatch")
     return proposal, identities
@@ -995,6 +1172,7 @@ def execute_spectral_metric_control(
             authorization=authorization,
             output_dir=destination,
             identities=identities,
+            registry=registry,
         )
 
     registry.register_identities(identities)
@@ -1100,6 +1278,7 @@ def execute_spectral_metric_control(
         authorization=authorization,
         output_dir=destination,
         identities=identities,
+        registry=registry,
     )
 
 
@@ -1141,6 +1320,7 @@ def _validate_completed_control_execution(
     authorization: Mapping[str, Any],
     output_dir: Path,
     identities: Sequence[AttemptIdentity],
+    registry: AttemptRegistry,
 ) -> dict[str, Any]:
     completion = read_json(completion_path)
     _verify_embedded_hash(
@@ -1148,14 +1328,18 @@ def _validate_completed_control_execution(
         hash_field="completion_sha256",
         artifact_name="spectral_metric_control_completion",
     )
+    matrix_summary = registry.matrix_execution_summary(identities)
     if (
         completion.get("proposal_sha256") != proposal.get("proposal_sha256")
         or completion.get("authorization_sha256")
         != canonical_sha256(authorization)
         or completion.get("diagnostic_result_count") != 12
+        or completion.get("diagnostic_run_count")
+        != matrix_summary["identity_with_solver_attempt_count"]
         or completion.get("parameter_search_run_count") != 0
         or completion.get("independent_bo_run_count") != 0
         or completion.get("may_nominate_recovery_candidate") is not False
+        or completion.get("matrix_execution_summary") != matrix_summary
     ):
         raise SpectralMetricControlError(
             "spectral_metric_control_completion_identity_mismatch"
@@ -1205,6 +1389,7 @@ def _validate_completed_control_execution(
             "spectral_metric_control_manifest_mismatch"
         )
     observed: set[str] = set()
+    rows: list[dict[str, Any]] = []
     for raw in entries:
         entry = _require_mapping("spectral_metric_control_manifest_entry", raw)
         identity_hash = str(entry.get("identity_sha256", ""))
@@ -1233,9 +1418,23 @@ def _validate_completed_control_execution(
             raise SpectralMetricControlError(
                 "spectral_metric_control_manifest_result_mismatch"
             )
+        rows.append(result)
         observed.add(identity_hash)
     if observed != set(identities_by_hash):
         raise SpectralMetricControlError(
             "spectral_metric_control_manifest_identity_set_mismatch"
+        )
+    expected_decision = evaluate_spectral_metric_control_decision(
+        rows,
+        control_contract=SpectralMetricScaleControlContract(),
+    )
+    expected_decision["proposal_sha256"] = proposal["proposal_sha256"]
+    expected_decision.pop("decision_sha256")
+    expected_decision["decision_sha256"] = canonical_sha256(
+        expected_decision
+    )
+    if decision != expected_decision:
+        raise SpectralMetricControlError(
+            "spectral_metric_control_decision_recomputation_mismatch"
         )
     return completion

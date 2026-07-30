@@ -286,6 +286,11 @@ def test_prepare_and_execute_control_panel_obey_exact_human_gate(
     proposal = read_json(
         proposal_dir / "spectral_metric_control_proposal.json"
     )
+    assert all(
+        artifact["path_base"] == "repository_root"
+        and not Path(artifact["path"]).is_absolute()
+        for artifact in proposal["source_artifacts"].values()
+    )
     authorization_path = proposal_dir / "execution_authorization.json"
     atomic_write_json(authorization_path, _authorization(proposal))
     unapproved_path = proposal_dir / "unapproved_authorization.json"

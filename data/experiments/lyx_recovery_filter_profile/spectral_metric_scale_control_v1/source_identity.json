@@ -1,5 +1,5 @@
 {
-  "source_bundle_sha256": "4914945b9b720eedd01a77096b87a15b2c3da263c21790652a9dfda1c305c0bd",
+  "source_bundle_sha256": "1359174083c0c1022ae648cdadad37632c7d5963cc92c7293a51329f527983bb",
   "source_files": {
     "ppg_hr/__init__.py": "a75c364a694f664b76a00d2522395328f838f5ad5707d0aa217befb7ef6fdcdf",
     "ppg_hr/core/__init__.py": "7039113e745774f96cd44e3e2e786506753d8f54e6b00dd6aebef73262375e0b",
@@ -47,7 +47,7 @@
     "ppg_hr/v2/recovery_filter_profiles.py": "76a7ed36ae4506dc730262f884806789a6767f708ccb83993623d86b28800f26",
     "ppg_hr/v2/recovery_filter_stability.py": "9fff6466f4cb1e1a7866095e906254ae238974f15fa5268b565d8f623c6da172",
     "ppg_hr/v2/recovery_spectral_gate.py": "a2735138155410e14d231f3e8d0483c0f41c608a857bbb2e8a4851503497aae4",
-    "ppg_hr/v2/recovery_spectral_metric_control.py": "0829779067c6b89b427ccabbc477683229022da6ddaf5d417f56b38c204234ed",
+    "ppg_hr/v2/recovery_spectral_metric_control.py": "9fe75ef7b673a7c483228bfa8841f2db3ab0ce222e765f50d58dc7e24b696242",
     "ppg_hr/v2/reference_groups.py": "369e403c789d7106b4481340e952d9b0c6dc4165015042a4b82f549991581cee",
     "ppg_hr/v2/reference_overlap.py": "bfdd1596b3d9faac6f2bb164492504082d45464dbd65519bef3fc2f2ea6008db",
     "ppg_hr/v2/report.py": "4dbf887d1bbe2e9ca19b93805588c52f660b64ae345fa3cd6928add9ed5d5eae",
