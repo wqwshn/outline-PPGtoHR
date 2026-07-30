@@ -583,6 +583,28 @@ class BudgetContract:
             },
         )
 
+    @classmethod
+    def proposed_v7_spectral_metric_control(cls) -> BudgetContract:
+        """Return the proposed contract for 12 record-level scale controls."""
+
+        prior = cls.approved_v6_p25_diagnostic()
+        return cls(
+            stage_unique_limits={
+                **prior.stage_unique_limits,
+                "spectral_metric_scale_control_diagnostic": 12,
+            },
+            normal_unique_identity_limit=792,
+            supplemental_stage=prior.supplemental_stage,
+            max_unique_identities=804,
+            max_attempts=1608,
+            retry_limit=prior.retry_limit,
+            contract_version="lyx_recovery_filter_budget_v7",
+            stage_attempt_kinds={
+                **prior.stage_attempt_kinds,
+                "spectral_metric_scale_control_diagnostic": "diagnostic",
+            },
+        )
+
     @property
     def sha256(self) -> str:
         return _canonical_sha256(self.to_dict())
@@ -832,6 +854,9 @@ class AttemptRegistry:
             BudgetContract.approved_v4().sha256: BudgetContract.approved_v5().sha256,
             BudgetContract.approved_v5().sha256: (
                 BudgetContract.approved_v6_p25_diagnostic().sha256
+            ),
+            BudgetContract.approved_v6_p25_diagnostic().sha256: (
+                BudgetContract.proposed_v7_spectral_metric_control().sha256
             ),
         }
         expected_known_target = known_transitions.get(self.budget_contract.sha256)

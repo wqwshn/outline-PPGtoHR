@@ -1,0 +1,41 @@
+{
+  "contract_sha256": "9e04383a41c67c8256fbcdf68089e3e477bbe0597408fda23facebb52d159a37",
+  "control_version": "lyx_spectral_metric_scale_control_v1",
+  "decision_precedence": [
+    "spectral_evaluator_invalid",
+    "zero_update_path_invalid",
+    "legacy_scale_mismatch_confirmed",
+    "legacy_scale_mismatch_partial",
+    "legacy_scale_mismatch_not_reproduced"
+  ],
+  "direct_bypass_retention_max": 1.000001,
+  "direct_bypass_retention_min": 0.999999,
+  "expected_record_count": 12,
+  "forced_mu": 0.0,
+  "identity_grain": "record",
+  "independent_bo_authorized": false,
+  "lanes": {
+    "direct_raw_bypass": {
+      "after_scale": "raw_pre_filter",
+      "before_scale": "raw_pre_filter",
+      "filter_updates": 0
+    },
+    "legacy_raw_vs_zero_update_lms": {
+      "after_scale": "sample_zscore",
+      "before_scale": "raw_pre_filter",
+      "filter_updates": 0
+    },
+    "same_scale_zero_update_lms": {
+      "after_scale": "sample_zscore",
+      "before_scale": "sample_zscore",
+      "filter_updates": 0
+    }
+  },
+  "legacy_to_same_scale_ratio_max": 0.1,
+  "may_nominate_recovery_candidate": false,
+  "no_parameter_search": true,
+  "profile_id": "p25-short-low",
+  "require_complete_windows": true,
+  "same_scale_zero_update_retention_max": 1.05,
+  "same_scale_zero_update_retention_min": 0.95
+}

@@ -83,6 +83,20 @@ class StageRSpectralGateContract:
         return canonical_sha256(self.to_dict())
 
 
+@dataclass(frozen=True)
+class StageRPreparedWindow:
+    """One frozen Stage R window before any adaptive-filter update."""
+
+    original: np.ndarray
+    ranked_references: tuple[tuple[str, np.ndarray, float], ...]
+    primary_reference: np.ndarray
+    delay_samples: int
+    order: int
+    fs: int
+    reference_hr_bpm: float
+    window_center_s: float
+
+
 def _reference_hr_at_center(ref_data: np.ndarray, center_s: float) -> float:
     ref = np.asarray(ref_data, dtype=float)
     if ref.ndim != 2 or ref.shape[1] < 2 or ref.shape[0] == 0:
@@ -358,15 +372,12 @@ def evaluate_stage_r_spectral_gate_windows(
     }
 
 
-def audit_stage_r_profile_record(
+def prepare_stage_r_record_windows(
     profile: FilterProfile,
     record: FilterAuditRecord,
-    *,
-    contract: StageRSpectralGateContract,
-) -> dict[str, Any]:
-    """Run LMS stability plus the exact five relative spectral gates once."""
+) -> tuple[StageRPreparedWindow | None, ...]:
+    """Prepare the exact Stage R windows without running LMS."""
 
-    started = time.perf_counter()
     data_path = Path(record.data_path)
     reference_path = Path(record.reference_path)
     if file_sha256(data_path) != record.data_sha256:
@@ -415,8 +426,11 @@ def audit_stage_r_profile_record(
         raise StabilityAuditError(
             "stage_r_spectral_gate_requires_two_hf_references"
         )
-    stage_audits: list[dict[str, Any]] = []
-    spectral_windows: list[dict[str, Any]] = []
+    windows: list[StageRPreparedWindow | None] = []
+    signals = [
+        np.asarray(item["signal"], dtype=float)
+        for item in references
+    ]
     for idx_s in range(
         start_sample,
         max(start_sample, end_sample - window_samples + 1),
@@ -431,10 +445,6 @@ def audit_stage_r_profile_record(
             prepared.ref_data,
             center_s,
         )
-        signals = [
-            np.asarray(item["signal"], dtype=float)
-            for item in references
-        ]
         corr_arr, _empty, delay, _acc_delay = choose_delay(
             fs,
             time_1,
@@ -443,13 +453,12 @@ def audit_stage_r_profile_record(
             signals,
         )
         if corr_arr.size == 0:
-            spectral_windows.append({})
+            windows.append(None)
             continue
         original = np.asarray(
             prepared.ppg[idx_s:idx_e],
             dtype=float,
         )
-        current = original.copy()
         order = max(
             1,
             min(profile.actual_taps, int(abs(delay)) or 1),
@@ -457,45 +466,82 @@ def audit_stage_r_profile_record(
         ranked_reference_indices = np.argsort(corr_arr)[::-1]
         primary = signals[int(ranked_reference_indices[0])][idx_s:idx_e]
         primary = _aligned_reference(primary, int(delay))
-        for ref_idx in ranked_reference_indices:
-            reference = signals[int(ref_idx)][idx_s:idx_e]
+        ranked_references = tuple(
+            (
+                str(references[int(ref_idx)]["channel"]),
+                np.asarray(
+                    signals[int(ref_idx)][idx_s:idx_e],
+                    dtype=float,
+                ),
+                float(corr_arr[int(ref_idx)]),
+            )
+            for ref_idx in ranked_reference_indices
+        )
+        windows.append(
+            StageRPreparedWindow(
+                original=original,
+                ranked_references=ranked_references,
+                primary_reference=primary,
+                delay_samples=int(delay),
+                order=order,
+                fs=fs,
+                reference_hr_bpm=true_hr_bpm,
+                window_center_s=center_s,
+            )
+        )
+    return tuple(windows)
+
+
+def audit_stage_r_profile_record(
+    profile: FilterProfile,
+    record: FilterAuditRecord,
+    *,
+    contract: StageRSpectralGateContract,
+) -> dict[str, Any]:
+    """Run LMS stability plus the exact five relative spectral gates once."""
+
+    started = time.perf_counter()
+    stage_audits: list[dict[str, Any]] = []
+    spectral_windows: list[dict[str, Any]] = []
+    for window in prepare_stage_r_record_windows(profile, record):
+        if window is None:
+            spectral_windows.append({})
+            continue
+        current = window.original.copy()
+        for channel, reference, archive_abs_corr in window.ranked_references:
             stage = audit_lms_stage(
                 desired=current,
                 reference=reference,
-                fs=fs,
+                fs=window.fs,
                 nominal_mu=float(profile.nominal_mu),
-                order=order,
+                order=window.order,
                 K=0,
-                true_hr_bpm=true_hr_bpm,
+                true_hr_bpm=window.reference_hr_bpm,
             )
             stage.update(
                 {
-                    "window_center_s": center_s,
-                    "channel": str(
-                        references[int(ref_idx)]["channel"]
-                    ),
-                    "delay_samples": int(delay),
-                    "archive_style_abs_corr": float(
-                        corr_arr[int(ref_idx)]
-                    ),
+                    "window_center_s": window.window_center_s,
+                    "channel": channel,
+                    "delay_samples": window.delay_samples,
+                    "archive_style_abs_corr": archive_abs_corr,
                 }
             )
             stage_audits.append(stage)
             current, _weights, _unused = lms_filter(
                 float(stage["effective_mu"]),
-                order,
+                window.order,
                 0,
                 reference,
                 current,
             )
         spectral_windows.append(
             {
-                "before": original,
+                "before": window.original,
                 "after": current,
-                "motion_reference": primary,
-                "fs": fs,
-                "reference_hr_bpm": true_hr_bpm,
-                "window_center_s": center_s,
+                "motion_reference": window.primary_reference,
+                "fs": window.fs,
+                "reference_hr_bpm": window.reference_hr_bpm,
+                "window_center_s": window.window_center_s,
             }
         )
     stability = summarize_record_audit(

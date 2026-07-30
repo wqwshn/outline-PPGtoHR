@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import numpy as np
 
-__all__ = ["lms_filter"]
+__all__ = ["lms_filter", "standardize_lms_signal"]
 
 try:  # Optional acceleration; pure Python fallback is kept below.
     from numba import njit
@@ -25,6 +25,14 @@ def _zscore(x: np.ndarray) -> np.ndarray:
     if sd == 0.0 or not np.isfinite(sd):
         return x - x.mean()
     return (x - x.mean()) / sd
+
+
+def standardize_lms_signal(signal: np.ndarray) -> np.ndarray:
+    """Return the exact sample-z-score representation consumed by LMS."""
+
+    return _zscore(
+        np.atleast_1d(np.asarray(signal, dtype=float)).ravel()
+    )
 
 
 def _lms_filter_core_python(
@@ -97,8 +105,8 @@ def lms_filter(
     d: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Run normalised LMS; return ``(e, w, ee)``."""
-    u_arr = _zscore(np.atleast_1d(np.asarray(u, dtype=float)).ravel())
-    d_arr = _zscore(np.atleast_1d(np.asarray(d, dtype=float)).ravel())
+    u_arr = standardize_lms_signal(u)
+    d_arr = standardize_lms_signal(d)
 
     # MATLAB lmsFunc_h uses N = length(u) and only needs d up to index N-K.
     # In the cascade case the previous-stage output e shrinks by K each round,
