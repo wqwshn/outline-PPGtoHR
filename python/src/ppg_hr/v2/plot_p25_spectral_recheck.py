@@ -96,6 +96,28 @@ def _verify_embedded_hash(
     return expected
 
 
+def _verify_completion_artifact_bindings(
+    execution_root: Path,
+    completion: Mapping[str, Any],
+) -> None:
+    artifacts = completion.get("artifacts")
+    expected_names = {"decision_receipt.json", "result_manifest.json"}
+    if not isinstance(artifacts, dict) or set(artifacts) != expected_names:
+        raise ValueError("p25_recheck_completion_artifact_set_mismatch")
+    for artifact_name in sorted(expected_names):
+        expected_hash = artifacts.get(artifact_name)
+        artifact_path = execution_root / artifact_name
+        if (
+            not isinstance(expected_hash, str)
+            or len(expected_hash) != 64
+            or file_sha256(artifact_path) != expected_hash
+        ):
+            raise ValueError(
+                "p25_recheck_completion_artifact_hash_mismatch:"
+                f"{artifact_name}"
+            )
+
+
 def collect_p25_spectral_recheck_rows(
     execution_dir: Path,
     *,
@@ -578,15 +600,21 @@ def build_p25_spectral_recheck_report_assets(
         field="completion_sha256",
         artifact="p25_spectral_recheck_completion",
     )
+    _verify_completion_artifact_bindings(execution_root, completion)
     decision = _read_json(execution_root / "decision_receipt.json")
-    _verify_embedded_hash(
+    decision_sha = _verify_embedded_hash(
         decision,
         field="decision_sha256",
         artifact="p25_spectral_recheck_decision",
     )
+    if completion.get("decision_sha256") != decision_sha:
+        raise ValueError("p25_recheck_completion_decision_hash_mismatch")
     if (
         completion.get("status") != "p25_failure_review_required"
         or decision.get("decision") != completion.get("status")
+        or decision.get("proposal_sha256")
+        != completion.get("proposal_sha256")
+        or decision.get("next_state") != completion.get("next_state")
         or completion.get("diagnostic_result_count") != 36
         or completion.get("parameter_search_run_count") != 0
         or completion.get("independent_bo_run_count") != 0

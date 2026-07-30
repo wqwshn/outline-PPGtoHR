@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from ppg_hr.v2.plot_p25_spectral_recheck import (
     build_p25_spectral_recheck_report_assets,
     collect_p25_spectral_recheck_rows,
 )
+from ppg_hr.v2.recovery_contracts import canonical_sha256
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EXECUTION_DIR = (
@@ -17,6 +19,13 @@ EXECUTION_DIR = (
     / "experiments"
     / "lyx_recovery_filter_profile"
     / "p25_spectral_recheck_execution_v2"
+)
+ASSET_DIR = (
+    REPO_ROOT
+    / "docs"
+    / "reports"
+    / "assets"
+    / "2026-07-30-lyx-p25-spectral-recheck"
 )
 
 
@@ -70,6 +79,73 @@ def test_committed_p25_spectral_recheck_builds_report_assets(
     assert (tmp_path / "p25_spectral_recheck.png").is_file()
     assert (tmp_path / "p25_spectral_recheck.svg").is_file()
     assert (tmp_path / "p25_spectral_recheck.pdf").is_file()
+    for artifact_name in (
+        "p25_spectral_recheck_record_metrics.csv",
+        "p25_spectral_recheck_summary.json",
+    ):
+        assert (tmp_path / artifact_name).read_bytes() == (
+            ASSET_DIR / artifact_name
+        ).read_bytes()
+
+
+@pytest.mark.parametrize(
+    "artifact_name",
+    ("decision_receipt.json", "result_manifest.json"),
+)
+def test_recheck_report_builder_binds_completion_artifact_file_hashes(
+    tmp_path: Path,
+    artifact_name: str,
+) -> None:
+    execution_copy = tmp_path / "execution"
+    shutil.copytree(EXECUTION_DIR, execution_copy)
+    artifact_path = execution_copy / artifact_name
+    artifact_path.write_text(
+        artifact_path.read_text(encoding="utf-8") + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "p25_recheck_completion_artifact_hash_mismatch:"
+            f"{artifact_name}"
+        ),
+    ):
+        build_p25_spectral_recheck_report_assets(
+            execution_copy,
+            tmp_path / "report",
+        )
+
+
+def test_recheck_report_builder_binds_completion_to_decision_hash(
+    tmp_path: Path,
+) -> None:
+    execution_copy = tmp_path / "execution"
+    shutil.copytree(EXECUTION_DIR, execution_copy)
+    completion_path = execution_copy / "completion.json"
+    completion = json.loads(completion_path.read_text(encoding="utf-8"))
+    completion["decision_sha256"] = "0" * 64
+    completion.pop("completion_sha256")
+    completion["completion_sha256"] = canonical_sha256(completion)
+    completion_path.write_text(
+        json.dumps(
+            completion,
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="p25_recheck_completion_decision_hash_mismatch",
+    ):
+        build_p25_spectral_recheck_report_assets(
+            execution_copy,
+            tmp_path / "report",
+        )
 
 
 def test_recheck_report_loader_fails_closed_on_manifested_result_tamper(
