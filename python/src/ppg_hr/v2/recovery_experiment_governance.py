@@ -712,6 +712,28 @@ class BudgetContract:
             stage_attempt_kinds=dict(prior.stage_attempt_kinds),
         )
 
+    @classmethod
+    def proposed_v13_recovery_independent_bo(cls) -> BudgetContract:
+        """Add the bounded 3 × 12 × 150 recovery independent-BO search."""
+
+        prior = cls.proposed_v12_stage_r_rank1_runtime_fix()
+        return cls(
+            stage_unique_limits={
+                **prior.stage_unique_limits,
+                "recovery_independent_bo": 5400,
+            },
+            normal_unique_identity_limit=6324,
+            supplemental_stage=prior.supplemental_stage,
+            max_unique_identities=6336,
+            max_attempts=12672,
+            retry_limit=prior.retry_limit,
+            contract_version="lyx_recovery_filter_budget_v13",
+            stage_attempt_kinds={
+                **prior.stage_attempt_kinds,
+                "recovery_independent_bo": "formal",
+            },
+        )
+
     @property
     def sha256(self) -> str:
         return _canonical_sha256(self.to_dict())
@@ -979,6 +1001,9 @@ class AttemptRegistry:
             ),
             BudgetContract.proposed_v11_stage_r_rank1_replan().sha256: (
                 BudgetContract.proposed_v12_stage_r_rank1_runtime_fix().sha256
+            ),
+            BudgetContract.proposed_v12_stage_r_rank1_runtime_fix().sha256: (
+                BudgetContract.proposed_v13_recovery_independent_bo().sha256
             ),
         }
         expected_known_target = known_transitions.get(self.budget_contract.sha256)

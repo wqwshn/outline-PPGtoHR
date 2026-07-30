@@ -1107,7 +1107,10 @@ def _load_or_run_spectral_audit(
 
     raw_sentinel_role = item.get("sentinel_role")
     stage = str(item.get("stage", ""))
-    if stage == "recovery_sentinel_rank1_replan":
+    if stage in {
+        "recovery_sentinel_rank1_replan",
+        "recovery_independent_bo",
+    }:
         if raw_sentinel_role != "fixed_rank1":
             raise StageRPlanError(
                 "stage_r_rank1_sentinel_role_mismatch:"

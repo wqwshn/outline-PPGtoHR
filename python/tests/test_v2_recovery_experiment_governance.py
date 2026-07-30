@@ -1415,6 +1415,22 @@ def test_proposed_v12_replaces_failed_rank1_runtime_identities() -> None:
     assert sum(v12.stage_unique_limits.values()) == 936
 
 
+def test_proposed_v13_adds_bounded_recovery_independent_bo() -> None:
+    v12 = BudgetContract.proposed_v12_stage_r_rank1_runtime_fix()
+    v13 = BudgetContract.proposed_v13_recovery_independent_bo()
+
+    assert v13.stage_unique_limits == {
+        **v12.stage_unique_limits,
+        "recovery_independent_bo": 5400,
+    }
+    assert v13.normal_unique_identity_limit == 6324
+    assert v13.max_unique_identities == 6336
+    assert v13.max_attempts == 12672
+    assert v13.retry_limit == 1
+    assert v13.stage_attempt_kinds["recovery_independent_bo"] == "formal"
+    assert sum(v13.stage_unique_limits.values()) == 6336
+
+
 def test_rate_normalized_exploration_authorization_is_exact() -> None:
     request = ExplorationBudgetAmendmentRequest(
         stage="filter_profile_rate_normalization_exploration",

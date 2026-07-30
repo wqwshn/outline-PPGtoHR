@@ -744,6 +744,45 @@ def test_rank1_spectral_audit_does_not_require_legacy_sentinel_role(
     assert audit["spectral_gate_pass"] is True
 
 
+def test_recovery_independent_bo_reuses_rank1_spectral_role_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    identity = dict(_proposal()["identities"][0])
+    identity["stage"] = "recovery_independent_bo"
+    identity["filter_profile_id"] = "bo-physical-v1-test"
+    identity["filter_profile_sha256"] = "f" * 64
+    observed: dict[str, object] = {}
+
+    def fake_audit(
+        profile: object,
+        _record: object,
+        *,
+        contract: object,
+        reference_stage_limit: int | None,
+    ) -> dict[str, object]:
+        del contract
+        observed["profile"] = profile
+        return {
+            "stability_pass": True,
+            "spectral_gate_pass": True,
+            "reference_stage_limit": reference_stage_limit,
+        }
+
+    monkeypatch.setattr(
+        stage_r_module,
+        "audit_stage_r_profile_record",
+        fake_audit,
+    )
+
+    stage_r_module._load_or_run_spectral_audit(
+        identity,
+        spectral_audit_dir=tmp_path / "spectral",
+    )
+
+    assert observed["profile"].recovery_sentinel_role is None
+
+
 def test_legacy_stage_r_spectral_audit_still_rejects_invalid_role(
     tmp_path: Path,
 ) -> None:
