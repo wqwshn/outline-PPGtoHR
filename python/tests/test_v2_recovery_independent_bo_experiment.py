@@ -9,6 +9,7 @@ from ppg_hr.v2.recovery_independent_bo_experiment import (
     RecoveryIndependentBOAuthorizationError,
     build_recovery_independent_bo_identity,
     build_recovery_independent_bo_proposal,
+    validate_recovery_independent_bo_preflight,
     validate_recovery_independent_bo_execution_authorization,
 )
 from ppg_hr.v2.bo_space_generalization import build_bo_search_space
@@ -63,6 +64,15 @@ def test_zero_run_proposal_freezes_exact_36_cell_5400_identity_search() -> None:
         "lyx_recovery_filter_budget_v13"
     )
     assert proposal["independent_bo_request"]["unique_budget"] == 5400
+
+
+def test_json_round_tripped_proposal_passes_source_preflight() -> None:
+    proposal = json.loads(json.dumps(_proposal()))
+
+    validate_recovery_independent_bo_preflight(
+        proposal=proposal,
+        repository_root=REPOSITORY_ROOT,
+    )
 
 
 def test_execution_authorization_must_bind_exact_proposal_and_bo_request() -> None:

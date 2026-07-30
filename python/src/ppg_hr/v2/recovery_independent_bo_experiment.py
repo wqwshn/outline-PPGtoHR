@@ -155,9 +155,11 @@ def recovery_independent_bo_seed_manifest_v1() -> dict[str, Any]:
         objective_version="recovery_independent_bo_final_motion_v1",
         constraints_version="recovery_independent_bo_safety_v1",
     )
+    serialized_budget = asdict(budget)
+    serialized_budget["lane_seeds"] = list(budget.lane_seeds)
     manifest = {
         "manifest_version": "lyx_recovery_independent_bo_seed_manifest_v1",
-        **asdict(budget),
+        **serialized_budget,
         "search_cell_count": EXPECTED_SEARCH_CELL_COUNT,
         "unique_budget_per_cell": EXPECTED_CELL_UNIQUE_BUDGET,
         "total_unique_budget": EXPECTED_UNIQUE_BUDGET,
