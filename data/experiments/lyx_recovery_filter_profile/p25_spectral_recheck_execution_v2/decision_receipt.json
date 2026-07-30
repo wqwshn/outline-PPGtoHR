@@ -1,0 +1,75 @@
+{
+  "automatic_stage_f_execution": false,
+  "automatic_stage_r_execution": false,
+  "complete_pass_profile_ids": [],
+  "decision": "p25_failure_review_required",
+  "decision_sha256": "fd05114792fd04b276a114a6ac9e9292089da544883d1b98a6f7e91832fd5684",
+  "decision_version": "lyx_p25_spectral_recheck_decision_v2",
+  "global_gate_failure_counts": {
+    "complete_window_evidence_pass": 0,
+    "hr_band_share_delta_pass": 18,
+    "prominence_db_delta_pass": 4,
+    "pulse_power_retention_pass": 0,
+    "residual_artifact_corr_delta_pass": 0,
+    "visible_top3_rate_delta_pass": 0
+  },
+  "global_gate_pass_counts": {
+    "complete_window_evidence_pass": 36,
+    "hr_band_share_delta_pass": 18,
+    "prominence_db_delta_pass": 32,
+    "pulse_power_retention_pass": 36,
+    "residual_artifact_corr_delta_pass": 36,
+    "visible_top3_rate_delta_pass": 36
+  },
+  "independent_bo_authorized": false,
+  "independent_bo_review_package_generated": false,
+  "may_nominate_recovery_candidate": false,
+  "next_state": "awaiting_human_filter_mechanism_or_independent_bo_review",
+  "parameter_search_authorized": false,
+  "profile_summaries": {
+    "p25-long-mid": {
+      "complete_pass_count": 3,
+      "coordinate_count": 12,
+      "gate_pass_counts": {
+        "complete_window_evidence_pass": 12,
+        "hr_band_share_delta_pass": 3,
+        "prominence_db_delta_pass": 9,
+        "pulse_power_retention_pass": 12,
+        "residual_artifact_corr_delta_pass": 12,
+        "visible_top3_rate_delta_pass": 12
+      },
+      "spectral_gate_pass_count": 3,
+      "stability_pass_count": 12
+    },
+    "p25-short-low": {
+      "complete_pass_count": 10,
+      "coordinate_count": 12,
+      "gate_pass_counts": {
+        "complete_window_evidence_pass": 12,
+        "hr_band_share_delta_pass": 10,
+        "prominence_db_delta_pass": 12,
+        "pulse_power_retention_pass": 12,
+        "residual_artifact_corr_delta_pass": 12,
+        "visible_top3_rate_delta_pass": 12
+      },
+      "spectral_gate_pass_count": 10,
+      "stability_pass_count": 12
+    },
+    "p25-short-mid": {
+      "complete_pass_count": 5,
+      "coordinate_count": 12,
+      "gate_pass_counts": {
+        "complete_window_evidence_pass": 12,
+        "hr_band_share_delta_pass": 5,
+        "prominence_db_delta_pass": 11,
+        "pulse_power_retention_pass": 12,
+        "residual_artifact_corr_delta_pass": 12,
+        "visible_top3_rate_delta_pass": 12
+      },
+      "spectral_gate_pass_count": 5,
+      "stability_pass_count": 12
+    }
+  },
+  "proposal_sha256": "83081d8081def70b356b2737864b552c3fc2376817bbc595db32f4f650616c26",
+  "result_count": 36
+}

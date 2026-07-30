@@ -1,0 +1,22 @@
+{
+  "attempt_registry_summary": {
+    "actual_unique_run_count": 288,
+    "cache_evidence_count": 276,
+    "cache_hit_count": 228,
+    "failed_attempt_count": 3,
+    "logical_task_count": 519,
+    "planned_unique_identity_count": 324,
+    "retry_count": 3
+  },
+  "automatic_stage_f_execution": false,
+  "automatic_stage_r_execution": false,
+  "independent_bo_authorized": false,
+  "new_unique_identity_count": 36,
+  "parameter_search_authorized": false,
+  "proposal_sha256": "83081d8081def70b356b2737864b552c3fc2376817bbc595db32f4f650616c26",
+  "receipt_sha256": "9436c45c1dd007c6632f4b5d639d68e53a1d0d397acced15ee5fec105ca25b7d",
+  "receipt_version": "lyx_p25_spectral_recheck_governance_receipt_v2",
+  "source_budget_contract_hash": "d47b32fc86e34b8352277d296f85d41fe248420d3b7afeb83457396e0d4ef4cf",
+  "status": "prepared_zero_runs",
+  "target_budget_contract_hash": "bcc55f467c19e6e1c0975c776d3d4356d4034ce5cf8e0ec343c99877f8a84109"
+}
