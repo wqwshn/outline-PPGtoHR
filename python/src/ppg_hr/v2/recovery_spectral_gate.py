@@ -520,9 +520,19 @@ def audit_stage_r_profile_record(
     record: FilterAuditRecord,
     *,
     contract: StageRSpectralGateContract,
+    reference_stage_limit: int | None = None,
 ) -> dict[str, Any]:
     """Run LMS stability plus the exact five relative spectral gates once."""
 
+    if (
+        reference_stage_limit is not None
+        and (
+            isinstance(reference_stage_limit, bool)
+            or not isinstance(reference_stage_limit, int)
+            or reference_stage_limit <= 0
+        )
+    ):
+        raise ValueError("reference_stage_limit_must_be_positive")
     started = time.perf_counter()
     stage_audits: list[dict[str, Any]] = []
     spectral_windows: list[dict[str, Any]] = []
@@ -531,7 +541,12 @@ def audit_stage_r_profile_record(
             spectral_windows.append({})
             continue
         current = window.original.copy()
-        for channel, reference, archive_abs_corr in window.ranked_references:
+        ranked_references = window.ranked_references
+        if reference_stage_limit is not None:
+            ranked_references = ranked_references[
+                :reference_stage_limit
+            ]
+        for channel, reference, archive_abs_corr in ranked_references:
             stage = audit_lms_stage(
                 desired=current,
                 reference=reference,
@@ -579,7 +594,7 @@ def audit_stage_r_profile_record(
         spectral_windows,
         contract=contract,
     )
-    return {
+    result = {
         **stability,
         "stage_r_spectral_gate": spectral,
         "spectral_gate_pass": bool(
@@ -588,3 +603,6 @@ def audit_stage_r_profile_record(
         ),
         "stage_r_spectral_gate_contract_sha256": contract.sha256,
     }
+    if reference_stage_limit is not None:
+        result["reference_stage_limit"] = reference_stage_limit
+    return result

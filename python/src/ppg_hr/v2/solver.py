@@ -2528,9 +2528,20 @@ def _run_v1_style_reference_cascade(
 
     order = np.argsort(corr_arr)[::-1]
     best_idx = int(order[0])
+    stage_limit = cfg.adaptive_reference_stage_limit
+    if stage_limit is not None:
+        if (
+            isinstance(stage_limit, bool)
+            or not isinstance(stage_limit, int)
+            or stage_limit <= 0
+        ):
+            raise ValueError(
+                "adaptive_reference_stage_limit_must_be_positive"
+            )
+        order = order[:stage_limit]
     M = int(np.floor(abs(delay))) if delay < 0 else 1
     M = int(np.clip(M, 1, cfg.max_order))
-    for idx in order:
+    for reference_rank, idx in enumerate(order, start=1):
         ref_meta = references[int(idx)]
         K = int(ref_meta["K"])
         ref_win = np.asarray(ref_meta["signal"][idx_s:idx_e], dtype=float)
@@ -2547,17 +2558,23 @@ def _run_v1_style_reference_cascade(
             d=current,
             params=params,
         )
-        stages.append(
-            {
-                "sensor_type": ref_meta["group"],
-                "channel": ref_meta["channel"],
-                "corr": float(corr_arr[int(idx)]),
-                "delay_samples": int(delay),
-                "M": int(M),
-                "K": int(K),
-                "filter_type": cfg.adaptive_filter,
-            }
-        )
+        stage = {
+            "sensor_type": ref_meta["group"],
+            "channel": ref_meta["channel"],
+            "corr": float(corr_arr[int(idx)]),
+            "delay_samples": int(delay),
+            "M": int(M),
+            "K": int(K),
+            "filter_type": cfg.adaptive_filter,
+        }
+        if stage_limit is not None:
+            stage.update(
+                {
+                    "reference_rank": reference_rank,
+                    "reference_stage_limit": stage_limit,
+                }
+            )
+        stages.append(stage)
     penalty_ref = np.asarray(references[best_idx]["signal"][idx_s:idx_e], dtype=float)
     return current, penalty_ref, stages
 

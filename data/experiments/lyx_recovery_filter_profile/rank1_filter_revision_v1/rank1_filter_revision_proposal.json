@@ -1,0 +1,864 @@
+{
+  "algorithm_level_holdout": false,
+  "attempt_kind": "diagnostic",
+  "authorization_state": "authorized_rank1_filter_revision_diagnostic",
+  "automatic_stage_f_execution": false,
+  "automatic_stage_r_execution": false,
+  "diagnostic_run_count": 0,
+  "evidence_class": "development_reuse_pilot",
+  "frozen_contracts": {
+    "budget_contract_hash": "fd5cb64eef0a1f967ab1cb6019fd35d434a17fa7aab1aa6aabebdc363444585d",
+    "evaluation_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+    "profile_hash": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+    "revision_contract_hash": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+    "solver_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+    "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+  },
+  "identities": [
+    {
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "f30a7e9a4f6ed5002617f69fa0e3244448b96a30050c506ccb70d0e8f4f65c02",
+      "config": {
+        "adaptive_reference_stage_limit": 1,
+        "execution_mode": "rank1_filter_revision_spectral_audit",
+        "parameter_search": false,
+        "profile": {
+          "actual_taps": 1,
+          "design_role": "core",
+          "fs_target": 25,
+          "memory_ms": 40,
+          "nominal_mu": 0.008,
+          "profile_id": "p25-short-low",
+          "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100"
+        },
+        "revision_contract_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+        "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "3a58e53cb6734970c825dbef84eedb42681b05f6ca6a6a52edc80ae06d61db4d",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708.csv",
+      "data_sha256": "b5f81d40027419f8545a399a3a8b66f4737c75d78f60d20c7de7e378fd824d8a",
+      "evaluation_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+      "expected_rank1_lane_sha256": "22c411691ace482d6539d833dd99484ecd6a87a0518d8eac43429c9298941237",
+      "identity_sha256": "f30a7e9a4f6ed5002617f69fa0e3244448b96a30050c506ccb70d0e8f4f65c02",
+      "metric_contract_hash": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "raw_data_sha256": "7c23fa243cf4c7f0a0f92d2f8a84ca3c12ee5af18df38dd4437e92ad0bb83265",
+      "record_id": "jianpan1_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708_HR_ref.csv",
+      "reference_sha256": "076fec4a8767fdf6edfee35dfac72e898659b95e5cd6d9924724145976622b2c",
+      "scene": "jianpan",
+      "solver_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+      "source_mechanism_identity_sha256": "863b9b665f9d6c221be366bf0acf90e92044eff2f8bf93313b93c75c5472ca32",
+      "source_mechanism_result_file_sha256": "6df8433b31a8cf92918ac4fb0f3fa7187ac6fc4d549a077335cf95b197d2990f",
+      "source_mechanism_result_path": "record_mechanism_audits/jianpan1_LYX_0708.json",
+      "source_mechanism_result_sha256": "b70c4c2ec290f584e8af0c7f3180e43cb2cd7cfd9d76a5f73870126c9ad0360c",
+      "source_ranked_cascade_spectral_gate_pass": false,
+      "stage": "filter_profile_rank1_revision_diagnostic"
+    },
+    {
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "7b778202140bde7425215e3ead582d7c7538ce48f173a160fcefaf47094497fd",
+      "config": {
+        "adaptive_reference_stage_limit": 1,
+        "execution_mode": "rank1_filter_revision_spectral_audit",
+        "parameter_search": false,
+        "profile": {
+          "actual_taps": 1,
+          "design_role": "core",
+          "fs_target": 25,
+          "memory_ms": 40,
+          "nominal_mu": 0.008,
+          "profile_id": "p25-short-low",
+          "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100"
+        },
+        "revision_contract_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+        "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "3a58e53cb6734970c825dbef84eedb42681b05f6ca6a6a52edc80ae06d61db4d",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708.csv",
+      "data_sha256": "a7421b4146701f462dd4b033ad80a60e1fdc3f72fae3e97a9c5a7b89360ac1d2",
+      "evaluation_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+      "expected_rank1_lane_sha256": "22844390ab7858243db0dcd35e78936bd934e142ff6900bf18c205f63fb80bbf",
+      "identity_sha256": "7b778202140bde7425215e3ead582d7c7538ce48f173a160fcefaf47094497fd",
+      "metric_contract_hash": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "raw_data_sha256": "b4aaafa531d731c81d7e8da0e5dac4f8c6e360bda6c7520c34ae78e023dd8bb7",
+      "record_id": "jianpan2_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "c7a98e54da83d6310430276b33b88bf2306ade91ac81d5b9dd3f5d18ecf5a270",
+      "scene": "jianpan",
+      "solver_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+      "source_mechanism_identity_sha256": "af87be564178eb840dad769869b62b72cc1a178836026e9b5a1cc37670ecaacf",
+      "source_mechanism_result_file_sha256": "5db7f7fcc82d5334fbdc19dfb16d2bb63a4d01beda8dd701960b41600bb3ead8",
+      "source_mechanism_result_path": "record_mechanism_audits/jianpan2_LYX_0708.json",
+      "source_mechanism_result_sha256": "2b86749d5ca9654a059a6c22c971e978394b468aedbd6d013b5fda3aec8ab8cc",
+      "source_ranked_cascade_spectral_gate_pass": true,
+      "stage": "filter_profile_rank1_revision_diagnostic"
+    },
+    {
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "d1f444214770d2794c873168bf166abfc1e6bd8dc9f6fd417977ca574a4d9a08",
+      "config": {
+        "adaptive_reference_stage_limit": 1,
+        "execution_mode": "rank1_filter_revision_spectral_audit",
+        "parameter_search": false,
+        "profile": {
+          "actual_taps": 1,
+          "design_role": "core",
+          "fs_target": 25,
+          "memory_ms": 40,
+          "nominal_mu": 0.008,
+          "profile_id": "p25-short-low",
+          "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100"
+        },
+        "revision_contract_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+        "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "3a58e53cb6734970c825dbef84eedb42681b05f6ca6a6a52edc80ae06d61db4d",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708.csv",
+      "data_sha256": "d6ea629174441276720cb28ba416f68fba6018952bfa66105ba734bdbfdb8da5",
+      "evaluation_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+      "expected_rank1_lane_sha256": "0e224f5b846c3717ffc56ccc033179a610f150c26235d8936f44fc7342d35cfe",
+      "identity_sha256": "d1f444214770d2794c873168bf166abfc1e6bd8dc9f6fd417977ca574a4d9a08",
+      "metric_contract_hash": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "raw_data_sha256": "19b5d1c42c326cd2f868c1498bd282e7dba94141b8b51f70332fd82409c2e4b7",
+      "record_id": "jianpan3_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708_HR_ref.csv",
+      "reference_sha256": "ecf02c256cde6af1557910ee9ff769de523ffb54e8124c2f0528fad82df968e6",
+      "scene": "jianpan",
+      "solver_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+      "source_mechanism_identity_sha256": "cc1a15046924dc42ec3b58937ab342113a7b1b9691f8fb289e117841573af873",
+      "source_mechanism_result_file_sha256": "9bfda0a93ab15ccab3c34822465590a9bf71dd505dbdcc2294c760dac504fe43",
+      "source_mechanism_result_path": "record_mechanism_audits/jianpan3_LYX_0708.json",
+      "source_mechanism_result_sha256": "1a1227195db73e51dd076805d73a7b1c106e2049a40a9f98557d6983bdce76f0",
+      "source_ranked_cascade_spectral_gate_pass": true,
+      "stage": "filter_profile_rank1_revision_diagnostic"
+    },
+    {
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "4bc1a572dbd5e508b2f7e17ebd138f6518e0581bed3576b4de31cd28e98e6e2a",
+      "config": {
+        "adaptive_reference_stage_limit": 1,
+        "execution_mode": "rank1_filter_revision_spectral_audit",
+        "parameter_search": false,
+        "profile": {
+          "actual_taps": 1,
+          "design_role": "core",
+          "fs_target": 25,
+          "memory_ms": 40,
+          "nominal_mu": 0.008,
+          "profile_id": "p25-short-low",
+          "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100"
+        },
+        "revision_contract_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+        "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "3a58e53cb6734970c825dbef84eedb42681b05f6ca6a6a52edc80ae06d61db4d",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613.csv",
+      "data_sha256": "22927001aa2c6d6c378d5ab7897897e59f3c72dfad697fd77a165e599ca5443d",
+      "evaluation_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+      "expected_rank1_lane_sha256": "eb19071ba212f8086dc3c7cb6cd0c6fb60d327d76b01d203f805fec5bbdd51d1",
+      "identity_sha256": "4bc1a572dbd5e508b2f7e17ebd138f6518e0581bed3576b4de31cd28e98e6e2a",
+      "metric_contract_hash": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "raw_data_sha256": "1dd489af27c30e2f52b911ec1e11312a7498463cdb1e737ca66ffba26bbf4bcb",
+      "record_id": "kaihe1_LYX_0613",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613_HR_ref.csv",
+      "reference_sha256": "38a5b714ee897bbeaaafa0be7017b3bf9d941826a0e534334131b1301c53e0e0",
+      "scene": "kaihe",
+      "solver_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+      "source_mechanism_identity_sha256": "372bad3342cff86e9946b92518dfee31f9d3b926c70d51134e1d16b832b7f290",
+      "source_mechanism_result_file_sha256": "381c2c6c827e6c909cce94d1bb31de0a47f5f190d20fb95bcd5bf42abaca621a",
+      "source_mechanism_result_path": "record_mechanism_audits/kaihe1_LYX_0613.json",
+      "source_mechanism_result_sha256": "7cc65af218793a5cad7050d2f603c02b50e310d2cf6e0cd1a43bcb619a9afcbb",
+      "source_ranked_cascade_spectral_gate_pass": true,
+      "stage": "filter_profile_rank1_revision_diagnostic"
+    },
+    {
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "abeb43d7aeb0657a7ab69648906816ed18876ad837c94c3876363d7a5d2d9173",
+      "config": {
+        "adaptive_reference_stage_limit": 1,
+        "execution_mode": "rank1_filter_revision_spectral_audit",
+        "parameter_search": false,
+        "profile": {
+          "actual_taps": 1,
+          "design_role": "core",
+          "fs_target": 25,
+          "memory_ms": 40,
+          "nominal_mu": 0.008,
+          "profile_id": "p25-short-low",
+          "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100"
+        },
+        "revision_contract_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+        "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "3a58e53cb6734970c825dbef84eedb42681b05f6ca6a6a52edc80ae06d61db4d",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617.csv",
+      "data_sha256": "ba3d9938e8d9e04d25ce32fa6e698b21ef512f68bc89d3adfb0a5e77fc900d6d",
+      "evaluation_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+      "expected_rank1_lane_sha256": "c1fd04ee76e4447c56937336ab4acb07ff94898ace792ead5390c936cb0059f2",
+      "identity_sha256": "abeb43d7aeb0657a7ab69648906816ed18876ad837c94c3876363d7a5d2d9173",
+      "metric_contract_hash": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "raw_data_sha256": "73f626f972afccccb5a0ef261e3bfe1afd60b02b24a18e5b8a2ddfb5964e7528",
+      "record_id": "kaihe1_LYX_0617",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617_HR_ref.csv",
+      "reference_sha256": "a3b779e55561da76a3d69293e73175c624e947d57de38a3f5184d324731c0739",
+      "scene": "kaihe",
+      "solver_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+      "source_mechanism_identity_sha256": "bfd765391376d72eb6e4473ae710e6b9b687ea9c8fb3f07924614eb29f614eaf",
+      "source_mechanism_result_file_sha256": "76fa04e82b554db6a0dc3f9a1bb93d127a06df62e33848e03e6e45d0675b2431",
+      "source_mechanism_result_path": "record_mechanism_audits/kaihe1_LYX_0617.json",
+      "source_mechanism_result_sha256": "fa342174005a61791b0821392dd2b7aea0aa762a66ed69894906f74409ac49f6",
+      "source_ranked_cascade_spectral_gate_pass": true,
+      "stage": "filter_profile_rank1_revision_diagnostic"
+    },
+    {
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "d373af3357095e36f596f119ae8f879426055043849c95f64b027c37bd055d9c",
+      "config": {
+        "adaptive_reference_stage_limit": 1,
+        "execution_mode": "rank1_filter_revision_spectral_audit",
+        "parameter_search": false,
+        "profile": {
+          "actual_taps": 1,
+          "design_role": "core",
+          "fs_target": 25,
+          "memory_ms": 40,
+          "nominal_mu": 0.008,
+          "profile_id": "p25-short-low",
+          "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100"
+        },
+        "revision_contract_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+        "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "3a58e53cb6734970c825dbef84eedb42681b05f6ca6a6a52edc80ae06d61db4d",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613.csv",
+      "data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+      "evaluation_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+      "expected_rank1_lane_sha256": "6632d0f9dd1754ff34906dc8019ac01743cc2f3957886b7f93529c04d1655ed9",
+      "identity_sha256": "d373af3357095e36f596f119ae8f879426055043849c95f64b027c37bd055d9c",
+      "metric_contract_hash": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "raw_data_sha256": "778f75d02d47a134a5999a5641de201dfc613da915b43876398792c6833c6e84",
+      "record_id": "kaihe3_LYX_0613",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613_HR_ref.csv",
+      "reference_sha256": "5cb40473d1793f8ff91eeed993f4a1b9a59c44b7fefcfd57a0314ad34c626050",
+      "scene": "kaihe",
+      "solver_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+      "source_mechanism_identity_sha256": "4d004c4b418bddf1ac0cdfef26ea67b9e39db8be12cab536b57429de0d27a189",
+      "source_mechanism_result_file_sha256": "aa7c8b728afcec6411ece5e043319b7b3cc4db9cd73b3414de1c76974662ed2a",
+      "source_mechanism_result_path": "record_mechanism_audits/kaihe3_LYX_0613.json",
+      "source_mechanism_result_sha256": "47527bddc4e33305a5c2a74e4cec8312d58cb70d233632336235946f575b0a32",
+      "source_ranked_cascade_spectral_gate_pass": true,
+      "stage": "filter_profile_rank1_revision_diagnostic"
+    },
+    {
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "ff4c9fad193859725a3841c63539932a239d6be562a52e8676a830f524d8b45a",
+      "config": {
+        "adaptive_reference_stage_limit": 1,
+        "execution_mode": "rank1_filter_revision_spectral_audit",
+        "parameter_search": false,
+        "profile": {
+          "actual_taps": 1,
+          "design_role": "core",
+          "fs_target": 25,
+          "memory_ms": 40,
+          "nominal_mu": 0.008,
+          "profile_id": "p25-short-low",
+          "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100"
+        },
+        "revision_contract_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+        "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "3a58e53cb6734970c825dbef84eedb42681b05f6ca6a6a52edc80ae06d61db4d",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708.csv",
+      "data_sha256": "971a87c06295b73d4cca7936437de8c832c7d2eed65f286a8742805543f5f87b",
+      "evaluation_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+      "expected_rank1_lane_sha256": "a3d3ca9fb155b7da3bd0862ce18adff9556c3e99febe327ecebb744b7ac43427",
+      "identity_sha256": "ff4c9fad193859725a3841c63539932a239d6be562a52e8676a830f524d8b45a",
+      "metric_contract_hash": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "raw_data_sha256": "4e53e93fb94a8ecd17d319af41d6d010c1424baf9c0151099cb417fb0a2d6af0",
+      "record_id": "run1_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708_HR_ref.csv",
+      "reference_sha256": "c8677ec1f0e22b25100c20ab83b8faf22ddea730a973b41b1b43673acf1443a0",
+      "scene": "run",
+      "solver_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+      "source_mechanism_identity_sha256": "534ee3eeeda13c8603d1c8dae203c76d593fc09dc260c396508ff737a7c50f71",
+      "source_mechanism_result_file_sha256": "e854e63eaff44e5e15647a625305c8703d029beb8ce252b77573160f57910112",
+      "source_mechanism_result_path": "record_mechanism_audits/run1_LYX_0708.json",
+      "source_mechanism_result_sha256": "39990228c84afea61f167a762c74b22ff962101c0c9ad8ebf90bfb1505d0b6d0",
+      "source_ranked_cascade_spectral_gate_pass": true,
+      "stage": "filter_profile_rank1_revision_diagnostic"
+    },
+    {
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "7b88b4155b8227ffd25d987082d62b954081bb67d56b89be4f1f4e9d96c9b09c",
+      "config": {
+        "adaptive_reference_stage_limit": 1,
+        "execution_mode": "rank1_filter_revision_spectral_audit",
+        "parameter_search": false,
+        "profile": {
+          "actual_taps": 1,
+          "design_role": "core",
+          "fs_target": 25,
+          "memory_ms": 40,
+          "nominal_mu": 0.008,
+          "profile_id": "p25-short-low",
+          "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100"
+        },
+        "revision_contract_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+        "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "3a58e53cb6734970c825dbef84eedb42681b05f6ca6a6a52edc80ae06d61db4d",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708.csv",
+      "data_sha256": "a32ab804060f866add72e093d6bdced3d756faf967c1ac1b233fec07c5733cb7",
+      "evaluation_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+      "expected_rank1_lane_sha256": "7f325cc74dad8008d5830e01d617678107047e14ebeb682da5b4783fca542952",
+      "identity_sha256": "7b88b4155b8227ffd25d987082d62b954081bb67d56b89be4f1f4e9d96c9b09c",
+      "metric_contract_hash": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "raw_data_sha256": "6e06fcb2efffb234c1d7b2dc93bc8ea7b432f000fdfdc5f32639850d1e6e7d18",
+      "record_id": "run2_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "8d04fc22e8e98c5b4380a05ded28e8aa542ab5fa66d800cf602289ccf0062382",
+      "scene": "run",
+      "solver_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+      "source_mechanism_identity_sha256": "ec4f3882a486194f7a99db60d2a5d2480d23b2bdd451e1e015a31c1725865511",
+      "source_mechanism_result_file_sha256": "561c678232cc0b3b0798845f28c03004632fdc6f35535d6852432481ab2813cd",
+      "source_mechanism_result_path": "record_mechanism_audits/run2_LYX_0708.json",
+      "source_mechanism_result_sha256": "5d2beff97b6c214bc9fd11ad3e4031f42b6e79717f726515073adb0d823add4e",
+      "source_ranked_cascade_spectral_gate_pass": true,
+      "stage": "filter_profile_rank1_revision_diagnostic"
+    },
+    {
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "5dcd8d1401cae702f7fa61972ae279a41bf1ca20d32d97fcbb04487d09e6c2d9",
+      "config": {
+        "adaptive_reference_stage_limit": 1,
+        "execution_mode": "rank1_filter_revision_spectral_audit",
+        "parameter_search": false,
+        "profile": {
+          "actual_taps": 1,
+          "design_role": "core",
+          "fs_target": 25,
+          "memory_ms": 40,
+          "nominal_mu": 0.008,
+          "profile_id": "p25-short-low",
+          "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100"
+        },
+        "revision_contract_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+        "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "3a58e53cb6734970c825dbef84eedb42681b05f6ca6a6a52edc80ae06d61db4d",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708.csv",
+      "data_sha256": "1f1ea855fba32db79c1a5d654736170f1e08d1bbc72409191b227814db685742",
+      "evaluation_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+      "expected_rank1_lane_sha256": "8a690fe9436c8bbf229298c00b0f5fb11a89ccf55817b93b38e76272dadc7ee8",
+      "identity_sha256": "5dcd8d1401cae702f7fa61972ae279a41bf1ca20d32d97fcbb04487d09e6c2d9",
+      "metric_contract_hash": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "raw_data_sha256": "72d487748fa84ca857a1b50b09998d485359b9af63bdf9240a6e6b3415b632a8",
+      "record_id": "run3_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708_HR_ref.csv",
+      "reference_sha256": "323813b4b44f54e604bf751164616bdd3ed5859d5faee2f302b11301b612e1e3",
+      "scene": "run",
+      "solver_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+      "source_mechanism_identity_sha256": "b83dc59f7a9fd23d9a7c4e55d0d616f42586e2953dcd4a7e83e0dfa29ebe4ac0",
+      "source_mechanism_result_file_sha256": "6b551d4b98e686d234865f4de73eb628faa762ea7e488c66127a17b3c16321f6",
+      "source_mechanism_result_path": "record_mechanism_audits/run3_LYX_0708.json",
+      "source_mechanism_result_sha256": "ebaacdc9994ce9468df5b6dbbd941f199ed6b98e27da4539502d883a70a749aa",
+      "source_ranked_cascade_spectral_gate_pass": true,
+      "stage": "filter_profile_rank1_revision_diagnostic"
+    },
+    {
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "c1e00c7d4ef41e3fc65c9a00bd8c2442ec8ba182ca46b40d84de0b2723d80a53",
+      "config": {
+        "adaptive_reference_stage_limit": 1,
+        "execution_mode": "rank1_filter_revision_spectral_audit",
+        "parameter_search": false,
+        "profile": {
+          "actual_taps": 1,
+          "design_role": "core",
+          "fs_target": 25,
+          "memory_ms": 40,
+          "nominal_mu": 0.008,
+          "profile_id": "p25-short-low",
+          "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100"
+        },
+        "revision_contract_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+        "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "3a58e53cb6734970c825dbef84eedb42681b05f6ca6a6a52edc80ae06d61db4d",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708.csv",
+      "data_sha256": "cf5e2d02bd1f874b3b55883e351cb6cf5107b6f0eb4d7acf142d6f5e6d93e7ee",
+      "evaluation_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+      "expected_rank1_lane_sha256": "2f3af846f1ea9e8d6386a0f8fef73b2740f9fa50632aa9ecc2f39baecf2a5078",
+      "identity_sha256": "c1e00c7d4ef41e3fc65c9a00bd8c2442ec8ba182ca46b40d84de0b2723d80a53",
+      "metric_contract_hash": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "raw_data_sha256": "eaba17c0d527c7a8b099dfa3f9587496bce5095ab91528c2b371d5d795e852b1",
+      "record_id": "xiezi2_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "fc1a913849322295413e3ecf1ca48cefa477420ac4c34ea3cc2a5b74070d2877",
+      "scene": "xiezi",
+      "solver_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+      "source_mechanism_identity_sha256": "439c2edd7c4c73c10b3185e1070667dbd2272235afc33d93bf67117b44809343",
+      "source_mechanism_result_file_sha256": "f58d10f19dc327740348c30b991db6da774d1179b9cdfd00b50951c0365da430",
+      "source_mechanism_result_path": "record_mechanism_audits/xiezi2_LYX_0708.json",
+      "source_mechanism_result_sha256": "a9da19f9317b639fa089a78a1b1e97f00b283d91ae40fa41d6975fc343e2f9dd",
+      "source_ranked_cascade_spectral_gate_pass": false,
+      "stage": "filter_profile_rank1_revision_diagnostic"
+    },
+    {
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "79e8ea8a6a2da0c7f44e722afb642e44847c23d60b734b3ca9c6306306669f53",
+      "config": {
+        "adaptive_reference_stage_limit": 1,
+        "execution_mode": "rank1_filter_revision_spectral_audit",
+        "parameter_search": false,
+        "profile": {
+          "actual_taps": 1,
+          "design_role": "core",
+          "fs_target": 25,
+          "memory_ms": 40,
+          "nominal_mu": 0.008,
+          "profile_id": "p25-short-low",
+          "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100"
+        },
+        "revision_contract_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+        "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "3a58e53cb6734970c825dbef84eedb42681b05f6ca6a6a52edc80ae06d61db4d",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708.csv",
+      "data_sha256": "7b32139c8969ebcd6a8c1bedf8bb9191c916187a7716f43db6ad03d60f165619",
+      "evaluation_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+      "expected_rank1_lane_sha256": "0c8ec1c8a2b2255d948296a36f7369d0a6ce79c9c542141670ce44fa4884ffe8",
+      "identity_sha256": "79e8ea8a6a2da0c7f44e722afb642e44847c23d60b734b3ca9c6306306669f53",
+      "metric_contract_hash": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "raw_data_sha256": "111b11e3120c793eae426f7361f73ac8c0b5b6418057b2531f9fd62cf1a1be79",
+      "record_id": "xiezi3_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708_HR_ref.csv",
+      "reference_sha256": "34c0a25bf5953ba8968108170ddcf3b6664fb15c7cecd8f1dfc1728c5cca0916",
+      "scene": "xiezi",
+      "solver_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+      "source_mechanism_identity_sha256": "5a123ace188e86b0e20e4981a989cfc7dc36e423b6f2e1dca71c91e6f0e16a2a",
+      "source_mechanism_result_file_sha256": "c5d5bcf198c14b867670a5a613391cd24fac02590d1a0f5b8c26b4e1a37b6a5a",
+      "source_mechanism_result_path": "record_mechanism_audits/xiezi3_LYX_0708.json",
+      "source_mechanism_result_sha256": "a6474d1f39e6be2fbf76acf114f11b157fe2e4ab1192bfd36413794150b577ab",
+      "source_ranked_cascade_spectral_gate_pass": true,
+      "stage": "filter_profile_rank1_revision_diagnostic"
+    },
+    {
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "85e3fb74835e878663ab23f42cddf187828e896e063300cc793a5971ab07c91e",
+      "config": {
+        "adaptive_reference_stage_limit": 1,
+        "execution_mode": "rank1_filter_revision_spectral_audit",
+        "parameter_search": false,
+        "profile": {
+          "actual_taps": 1,
+          "design_role": "core",
+          "fs_target": 25,
+          "memory_ms": 40,
+          "nominal_mu": 0.008,
+          "profile_id": "p25-short-low",
+          "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100"
+        },
+        "revision_contract_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+        "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "3a58e53cb6734970c825dbef84eedb42681b05f6ca6a6a52edc80ae06d61db4d",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708.csv",
+      "data_sha256": "8044c3d7fb32f520f6ba5940508814f69cef5e3ec0b8f3ca8b9fb750961f897f",
+      "evaluation_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+      "expected_rank1_lane_sha256": "6896f3a6ffcaaa437e3958b71210f6a8a2529589b368b9879e9d5a4666162e3f",
+      "identity_sha256": "85e3fb74835e878663ab23f42cddf187828e896e063300cc793a5971ab07c91e",
+      "metric_contract_hash": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "raw_data_sha256": "1d18872f230a8ed75fdf9653196193557da946dcdb6b6375afe220ad9c71bdf4",
+      "record_id": "xiezi4_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708_HR_ref.csv",
+      "reference_sha256": "9db5f78f018e87128771f45cc3af8004e51ef7530ae1358dcf873b8f547cb0f7",
+      "scene": "xiezi",
+      "solver_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+      "source_mechanism_identity_sha256": "02ce192c85acf0c28b7e45a9faee1d3fbc8ec0110d9d05d5b6e246aad175fcd7",
+      "source_mechanism_result_file_sha256": "7fc038784c6f667e27be82db32b4a26e796ac01bd537cbf96f713e5260b1d3d2",
+      "source_mechanism_result_path": "record_mechanism_audits/xiezi4_LYX_0708.json",
+      "source_mechanism_result_sha256": "68aa62b8189d44573461aa164a1925bfd8cc692da6fe117d783a0236411ec44c",
+      "source_ranked_cascade_spectral_gate_pass": true,
+      "stage": "filter_profile_rank1_revision_diagnostic"
+    }
+  ],
+  "identity_panel_sha256": "f6cde705b39c30710d12e7da62e8aea5298a13f70b2c8404e1b8fd38608b9b52",
+  "identity_sha256": [
+    "f30a7e9a4f6ed5002617f69fa0e3244448b96a30050c506ccb70d0e8f4f65c02",
+    "7b778202140bde7425215e3ead582d7c7538ce48f173a160fcefaf47094497fd",
+    "d1f444214770d2794c873168bf166abfc1e6bd8dc9f6fd417977ca574a4d9a08",
+    "4bc1a572dbd5e508b2f7e17ebd138f6518e0581bed3576b4de31cd28e98e6e2a",
+    "abeb43d7aeb0657a7ab69648906816ed18876ad837c94c3876363d7a5d2d9173",
+    "d373af3357095e36f596f119ae8f879426055043849c95f64b027c37bd055d9c",
+    "ff4c9fad193859725a3841c63539932a239d6be562a52e8676a830f524d8b45a",
+    "7b88b4155b8227ffd25d987082d62b954081bb67d56b89be4f1f4e9d96c9b09c",
+    "5dcd8d1401cae702f7fa61972ae279a41bf1ca20d32d97fcbb04487d09e6c2d9",
+    "c1e00c7d4ef41e3fc65c9a00bd8c2442ec8ba182ca46b40d84de0b2723d80a53",
+    "79e8ea8a6a2da0c7f44e722afb642e44847c23d60b734b3ca9c6306306669f53",
+    "85e3fb74835e878663ab23f42cddf187828e896e063300cc793a5971ab07c91e"
+  ],
+  "independent_bo_authorized": false,
+  "may_nominate_recovery_candidate": false,
+  "parameter_search_authorized": false,
+  "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+  "profile": {
+    "actual_taps": 1,
+    "design_role": "core",
+    "fs_target": 25,
+    "memory_ms": 40,
+    "nominal_mu": 0.008,
+    "profile_id": "p25-short-low",
+    "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100"
+  },
+  "proposal_sha256": "4b06a3f1aceee3a6459778c6878a1c1ae461077ae6a48a17f95eeed3852ba9c0",
+  "proposal_version": "lyx_rank1_filter_revision_proposal_v1",
+  "record_panel": [
+    {
+      "data_sha256": "b5f81d40027419f8545a399a3a8b66f4737c75d78f60d20c7de7e378fd824d8a",
+      "raw_data_sha256": "7c23fa243cf4c7f0a0f92d2f8a84ca3c12ee5af18df38dd4437e92ad0bb83265",
+      "record_id": "jianpan1_LYX_0708",
+      "reference_sha256": "076fec4a8767fdf6edfee35dfac72e898659b95e5cd6d9924724145976622b2c",
+      "scene": "jianpan"
+    },
+    {
+      "data_sha256": "a7421b4146701f462dd4b033ad80a60e1fdc3f72fae3e97a9c5a7b89360ac1d2",
+      "raw_data_sha256": "b4aaafa531d731c81d7e8da0e5dac4f8c6e360bda6c7520c34ae78e023dd8bb7",
+      "record_id": "jianpan2_LYX_0708",
+      "reference_sha256": "c7a98e54da83d6310430276b33b88bf2306ade91ac81d5b9dd3f5d18ecf5a270",
+      "scene": "jianpan"
+    },
+    {
+      "data_sha256": "d6ea629174441276720cb28ba416f68fba6018952bfa66105ba734bdbfdb8da5",
+      "raw_data_sha256": "19b5d1c42c326cd2f868c1498bd282e7dba94141b8b51f70332fd82409c2e4b7",
+      "record_id": "jianpan3_LYX_0708",
+      "reference_sha256": "ecf02c256cde6af1557910ee9ff769de523ffb54e8124c2f0528fad82df968e6",
+      "scene": "jianpan"
+    },
+    {
+      "data_sha256": "22927001aa2c6d6c378d5ab7897897e59f3c72dfad697fd77a165e599ca5443d",
+      "raw_data_sha256": "1dd489af27c30e2f52b911ec1e11312a7498463cdb1e737ca66ffba26bbf4bcb",
+      "record_id": "kaihe1_LYX_0613",
+      "reference_sha256": "38a5b714ee897bbeaaafa0be7017b3bf9d941826a0e534334131b1301c53e0e0",
+      "scene": "kaihe"
+    },
+    {
+      "data_sha256": "ba3d9938e8d9e04d25ce32fa6e698b21ef512f68bc89d3adfb0a5e77fc900d6d",
+      "raw_data_sha256": "73f626f972afccccb5a0ef261e3bfe1afd60b02b24a18e5b8a2ddfb5964e7528",
+      "record_id": "kaihe1_LYX_0617",
+      "reference_sha256": "a3b779e55561da76a3d69293e73175c624e947d57de38a3f5184d324731c0739",
+      "scene": "kaihe"
+    },
+    {
+      "data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+      "raw_data_sha256": "778f75d02d47a134a5999a5641de201dfc613da915b43876398792c6833c6e84",
+      "record_id": "kaihe3_LYX_0613",
+      "reference_sha256": "5cb40473d1793f8ff91eeed993f4a1b9a59c44b7fefcfd57a0314ad34c626050",
+      "scene": "kaihe"
+    },
+    {
+      "data_sha256": "971a87c06295b73d4cca7936437de8c832c7d2eed65f286a8742805543f5f87b",
+      "raw_data_sha256": "4e53e93fb94a8ecd17d319af41d6d010c1424baf9c0151099cb417fb0a2d6af0",
+      "record_id": "run1_LYX_0708",
+      "reference_sha256": "c8677ec1f0e22b25100c20ab83b8faf22ddea730a973b41b1b43673acf1443a0",
+      "scene": "run"
+    },
+    {
+      "data_sha256": "a32ab804060f866add72e093d6bdced3d756faf967c1ac1b233fec07c5733cb7",
+      "raw_data_sha256": "6e06fcb2efffb234c1d7b2dc93bc8ea7b432f000fdfdc5f32639850d1e6e7d18",
+      "record_id": "run2_LYX_0708",
+      "reference_sha256": "8d04fc22e8e98c5b4380a05ded28e8aa542ab5fa66d800cf602289ccf0062382",
+      "scene": "run"
+    },
+    {
+      "data_sha256": "1f1ea855fba32db79c1a5d654736170f1e08d1bbc72409191b227814db685742",
+      "raw_data_sha256": "72d487748fa84ca857a1b50b09998d485359b9af63bdf9240a6e6b3415b632a8",
+      "record_id": "run3_LYX_0708",
+      "reference_sha256": "323813b4b44f54e604bf751164616bdd3ed5859d5faee2f302b11301b612e1e3",
+      "scene": "run"
+    },
+    {
+      "data_sha256": "cf5e2d02bd1f874b3b55883e351cb6cf5107b6f0eb4d7acf142d6f5e6d93e7ee",
+      "raw_data_sha256": "eaba17c0d527c7a8b099dfa3f9587496bce5095ab91528c2b371d5d795e852b1",
+      "record_id": "xiezi2_LYX_0708",
+      "reference_sha256": "fc1a913849322295413e3ecf1ca48cefa477420ac4c34ea3cc2a5b74070d2877",
+      "scene": "xiezi"
+    },
+    {
+      "data_sha256": "7b32139c8969ebcd6a8c1bedf8bb9191c916187a7716f43db6ad03d60f165619",
+      "raw_data_sha256": "111b11e3120c793eae426f7361f73ac8c0b5b6418057b2531f9fd62cf1a1be79",
+      "record_id": "xiezi3_LYX_0708",
+      "reference_sha256": "34c0a25bf5953ba8968108170ddcf3b6664fb15c7cecd8f1dfc1728c5cca0916",
+      "scene": "xiezi"
+    },
+    {
+      "data_sha256": "8044c3d7fb32f520f6ba5940508814f69cef5e3ec0b8f3ca8b9fb750961f897f",
+      "raw_data_sha256": "1d18872f230a8ed75fdf9653196193557da946dcdb6b6375afe220ad9c71bdf4",
+      "record_id": "xiezi4_LYX_0708",
+      "reference_sha256": "9db5f78f018e87128771f45cc3af8004e51ef7530ae1358dcf873b8f547cb0f7",
+      "scene": "xiezi"
+    }
+  ],
+  "record_panel_sha256": "5db7aac87885cd8c0af8fa071085699fd2b820555bbe2b2784bd7e3fa7169e4b",
+  "retry_limit": 1,
+  "revision_contract": {
+    "actual_taps": 1,
+    "adaptive_reference_stage_limit": 1,
+    "base_profile_id": "p25-short-low",
+    "contract_version": "lyx_rank1_filter_revision_v1",
+    "fs_target": 25,
+    "lms_mu_min": 1e-06,
+    "memory_ms": 40,
+    "nominal_mu": 0.008,
+    "parameter_search": false,
+    "reference_groups_order": [
+      "HF"
+    ],
+    "revision_id": "p25-short-low-rank1-v1",
+    "selection_rule": "first_reference_after_existing_absolute_correlation_ranking"
+  },
+  "source_artifacts": {
+    "experiment_spec": {
+      "file_sha256": "0d21c0db9d533b7d540c250a88bf1af12da8cc238a7b49a91a2e10ade73ee418",
+      "path": "docs/experiments/2026-07-30-lyx-rank1-filter-revision-spec.md",
+      "path_base": "repository_root"
+    },
+    "mechanism_completion": {
+      "file_sha256": "4fc72de74da4d207e8329fbad13987bb0670414da257dbf15229c56681b96265",
+      "path": "data/experiments/lyx_recovery_filter_profile/filter_mechanism_decomposition_execution_v1/completion.json",
+      "path_base": "repository_root"
+    },
+    "mechanism_decision": {
+      "file_sha256": "45f577bd2bb0f55216de6a4126cf1986295dd1c42ae6417b5b17f44b443562f6",
+      "path": "data/experiments/lyx_recovery_filter_profile/filter_mechanism_decomposition_execution_v1/decision_receipt.json",
+      "path_base": "repository_root"
+    },
+    "mechanism_manifest": {
+      "file_sha256": "ecaf0734b30e293291b560e1a84a3a9e7e1834f50dbbcb664fa3a696b487c81c",
+      "path": "data/experiments/lyx_recovery_filter_profile/filter_mechanism_decomposition_execution_v1/result_manifest.json",
+      "path_base": "repository_root"
+    },
+    "mechanism_proposal": {
+      "file_sha256": "d8ccede83e26ff537321dffc114e7ff3d61071fe95d3fd785abde9c00cc1e148",
+      "path": "data/experiments/lyx_recovery_filter_profile/filter_mechanism_decomposition_v1/filter_mechanism_decomposition_proposal.json",
+      "path_base": "repository_root"
+    },
+    "source_budget_contract": {
+      "file_sha256": "aa6a4f55651f8165a7250094a348bb6b8c28d6a35b599b8b3e80acbc0dea92ff",
+      "path": "data/experiments/lyx_recovery_filter_profile/governance_v9/budget_contract.json",
+      "path_base": "repository_root"
+    },
+    "source_result:jianpan1_LYX_0708": {
+      "file_sha256": "6df8433b31a8cf92918ac4fb0f3fa7187ac6fc4d549a077335cf95b197d2990f",
+      "path": "data/experiments/lyx_recovery_filter_profile/filter_mechanism_decomposition_execution_v1/record_mechanism_audits/jianpan1_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "source_result:jianpan2_LYX_0708": {
+      "file_sha256": "5db7f7fcc82d5334fbdc19dfb16d2bb63a4d01beda8dd701960b41600bb3ead8",
+      "path": "data/experiments/lyx_recovery_filter_profile/filter_mechanism_decomposition_execution_v1/record_mechanism_audits/jianpan2_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "source_result:jianpan3_LYX_0708": {
+      "file_sha256": "9bfda0a93ab15ccab3c34822465590a9bf71dd505dbdcc2294c760dac504fe43",
+      "path": "data/experiments/lyx_recovery_filter_profile/filter_mechanism_decomposition_execution_v1/record_mechanism_audits/jianpan3_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "source_result:kaihe1_LYX_0613": {
+      "file_sha256": "381c2c6c827e6c909cce94d1bb31de0a47f5f190d20fb95bcd5bf42abaca621a",
+      "path": "data/experiments/lyx_recovery_filter_profile/filter_mechanism_decomposition_execution_v1/record_mechanism_audits/kaihe1_LYX_0613.json",
+      "path_base": "repository_root"
+    },
+    "source_result:kaihe1_LYX_0617": {
+      "file_sha256": "76fa04e82b554db6a0dc3f9a1bb93d127a06df62e33848e03e6e45d0675b2431",
+      "path": "data/experiments/lyx_recovery_filter_profile/filter_mechanism_decomposition_execution_v1/record_mechanism_audits/kaihe1_LYX_0617.json",
+      "path_base": "repository_root"
+    },
+    "source_result:kaihe3_LYX_0613": {
+      "file_sha256": "aa7c8b728afcec6411ece5e043319b7b3cc4db9cd73b3414de1c76974662ed2a",
+      "path": "data/experiments/lyx_recovery_filter_profile/filter_mechanism_decomposition_execution_v1/record_mechanism_audits/kaihe3_LYX_0613.json",
+      "path_base": "repository_root"
+    },
+    "source_result:run1_LYX_0708": {
+      "file_sha256": "e854e63eaff44e5e15647a625305c8703d029beb8ce252b77573160f57910112",
+      "path": "data/experiments/lyx_recovery_filter_profile/filter_mechanism_decomposition_execution_v1/record_mechanism_audits/run1_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "source_result:run2_LYX_0708": {
+      "file_sha256": "561c678232cc0b3b0798845f28c03004632fdc6f35535d6852432481ab2813cd",
+      "path": "data/experiments/lyx_recovery_filter_profile/filter_mechanism_decomposition_execution_v1/record_mechanism_audits/run2_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "source_result:run3_LYX_0708": {
+      "file_sha256": "6b551d4b98e686d234865f4de73eb628faa762ea7e488c66127a17b3c16321f6",
+      "path": "data/experiments/lyx_recovery_filter_profile/filter_mechanism_decomposition_execution_v1/record_mechanism_audits/run3_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "source_result:xiezi2_LYX_0708": {
+      "file_sha256": "f58d10f19dc327740348c30b991db6da774d1179b9cdfd00b50951c0365da430",
+      "path": "data/experiments/lyx_recovery_filter_profile/filter_mechanism_decomposition_execution_v1/record_mechanism_audits/xiezi2_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "source_result:xiezi3_LYX_0708": {
+      "file_sha256": "c5d5bcf198c14b867670a5a613391cd24fac02590d1a0f5b8c26b4e1a37b6a5a",
+      "path": "data/experiments/lyx_recovery_filter_profile/filter_mechanism_decomposition_execution_v1/record_mechanism_audits/xiezi3_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "source_result:xiezi4_LYX_0708": {
+      "file_sha256": "7fc038784c6f667e27be82db32b4a26e796ac01bd537cbf96f713e5260b1d3d2",
+      "path": "data/experiments/lyx_recovery_filter_profile/filter_mechanism_decomposition_execution_v1/record_mechanism_audits/xiezi4_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "spectral_gate_contract": {
+      "file_sha256": "bf2ee4deca720850b9030293b36c3db7b87bec621d9f4827388166da18460c19",
+      "path": "data/experiments/lyx_recovery_filter_profile/filter_mechanism_decomposition_v1/spectral_gate_contract.json",
+      "path_base": "repository_root"
+    }
+  },
+  "source_result_panel": [
+    {
+      "expected_rank1_lane_sha256": "22c411691ace482d6539d833dd99484ecd6a87a0518d8eac43429c9298941237",
+      "record_id": "jianpan1_LYX_0708",
+      "scene": "jianpan",
+      "source_identity_sha256": "863b9b665f9d6c221be366bf0acf90e92044eff2f8bf93313b93c75c5472ca32",
+      "source_ranked_cascade_spectral_gate_pass": false,
+      "source_result_file_sha256": "6df8433b31a8cf92918ac4fb0f3fa7187ac6fc4d549a077335cf95b197d2990f",
+      "source_result_path": "record_mechanism_audits/jianpan1_LYX_0708.json",
+      "source_result_sha256": "b70c4c2ec290f584e8af0c7f3180e43cb2cd7cfd9d76a5f73870126c9ad0360c"
+    },
+    {
+      "expected_rank1_lane_sha256": "22844390ab7858243db0dcd35e78936bd934e142ff6900bf18c205f63fb80bbf",
+      "record_id": "jianpan2_LYX_0708",
+      "scene": "jianpan",
+      "source_identity_sha256": "af87be564178eb840dad769869b62b72cc1a178836026e9b5a1cc37670ecaacf",
+      "source_ranked_cascade_spectral_gate_pass": true,
+      "source_result_file_sha256": "5db7f7fcc82d5334fbdc19dfb16d2bb63a4d01beda8dd701960b41600bb3ead8",
+      "source_result_path": "record_mechanism_audits/jianpan2_LYX_0708.json",
+      "source_result_sha256": "2b86749d5ca9654a059a6c22c971e978394b468aedbd6d013b5fda3aec8ab8cc"
+    },
+    {
+      "expected_rank1_lane_sha256": "0e224f5b846c3717ffc56ccc033179a610f150c26235d8936f44fc7342d35cfe",
+      "record_id": "jianpan3_LYX_0708",
+      "scene": "jianpan",
+      "source_identity_sha256": "cc1a15046924dc42ec3b58937ab342113a7b1b9691f8fb289e117841573af873",
+      "source_ranked_cascade_spectral_gate_pass": true,
+      "source_result_file_sha256": "9bfda0a93ab15ccab3c34822465590a9bf71dd505dbdcc2294c760dac504fe43",
+      "source_result_path": "record_mechanism_audits/jianpan3_LYX_0708.json",
+      "source_result_sha256": "1a1227195db73e51dd076805d73a7b1c106e2049a40a9f98557d6983bdce76f0"
+    },
+    {
+      "expected_rank1_lane_sha256": "eb19071ba212f8086dc3c7cb6cd0c6fb60d327d76b01d203f805fec5bbdd51d1",
+      "record_id": "kaihe1_LYX_0613",
+      "scene": "kaihe",
+      "source_identity_sha256": "372bad3342cff86e9946b92518dfee31f9d3b926c70d51134e1d16b832b7f290",
+      "source_ranked_cascade_spectral_gate_pass": true,
+      "source_result_file_sha256": "381c2c6c827e6c909cce94d1bb31de0a47f5f190d20fb95bcd5bf42abaca621a",
+      "source_result_path": "record_mechanism_audits/kaihe1_LYX_0613.json",
+      "source_result_sha256": "7cc65af218793a5cad7050d2f603c02b50e310d2cf6e0cd1a43bcb619a9afcbb"
+    },
+    {
+      "expected_rank1_lane_sha256": "c1fd04ee76e4447c56937336ab4acb07ff94898ace792ead5390c936cb0059f2",
+      "record_id": "kaihe1_LYX_0617",
+      "scene": "kaihe",
+      "source_identity_sha256": "bfd765391376d72eb6e4473ae710e6b9b687ea9c8fb3f07924614eb29f614eaf",
+      "source_ranked_cascade_spectral_gate_pass": true,
+      "source_result_file_sha256": "76fa04e82b554db6a0dc3f9a1bb93d127a06df62e33848e03e6e45d0675b2431",
+      "source_result_path": "record_mechanism_audits/kaihe1_LYX_0617.json",
+      "source_result_sha256": "fa342174005a61791b0821392dd2b7aea0aa762a66ed69894906f74409ac49f6"
+    },
+    {
+      "expected_rank1_lane_sha256": "6632d0f9dd1754ff34906dc8019ac01743cc2f3957886b7f93529c04d1655ed9",
+      "record_id": "kaihe3_LYX_0613",
+      "scene": "kaihe",
+      "source_identity_sha256": "4d004c4b418bddf1ac0cdfef26ea67b9e39db8be12cab536b57429de0d27a189",
+      "source_ranked_cascade_spectral_gate_pass": true,
+      "source_result_file_sha256": "aa7c8b728afcec6411ece5e043319b7b3cc4db9cd73b3414de1c76974662ed2a",
+      "source_result_path": "record_mechanism_audits/kaihe3_LYX_0613.json",
+      "source_result_sha256": "47527bddc4e33305a5c2a74e4cec8312d58cb70d233632336235946f575b0a32"
+    },
+    {
+      "expected_rank1_lane_sha256": "a3d3ca9fb155b7da3bd0862ce18adff9556c3e99febe327ecebb744b7ac43427",
+      "record_id": "run1_LYX_0708",
+      "scene": "run",
+      "source_identity_sha256": "534ee3eeeda13c8603d1c8dae203c76d593fc09dc260c396508ff737a7c50f71",
+      "source_ranked_cascade_spectral_gate_pass": true,
+      "source_result_file_sha256": "e854e63eaff44e5e15647a625305c8703d029beb8ce252b77573160f57910112",
+      "source_result_path": "record_mechanism_audits/run1_LYX_0708.json",
+      "source_result_sha256": "39990228c84afea61f167a762c74b22ff962101c0c9ad8ebf90bfb1505d0b6d0"
+    },
+    {
+      "expected_rank1_lane_sha256": "7f325cc74dad8008d5830e01d617678107047e14ebeb682da5b4783fca542952",
+      "record_id": "run2_LYX_0708",
+      "scene": "run",
+      "source_identity_sha256": "ec4f3882a486194f7a99db60d2a5d2480d23b2bdd451e1e015a31c1725865511",
+      "source_ranked_cascade_spectral_gate_pass": true,
+      "source_result_file_sha256": "561c678232cc0b3b0798845f28c03004632fdc6f35535d6852432481ab2813cd",
+      "source_result_path": "record_mechanism_audits/run2_LYX_0708.json",
+      "source_result_sha256": "5d2beff97b6c214bc9fd11ad3e4031f42b6e79717f726515073adb0d823add4e"
+    },
+    {
+      "expected_rank1_lane_sha256": "8a690fe9436c8bbf229298c00b0f5fb11a89ccf55817b93b38e76272dadc7ee8",
+      "record_id": "run3_LYX_0708",
+      "scene": "run",
+      "source_identity_sha256": "b83dc59f7a9fd23d9a7c4e55d0d616f42586e2953dcd4a7e83e0dfa29ebe4ac0",
+      "source_ranked_cascade_spectral_gate_pass": true,
+      "source_result_file_sha256": "6b551d4b98e686d234865f4de73eb628faa762ea7e488c66127a17b3c16321f6",
+      "source_result_path": "record_mechanism_audits/run3_LYX_0708.json",
+      "source_result_sha256": "ebaacdc9994ce9468df5b6dbbd941f199ed6b98e27da4539502d883a70a749aa"
+    },
+    {
+      "expected_rank1_lane_sha256": "2f3af846f1ea9e8d6386a0f8fef73b2740f9fa50632aa9ecc2f39baecf2a5078",
+      "record_id": "xiezi2_LYX_0708",
+      "scene": "xiezi",
+      "source_identity_sha256": "439c2edd7c4c73c10b3185e1070667dbd2272235afc33d93bf67117b44809343",
+      "source_ranked_cascade_spectral_gate_pass": false,
+      "source_result_file_sha256": "f58d10f19dc327740348c30b991db6da774d1179b9cdfd00b50951c0365da430",
+      "source_result_path": "record_mechanism_audits/xiezi2_LYX_0708.json",
+      "source_result_sha256": "a9da19f9317b639fa089a78a1b1e97f00b283d91ae40fa41d6975fc343e2f9dd"
+    },
+    {
+      "expected_rank1_lane_sha256": "0c8ec1c8a2b2255d948296a36f7369d0a6ce79c9c542141670ce44fa4884ffe8",
+      "record_id": "xiezi3_LYX_0708",
+      "scene": "xiezi",
+      "source_identity_sha256": "5a123ace188e86b0e20e4981a989cfc7dc36e423b6f2e1dca71c91e6f0e16a2a",
+      "source_ranked_cascade_spectral_gate_pass": true,
+      "source_result_file_sha256": "c5d5bcf198c14b867670a5a613391cd24fac02590d1a0f5b8c26b4e1a37b6a5a",
+      "source_result_path": "record_mechanism_audits/xiezi3_LYX_0708.json",
+      "source_result_sha256": "a6474d1f39e6be2fbf76acf114f11b157fe2e4ab1192bfd36413794150b577ab"
+    },
+    {
+      "expected_rank1_lane_sha256": "6896f3a6ffcaaa437e3958b71210f6a8a2529589b368b9879e9d5a4666162e3f",
+      "record_id": "xiezi4_LYX_0708",
+      "scene": "xiezi",
+      "source_identity_sha256": "02ce192c85acf0c28b7e45a9faee1d3fbc8ec0110d9d05d5b6e246aad175fcd7",
+      "source_ranked_cascade_spectral_gate_pass": true,
+      "source_result_file_sha256": "7fc038784c6f667e27be82db32b4a26e796ac01bd537cbf96f713e5260b1d3d2",
+      "source_result_path": "record_mechanism_audits/xiezi4_LYX_0708.json",
+      "source_result_sha256": "68aa62b8189d44573461aa164a1925bfd8cc692da6fe117d783a0236411ec44c"
+    }
+  ],
+  "source_result_panel_sha256": "e120e6ed3e6bf5e6a6d2d5fe20b0acb0fbcaa5c56e04c3d41090b0f4f19534e2",
+  "stage": "filter_profile_rank1_revision_diagnostic",
+  "status": "authorized_scope_frozen_zero_runs",
+  "unique_budget": 12,
+  "upstream_filter_mechanism_decomposition": {
+    "completion_sha256": "4099eac8231342b014ed0363a49db28afd682a7b623f07248f8f4d88320ee8e8",
+    "decision_sha256": "b01ff36a82596b11de10290f8225f7bc979e7886ecda8f84ec138e4301ff3304",
+    "manifest_sha256": "1d43a9670bc6160af3b77bdcae52bc817c07b417ff0fed587f104c1f269809d1",
+    "proposal_sha256": "94c9264dbbdd8cdd299cf502c1ef1ba0e859000c9c72a1c35fc490eb46eccfab",
+    "status": "rank1_single_stage_mechanism_candidate"
+  },
+  "worst_case_attempt_budget": 24
+}

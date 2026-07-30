@@ -1,0 +1,23 @@
+{
+  "approval_scope_quote": "我同意进行A：撰写滤波机制分解的零运行 spec/proposal，并且允许之后可以推进执行这个子实验，基于子实验的结论继续完成这一轮大实验。",
+  "approved": true,
+  "approved_at": "2026-07-30T19:24:48.939216+08:00",
+  "approved_by": "user",
+  "automatic_stage_f_execution": false,
+  "automatic_stage_r_execution": false,
+  "budget_contract_hash": "fd5cb64eef0a1f967ab1cb6019fd35d434a17fa7aab1aa6aabebdc363444585d",
+  "decision_state": "authorized_rank1_filter_revision_diagnostic",
+  "evaluation_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+  "identity_panel_sha256": "f6cde705b39c30710d12e7da62e8aea5298a13f70b2c8404e1b8fd38608b9b52",
+  "independent_bo_authorized": false,
+  "may_nominate_recovery_candidate": false,
+  "parameter_search_authorized": false,
+  "proposal_sha256": "4b06a3f1aceee3a6459778c6878a1c1ae461077ae6a48a17f95eeed3852ba9c0",
+  "record_panel_sha256": "5db7aac87885cd8c0af8fa071085699fd2b820555bbe2b2784bd7e3fa7169e4b",
+  "revision_contract_hash": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+  "solver_hash": "7002c0cae3c0496dce083c268902d43603b7372473a0b5806e6fe83c3375cb6e",
+  "source_result_panel_sha256": "e120e6ed3e6bf5e6a6d2d5fe20b0acb0fbcaa5c56e04c3d41090b0f4f19534e2",
+  "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+  "stage": "filter_profile_rank1_revision_diagnostic",
+  "unique_budget": 12
+}

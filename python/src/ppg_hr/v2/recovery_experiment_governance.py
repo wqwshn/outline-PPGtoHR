@@ -649,6 +649,28 @@ class BudgetContract:
             },
         )
 
+    @classmethod
+    def proposed_v10_rank1_filter_revision(cls) -> BudgetContract:
+        """Return the proposed contract for 12 rank-1 revision audits."""
+
+        prior = cls.proposed_v9_filter_mechanism_decomposition()
+        return cls(
+            stage_unique_limits={
+                **prior.stage_unique_limits,
+                "filter_profile_rank1_revision_diagnostic": 12,
+            },
+            normal_unique_identity_limit=852,
+            supplemental_stage=prior.supplemental_stage,
+            max_unique_identities=864,
+            max_attempts=1728,
+            retry_limit=prior.retry_limit,
+            contract_version="lyx_recovery_filter_budget_v10",
+            stage_attempt_kinds={
+                **prior.stage_attempt_kinds,
+                "filter_profile_rank1_revision_diagnostic": "diagnostic",
+            },
+        )
+
     @property
     def sha256(self) -> str:
         return _canonical_sha256(self.to_dict())
@@ -907,6 +929,9 @@ class AttemptRegistry:
             ),
             BudgetContract.proposed_v8_p25_spectral_recheck().sha256: (
                 BudgetContract.proposed_v9_filter_mechanism_decomposition().sha256
+            ),
+            BudgetContract.proposed_v9_filter_mechanism_decomposition().sha256: (
+                BudgetContract.proposed_v10_rank1_filter_revision().sha256
             ),
         }
         expected_known_target = known_transitions.get(self.budget_contract.sha256)

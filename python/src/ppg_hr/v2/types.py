@@ -23,6 +23,7 @@ class V2RunConfig:
     adaptive_filter: str = "noncausal_lms"
     algorithm_preset: str = "dynamic_rest_bo"
     reference_groups_order: tuple[str, ...] = ("HF", "CF", "ACC")
+    adaptive_reference_stage_limit: int | None = None
     fs_origin: int = 100
     fs_target: int = 25
     window_seconds: float = 8.0

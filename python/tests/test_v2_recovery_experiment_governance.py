@@ -1361,6 +1361,24 @@ def test_proposed_v9_adds_only_12_filter_mechanism_diagnostics() -> None:
     assert sum(v9.stage_unique_limits.values()) == 852
 
 
+def test_proposed_v10_adds_only_12_rank1_revision_diagnostics() -> None:
+    v9 = BudgetContract.proposed_v9_filter_mechanism_decomposition()
+    v10 = BudgetContract.proposed_v10_rank1_filter_revision()
+
+    assert v10.stage_unique_limits == {
+        **v9.stage_unique_limits,
+        "filter_profile_rank1_revision_diagnostic": 12,
+    }
+    assert v10.normal_unique_identity_limit == 852
+    assert v10.max_unique_identities == 864
+    assert v10.max_attempts == 1728
+    assert v10.retry_limit == 1
+    assert v10.stage_attempt_kinds[
+        "filter_profile_rank1_revision_diagnostic"
+    ] == "diagnostic"
+    assert sum(v10.stage_unique_limits.values()) == 864
+
+
 def test_rate_normalized_exploration_authorization_is_exact() -> None:
     request = ExplorationBudgetAmendmentRequest(
         stage="filter_profile_rate_normalization_exploration",
