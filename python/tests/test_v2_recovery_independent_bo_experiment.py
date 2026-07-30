@@ -17,6 +17,11 @@ from ppg_hr.v2.recovery_independent_bo_experiment import (
 )
 from ppg_hr.v2.bo_space_generalization import build_bo_search_space
 from ppg_hr.v2.recovery_contracts import canonical_sha256
+from ppg_hr.v2.recovery_experiment_governance import (
+    BudgetAmendmentRequest,
+    validate_budget_amendment_authorization,
+)
+from ppg_hr.v2.recovery_independent_bo_runner import main as runner_main
 from ppg_hr.v2.recovery_stage_r_common import StageRPlanError
 
 
@@ -191,3 +196,50 @@ def test_independent_bo_interrupted_attempt_never_auto_retries(
             spectral_audit_dir=tmp_path / "spectral",
             allow_retry=False,
         )
+
+
+def test_blanket_authorization_cli_writes_both_exact_receipts(
+    tmp_path: Path,
+) -> None:
+    proposal = _proposal()
+    proposal_dir = tmp_path / "proposal"
+    proposal_dir.mkdir()
+    (proposal_dir / "recovery_independent_bo_proposal.json").write_text(
+        json.dumps(proposal),
+        encoding="utf-8",
+    )
+
+    assert runner_main(
+        [
+            "authorize-blanket",
+            "--proposal-dir",
+            str(proposal_dir),
+        ]
+    ) == 0
+
+    execution = json.loads(
+        (proposal_dir / "execution_authorization.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    budget = json.loads(
+        (proposal_dir / "budget_authorization.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    validate_recovery_independent_bo_execution_authorization(
+        proposal,
+        receipt=execution,
+    )
+    validate_budget_amendment_authorization(
+        BudgetAmendmentRequest(
+            **proposal["budget_amendment_request"]
+        ),
+        receipt=budget,
+    )
+    assert execution["user_authorization"] == (
+        BLANKET_AUTHORIZATION_USER_TEXT
+    )
+    assert budget["user_authorization"] == (
+        BLANKET_AUTHORIZATION_USER_TEXT
+    )

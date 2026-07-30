@@ -130,7 +130,10 @@ def _record_blanket_authorization(
         "authorization_basis": (
             "blanket_proposal_authorization_until_deadline"
         ),
-        "blanket_authorization_expires_at": expires_at,
+        "blanket_authorization_expires_at": (
+            BLANKET_AUTHORIZATION_EXPIRES_AT
+        ),
+        "user_authorization": BLANKET_AUTHORIZATION_USER_TEXT,
         "proposal_sha256": proposal["proposal_sha256"],
     }
     budget["authorization_sha256"] = canonical_sha256(budget)
