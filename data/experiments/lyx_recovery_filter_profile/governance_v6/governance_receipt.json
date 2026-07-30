@@ -1,0 +1,25 @@
+{
+  "artifacts": {
+    "attempt_registry.json": "80bf93a4acd29335f24bffa0756f2e73a9e0f21a96516a67a1540020b34eb239",
+    "budget_contract.json": "647ab3e1fffd61e840ce48c1f4d9f169fcbcc62600b641dcd3ebbd968ee5506a",
+    "execution_authorization.json": "162a40676417da361715f0d4d39428b1fc356f092f0e82529ec362d4532ead3e",
+    "exploration_registry.json": "7f414ebb2deb29e659cc2cb5a777d9a5146f1d362586a3e6f48531ee767b2cbd"
+  },
+  "attempt_registry_summary": {
+    "actual_unique_run_count": 240,
+    "cache_evidence_count": 240,
+    "cache_hit_count": 228,
+    "failed_attempt_count": 3,
+    "logical_task_count": 471,
+    "planned_unique_identity_count": 276,
+    "retry_count": 3
+  },
+  "independent_bo_authorized": false,
+  "new_unique_identity_count": 36,
+  "proposal_sha256": "db1f5d2278458592c08d7e6217d52090a8ab1f94b96262de99e84a466e2c6128",
+  "receipt_sha256": "a1bdf438de8d31a7cb4234989d2374c37aaaba55c5c62dd93eedbeb068a84691",
+  "receipt_version": "lyx_p25_spectral_governance_receipt_v1",
+  "source_budget_contract_hash": "91d0ce95bd83ab375633b21d06edd1c643583bf7d2f349ca2111f9528a4cf41d",
+  "status": "prepared_zero_runs",
+  "target_budget_contract_hash": "7ce85ea070fdbdc61ef6f7456c5878cba313bf889b68ce33cf9719d8c7837d85"
+}

@@ -1,0 +1,25 @@
+{
+  "complete_pass_profile_ids": [],
+  "profiles": {
+    "p25-long-mid": {
+      "complete_spectral_pass_count": 0,
+      "coordinate_count": 12,
+      "pulse_power_retention_pass_count": 0
+    },
+    "p25-short-low": {
+      "complete_spectral_pass_count": 0,
+      "coordinate_count": 12,
+      "pulse_power_retention_pass_count": 0
+    },
+    "p25-short-mid": {
+      "complete_spectral_pass_count": 0,
+      "coordinate_count": 12,
+      "pulse_power_retention_pass_count": 0
+    }
+  },
+  "proposal_sha256": "db1f5d2278458592c08d7e6217d52090a8ab1f94b96262de99e84a466e2c6128",
+  "pulse_power_retention_pass_count": 0,
+  "result_count": 36,
+  "summary_sha256": "e7cf134a58a68200df22d09a5c0b5766cce87b542704fee3d7d0d70638100031",
+  "summary_version": "lyx_p25_profile_gate_summary_v1"
+}

@@ -1,0 +1,73 @@
+{
+  "algorithm_level_holdout": false,
+  "completion_sha256": "81171332c7c29e80f329c9140874480321bf101ca7f91c853c3ae453015251ac",
+  "decision": "spectral_metric_control_audit_required",
+  "decision_sha256": "29f042e080441ae979fea32e0b38c9de8ac778fc71d3bd5d99d78ba8ba763f55",
+  "evidence_class": "development_reuse_pilot",
+  "overall_gate_pass_counts": {
+    "complete_window_evidence_pass": 36,
+    "hr_band_share_delta_pass": 18,
+    "prominence_db_delta_pass": 32,
+    "pulse_power_retention_pass": 0,
+    "residual_artifact_corr_delta_pass": 36,
+    "visible_top3_rate_delta_pass": 36
+  },
+  "profiles": {
+    "p25-long-mid": {
+      "complete_spectral_pass_count": 0,
+      "gate_pass_counts": {
+        "complete_window_evidence_pass": 12,
+        "hr_band_share_delta_pass": 3,
+        "prominence_db_delta_pass": 9,
+        "pulse_power_retention_pass": 0,
+        "residual_artifact_corr_delta_pass": 12,
+        "visible_top3_rate_delta_pass": 12
+      },
+      "pulse_power_retention_max": 0.0034288512003354467,
+      "pulse_power_retention_median": 0.000758767356897028,
+      "pulse_power_retention_min": 0.0002025793259155585,
+      "record_count": 12
+    },
+    "p25-short-low": {
+      "complete_spectral_pass_count": 0,
+      "gate_pass_counts": {
+        "complete_window_evidence_pass": 12,
+        "hr_band_share_delta_pass": 10,
+        "prominence_db_delta_pass": 12,
+        "pulse_power_retention_pass": 0,
+        "residual_artifact_corr_delta_pass": 12,
+        "visible_top3_rate_delta_pass": 12
+      },
+      "pulse_power_retention_max": 0.0024161450431489937,
+      "pulse_power_retention_median": 0.0007596283190500377,
+      "pulse_power_retention_min": 0.00027624071390583915,
+      "record_count": 12
+    },
+    "p25-short-mid": {
+      "complete_spectral_pass_count": 0,
+      "gate_pass_counts": {
+        "complete_window_evidence_pass": 12,
+        "hr_band_share_delta_pass": 5,
+        "prominence_db_delta_pass": 11,
+        "pulse_power_retention_pass": 0,
+        "residual_artifact_corr_delta_pass": 12,
+        "visible_top3_rate_delta_pass": 12
+      },
+      "pulse_power_retention_max": 0.0024047099096046846,
+      "pulse_power_retention_median": 0.0007547643669339264,
+      "pulse_power_retention_min": 0.0002628004489701297,
+      "record_count": 12
+    }
+  },
+  "proposal_sha256": "db1f5d2278458592c08d7e6217d52090a8ab1f94b96262de99e84a466e2c6128",
+  "pulse_power_retention_overall": {
+    "max": 0.0034288512003354467,
+    "median": 0.000758767356897028,
+    "min": 0.0002025793259155585,
+    "pass_count": 0
+  },
+  "pulse_power_retention_threshold": 0.8,
+  "record_result_count": 36,
+  "summary_sha256": "dbe0d4e9d6ccc7f02b372a7c83e3cffeccd838b07c50576a87a02d60f7fd6aee",
+  "summary_version": "lyx_p25_spectral_figure_summary_v1"
+}

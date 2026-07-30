@@ -1,0 +1,18 @@
+{
+  "approved": true,
+  "approved_at": "2026-07-30T09:52:54+08:00",
+  "approved_by": "wqwshn",
+  "budget_contract_hash": "7ce85ea070fdbdc61ef6f7456c5878cba313bf889b68ce33cf9719d8c7837d85",
+  "decision_contract_hash": "813c23353a4dbfb3cc8df83a88ee76cffda65a87e344f2caca9305337eaa1a6c",
+  "decision_state": "awaiting_human_p25_spectral_diagnostic_decision",
+  "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+  "independent_bo_authorized": false,
+  "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+  "profile_panel_sha256": "7f6f1615afab9aff3c82c2fd93e00e5c7ed896c73ab066edc1e2367e06737cfc",
+  "proposal_sha256": "db1f5d2278458592c08d7e6217d52090a8ab1f94b96262de99e84a466e2c6128",
+  "record_panel_sha256": "dc636a649a978f22f0f0c2dc6c71fd326a9af8ed5d71ba721511b0463ee9a257",
+  "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+  "spectral_gate_contract_hash": "46ccbaebe3f7eafcc14853066a5173cb3ff5ce0b8400b2a1fc1c8e6f59f0ee08",
+  "stage": "filter_profile_p25_spectral_diagnostic",
+  "unique_budget": 36
+}

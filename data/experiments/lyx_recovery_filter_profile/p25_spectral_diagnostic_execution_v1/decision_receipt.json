@@ -1,0 +1,28 @@
+{
+  "complete_pass_profile_ids": [],
+  "decision": "spectral_metric_control_audit_required",
+  "decision_sha256": "29f042e080441ae979fea32e0b38c9de8ac778fc71d3bd5d99d78ba8ba763f55",
+  "decision_version": "lyx_p25_spectral_decision_v1",
+  "independent_bo_authorized": false,
+  "may_nominate_recovery_candidate": false,
+  "profile_summaries": {
+    "p25-long-mid": {
+      "complete_spectral_pass_count": 0,
+      "coordinate_count": 12,
+      "pulse_power_retention_pass_count": 0
+    },
+    "p25-short-low": {
+      "complete_spectral_pass_count": 0,
+      "coordinate_count": 12,
+      "pulse_power_retention_pass_count": 0
+    },
+    "p25-short-mid": {
+      "complete_spectral_pass_count": 0,
+      "coordinate_count": 12,
+      "pulse_power_retention_pass_count": 0
+    }
+  },
+  "proposal_sha256": "db1f5d2278458592c08d7e6217d52090a8ab1f94b96262de99e84a466e2c6128",
+  "pulse_power_retention_pass_count": 0,
+  "result_count": 36
+}

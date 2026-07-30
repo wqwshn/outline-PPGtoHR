@@ -1,0 +1,14 @@
+{
+  "allowed_identity_sha256": [
+    "52f60dee87e77f385a766f3f3dbde55e3c77fcea111ea766480990ea237d8e99",
+    "d24b35b5fc1e0d5271014cd03174150f2a705eaf7fd3237148685a501a640a39",
+    "e39bf423ad4a33ba2eaaa7035ba8e90a2d4981a8eba89b1350990a50da2a9089",
+    "0792ffbad90e5a19cfabeecf11fab4131e00a763a9bd628abbd152ea48fc358b",
+    "fbedcc9997748eacb580787eb09c24cb5b1581749ed291104edad6b0748c9993",
+    "ef68cf46f05c1293cdbd60349c1aee062c7d1ff14b4c9e78d1421f86f11f289c",
+    "cc6c11587b3fb42f800b74be1e801fe40230a1782e6b63104aa71c6f7c2cd898",
+    "bc4a5cebbeb4db60ce88dc19722a8e2eb5ff3564591e0b57b44f40013ba17853"
+  ],
+  "registry_version": "lyx_recovery_exploration_registry_v1",
+  "unique_budget": 8
+}

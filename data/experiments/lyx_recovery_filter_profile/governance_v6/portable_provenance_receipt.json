@@ -1,0 +1,43 @@
+{
+  "attempt_registry_transition": {
+    "final_attempt_registry_file_sha256": "9ff4f90b3951ead55793bccf8228d73a99fe35d5abcbb0b7c7781d06af8ab55e",
+    "final_summary": {
+      "actual_unique_run_count": 276,
+      "cache_evidence_count": 276,
+      "cache_hit_count": 228,
+      "failed_attempt_count": 3,
+      "logical_task_count": 507,
+      "planned_unique_identity_count": 276,
+      "retry_count": 3
+    },
+    "source_attempt_registry_file_sha256": "6daed67f8547d4d2ddf03c193a27e235ad4381aa664e348ff8d4db59df539c6f",
+    "source_governance_version": "v5",
+    "target_governance_version": "v6"
+  },
+  "cache_publication_contract": {
+    "portable_cache_replay_supported": false,
+    "published_scope": "provenance_only",
+    "reason": "The local v6 cache inherits 240 prior materializations and stores trajectories and solver-detail sidecars outside the compact result receipts. Publishing a partial cache would falsely claim replayability.",
+    "runtime_cache_is_authoritative": false
+  },
+  "independent_bo_authorized": false,
+  "independent_bo_run_count": 0,
+  "portable_authoritative_artifacts": {
+    "budget_contract.json": "647ab3e1fffd61e840ce48c1f4d9f169fcbcc62600b641dcd3ebbd968ee5506a",
+    "execution_authorization.json": "162a40676417da361715f0d4d39428b1fc356f092f0e82529ec362d4532ead3e",
+    "exploration_registry.json": "7f414ebb2deb29e659cc2cb5a777d9a5146f1d362586a3e6f48531ee767b2cbd",
+    "p25_execution_completion_sha256": "81171332c7c29e80f329c9140874480321bf101ca7f91c853c3ae453015251ac",
+    "p25_execution_receipt_file_sha256": "263699f8595414e69163d74086fdaef21ff3401804479c09a2e81e4e720af14a",
+    "p25_execution_receipt_sha256": "40a9bc02fcc6086d7c2b99fd4856108a830ca2b94c1f1b13ae29f6fc9d769460",
+    "p25_spectral_audit_manifest_sha256": "6ee1e436097ee93f22725a26f7a6bea91466a636cafcfbdfa9d4296cf148252e"
+  },
+  "proposal_sha256": "db1f5d2278458592c08d7e6217d52090a8ab1f94b96262de99e84a466e2c6128",
+  "receipt_version": "lyx_p25_portable_provenance_receipt_v1",
+  "result_scope": {
+    "diagnostic_result_count": 36,
+    "diagnostic_solver_run_count": 36,
+    "failed_attempt_count": 0,
+    "retry_count": 0
+  },
+  "status": "spectral_metric_control_audit_required"
+}

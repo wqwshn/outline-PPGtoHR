@@ -1,0 +1,296 @@
+{
+  "audit_count": 36,
+  "audits": [
+    {
+      "file_sha256": "0b188e37ec1913086520b2ad3b979f2c275ae10b17b8f856363f935b019c51a6",
+      "identity_sha256": "d2691ceeb9551e75ef5bed44c806704f3323bdfb57f9e5837e426e8120c1c1a3",
+      "materialized_audit_sha256": "43a6fedf729ebdbcd3f88dea811a50fd3f78627d5bf56109016a9729e5fc91bf",
+      "path": "spectral_audits/p25-short-low/jianpan1_LYX_0708.json",
+      "profile_id": "p25-short-low",
+      "record_id": "jianpan1_LYX_0708"
+    },
+    {
+      "file_sha256": "42d0890e939ddcbcadd246b74b4e1d82472d86c5fbd0cb6eeab2eaa1c0427d9e",
+      "identity_sha256": "b181f01a5ab58e4b015492a1d0ac929e2993c55d029dc34872bc4f53e343da27",
+      "materialized_audit_sha256": "075b532213117bc4a18d6d70605dbb9d7707cbd30bf655adc1588ec787bef433",
+      "path": "spectral_audits/p25-short-low/jianpan2_LYX_0708.json",
+      "profile_id": "p25-short-low",
+      "record_id": "jianpan2_LYX_0708"
+    },
+    {
+      "file_sha256": "31e571fc9d5d3ca15ef3e82f2419e16f127c70b2685b264c3f21a27ad896f27b",
+      "identity_sha256": "22db5388d53bcd2b24b49d8564c71eb95ca61519439d3c65b8b6d708522a80ec",
+      "materialized_audit_sha256": "6e6614b5fb55b80e5fc97c895fce9597eec83cab13b03081086a929ef5dfe315",
+      "path": "spectral_audits/p25-short-low/jianpan3_LYX_0708.json",
+      "profile_id": "p25-short-low",
+      "record_id": "jianpan3_LYX_0708"
+    },
+    {
+      "file_sha256": "e718d4f1614600c90754e898965b62c1bd26ec74c7a8648d1b0ec81f13d18ae6",
+      "identity_sha256": "9cf02621931703d6ef65f63f269981c7aad16477178ba485c8592f4445bbc7af",
+      "materialized_audit_sha256": "49e07fd006ab947dea8ed6af00c48be8aebef9599eb5f9ae89240c4ca6491f5d",
+      "path": "spectral_audits/p25-short-low/kaihe1_LYX_0613.json",
+      "profile_id": "p25-short-low",
+      "record_id": "kaihe1_LYX_0613"
+    },
+    {
+      "file_sha256": "0869c217359cbb2b38d2c1afb935588f6e5d5ebb946c568b47d6a55ab4f06317",
+      "identity_sha256": "25fce5d35765c001d99025bf70925f6b022b22e3a329c29ba8b37d5c5a6602ab",
+      "materialized_audit_sha256": "14ba949b8b589a9cf4dbb126eae95eec09b90b4ce31e81ed30ce34f5f9924021",
+      "path": "spectral_audits/p25-short-low/kaihe1_LYX_0617.json",
+      "profile_id": "p25-short-low",
+      "record_id": "kaihe1_LYX_0617"
+    },
+    {
+      "file_sha256": "ef6437d23d9a6725151a57c2f00b3b5a95af0aed17e8f04abb115a7406aefbe4",
+      "identity_sha256": "c082cf66c669a4f5678880abc2ff9a017f33a144311c8fbfeb53ef26cba83301",
+      "materialized_audit_sha256": "7deca3c44633f70d23fc42fcb797675e74bec77fca67213293d8b79ccc6c6364",
+      "path": "spectral_audits/p25-short-low/kaihe3_LYX_0613.json",
+      "profile_id": "p25-short-low",
+      "record_id": "kaihe3_LYX_0613"
+    },
+    {
+      "file_sha256": "1a91a31dd77f7f63bd31d97f8e89e39a6b18450c3237f5f14044afe9ebe0e82a",
+      "identity_sha256": "28e589cdf41325a303adc8b8574f873c23aaa97df34d78ed4b13603a0b8c90de",
+      "materialized_audit_sha256": "85a19e1c460ae858229c9bd3435923f606924a1e2a87df9000d279a663076155",
+      "path": "spectral_audits/p25-short-low/run1_LYX_0708.json",
+      "profile_id": "p25-short-low",
+      "record_id": "run1_LYX_0708"
+    },
+    {
+      "file_sha256": "eb113d14f315afbc1f6b2c9bfdb42a05a8afb93ed511f38d405bdab9a69e9aa2",
+      "identity_sha256": "1a64e31f1c3273ad0b11201f1842c863323f6564a8ac954bbb7243320e37a7d6",
+      "materialized_audit_sha256": "3e0c89cfd8343baf948692df6cefa797ff50378e5b6a866a758fbc6c431f7c81",
+      "path": "spectral_audits/p25-short-low/run2_LYX_0708.json",
+      "profile_id": "p25-short-low",
+      "record_id": "run2_LYX_0708"
+    },
+    {
+      "file_sha256": "3774c29d5552c5e87a04035279d4552385f6e6719752f520bcb80c665d4dfc1c",
+      "identity_sha256": "d12146f6a2faddbea9332265e582495cc65e3d8de6ced3a7b5e886e0cbb450ec",
+      "materialized_audit_sha256": "a18f61f6becb212f934eb7f93cfefcf9fd30fd88178806afda9d153a49a40433",
+      "path": "spectral_audits/p25-short-low/run3_LYX_0708.json",
+      "profile_id": "p25-short-low",
+      "record_id": "run3_LYX_0708"
+    },
+    {
+      "file_sha256": "0a1716261f49d5f9956bd019ff8bfba0664bfebaaa2349efc814a720ae369768",
+      "identity_sha256": "04901d800c9aaf87404329c83bbaba273245ab215d18b197bf798326df91459c",
+      "materialized_audit_sha256": "f40bc9f00243abf20d4e6cb332b9d5383501beec842963e4e89d2c5d4e197f6c",
+      "path": "spectral_audits/p25-short-low/xiezi2_LYX_0708.json",
+      "profile_id": "p25-short-low",
+      "record_id": "xiezi2_LYX_0708"
+    },
+    {
+      "file_sha256": "e087f026b5d66de472aeb1505dc032149a712775da665f58cb3ef40d47db35a1",
+      "identity_sha256": "dad1ee88eb62e362f4eb697972d07eb22b732393a5c18fce4250ed40b106be38",
+      "materialized_audit_sha256": "6187655f2c0dad3bf60f6a923eac09a356bac767d2c88edb1b6d52c9b9f2b6cf",
+      "path": "spectral_audits/p25-short-low/xiezi3_LYX_0708.json",
+      "profile_id": "p25-short-low",
+      "record_id": "xiezi3_LYX_0708"
+    },
+    {
+      "file_sha256": "6e1f308852fffae15fed057bc434e517375c7d0cd0532ed3099a5b805356f58e",
+      "identity_sha256": "d6293ab6c83d43a788db820297230ca0c7614dcd71635dbd32a0b26ded770e6d",
+      "materialized_audit_sha256": "b0db14e0d9bc02c5b90e06732917cd4889e24d49f6e8435cde02b673860f46d6",
+      "path": "spectral_audits/p25-short-low/xiezi4_LYX_0708.json",
+      "profile_id": "p25-short-low",
+      "record_id": "xiezi4_LYX_0708"
+    },
+    {
+      "file_sha256": "9269c9991d79ec43748ad7a123e508794b30e5ac92c4e6aca7ab2789cd979654",
+      "identity_sha256": "e6945d70e698294c3eb91d63c0a3ecce5af7deefe23b455739872f26dfa77564",
+      "materialized_audit_sha256": "4bcf03ea1d742b48de238153c4d01d6592b6d1657cd7d433ec461e6a10cdd544",
+      "path": "spectral_audits/p25-short-mid/jianpan1_LYX_0708.json",
+      "profile_id": "p25-short-mid",
+      "record_id": "jianpan1_LYX_0708"
+    },
+    {
+      "file_sha256": "98048e416fce3b8aa9be0f9538088190f635fdfd8c03fa96466755fd4b21e430",
+      "identity_sha256": "42eff06c7fd5cf6c449a0a04b0f0f4058c9cbb2240686782313333584f3546aa",
+      "materialized_audit_sha256": "1fc3f7551171e7658bdae620309e1b9a41943f63dc4ebf980b57dbb79e0fb042",
+      "path": "spectral_audits/p25-short-mid/jianpan2_LYX_0708.json",
+      "profile_id": "p25-short-mid",
+      "record_id": "jianpan2_LYX_0708"
+    },
+    {
+      "file_sha256": "4233f52ad2757c60b5ca28780b94d2e6f8b24911e3a23f29b104c2f3c826f6c2",
+      "identity_sha256": "1c038172b95147fcd803befcee10b283b3a7441b07364e6779aed62e72084cbb",
+      "materialized_audit_sha256": "4c91dce99a3bbf87e8a93f57af495c85549dca6ba4f48917bfe4ecc8c0b12a17",
+      "path": "spectral_audits/p25-short-mid/jianpan3_LYX_0708.json",
+      "profile_id": "p25-short-mid",
+      "record_id": "jianpan3_LYX_0708"
+    },
+    {
+      "file_sha256": "8359dec78a1706d39971f83f61cf77dd42e2b039ee33d5ed8552503eadcc9fcf",
+      "identity_sha256": "6bec2d8c47e3ea7277f2fc97edc83dd84a5919e514ad03b1a2328d34d75bbadf",
+      "materialized_audit_sha256": "29d78e2b65eec16ea2b2201dec5508750d3d6d3a30b3823dd0a82453479bd0ba",
+      "path": "spectral_audits/p25-short-mid/kaihe1_LYX_0613.json",
+      "profile_id": "p25-short-mid",
+      "record_id": "kaihe1_LYX_0613"
+    },
+    {
+      "file_sha256": "1993a1d4d3bf27fd6df67e636f88fc18a24622ddc2ba6b80861bd40e1bb88514",
+      "identity_sha256": "99693c5196f6c9aeac1d7414a1ad6337bc8a59ca298e7da2f186a0e204b701b1",
+      "materialized_audit_sha256": "440bc416de634030121038ad4baa6220932ff0f9e02e82c1a12e337b44418224",
+      "path": "spectral_audits/p25-short-mid/kaihe1_LYX_0617.json",
+      "profile_id": "p25-short-mid",
+      "record_id": "kaihe1_LYX_0617"
+    },
+    {
+      "file_sha256": "44230871c63f520109b72d6fd47f7d273d74fe32f28767c507afc801c2b2dbd5",
+      "identity_sha256": "bde9c68c3f6db2e28928ead2c8018719992628af29893fd70f977b73c4bf972f",
+      "materialized_audit_sha256": "cba35b021463d9b5f9dc0bdaa192d69e367e7f026686c0fd5c7b6df818617885",
+      "path": "spectral_audits/p25-short-mid/kaihe3_LYX_0613.json",
+      "profile_id": "p25-short-mid",
+      "record_id": "kaihe3_LYX_0613"
+    },
+    {
+      "file_sha256": "8fe96faadf03465a1b8941be83a8729fd7f14af45936be4b4bf6191203e0e3b0",
+      "identity_sha256": "7b607e37ccc7a348c0e6b371917b2922b57591d33101aaae2cf531d3571eb054",
+      "materialized_audit_sha256": "7721c8d8754f73ea613d7dda82c7c6a793cca418227e6dcf6a445c182d6aae74",
+      "path": "spectral_audits/p25-short-mid/run1_LYX_0708.json",
+      "profile_id": "p25-short-mid",
+      "record_id": "run1_LYX_0708"
+    },
+    {
+      "file_sha256": "74c1d24d558c193e9ef10da78f5135f6f32bd226ed0bab3c72dcbbfd15fc07bd",
+      "identity_sha256": "4fa3624aae1958a841d2ae847e4d15c83c899e8c552c993f4d9d50cde59cbff9",
+      "materialized_audit_sha256": "7bba017ca2c467974d0d74a5765e1fde7ca2ae65dabe0af5346c083154dcff1d",
+      "path": "spectral_audits/p25-short-mid/run2_LYX_0708.json",
+      "profile_id": "p25-short-mid",
+      "record_id": "run2_LYX_0708"
+    },
+    {
+      "file_sha256": "da6834040bb6d4bb3c154fe3abc20c07610f2936f029c43e8693fa01b6b64f2f",
+      "identity_sha256": "903053add57c377e04cb4a80e9bb8b933214bcc46c2969732abddd60fa2a3b51",
+      "materialized_audit_sha256": "319020eb4d85116c2fa37ebaf42d0d272068d6da9947636ce20b7e95c33213e3",
+      "path": "spectral_audits/p25-short-mid/run3_LYX_0708.json",
+      "profile_id": "p25-short-mid",
+      "record_id": "run3_LYX_0708"
+    },
+    {
+      "file_sha256": "bf5e5a7552133a557962da6f6495c97b86a7e8ab430b1def82769a85d4134ea5",
+      "identity_sha256": "057dccb872711d01e498c6ceafc8b08ab49ece94b97a586c21bb0a746ab01ff6",
+      "materialized_audit_sha256": "a2b16970a316f22969f8f439ffb46a87ab526c04bc36f66a72c52a56c490b845",
+      "path": "spectral_audits/p25-short-mid/xiezi2_LYX_0708.json",
+      "profile_id": "p25-short-mid",
+      "record_id": "xiezi2_LYX_0708"
+    },
+    {
+      "file_sha256": "4aa7e5324244cfbfb5072db77a2e843ac4f5af12cfb7700923ae74cdc95f3a36",
+      "identity_sha256": "10c27b5cb74d620dd894c63b1e451a977260ed39927e2f5e4b050fce23d3d9f7",
+      "materialized_audit_sha256": "8dfaf7675a4fcc53bcff51d6b63e8ca80e81031dbacfdba47373c549c144fbcf",
+      "path": "spectral_audits/p25-short-mid/xiezi3_LYX_0708.json",
+      "profile_id": "p25-short-mid",
+      "record_id": "xiezi3_LYX_0708"
+    },
+    {
+      "file_sha256": "ed55853e3e0dd3984ffb60c791c5686d1605475411aac752030c0fd89bb370fe",
+      "identity_sha256": "8557fde4681a4405639e8604989be82f056fa8e79a73e7cbf1c3eacc7c174d39",
+      "materialized_audit_sha256": "bb6aa617290f05046a545b055b56d5d0ab1d76cebec3655289151965d5671cd6",
+      "path": "spectral_audits/p25-short-mid/xiezi4_LYX_0708.json",
+      "profile_id": "p25-short-mid",
+      "record_id": "xiezi4_LYX_0708"
+    },
+    {
+      "file_sha256": "2f7f948d4658df696d6975bd6872a963e267ce6e72789864947774bd8c006297",
+      "identity_sha256": "8e80249bf7d218b4a350254128607c1c39331753f22dcbb8046bd721a694a97b",
+      "materialized_audit_sha256": "a4ccb9147fe1b440707c97de9cf121dec273c843bea69170275092c9ec128e48",
+      "path": "spectral_audits/p25-long-mid/jianpan1_LYX_0708.json",
+      "profile_id": "p25-long-mid",
+      "record_id": "jianpan1_LYX_0708"
+    },
+    {
+      "file_sha256": "e64198c5fbd89e473a3472e050815c1eb0136961007f22ae3cdcd6c82b38e370",
+      "identity_sha256": "5bfd14237566a22f698c2e04bbed3a053d8e0acecc8bb792977aaadbcae503f4",
+      "materialized_audit_sha256": "29bf75b59dbfe46cdc101acfa5b764aedb9fe25612303704e8ba74219a1f0e09",
+      "path": "spectral_audits/p25-long-mid/jianpan2_LYX_0708.json",
+      "profile_id": "p25-long-mid",
+      "record_id": "jianpan2_LYX_0708"
+    },
+    {
+      "file_sha256": "9a238bbaf1a74e0b79ac5aae6bb76501f2e1521ad0134a453b6489c0c88ccecc",
+      "identity_sha256": "e1f713a33cffe177274bfa591182253d8f62523dec069667b643b38db473e48c",
+      "materialized_audit_sha256": "45ace4d68ce1c2b7badc2f9042c81110b13bf87ac54f512ea7b1d112c64cdde1",
+      "path": "spectral_audits/p25-long-mid/jianpan3_LYX_0708.json",
+      "profile_id": "p25-long-mid",
+      "record_id": "jianpan3_LYX_0708"
+    },
+    {
+      "file_sha256": "6743e743eb19e82f249619448a85d69c8e851eb20c10991b1a8f6d28f9cef327",
+      "identity_sha256": "217d83db4398aeac41811ef439822e8ae351d0914060d3ef228d77755f811080",
+      "materialized_audit_sha256": "e9584808204ef4026d150c99ad4af19f914f40f7539ccf8cfd9eec13b1b5aa38",
+      "path": "spectral_audits/p25-long-mid/kaihe1_LYX_0613.json",
+      "profile_id": "p25-long-mid",
+      "record_id": "kaihe1_LYX_0613"
+    },
+    {
+      "file_sha256": "92fae3f0ad30ad94e4564d5c8cd49647ff4a2e78c2b80566f9a060b8c8ab3e8f",
+      "identity_sha256": "f131b5e6e9e8573346be4e531806cf4d7026ef8d0b431e55ce9e4d479a94c302",
+      "materialized_audit_sha256": "a532e16a174115d6d07eeb8d3ca26ea268097c2f548f8fdd8ac188c4f553904b",
+      "path": "spectral_audits/p25-long-mid/kaihe1_LYX_0617.json",
+      "profile_id": "p25-long-mid",
+      "record_id": "kaihe1_LYX_0617"
+    },
+    {
+      "file_sha256": "0126cb5604fea54834844925d9b7ffa99408b65bc5cd64e73d0d8fad83902434",
+      "identity_sha256": "6dbfcbeb23338dc4204a62487e2a58d6cc5e5d7c26f1fbed6c1f1187089e6f15",
+      "materialized_audit_sha256": "ca6fa008ddd20903c3a67bda939887bc0378a59e28d7f097e32d4106db6042a0",
+      "path": "spectral_audits/p25-long-mid/kaihe3_LYX_0613.json",
+      "profile_id": "p25-long-mid",
+      "record_id": "kaihe3_LYX_0613"
+    },
+    {
+      "file_sha256": "c9bcaed6b4c24093fc3863d70d89590780e24b8724d346f71cfa0ad2b046350a",
+      "identity_sha256": "7e420f3d3c9b0ace702b8defa316a7420da6ee5e93d994a88810ddd7354f0fa5",
+      "materialized_audit_sha256": "fd30681a38613c9c1be25beab2600585d808b720835de63db0fd0d6bf68aaa9b",
+      "path": "spectral_audits/p25-long-mid/run1_LYX_0708.json",
+      "profile_id": "p25-long-mid",
+      "record_id": "run1_LYX_0708"
+    },
+    {
+      "file_sha256": "e7df54e758101503cb0d37d15e8049018f387ea48ad21bd5e1e7931a3e1009fb",
+      "identity_sha256": "db9212ffc56e70e77ea3641e78179ce1876335106213dd0859d8273fb5a92c75",
+      "materialized_audit_sha256": "a8b3b8fd504c2ab50049bb3830b42d8e6063814e28af16db11480da65a18904b",
+      "path": "spectral_audits/p25-long-mid/run2_LYX_0708.json",
+      "profile_id": "p25-long-mid",
+      "record_id": "run2_LYX_0708"
+    },
+    {
+      "file_sha256": "a6d4f1e6be818d91016e825c04390e1e0507a54ea569ee6793a2b6ece37a6cce",
+      "identity_sha256": "787bf925e9e16fe8e930ef2f3d89a06b6712de8e2168dee3a4efd5afbd559b30",
+      "materialized_audit_sha256": "5df1e82a08e301df9e62d1d2eebae25cab2730a7568d1622996e5381b439f648",
+      "path": "spectral_audits/p25-long-mid/run3_LYX_0708.json",
+      "profile_id": "p25-long-mid",
+      "record_id": "run3_LYX_0708"
+    },
+    {
+      "file_sha256": "e962cbcca45f60a81f2126267539118381fd158240886b2df8e0a87d42dccbe4",
+      "identity_sha256": "539b4c817a93d2cb5bb8db00e9d62cb1fef945321a7fa65131e1928d8c001002",
+      "materialized_audit_sha256": "928bf688e2dc68e592780f7497207e86c6cd6f11040a5dcf2a8b1de9a4fbefcd",
+      "path": "spectral_audits/p25-long-mid/xiezi2_LYX_0708.json",
+      "profile_id": "p25-long-mid",
+      "record_id": "xiezi2_LYX_0708"
+    },
+    {
+      "file_sha256": "40fa1cbc6e3b951378f1d03584c8bcf6bb93b07ba413b08a9188a0e47a88f727",
+      "identity_sha256": "22eda10a98d8b8b501cb1ecd9f515b8d6c832e8d59d7f162aa3969567460d0f8",
+      "materialized_audit_sha256": "c81a4ed799082991d38bca6e7af298c1680e41ee44141b92ad40a4860d1e0f7a",
+      "path": "spectral_audits/p25-long-mid/xiezi3_LYX_0708.json",
+      "profile_id": "p25-long-mid",
+      "record_id": "xiezi3_LYX_0708"
+    },
+    {
+      "file_sha256": "f9180afd993ce38424cf82ec03f85e73409f8fd69e9a8513def01d51aa145c18",
+      "identity_sha256": "5c353986b8455de0c09e30c5ce9c0cb994133d4a2521b396bb421377c6b80da0",
+      "materialized_audit_sha256": "8ede854290dd43cbb8ff5dc4d150c26fa5194345b2a09956a9d7523801742dcb",
+      "path": "spectral_audits/p25-long-mid/xiezi4_LYX_0708.json",
+      "profile_id": "p25-long-mid",
+      "record_id": "xiezi4_LYX_0708"
+    }
+  ],
+  "manifest_sha256": "6ee1e436097ee93f22725a26f7a6bea91466a636cafcfbdfa9d4296cf148252e",
+  "manifest_version": "lyx_p25_materialized_spectral_audit_manifest_v1",
+  "proposal_sha256": "db1f5d2278458592c08d7e6217d52090a8ab1f94b96262de99e84a466e2c6128"
+}

@@ -1,0 +1,32 @@
+{
+  "algorithm_level_holdout": false,
+  "artifacts": {
+    "attempt_registry_p25_snapshot.json": "47ace8d3f52f7f7d1365828de64eed1138c669e23609257501549c6d02ff9e68",
+    "decision_receipt.json": "95a89e411c7cf44df5485f08c58908346bb417b4c68167c59a207e6f48cba38d",
+    "execution_binding.json": "642b8e7357784d180bffb2de1ab046d9a2a4698d8a1b8e5c2648e391e51c1b44",
+    "identity_result_index.json": "0af7e16e34028ab290e013eb274c3d2aa070b5b6018b0dcfe32907d197d1ad69",
+    "profile_gate_summary.json": "155ab12f441b12df9adae0ee06b721717e83671b2b2942ec3380c91d823a39a0",
+    "spectral_audit_manifest.json": "f008ab9f67a22c406105e23c65903b9308fc0f9f06c4a8ce47ba043b68bdfb0e"
+  },
+  "authorization_sha256": "3e5b795f91b87f22af49bfa7445c45eab206e77c2581242d9c257113a08bf91a",
+  "completion_sha256": "81171332c7c29e80f329c9140874480321bf101ca7f91c853c3ae453015251ac",
+  "completion_version": "lyx_p25_spectral_completion_v1",
+  "diagnostic_result_count": 36,
+  "diagnostic_solver_run_count": 36,
+  "evidence_class": "development_reuse_pilot",
+  "governance_receipt_file_sha256": "263699f8595414e69163d74086fdaef21ff3401804479c09a2e81e4e720af14a",
+  "governance_receipt_sha256": "40a9bc02fcc6086d7c2b99fd4856108a830ca2b94c1f1b13ae29f6fc9d769460",
+  "independent_bo_run_count": 0,
+  "matrix_execution_summary": {
+    "cache_only_identity_count": 0,
+    "failed_attempt_count": 0,
+    "identity_with_solver_attempt_count": 36,
+    "planned_identity_count": 36,
+    "retry_count": 0,
+    "total_attempt_count": 36
+  },
+  "may_nominate_recovery_candidate": false,
+  "next_state": "awaiting_spectral_metric_control_audit",
+  "proposal_sha256": "db1f5d2278458592c08d7e6217d52090a8ab1f94b96262de99e84a466e2c6128",
+  "status": "spectral_metric_control_audit_required"
+}
