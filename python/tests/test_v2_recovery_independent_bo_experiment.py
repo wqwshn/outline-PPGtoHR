@@ -130,6 +130,23 @@ def test_execution_authorization_must_bind_exact_proposal_and_bo_request() -> No
             receipt=extended,
         )
 
+    at_deadline = dict(receipt)
+    at_deadline["approved_at"] = (
+        BLANKET_AUTHORIZATION_EXPIRES_AT
+    )
+    at_deadline.pop("authorization_sha256")
+    at_deadline["authorization_sha256"] = canonical_sha256(
+        at_deadline
+    )
+    with pytest.raises(
+        RecoveryIndependentBOAuthorizationError,
+        match="independent_bo_authorization_invalid",
+    ):
+        validate_recovery_independent_bo_execution_authorization(
+            proposal,
+            receipt=at_deadline,
+        )
+
 
 def test_bo_candidate_becomes_a_registered_rank1_recovery_identity() -> None:
     proposal = _proposal()

@@ -798,7 +798,7 @@ def _validate_blanket_authorization_metadata(
     if (
         approved_at.tzinfo is None
         or approved_at.utcoffset() != deadline.utcoffset()
-        or approved_at > deadline
+        or approved_at >= deadline
     ):
         raise RecoveryIndependentBOAuthorizationError(
             "independent_bo_authorization_invalid"
