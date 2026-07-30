@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import argparse
 import json
-from dataclasses import asdict
+from datetime import datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from .phase2_experiment_io import atomic_write_json, read_json
 from .recovery_contracts import canonical_sha256
 from .recovery_independent_bo_experiment import (
+    BLANKET_AUTHORIZATION_EXPIRES_AT,
+    BLANKET_AUTHORIZATION_USER_TEXT,
     build_recovery_independent_bo_proposal,
     execute_recovery_independent_bo_proposal,
     prepare_recovery_independent_bo_governance,
@@ -74,10 +77,17 @@ def _write_proposal_artifacts(
 def _record_blanket_authorization(
     *,
     proposal_dir: Path,
-    approved_at: str,
-    expires_at: str,
 ) -> None:
     root = Path(proposal_dir).resolve()
+    now = datetime.now(ZoneInfo("Asia/Shanghai"))
+    deadline = datetime.fromisoformat(
+        BLANKET_AUTHORIZATION_EXPIRES_AT
+    )
+    if now >= deadline:
+        raise RuntimeError(
+            "blanket_proposal_authorization_deadline_passed"
+        )
+    approved_at = now.isoformat(timespec="seconds")
     proposal = read_json(
         root / "recovery_independent_bo_proposal.json"
     )
@@ -97,11 +107,10 @@ def _record_blanket_authorization(
         "authorization_basis": (
             "blanket_proposal_authorization_until_deadline"
         ),
-        "blanket_authorization_expires_at": expires_at,
-        "user_authorization": (
-            "在7月31日10:00前，所有需要人工批准的proposal"
-            "均授权通过并可继续执行"
+        "blanket_authorization_expires_at": (
+            BLANKET_AUTHORIZATION_EXPIRES_AT
         ),
+        "user_authorization": BLANKET_AUTHORIZATION_USER_TEXT,
     }
     execution["authorization_sha256"] = canonical_sha256(
         execution
@@ -149,8 +158,6 @@ def _parser() -> argparse.ArgumentParser:
         propose.add_argument(f"--{name.replace('_', '-')}", required=True)
     authorize = subparsers.add_parser("authorize-blanket")
     authorize.add_argument("--proposal-dir", required=True)
-    authorize.add_argument("--approved-at", required=True)
-    authorize.add_argument("--expires-at", required=True)
     prepare = subparsers.add_parser("prepare")
     for name in (
         "proposal_dir",
@@ -211,8 +218,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "authorize-blanket":
         _record_blanket_authorization(
             proposal_dir=Path(args.proposal_dir),
-            approved_at=args.approved_at,
-            expires_at=args.expires_at,
         )
         print('{"status":"authorized"}')
         return 0

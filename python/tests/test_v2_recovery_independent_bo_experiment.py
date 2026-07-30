@@ -5,7 +5,10 @@ from pathlib import Path
 
 import pytest
 
+from ppg_hr.v2 import recovery_stage_r_cache
 from ppg_hr.v2.recovery_independent_bo_experiment import (
+    BLANKET_AUTHORIZATION_EXPIRES_AT,
+    BLANKET_AUTHORIZATION_USER_TEXT,
     RecoveryIndependentBOAuthorizationError,
     build_recovery_independent_bo_identity,
     build_recovery_independent_bo_proposal,
@@ -14,6 +17,7 @@ from ppg_hr.v2.recovery_independent_bo_experiment import (
 )
 from ppg_hr.v2.bo_space_generalization import build_bo_search_space
 from ppg_hr.v2.recovery_contracts import canonical_sha256
+from ppg_hr.v2.recovery_stage_r_common import StageRPlanError
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -60,6 +64,7 @@ def test_zero_run_proposal_freezes_exact_36_cell_5400_identity_search() -> None:
     assert proposal["formal_solver_run_count"] == 0
     assert proposal["independent_bo_run_count"] == 0
     assert proposal["automatic_stage_f_execution"] is False
+    assert proposal["seed_manifest"]["parallel_lanes"] is False
     assert proposal["budget_contract"]["contract_version"] == (
         "lyx_recovery_filter_budget_v13"
     )
@@ -87,7 +92,10 @@ def test_execution_authorization_must_bind_exact_proposal_and_bo_request() -> No
         "approved_at": "2026-07-31T00:30:00+08:00",
         "approved_by": "user",
         "authorization_basis": "blanket_proposal_authorization_until_deadline",
-        "blanket_authorization_expires_at": "2026-07-31T10:00:00+08:00",
+        "blanket_authorization_expires_at": (
+            BLANKET_AUTHORIZATION_EXPIRES_AT
+        ),
+        "user_authorization": BLANKET_AUTHORIZATION_USER_TEXT,
     }
 
     assert validate_recovery_independent_bo_execution_authorization(
@@ -104,6 +112,19 @@ def test_execution_authorization_must_bind_exact_proposal_and_bo_request() -> No
         validate_recovery_independent_bo_execution_authorization(
             proposal,
             receipt=drifted,
+        )
+
+    extended = dict(receipt)
+    extended["blanket_authorization_expires_at"] = (
+        "2026-07-31T10:00:01+08:00"
+    )
+    with pytest.raises(
+        RecoveryIndependentBOAuthorizationError,
+        match="independent_bo_authorization_invalid",
+    ):
+        validate_recovery_independent_bo_execution_authorization(
+            proposal,
+            receipt=extended,
         )
 
 
@@ -128,3 +149,45 @@ def test_bo_candidate_becomes_a_registered_rank1_recovery_identity() -> None:
     assert identity["config"]["parameters"]["spec_penalty_width"] == 0.3
     assert identity["config_hash"] == canonical_sha256(identity["config"])
     assert identity["identity_sha256"] == identity["cache_identity_sha256"]
+
+
+def test_independent_bo_interrupted_attempt_never_auto_retries(
+    tmp_path: Path,
+) -> None:
+    proposal = _proposal()
+    item = build_recovery_independent_bo_identity(
+        proposal=proposal,
+        cell=proposal["search_cells"][0],
+        candidate=build_bo_search_space("physical_v1").candidates[0],
+    )
+
+    class InterruptedRegistry:
+        trusted_cache_root = tmp_path / "cache"
+
+        @staticmethod
+        def reconcile_interrupted_attempt(
+            _identity: object,
+            *,
+            evidence: object,
+        ) -> str:
+            assert evidence is None
+            return "recovered_failed_attempt"
+
+        @staticmethod
+        def execute_registered(
+            _identity: object,
+            _operation: object,
+        ) -> object:
+            raise AssertionError("unauthorized retry was started")
+
+    with pytest.raises(
+        StageRPlanError,
+        match="interrupted_attempt_requires_new_proposal",
+    ):
+        recovery_stage_r_cache.execute_stage_r_identity(
+            registry=InterruptedRegistry(),
+            item=item,
+            numerical_runner=lambda *_args: None,
+            spectral_audit_dir=tmp_path / "spectral",
+            allow_retry=False,
+        )

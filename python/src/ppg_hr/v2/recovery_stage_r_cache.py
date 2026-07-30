@@ -181,6 +181,7 @@ def execute_stage_r_identity(
     item: dict[str, Any],
     numerical_runner: StageRNumericalRunner,
     spectral_audit_dir: Path,
+    allow_retry: bool = True,
 ) -> dict[str, Any]:
     """Resolve one identity from immutable cache or one charged solver run."""
 
@@ -204,10 +205,18 @@ def execute_stage_r_identity(
         if recovery == "no_running_attempt":
             registry.record_cache_hit(identity, evidence=evidence)
     else:
-        registry.reconcile_interrupted_attempt(
+        recovery = registry.reconcile_interrupted_attempt(
             identity,
             evidence=None,
         )
+        if (
+            recovery == "recovered_failed_attempt"
+            and not allow_retry
+        ):
+            raise StageRPlanError(
+                "stage_r_interrupted_attempt_requires_new_proposal:"
+                + identity.sha256
+            )
 
         def operation() -> dict[str, Any]:
             numerical = numerical_runner(item, spectral_audit_dir)

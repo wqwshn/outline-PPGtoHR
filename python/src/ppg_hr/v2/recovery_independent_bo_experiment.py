@@ -80,6 +80,13 @@ _SOURCE_STAGE = "recovery_sentinel_rank1_replan"
 _SOURCE_PROPOSAL_VERSION = "lyx_stage_r_rank1_replan_proposal_v2"
 _SOURCE_COMPLETION_VERSION = "lyx_stage_r_rank1_replan_completion_v2"
 _AUTHORIZATION_STATE = "awaiting_human_independent_bo_decision"
+BLANKET_AUTHORIZATION_EXPIRES_AT = (
+    "2026-07-31T10:00:00+08:00"
+)
+BLANKET_AUTHORIZATION_USER_TEXT = (
+    "另外在7月31日10：00前，所有需要人工批准的proposal我都授权通过，"
+    "目标进行不需要在被阻塞，你可以尽力提出想法并进行验证，最终完成整个大实验。"
+)
 
 
 def _mapping(name: str, value: object) -> Mapping[str, Any]:
@@ -163,7 +170,7 @@ def recovery_independent_bo_seed_manifest_v1() -> dict[str, Any]:
         "search_cell_count": EXPECTED_SEARCH_CELL_COUNT,
         "unique_budget_per_cell": EXPECTED_CELL_UNIQUE_BUDGET,
         "total_unique_budget": EXPECTED_UNIQUE_BUDGET,
-        "parallel_lanes": True,
+        "parallel_lanes": False,
     }
     manifest["manifest_sha256"] = canonical_sha256(manifest)
     return manifest
@@ -734,6 +741,12 @@ def validate_recovery_independent_bo_execution_authorization(
             != proposal.get("budget_contract_hash")
             or validated.get("authorization_basis")
             != "blanket_proposal_authorization_until_deadline"
+            or validated.get(
+                "blanket_authorization_expires_at"
+            )
+            != BLANKET_AUTHORIZATION_EXPIRES_AT
+            or validated.get("user_authorization")
+            != BLANKET_AUTHORIZATION_USER_TEXT
         ):
             raise RecoveryIndependentBOAuthorizationError(
                 "independent_bo_authorization_invalid"
@@ -744,7 +757,18 @@ def validate_recovery_independent_bo_execution_authorization(
         expires_at = datetime.fromisoformat(
             str(validated["blanket_authorization_expires_at"])
         )
-        if approved_at > expires_at:
+        if (
+            approved_at.tzinfo is None
+            or approved_at.utcoffset()
+            != datetime.fromisoformat(
+                BLANKET_AUTHORIZATION_EXPIRES_AT
+            ).utcoffset()
+            or expires_at
+            != datetime.fromisoformat(
+                BLANKET_AUTHORIZATION_EXPIRES_AT
+            )
+            or approved_at > expires_at
+        ):
             raise RecoveryIndependentBOAuthorizationError(
                 "independent_bo_authorization_invalid"
             )
@@ -1248,6 +1272,7 @@ def _execute_search_cell(
                 item=item,
                 numerical_runner=run_stage_r_numerical_identity,
                 spectral_audit_dir=spectral_dir,
+                allow_retry=False,
             )
             metrics = _mapping(
                 "independent_bo_result_metrics",
