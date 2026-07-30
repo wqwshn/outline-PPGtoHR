@@ -6,8 +6,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from ppg_hr.v2 import recovery_stage_r_experiment as stage_r_module
 from ppg_hr.v2 import recovery_stage_r_rank1_replan as replan_module
-from ppg_hr.v2.phase2_experiment_io import atomic_write_json, read_json
+from ppg_hr.v2.phase2_experiment_io import (
+    atomic_write_json,
+    file_sha256,
+    read_json,
+)
 from ppg_hr.v2.recovery_contracts import canonical_sha256
 from ppg_hr.v2.recovery_experiment_governance import (
     AttemptRegistry,
@@ -28,6 +33,7 @@ from ppg_hr.v2.recovery_stage_r_rank1_replan import (
     execute_stage_r_rank1_replan,
     prepare_stage_r_rank1_replan_governance,
     propose_stage_r_rank1_replan,
+    publish_stage_r_rank1_failure_receipt,
     validate_stage_r_rank1_execution_authorization,
 )
 from ppg_hr.v2.solver import V2SolverResult
@@ -57,11 +63,17 @@ def _proposal(
     baseline_manifest: dict[str, object] | None = None,
     baseline_metrics: dict[str, object] | None = None,
     penalty_registry: dict[str, object] | None = None,
+    proposal_generation: int = 1,
+    runtime_failure_context: dict[str, object] | None = None,
 ) -> dict[str, object]:
     metric = stage_r_metric_contract_v1()
     spectral = stage_r_spectral_gate_contract_v2()
     selection = recovery_selection_contract_rank1_replan_v1()
-    budget = BudgetContract.proposed_v11_stage_r_rank1_replan()
+    budget = (
+        BudgetContract.proposed_v11_stage_r_rank1_replan()
+        if proposal_generation == 1
+        else BudgetContract.proposed_v12_stage_r_rank1_runtime_fix()
+    )
     return build_stage_r_rank1_replan_proposal(
         rank1_proposal=read_json(
             RANK1_PROPOSAL_DIR / "rank1_filter_revision_proposal.json"
@@ -116,18 +128,34 @@ def _proposal(
             )
         ),
         parent_experiment_id="lyx-recovery-filter-profile-v1",
-        solver_hash="a" * 64,
-        evaluation_hash="b" * 64,
+        solver_hash=("a" if proposal_generation == 1 else "c") * 64,
+        evaluation_hash=(
+            "b" if proposal_generation == 1 else "d"
+        )
+        * 64,
         metric_contract_hash=metric["contract_sha256"],
         spectral_gate_contract_hash=spectral["contract_sha256"],
         selection_contract_hash=selection["contract_sha256"],
         budget_contract_hash=budget.sha256,
+        proposal_generation=proposal_generation,
+        runtime_failure_context=runtime_failure_context,
     )
 
 
 def _authorization(proposal: dict[str, object]) -> dict[str, object]:
     frozen = proposal["frozen_contracts"]
-    return {
+    generation = (
+        1
+        if proposal["proposal_version"]
+        == "lyx_stage_r_rank1_replan_proposal_v1"
+        else 2
+    )
+    target_budget = (
+        BudgetContract.proposed_v11_stage_r_rank1_replan()
+        if generation == 1
+        else BudgetContract.proposed_v12_stage_r_rank1_runtime_fix()
+    )
+    receipt = {
         "approved": True,
         "decision_state": "awaiting_human_budget_decision",
         "proposal_sha256": proposal["proposal_sha256"],
@@ -135,9 +163,11 @@ def _authorization(proposal: dict[str, object]) -> dict[str, object]:
         "profile_design_rule_hash": frozen["selection_contract_hash"],
         "record_manifest_hash": proposal["record_panel_sha256"],
         "added_unique_identities": 36,
-        "normal_unique_identity_limit": 888,
-        "max_unique_identities": 900,
-        "max_attempts": 1800,
+        "normal_unique_identity_limit": (
+            target_budget.normal_unique_identity_limit
+        ),
+        "max_unique_identities": target_budget.max_unique_identities,
+        "max_attempts": target_budget.max_attempts,
         "budget_contract_hash": frozen["budget_contract_hash"],
         "identity_panel_sha256": proposal["identity_panel_sha256"],
         "baseline_identity_panel_sha256": proposal[
@@ -160,6 +190,56 @@ def _authorization(proposal: dict[str, object]) -> dict[str, object]:
         "approved_at": "2026-07-30T23:59:00+08:00",
         "approved_by": "user",
     }
+    if generation == 2:
+        receipt["superseded_proposal_sha256"] = proposal[
+            "runtime_failure_replacement"
+        ]["superseded_proposal_sha256"]
+    return receipt
+
+
+def _failure_context(
+    superseded_proposal: dict[str, object],
+) -> dict[str, object]:
+    context = {
+        "context_version": (
+            "lyx_stage_r_rank1_runtime_failure_context_v1"
+        ),
+        "superseded_proposal_sha256": superseded_proposal[
+            "proposal_sha256"
+        ],
+        "superseded_authorization_sha256": "1" * 64,
+        "source_governance_receipt_sha256": "2" * 64,
+        "source_attempt_registry_file_sha256": "3" * 64,
+        "source_exploration_registry_file_sha256": "5" * 64,
+        "failed_execution_binding_sha256": "4" * 64,
+        "failed_identity_sha256": superseded_proposal[
+            "identity_sha256"
+        ][0],
+        "original_identity_panel_sha256": superseded_proposal[
+            "identity_panel_sha256"
+        ],
+        "failed_record_id": superseded_proposal["identities"][0][
+            "record_id"
+        ],
+        "failed_recovery_candidate_id": superseded_proposal[
+            "identities"
+        ][0]["recovery_candidate_id"],
+        "failure_reason": (
+            "ValueError:invalid_recovery_sentinel_role"
+        ),
+        "failure_class": "post_solver_spectral_audit",
+        "failed_attempt_count": 1,
+        "succeeded_identity_count": 0,
+        "unattempted_identity_count": 35,
+        "solver_invocation_count": 1,
+        "persisted_numerical_result_count": 0,
+        "solver_output_reusable": False,
+        "replacement_identity_count": 36,
+        "original_identity_reuse_authorized": False,
+        "original_retry_authorized": False,
+    }
+    context["context_sha256"] = canonical_sha256(context)
+    return context
 
 
 def _publish_proposal(destination: Path) -> dict[str, object]:
@@ -268,6 +348,210 @@ def test_replan_proposal_freezes_only_36_new_formal_identities() -> None:
         and item["config"]["parameters"]["max_order"] == 1
         for item in identities
     )
+
+
+def test_runtime_fix_proposal_replaces_all_source_bound_identities() -> None:
+    superseded = _proposal()
+    replacement = _proposal(
+        proposal_generation=2,
+        runtime_failure_context=_failure_context(superseded),
+    )
+
+    assert replacement["proposal_version"] == (
+        "lyx_stage_r_rank1_replan_proposal_v2"
+    )
+    assert replacement["runtime_failure_replacement"][
+        "superseded_proposal_sha256"
+    ] == superseded["proposal_sha256"]
+    assert replacement["runtime_failure_replacement"][
+        "original_retry_authorized"
+    ] is False
+    assert len(replacement["identity_sha256"]) == 36
+    assert set(replacement["identity_sha256"]).isdisjoint(
+        superseded["identity_sha256"]
+    )
+    replan_module._validate_replacement_identity_panel(
+        replacement,
+        superseded_proposal=superseded,
+    )
+    assert replacement["frozen_contracts"][
+        "budget_contract_hash"
+    ] == BudgetContract.proposed_v12_stage_r_rank1_runtime_fix().sha256
+    assert validate_stage_r_rank1_execution_authorization(
+        replacement,
+        receipt=_authorization(replacement),
+    )["max_unique_identities"] == 936
+
+
+def test_runtime_fix_rejects_scientific_coordinate_drift() -> None:
+    superseded = _proposal()
+    replacement = _proposal(
+        proposal_generation=2,
+        runtime_failure_context=_failure_context(superseded),
+    )
+    replacement["identities"][0]["nominal_mu"] = 0.009
+
+    with pytest.raises(
+        replan_module.StageRRank1Error,
+        match="stage_r_rank1_replacement_coordinate_drift",
+    ):
+        replan_module._validate_replacement_identity_panel(
+            replacement,
+            superseded_proposal=superseded,
+        )
+
+
+def test_runtime_failure_receipt_freezes_exact_failed_attempt(
+    tmp_path: Path,
+) -> None:
+    proposal = _proposal()
+    authorization = _authorization(proposal)
+    proposal_path = tmp_path / "proposal.json"
+    authorization_path = tmp_path / "authorization.json"
+    atomic_write_json(proposal_path, proposal)
+    atomic_write_json(authorization_path, authorization)
+    budget = BudgetContract.proposed_v11_stage_r_rank1_replan()
+    exploration = ExplorationRegistry.zero_budget_v1()
+    governance = tmp_path / "governance"
+    atomic_write_json(
+        governance / "exploration_registry.json",
+        exploration.to_dict(),
+    )
+    registry = AttemptRegistry.create(
+        governance / "attempt_registry.json",
+        budget_contract=budget,
+        exploration_registry=exploration,
+    )
+    identities = tuple(
+        replan_module._identity_from_item(item)
+        for item in proposal["identities"]
+    )
+    registry.register_identities(identities)
+
+    def fail_after_solver() -> None:
+        raise ValueError("invalid_recovery_sentinel_role")
+
+    with pytest.raises(
+        ValueError,
+        match="invalid_recovery_sentinel_role",
+    ):
+        registry.execute_registered(
+            identities[0],
+            fail_after_solver,
+        )
+    governance_receipt = {
+        "receipt_version": (
+            "lyx_stage_r_rank1_replan_governance_v1"
+        ),
+        "status": "prepared_zero_runs",
+        "proposal_sha256": proposal["proposal_sha256"],
+        "authorization_sha256": canonical_sha256(authorization),
+        "target_budget_contract_hash": budget.sha256,
+    }
+    governance_receipt["receipt_sha256"] = canonical_sha256(
+        governance_receipt
+    )
+    governance_receipt_path = (
+        governance / "governance_receipt.json"
+    )
+    atomic_write_json(
+        governance_receipt_path,
+        governance_receipt,
+    )
+    atomic_write_json(
+        governance / "execution_authorization.json",
+        authorization,
+    )
+    binding = {
+        "binding_version": (
+            "lyx_stage_r_rank1_execution_binding_v1"
+        ),
+        "proposal_sha256": proposal["proposal_sha256"],
+        "authorization_sha256": canonical_sha256(authorization),
+        "solver_source_bundle_sha256": proposal[
+            "frozen_contracts"
+        ]["solver_hash"],
+        "evaluation_hash": proposal["frozen_contracts"][
+            "evaluation_hash"
+        ],
+    }
+    binding["binding_sha256"] = canonical_sha256(binding)
+    binding_path = tmp_path / "execution" / "execution_binding.json"
+    atomic_write_json(binding_path, binding)
+
+    receipt = publish_stage_r_rank1_failure_receipt(
+        superseded_proposal_path=proposal_path,
+        superseded_authorization_path=authorization_path,
+        source_governance_receipt_path=governance_receipt_path,
+        source_attempt_registry_path=(
+            governance / "attempt_registry.json"
+        ),
+        source_exploration_registry_path=(
+            governance / "exploration_registry.json"
+        ),
+        failed_execution_binding_path=binding_path,
+        output_path=tmp_path / "failure_receipt.json",
+    )
+
+    assert receipt["status"] == (
+        "failed_after_solver_before_result_persistence"
+    )
+    assert receipt["failed_identity_sha256"] == identities[0].sha256
+    assert receipt["failed_attempt_count"] == 1
+    assert receipt["unattempted_identity_count"] == 35
+    assert receipt["solver_invocation_count"] == 1
+    assert receipt["persisted_numerical_result_count"] == 0
+    assert receipt["solver_output_reusable"] is False
+    assert receipt["original_retry_authorized"] is False
+
+    replacement = _proposal(
+        proposal_generation=2,
+        runtime_failure_context=(
+            replan_module._runtime_failure_context_from_receipt(
+                receipt=receipt,
+                superseded_proposal=proposal,
+                superseded_authorization=authorization,
+                source_governance_receipt=governance_receipt,
+                failed_execution_binding=binding,
+                source_exploration_registry_file_sha256=(
+                    file_sha256(
+                        governance / "exploration_registry.json"
+                    )
+                ),
+            )
+        ),
+    )
+    resolved = {
+        "superseded_proposal": proposal_path,
+        "superseded_authorization": authorization_path,
+        "source_exploration_registry": (
+            governance / "exploration_registry.json"
+        ),
+        "failed_execution_binding": binding_path,
+        "runtime_failure_receipt": tmp_path / "failure_receipt.json",
+    }
+    replan_module._validate_v2_source_governance_state(
+        replacement,
+        source_dir=governance,
+        resolved=resolved,
+    )
+    drifted_exploration = exploration.to_dict()
+    drifted_exploration["unexpected_change"] = True
+    atomic_write_json(
+        governance / "exploration_registry.json",
+        drifted_exploration,
+    )
+    with pytest.raises(
+        replan_module.StageRRank1Error,
+        match=(
+            "stage_r_rank1_v11_registry_changed_after_failure_receipt"
+        ),
+    ):
+        replan_module._validate_v2_source_governance_state(
+            replacement,
+            source_dir=governance,
+            resolved=resolved,
+        )
 
 
 def test_replan_authorization_is_exact_and_keeps_bo_disabled() -> None:
@@ -419,6 +703,96 @@ def test_replan_right_censored_delay_uses_finite_window_fallback() -> None:
     ) == 37.0
 
 
+def test_rank1_spectral_audit_does_not_require_legacy_sentinel_role(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    identity = dict(_proposal()["identities"][0])
+    observed: dict[str, object] = {}
+
+    def fake_audit(
+        profile: object,
+        _record: object,
+        *,
+        contract: object,
+        reference_stage_limit: int | None,
+    ) -> dict[str, object]:
+        del contract
+        observed["profile"] = profile
+        observed["reference_stage_limit"] = reference_stage_limit
+        return {
+            "stability_pass": True,
+            "spectral_gate_pass": True,
+            "reference_stage_limit": reference_stage_limit,
+        }
+
+    monkeypatch.setattr(
+        stage_r_module,
+        "audit_stage_r_profile_record",
+        fake_audit,
+    )
+
+    audit = stage_r_module._load_or_run_spectral_audit(
+        identity,
+        spectral_audit_dir=tmp_path / "spectral",
+    )
+
+    profile = observed["profile"]
+    assert profile.profile_id == "p25-short-low-rank1-v1"
+    assert profile.recovery_sentinel_role is None
+    assert observed["reference_stage_limit"] == 1
+    assert audit["spectral_gate_pass"] is True
+
+
+def test_legacy_stage_r_spectral_audit_still_rejects_invalid_role(
+    tmp_path: Path,
+) -> None:
+    identity = dict(_proposal()["identities"][0])
+    identity["stage"] = "recovery_sentinel"
+    identity["sentinel_role"] = "fixed_rank1"
+
+    with pytest.raises(
+        ValueError,
+        match="invalid_recovery_sentinel_role",
+    ):
+        stage_r_module._load_or_run_spectral_audit(
+            identity,
+            spectral_audit_dir=tmp_path / "spectral",
+        )
+
+
+def test_stage_r_spectral_audit_runs_before_solver(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    identity = dict(_proposal()["identities"][0])
+
+    def fail_audit(*_args: object, **_kwargs: object) -> object:
+        raise ValueError("invalid_recovery_sentinel_role")
+
+    monkeypatch.setattr(
+        stage_r_module,
+        "_load_or_run_spectral_audit",
+        fail_audit,
+    )
+    monkeypatch.setattr(
+        stage_r_module,
+        "solve_v2",
+        lambda *_args, **_kwargs: pytest.fail(
+            "spectral audit failure must stop before solver"
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="invalid_recovery_sentinel_role",
+    ):
+        stage_r_module.run_stage_r_numerical_identity(
+            identity,
+            tmp_path / "spectral",
+        )
+
+
 def test_replan_fake_execution_is_recomputable_and_resumable(
     tmp_path: Path,
 ) -> None:
@@ -455,6 +829,39 @@ def test_replan_fake_execution_is_recomputable_and_resumable(
         source_governance_dir=source_governance,
         governance_dir=governance,
         source_root=ROOT / "python" / "src",
+    )
+    governance_receipt_path = governance / "governance_receipt.json"
+    valid_governance_receipt = read_json(governance_receipt_path)
+    tampered_governance_receipt = deepcopy(
+        valid_governance_receipt
+    )
+    tampered_governance_receipt["independent_bo_authorized"] = True
+    tampered_governance_receipt.pop("receipt_sha256")
+    tampered_governance_receipt["receipt_sha256"] = canonical_sha256(
+        tampered_governance_receipt
+    )
+    atomic_write_json(
+        governance_receipt_path,
+        tampered_governance_receipt,
+    )
+    with pytest.raises(
+        replan_module.StageRRank1Error,
+        match="stage_r_rank1_governance_receipt_mismatch",
+    ):
+        execute_stage_r_rank1_replan(
+            proposal_dir=proposal_dir,
+            authorization_receipt_path=authorization_path,
+            governance_dir=governance,
+            output_dir=tmp_path / "tampered_execution",
+            source_root=ROOT / "python" / "src",
+            numerical_runner=lambda *_args: pytest.fail(
+                "tampered governance must stop before solver"
+            ),
+        )
+    assert not (tmp_path / "tampered_execution").exists()
+    atomic_write_json(
+        governance_receipt_path,
+        valid_governance_receipt,
     )
     baseline = read_json(
         EXPERIMENT

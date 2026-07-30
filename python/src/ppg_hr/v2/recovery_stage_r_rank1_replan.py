@@ -66,9 +66,10 @@ _EXPECTED_SCENE_COUNTS = {
 _CONTROL_RECOVERY_ID = "current_fixed_floor_control_v1"
 _CONTROL_PENALTY_ID = "current_soft_penalty_control_v1"
 _SOURCE_SENTINEL_ROLE = "conservative"
-_PROPOSAL_ARTIFACT_NAMES = {
+_PROPOSAL_VERSION_V1 = "lyx_stage_r_rank1_replan_proposal_v1"
+_PROPOSAL_VERSION_V2 = "lyx_stage_r_rank1_replan_proposal_v2"
+_PROPOSAL_COMMON_ARTIFACT_NAMES = {
     "budget_amendment_request.json",
-    "budget_contract_v11.json",
     "metric_contract.json",
     "proposal_receipt.json",
     "recovery_selection_contract.json",
@@ -76,6 +77,61 @@ _PROPOSAL_ARTIFACT_NAMES = {
     "spectral_gate_contract.json",
     "stage_r_rank1_replan_proposal.json",
 }
+
+
+def _proposal_generation(proposal: Mapping[str, Any]) -> int:
+    version = proposal.get("proposal_version")
+    if version == _PROPOSAL_VERSION_V1:
+        return 1
+    if version == _PROPOSAL_VERSION_V2:
+        return 2
+    raise StageRRank1Error(
+        "stage_r_rank1_proposal_version_invalid"
+    )
+
+
+def _budget_contracts_for_generation(
+    generation: int,
+) -> tuple[BudgetContract, BudgetContract]:
+    if generation == 1:
+        return (
+            BudgetContract.proposed_v10_rank1_filter_revision(),
+            BudgetContract.proposed_v11_stage_r_rank1_replan(),
+        )
+    if generation == 2:
+        return (
+            BudgetContract.proposed_v11_stage_r_rank1_replan(),
+            BudgetContract.proposed_v12_stage_r_rank1_runtime_fix(),
+        )
+    raise StageRRank1Error(
+        "stage_r_rank1_proposal_generation_invalid"
+    )
+
+
+def _budget_filename(generation: int) -> str:
+    return f"budget_contract_v{10 + generation}.json"
+
+
+def _proposal_artifact_names(generation: int) -> set[str]:
+    return {
+        *_PROPOSAL_COMMON_ARTIFACT_NAMES,
+        _budget_filename(generation),
+    }
+
+
+def _budget_limits(
+    target: BudgetContract,
+) -> dict[str, int]:
+    normal = target.normal_unique_identity_limit
+    if normal is None:
+        raise StageRRank1Error(
+            "stage_r_rank1_normal_budget_missing"
+        )
+    return {
+        "normal_unique_identity_limit": normal,
+        "max_unique_identities": target.max_unique_identities,
+        "max_attempts": target.max_attempts,
+    }
 
 
 def _require_mapping(name: str, value: object) -> Mapping[str, Any]:
@@ -524,6 +580,81 @@ def _validate_prior_stage_r(
     }
 
 
+def _runtime_failure_context(
+    value: Mapping[str, Any] | None,
+    *,
+    proposal_generation: int,
+) -> dict[str, Any] | None:
+    if proposal_generation == 1:
+        if value is not None:
+            raise StageRRank1Error(
+                "stage_r_rank1_v1_runtime_failure_context_forbidden"
+            )
+        return None
+    if proposal_generation != 2 or value is None:
+        raise StageRRank1Error(
+            "stage_r_rank1_v2_runtime_failure_context_required"
+        )
+    context = dict(value)
+    _verify_embedded_hash(
+        context,
+        hash_field="context_sha256",
+        artifact_name="stage_r_rank1_runtime_failure_context",
+    )
+    expected = {
+        "context_version": (
+            "lyx_stage_r_rank1_runtime_failure_context_v1"
+        ),
+        "failure_reason": (
+            "ValueError:invalid_recovery_sentinel_role"
+        ),
+        "failure_class": "post_solver_spectral_audit",
+        "failed_attempt_count": 1,
+        "succeeded_identity_count": 0,
+        "unattempted_identity_count": 35,
+        "solver_invocation_count": 1,
+        "persisted_numerical_result_count": 0,
+        "solver_output_reusable": False,
+        "replacement_identity_count": 36,
+        "original_identity_reuse_authorized": False,
+        "original_retry_authorized": False,
+    }
+    mismatched = sorted(
+        name
+        for name, expected_value in expected.items()
+        if context.get(name) != expected_value
+    )
+    for name in (
+        "superseded_proposal_sha256",
+        "superseded_authorization_sha256",
+        "source_governance_receipt_sha256",
+        "source_attempt_registry_file_sha256",
+        "failed_execution_binding_sha256",
+        "failed_identity_sha256",
+        "original_identity_panel_sha256",
+        "source_exploration_registry_file_sha256",
+    ):
+        try:
+            require_sha256(name, str(context.get(name, "")))
+        except ValueError as error:
+            raise StageRRank1Error(
+                "stage_r_rank1_runtime_failure_hash_invalid:"
+                + name
+            ) from error
+    for name in (
+        "failed_record_id",
+        "failed_recovery_candidate_id",
+    ):
+        if not isinstance(context.get(name), str) or not context[name]:
+            mismatched.append(name)
+    if mismatched:
+        raise StageRRank1Error(
+            "stage_r_rank1_runtime_failure_context_mismatch:"
+            + ",".join(sorted(set(mismatched)))
+        )
+    return context
+
+
 def _identity_item(
     *,
     parent_experiment_id: str,
@@ -642,6 +773,8 @@ def build_stage_r_rank1_replan_proposal(
     spectral_gate_contract_hash: str,
     selection_contract_hash: str,
     budget_contract_hash: str,
+    proposal_generation: int = 1,
+    runtime_failure_context: Mapping[str, Any] | None = None,
     source_artifacts: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Build the exact 36-identity proposal without running a solver."""
@@ -662,6 +795,14 @@ def build_stage_r_rank1_replan_proposal(
         ("budget_contract_hash", budget_contract_hash),
     ):
         require_sha256(name, value)
+    if proposal_generation not in {1, 2}:
+        raise StageRRank1Error(
+            "stage_r_rank1_proposal_generation_invalid"
+        )
+    frozen_failure_context = _runtime_failure_context(
+        runtime_failure_context,
+        proposal_generation=proposal_generation,
+    )
     source_by_record, rank1_source = _validate_rank1_source(
         proposal=rank1_proposal,
         completion=rank1_completion,
@@ -819,7 +960,11 @@ def build_stage_r_rank1_replan_proposal(
         for record_id in sorted(source_by_record)
     ]
     proposal: dict[str, Any] = {
-        "proposal_version": "lyx_stage_r_rank1_replan_proposal_v1",
+        "proposal_version": (
+            _PROPOSAL_VERSION_V1
+            if proposal_generation == 1
+            else _PROPOSAL_VERSION_V2
+        ),
         "status": "awaiting_human_execution_authorization",
         "authorization_state": _AUTHORIZATION_STATE,
         "parent_experiment_id": parent_experiment_id,
@@ -881,6 +1026,10 @@ def build_stage_r_rank1_replan_proposal(
         ),
         "identities": identities,
     }
+    if frozen_failure_context is not None:
+        proposal["runtime_failure_replacement"] = (
+            frozen_failure_context
+        )
     if source_artifacts is not None:
         proposal["source_artifacts"] = {
             str(name): dict(value)
@@ -910,6 +1059,11 @@ def validate_stage_r_rank1_execution_authorization(
         "stage_r_rank1_frozen_contracts",
         proposal.get("frozen_contracts"),
     )
+    generation = _proposal_generation(proposal)
+    _source_budget, target_budget = (
+        _budget_contracts_for_generation(generation)
+    )
+    limits = _budget_limits(target_budget)
     expected = {
         "decision_state": _AUTHORIZATION_STATE,
         "proposal_sha256": proposal_sha,
@@ -921,9 +1075,7 @@ def validate_stage_r_rank1_execution_authorization(
             "record_panel_sha256"
         ),
         "added_unique_identities": 36,
-        "normal_unique_identity_limit": 888,
-        "max_unique_identities": 900,
-        "max_attempts": 1800,
+        **limits,
         "budget_contract_hash": frozen.get(
             "budget_contract_hash"
         ),
@@ -952,6 +1104,14 @@ def validate_stage_r_rank1_execution_authorization(
         "automatic_stage_f_execution": False,
         "may_nominate_recovery_candidate": True,
     }
+    if generation == 2:
+        failure = _require_mapping(
+            "stage_r_rank1_runtime_failure_replacement",
+            proposal.get("runtime_failure_replacement"),
+        )
+        expected["superseded_proposal_sha256"] = failure.get(
+            "superseded_proposal_sha256"
+        )
     mismatched = sorted(
         name
         for name, value in expected.items()
@@ -1038,6 +1198,517 @@ def _load_rank1_result_artifacts(
     return results
 
 
+def _build_runtime_failure_receipt(
+    *,
+    superseded_proposal_path: Path,
+    superseded_authorization_path: Path,
+    source_governance_receipt_path: Path,
+    source_attempt_registry_path: Path,
+    source_exploration_registry_path: Path,
+    failed_execution_binding_path: Path,
+) -> dict[str, Any]:
+    proposal = read_json(superseded_proposal_path)
+    if _proposal_generation(proposal) != 1:
+        raise StageRRank1Error(
+            "stage_r_rank1_superseded_proposal_not_v1"
+        )
+    authorization = validate_stage_r_rank1_execution_authorization(
+        proposal,
+        receipt=read_json(superseded_authorization_path),
+    )
+    authorization_sha = canonical_sha256(authorization)
+    governance_receipt = read_json(source_governance_receipt_path)
+    governance_receipt_sha = _verify_embedded_hash(
+        governance_receipt,
+        hash_field="receipt_sha256",
+        artifact_name="stage_r_rank1_source_governance_receipt",
+    )
+    source_budget = BudgetContract.proposed_v11_stage_r_rank1_replan()
+    if (
+        governance_receipt.get("proposal_sha256")
+        != proposal["proposal_sha256"]
+        or governance_receipt.get("authorization_sha256")
+        != authorization_sha
+        or governance_receipt.get("status") != "prepared_zero_runs"
+        or governance_receipt.get("target_budget_contract_hash")
+        != source_budget.sha256
+    ):
+        raise StageRRank1Error(
+            "stage_r_rank1_source_governance_receipt_mismatch"
+        )
+    exploration_payload = read_json(
+        source_exploration_registry_path
+    )
+    exploration = _exploration_from_payload(exploration_payload)
+    registry = AttemptRegistry.open(
+        source_attempt_registry_path,
+        budget_contract=source_budget,
+        exploration_registry=exploration,
+    )
+    raw_identities = tuple(
+        dict(
+            _require_mapping(
+                "stage_r_rank1_superseded_identity",
+                item,
+            )
+        )
+        for item in _require_list(
+            "stage_r_rank1_superseded_identities",
+            proposal.get("identities"),
+        )
+    )
+    identities = tuple(
+        _identity_from_item(item) for item in raw_identities
+    )
+    summary = registry.matrix_execution_summary(identities)
+    if (
+        summary["planned_identity_count"] != 36
+        or summary["failed_attempt_count"] != 1
+        or summary["retry_count"] != 0
+        or summary["identity_with_solver_attempt_count"] != 1
+        or summary["cache_only_identity_count"] != 0
+    ):
+        raise StageRRank1Error(
+            "stage_r_rank1_source_failure_summary_mismatch"
+        )
+    registry_payload = read_json(source_attempt_registry_path)
+    entries = _require_mapping(
+        "stage_r_rank1_source_attempt_entries",
+        registry_payload.get("entries"),
+    )
+    failed: list[
+        tuple[dict[str, Any], Mapping[str, Any], Mapping[str, Any]]
+    ] = []
+    for item, identity in zip(
+        raw_identities,
+        identities,
+        strict=True,
+    ):
+        entry = _require_mapping(
+            "stage_r_rank1_source_attempt_entry",
+            entries.get(identity.sha256),
+        )
+        attempts = _require_list(
+            "stage_r_rank1_source_attempts",
+            entry.get("attempts"),
+        )
+        cache_evidence = _require_list(
+            "stage_r_rank1_source_cache_evidence",
+            entry.get("cache_evidence"),
+        )
+        if entry.get("status") == "failed":
+            if len(attempts) != 1 or cache_evidence:
+                raise StageRRank1Error(
+                    "stage_r_rank1_failed_entry_shape_mismatch"
+                )
+            failed.append(
+                (
+                    item,
+                    entry,
+                    _require_mapping(
+                        "stage_r_rank1_failed_attempt",
+                        attempts[0],
+                    ),
+                )
+            )
+        elif (
+            entry.get("status") != "registered"
+            or attempts
+            or cache_evidence
+        ):
+            raise StageRRank1Error(
+                "stage_r_rank1_unattempted_entry_mismatch:"
+                + identity.sha256
+            )
+    if len(failed) != 1:
+        raise StageRRank1Error(
+            "stage_r_rank1_failed_identity_count_mismatch"
+        )
+    failed_item, _failed_entry, failed_attempt = failed[0]
+    if (
+        failed_attempt.get("status") != "failed"
+        or failed_attempt.get("attempt_number") != 1
+        or failed_attempt.get("failure_reason")
+        != "ValueError:invalid_recovery_sentinel_role"
+    ):
+        raise StageRRank1Error(
+            "stage_r_rank1_failed_attempt_mismatch"
+        )
+    binding = read_json(failed_execution_binding_path)
+    binding_sha = _verify_embedded_hash(
+        binding,
+        hash_field="binding_sha256",
+        artifact_name="stage_r_rank1_failed_execution_binding",
+    )
+    if (
+        binding.get("proposal_sha256")
+        != proposal["proposal_sha256"]
+        or binding.get("authorization_sha256")
+        != authorization_sha
+    ):
+        raise StageRRank1Error(
+            "stage_r_rank1_failed_execution_binding_mismatch"
+        )
+    execution_root = failed_execution_binding_path.parent
+    if any(
+        (execution_root / name).exists()
+        for name in (
+            "completion.json",
+            "identity_result_index.json",
+            "formal_candidate_evaluations.json",
+            "recovery_selection.json",
+        )
+    ):
+        raise StageRRank1Error(
+            "stage_r_rank1_failed_execution_has_results"
+        )
+    receipt: dict[str, Any] = {
+        "receipt_version": (
+            "lyx_stage_r_rank1_runtime_failure_receipt_v1"
+        ),
+        "status": "failed_after_solver_before_result_persistence",
+        "context_version": (
+            "lyx_stage_r_rank1_runtime_failure_context_v1"
+        ),
+        "superseded_proposal_sha256": proposal[
+            "proposal_sha256"
+        ],
+        "superseded_authorization_sha256": authorization_sha,
+        "source_governance_receipt_sha256": (
+            governance_receipt_sha
+        ),
+        "source_attempt_registry_file_sha256": file_sha256(
+            source_attempt_registry_path
+        ),
+        "source_exploration_registry_file_sha256": file_sha256(
+            source_exploration_registry_path
+        ),
+        "failed_execution_binding_sha256": binding_sha,
+        "failed_identity_sha256": failed_item["identity_sha256"],
+        "original_identity_panel_sha256": proposal[
+            "identity_panel_sha256"
+        ],
+        "failed_record_id": failed_item["record_id"],
+        "failed_recovery_candidate_id": failed_item[
+            "recovery_candidate_id"
+        ],
+        "failure_reason": (
+            "ValueError:invalid_recovery_sentinel_role"
+        ),
+        "failure_class": "post_solver_spectral_audit",
+        "failed_attempt_count": 1,
+        "succeeded_identity_count": 0,
+        "unattempted_identity_count": 35,
+        "solver_invocation_count": 1,
+        "persisted_numerical_result_count": 0,
+        "solver_output_reusable": False,
+        "replacement_identity_count": 36,
+        "original_identity_reuse_authorized": False,
+        "original_retry_authorized": False,
+    }
+    receipt["receipt_sha256"] = canonical_sha256(receipt)
+    return receipt
+
+
+def _runtime_failure_context_from_receipt(
+    *,
+    receipt: Mapping[str, Any],
+    superseded_proposal: Mapping[str, Any],
+    superseded_authorization: Mapping[str, Any],
+    source_governance_receipt: Mapping[str, Any],
+    failed_execution_binding: Mapping[str, Any],
+    source_exploration_registry_file_sha256: str,
+) -> dict[str, Any]:
+    frozen_receipt = dict(receipt)
+    _verify_embedded_hash(
+        frozen_receipt,
+        hash_field="receipt_sha256",
+        artifact_name="stage_r_rank1_runtime_failure_receipt",
+    )
+    if (
+        frozen_receipt.get("receipt_version")
+        != "lyx_stage_r_rank1_runtime_failure_receipt_v1"
+        or frozen_receipt.get("status")
+        != "failed_after_solver_before_result_persistence"
+    ):
+        raise StageRRank1Error(
+            "stage_r_rank1_runtime_failure_receipt_invalid"
+        )
+    proposal_sha = _verify_embedded_hash(
+        superseded_proposal,
+        hash_field="proposal_sha256",
+        artifact_name="stage_r_rank1_superseded_proposal",
+    )
+    authorization = validate_stage_r_rank1_execution_authorization(
+        superseded_proposal,
+        receipt=superseded_authorization,
+    )
+    governance_sha = _verify_embedded_hash(
+        source_governance_receipt,
+        hash_field="receipt_sha256",
+        artifact_name="stage_r_rank1_source_governance_receipt",
+    )
+    binding_sha = _verify_embedded_hash(
+        failed_execution_binding,
+        hash_field="binding_sha256",
+        artifact_name="stage_r_rank1_failed_execution_binding",
+    )
+    expected = {
+        "superseded_proposal_sha256": proposal_sha,
+        "superseded_authorization_sha256": canonical_sha256(
+            authorization
+        ),
+        "source_governance_receipt_sha256": governance_sha,
+        "failed_execution_binding_sha256": binding_sha,
+        "source_exploration_registry_file_sha256": (
+            source_exploration_registry_file_sha256
+        ),
+    }
+    mismatched = sorted(
+        name
+        for name, expected_value in expected.items()
+        if frozen_receipt.get(name) != expected_value
+    )
+    if mismatched:
+        raise StageRRank1Error(
+            "stage_r_rank1_runtime_failure_receipt_source_mismatch:"
+            + ",".join(mismatched)
+        )
+    context = {
+        key: value
+        for key, value in frozen_receipt.items()
+        if key
+        not in {
+            "receipt_version",
+            "receipt_sha256",
+            "status",
+        }
+    }
+    context["context_sha256"] = canonical_sha256(context)
+    return _runtime_failure_context(
+        context,
+        proposal_generation=2,
+    ) or {}
+
+
+def publish_stage_r_rank1_failure_receipt(
+    *,
+    superseded_proposal_path: Path,
+    superseded_authorization_path: Path,
+    source_governance_receipt_path: Path,
+    source_attempt_registry_path: Path,
+    source_exploration_registry_path: Path,
+    failed_execution_binding_path: Path,
+    output_path: Path,
+) -> dict[str, Any]:
+    """Freeze one failed-closed orchestration attempt for replacement."""
+
+    receipt = _build_runtime_failure_receipt(
+        superseded_proposal_path=Path(
+            superseded_proposal_path
+        ).resolve(),
+        superseded_authorization_path=Path(
+            superseded_authorization_path
+        ).resolve(),
+        source_governance_receipt_path=Path(
+            source_governance_receipt_path
+        ).resolve(),
+        source_attempt_registry_path=Path(
+            source_attempt_registry_path
+        ).resolve(),
+        source_exploration_registry_path=Path(
+            source_exploration_registry_path
+        ).resolve(),
+        failed_execution_binding_path=Path(
+            failed_execution_binding_path
+        ).resolve(),
+    )
+    destination = Path(output_path).resolve()
+    if destination.exists():
+        if read_json(destination) != receipt:
+            raise StageRRank1Error(
+                "stage_r_rank1_failure_receipt_exists_mismatch"
+            )
+        return receipt
+    atomic_write_json(destination, receipt)
+    return receipt
+
+
+def _validate_replacement_identity_panel(
+    proposal: Mapping[str, Any],
+    *,
+    superseded_proposal: Mapping[str, Any],
+) -> None:
+    if _proposal_generation(proposal) != 2:
+        raise StageRRank1Error(
+            "stage_r_rank1_replacement_proposal_not_v2"
+        )
+    superseded_sha = _verify_embedded_hash(
+        superseded_proposal,
+        hash_field="proposal_sha256",
+        artifact_name="stage_r_rank1_superseded_proposal",
+    )
+    old_hashes = _require_list(
+        "stage_r_rank1_superseded_identity_hashes",
+        superseded_proposal.get("identity_sha256"),
+    )
+    new_hashes = _require_list(
+        "stage_r_rank1_replacement_identity_hashes",
+        proposal.get("identity_sha256"),
+    )
+    old_items = tuple(
+        dict(
+            _require_mapping(
+                "stage_r_rank1_superseded_identity",
+                item,
+            )
+        )
+        for item in _require_list(
+            "stage_r_rank1_superseded_identities",
+            superseded_proposal.get("identities"),
+        )
+    )
+    new_items = tuple(
+        dict(
+            _require_mapping(
+                "stage_r_rank1_replacement_identity",
+                item,
+            )
+        )
+        for item in _require_list(
+            "stage_r_rank1_replacement_identities",
+            proposal.get("identities"),
+        )
+    )
+    failure = _require_mapping(
+        "stage_r_rank1_runtime_failure_replacement",
+        proposal.get("runtime_failure_replacement"),
+    )
+    if (
+        _proposal_generation(superseded_proposal) != 1
+        or len(old_hashes) != 36
+        or len(set(old_hashes)) != 36
+        or canonical_sha256(old_hashes)
+        != superseded_proposal.get("identity_panel_sha256")
+        or len(old_items) != 36
+        or len(new_hashes) != 36
+        or len(set(new_hashes)) != 36
+        or len(new_items) != 36
+        or set(old_hashes).intersection(new_hashes)
+        or failure.get("superseded_proposal_sha256")
+        != superseded_sha
+        or failure.get("original_identity_panel_sha256")
+        != superseded_proposal.get("identity_panel_sha256")
+        or failure.get("failed_identity_sha256") not in old_hashes
+    ):
+        raise StageRRank1Error(
+            "stage_r_rank1_replacement_identity_panel_mismatch"
+        )
+
+    def identity_key(item: Mapping[str, Any]) -> tuple[str, str]:
+        return (
+            str(item.get("recovery_candidate_id", "")),
+            str(item.get("record_id", "")),
+        )
+
+    old_by_coordinate = {
+        identity_key(item): item for item in old_items
+    }
+    new_by_coordinate = {
+        identity_key(item): item for item in new_items
+    }
+    if (
+        len(old_by_coordinate) != 36
+        or len(new_by_coordinate) != 36
+        or set(old_by_coordinate) != set(new_by_coordinate)
+    ):
+        raise StageRRank1Error(
+            "stage_r_rank1_replacement_coordinate_set_mismatch"
+        )
+    source_bound_fields = {
+        "solver_hash",
+        "evaluation_hash",
+        "identity_sha256",
+        "cache_identity_sha256",
+    }
+    for coordinate, old_item in old_by_coordinate.items():
+        new_item = new_by_coordinate[coordinate]
+        old_scientific = {
+            name: value
+            for name, value in old_item.items()
+            if name not in source_bound_fields
+        }
+        new_scientific = {
+            name: value
+            for name, value in new_item.items()
+            if name not in source_bound_fields
+        }
+        if old_scientific != new_scientific:
+            raise StageRRank1Error(
+                "stage_r_rank1_replacement_coordinate_drift:"
+                + ":".join(coordinate)
+            )
+        if (
+            old_item.get("solver_hash")
+            == new_item.get("solver_hash")
+            or old_item.get("evaluation_hash")
+            == new_item.get("evaluation_hash")
+        ):
+            raise StageRRank1Error(
+                "stage_r_rank1_replacement_source_hash_not_changed:"
+                + ":".join(coordinate)
+            )
+
+    old_frozen = dict(
+        _require_mapping(
+            "stage_r_rank1_superseded_frozen_contracts",
+            superseded_proposal.get("frozen_contracts"),
+        )
+    )
+    new_frozen = dict(
+        _require_mapping(
+            "stage_r_rank1_replacement_frozen_contracts",
+            proposal.get("frozen_contracts"),
+        )
+    )
+    for name in (
+        "solver_hash",
+        "evaluation_hash",
+        "budget_contract_hash",
+    ):
+        old_frozen.pop(name, None)
+        new_frozen.pop(name, None)
+    if old_frozen != new_frozen:
+        raise StageRRank1Error(
+            "stage_r_rank1_replacement_frozen_contract_drift"
+        )
+
+    bookkeeping_fields = {
+        "proposal_version",
+        "proposal_sha256",
+        "source_artifacts",
+        "frozen_contracts",
+        "identities",
+        "identity_sha256",
+        "identity_panel_sha256",
+        "runtime_failure_replacement",
+    }
+    old_scientific_proposal = {
+        name: value
+        for name, value in superseded_proposal.items()
+        if name not in bookkeeping_fields
+    }
+    new_scientific_proposal = {
+        name: value
+        for name, value in proposal.items()
+        if name not in bookkeeping_fields
+    }
+    if old_scientific_proposal != new_scientific_proposal:
+        raise StageRRank1Error(
+            "stage_r_rank1_replacement_proposal_contract_drift"
+        )
+
+
 def propose_stage_r_rank1_replan(
     *,
     rank1_proposal_path: Path,
@@ -1055,6 +1726,12 @@ def propose_stage_r_rank1_replan(
     output_dir: Path,
     source_root: Path,
     parent_experiment_id: str,
+    superseded_proposal_path: Path | None = None,
+    superseded_authorization_path: Path | None = None,
+    source_governance_receipt_path: Path | None = None,
+    source_exploration_registry_path: Path | None = None,
+    failed_execution_binding_path: Path | None = None,
+    runtime_failure_receipt_path: Path | None = None,
 ) -> dict[str, Any]:
     """Publish an atomic zero-run proposal awaiting exact approval."""
 
@@ -1084,25 +1761,102 @@ def propose_stage_r_rank1_replan(
         ).resolve(),
         "experiment_spec": Path(spec_path).resolve(),
     }
+    destination = Path(output_dir).resolve()
+    if destination.exists():
+        raise StageRRank1Error(
+            "stage_r_rank1_destination_exists"
+        )
+    source_budget_payload = read_json(
+        artifacts["source_budget_contract"]
+    )
+    if (
+        source_budget_payload
+        == BudgetContract.proposed_v10_rank1_filter_revision().to_dict()
+    ):
+        proposal_generation = 1
+    elif (
+        source_budget_payload
+        == BudgetContract.proposed_v11_stage_r_rank1_replan().to_dict()
+    ):
+        proposal_generation = 2
+    else:
+        raise StageRRank1Error(
+            "stage_r_rank1_source_budget_mismatch"
+        )
+    source_budget, target_budget = (
+        _budget_contracts_for_generation(proposal_generation)
+    )
+    optional_failure_paths = {
+        "superseded_proposal": superseded_proposal_path,
+        "superseded_authorization": (
+            superseded_authorization_path
+        ),
+        "source_governance_receipt": (
+            source_governance_receipt_path
+        ),
+        "source_exploration_registry": (
+            source_exploration_registry_path
+        ),
+        "failed_execution_binding": (
+            failed_execution_binding_path
+        ),
+        "runtime_failure_receipt": (
+            runtime_failure_receipt_path
+        ),
+    }
+    if proposal_generation == 1:
+        if any(
+            path is not None
+            for path in optional_failure_paths.values()
+        ):
+            raise StageRRank1Error(
+                "stage_r_rank1_v1_failure_sources_forbidden"
+            )
+        runtime_failure_context = None
+    else:
+        missing_names = [
+            name
+            for name, path in optional_failure_paths.items()
+            if path is None
+        ]
+        if missing_names:
+            raise StageRRank1Error(
+                "stage_r_rank1_v2_failure_sources_missing:"
+                + ",".join(missing_names)
+            )
+        for name, path in optional_failure_paths.items():
+            assert path is not None
+            artifacts[name] = Path(path).resolve()
+        runtime_failure_context = (
+            _runtime_failure_context_from_receipt(
+                receipt=read_json(
+                    artifacts["runtime_failure_receipt"]
+                ),
+                superseded_proposal=read_json(
+                    artifacts["superseded_proposal"]
+                ),
+                superseded_authorization=read_json(
+                    artifacts["superseded_authorization"]
+                ),
+                source_governance_receipt=read_json(
+                    artifacts["source_governance_receipt"]
+                ),
+                failed_execution_binding=read_json(
+                    artifacts["failed_execution_binding"]
+                ),
+                source_exploration_registry_file_sha256=(
+                    file_sha256(
+                        artifacts["source_exploration_registry"]
+                    )
+                ),
+            )
+        )
     missing = [
         name for name, path in artifacts.items() if not path.is_file()
     ]
     if missing:
         raise StageRRank1Error(
             "stage_r_rank1_source_missing:" + ",".join(missing)
-        )
-    destination = Path(output_dir).resolve()
-    if destination.exists():
-        raise StageRRank1Error(
-            "stage_r_rank1_destination_exists"
-        )
-    source_budget = BudgetContract.proposed_v10_rank1_filter_revision()
-    if (
-        read_json(artifacts["source_budget_contract"])
-        != source_budget.to_dict()
-    ):
-        raise StageRRank1Error(
-            "stage_r_rank1_source_budget_mismatch"
         )
     rank1_results = _load_rank1_result_artifacts(
         manifest_path=artifacts["rank1_manifest"],
@@ -1129,7 +1883,6 @@ def propose_stage_r_rank1_replan(
     metric = stage_r_metric_contract_v1()
     spectral = stage_r_spectral_gate_contract_v2()
     selection = recovery_selection_contract_rank1_replan_v1()
-    target_budget = BudgetContract.proposed_v11_stage_r_rank1_replan()
     proposal = build_stage_r_rank1_replan_proposal(
         rank1_proposal=read_json(artifacts["rank1_proposal"]),
         rank1_completion=read_json(artifacts["rank1_completion"]),
@@ -1165,11 +1918,22 @@ def propose_stage_r_rank1_replan(
             selection["contract_sha256"]
         ),
         budget_contract_hash=target_budget.sha256,
+        proposal_generation=proposal_generation,
+        runtime_failure_context=runtime_failure_context,
         source_artifacts=source_artifacts,
     )
+    if proposal_generation == 2:
+        _validate_replacement_identity_panel(
+            proposal,
+            superseded_proposal=read_json(
+                artifacts["superseded_proposal"]
+            ),
+        )
+    limits = _budget_limits(target_budget)
     request: dict[str, Any] = {
         "request_version": (
-            "lyx_stage_r_rank1_replan_budget_request_v1"
+            "lyx_stage_r_rank1_replan_budget_request_v"
+            + str(proposal_generation)
         ),
         "status": "awaiting_human_budget_decision",
         "approved": False,
@@ -1184,9 +1948,7 @@ def propose_stage_r_rank1_replan(
             "record_panel_sha256"
         ],
         "added_unique_identities": 36,
-        "normal_unique_identity_limit": 888,
-        "max_unique_identities": 900,
-        "max_attempts": 1800,
+        **limits,
         "retry_limit": 1,
         "budget_contract_hash": target_budget.sha256,
         "identity_panel_sha256": proposal[
@@ -1212,10 +1974,15 @@ def propose_stage_r_rank1_replan(
         "automatic_stage_f_execution": False,
         "may_nominate_recovery_candidate": True,
     }
+    if runtime_failure_context is not None:
+        request["superseded_proposal_sha256"] = (
+            runtime_failure_context["superseded_proposal_sha256"]
+        )
     request["request_sha256"] = canonical_sha256(request)
     receipt: dict[str, Any] = {
         "receipt_version": (
-            "lyx_stage_r_rank1_replan_proposal_receipt_v1"
+            "lyx_stage_r_rank1_replan_proposal_receipt_v"
+            + str(proposal_generation)
         ),
         "status": "awaiting_human_execution_authorization",
         "proposal_sha256": proposal["proposal_sha256"],
@@ -1249,7 +2016,7 @@ def propose_stage_r_rank1_replan(
             selection,
         )
         atomic_write_json(
-            staging / "budget_contract_v11.json",
+            staging / _budget_filename(proposal_generation),
             target_budget.to_dict(),
         )
         atomic_write_json(
@@ -1263,7 +2030,7 @@ def propose_stage_r_rank1_replan(
         receipt["artifact_sha256"] = {
             name: file_sha256(staging / name)
             for name in sorted(
-                _PROPOSAL_ARTIFACT_NAMES
+                _proposal_artifact_names(proposal_generation)
                 - {"proposal_receipt.json"}
             )
         }
@@ -1357,6 +2124,7 @@ def _validate_proposal_preflight(
     proposal = read_json(
         proposal_root / "stage_r_rank1_replan_proposal.json"
     )
+    proposal_generation = _proposal_generation(proposal)
     proposal_sha = _verify_embedded_hash(
         proposal,
         hash_field="proposal_sha256",
@@ -1372,7 +2140,9 @@ def _validate_proposal_preflight(
         "stage_r_rank1_proposal_artifact_hashes",
         receipt.get("artifact_sha256"),
     )
-    expected_artifacts = _PROPOSAL_ARTIFACT_NAMES - {
+    expected_artifacts = _proposal_artifact_names(
+        proposal_generation
+    ) - {
         "proposal_receipt.json"
     }
     if set(artifact_hashes) != expected_artifacts:
@@ -1389,6 +2159,12 @@ def _validate_proposal_preflight(
                 "stage_r_rank1_proposal_artifact_mismatch:" + name
             )
     if (
+        receipt.get("receipt_version")
+        != (
+            "lyx_stage_r_rank1_replan_proposal_receipt_v"
+            + str(proposal_generation)
+        )
+        or
         receipt.get("proposal_sha256") != proposal_sha
         or receipt.get("identity_count") != 36
         or receipt.get("diagnostic_run_count") != 0
@@ -1423,7 +2199,9 @@ def _validate_proposal_preflight(
     metric = stage_r_metric_contract_v1()
     spectral = stage_r_spectral_gate_contract_v2()
     selection = recovery_selection_contract_rank1_replan_v1()
-    target_budget = BudgetContract.proposed_v11_stage_r_rank1_replan()
+    source_budget, target_budget = (
+        _budget_contracts_for_generation(proposal_generation)
+    )
     if (
         canonical_sha256(
             read_json(proposal_root / "metric_contract.json")
@@ -1443,7 +2221,8 @@ def _validate_proposal_preflight(
         != canonical_sha256(selection)
         or canonical_sha256(
             read_json(
-                proposal_root / "budget_contract_v11.json"
+                proposal_root
+                / _budget_filename(proposal_generation)
             )
         )
         != canonical_sha256(target_budget.to_dict())
@@ -1476,6 +2255,17 @@ def _validate_proposal_preflight(
             )
         ),
     }
+    if proposal_generation == 2:
+        required_source_names.update(
+            {
+                "superseded_proposal",
+                "superseded_authorization",
+                "source_governance_receipt",
+                "source_exploration_registry",
+                "failed_execution_binding",
+                "runtime_failure_receipt",
+            }
+        )
     if set(resolved) != required_source_names:
         raise StageRRank1Error(
             "stage_r_rank1_source_artifact_set_mismatch"
@@ -1493,6 +2283,35 @@ def _validate_proposal_preflight(
     frozen = _require_mapping(
         "stage_r_rank1_frozen_contracts",
         proposal.get("frozen_contracts"),
+    )
+    if (
+        read_json(resolved["source_budget_contract"])
+        != source_budget.to_dict()
+    ):
+        raise StageRRank1Error(
+            "stage_r_rank1_resolved_source_budget_mismatch"
+        )
+    runtime_failure_context = (
+        None
+        if proposal_generation == 1
+        else _runtime_failure_context_from_receipt(
+            receipt=read_json(resolved["runtime_failure_receipt"]),
+            superseded_proposal=read_json(
+                resolved["superseded_proposal"]
+            ),
+            superseded_authorization=read_json(
+                resolved["superseded_authorization"]
+            ),
+            source_governance_receipt=read_json(
+                resolved["source_governance_receipt"]
+            ),
+            failed_execution_binding=read_json(
+                resolved["failed_execution_binding"]
+            ),
+            source_exploration_registry_file_sha256=file_sha256(
+                resolved["source_exploration_registry"]
+            ),
+        )
     )
     rebuilt = build_stage_r_rank1_replan_proposal(
         rank1_proposal=read_json(resolved["rank1_proposal"]),
@@ -1525,6 +2344,8 @@ def _validate_proposal_preflight(
             frozen["selection_contract_hash"]
         ),
         budget_contract_hash=str(frozen["budget_contract_hash"]),
+        proposal_generation=proposal_generation,
+        runtime_failure_context=runtime_failure_context,
         source_artifacts={
             str(name): dict(
                 _require_mapping(
@@ -1542,6 +2363,13 @@ def _validate_proposal_preflight(
         raise StageRRank1Error(
             "stage_r_rank1_proposal_rebuild_mismatch"
         )
+    if proposal_generation == 2:
+        _validate_replacement_identity_panel(
+            proposal,
+            superseded_proposal=read_json(
+                resolved["superseded_proposal"]
+            ),
+        )
     request = read_json(
         proposal_root / "budget_amendment_request.json"
     )
@@ -1551,6 +2379,10 @@ def _validate_proposal_preflight(
         artifact_name="stage_r_rank1_budget_request",
     )
     expected_request = {
+        "request_version": (
+            "lyx_stage_r_rank1_replan_budget_request_v"
+            + str(proposal_generation)
+        ),
         "status": "awaiting_human_budget_decision",
         "approved": False,
         "decision_state": _AUTHORIZATION_STATE,
@@ -1564,9 +2396,7 @@ def _validate_proposal_preflight(
             "record_panel_sha256"
         ],
         "added_unique_identities": 36,
-        "normal_unique_identity_limit": 888,
-        "max_unique_identities": 900,
-        "max_attempts": 1800,
+        **_budget_limits(target_budget),
         "retry_limit": 1,
         "budget_contract_hash": target_budget.sha256,
         "identity_panel_sha256": proposal[
@@ -1592,6 +2422,11 @@ def _validate_proposal_preflight(
         "automatic_stage_f_execution": False,
         "may_nominate_recovery_candidate": True,
     }
+    if proposal_generation == 2:
+        assert runtime_failure_context is not None
+        expected_request["superseded_proposal_sha256"] = (
+            runtime_failure_context["superseded_proposal_sha256"]
+        )
     mismatched = sorted(
         name
         for name, value in expected_request.items()
@@ -1633,6 +2468,66 @@ def _validate_proposal_preflight(
     return proposal, raw_identities, resolved
 
 
+def _validate_v2_source_governance_state(
+    proposal: Mapping[str, Any],
+    *,
+    source_dir: Path,
+    resolved: Mapping[str, Path],
+) -> None:
+    failure = _require_mapping(
+        "stage_r_rank1_runtime_failure_replacement",
+        proposal.get("runtime_failure_replacement"),
+    )
+    attempt_registry_path = source_dir / "attempt_registry.json"
+    exploration_registry_path = (
+        source_dir / "exploration_registry.json"
+    )
+    governance_receipt_path = source_dir / "governance_receipt.json"
+    authorization_path = source_dir / "execution_authorization.json"
+    if (
+        file_sha256(attempt_registry_path)
+        != failure.get("source_attempt_registry_file_sha256")
+        or file_sha256(exploration_registry_path)
+        != failure.get("source_exploration_registry_file_sha256")
+        or file_sha256(resolved["source_exploration_registry"])
+        != failure.get("source_exploration_registry_file_sha256")
+    ):
+        raise StageRRank1Error(
+            "stage_r_rank1_v11_registry_changed_after_failure_receipt"
+        )
+    live_governance = read_json(governance_receipt_path)
+    if (
+        _verify_embedded_hash(
+            live_governance,
+            hash_field="receipt_sha256",
+            artifact_name="stage_r_rank1_live_v11_governance_receipt",
+        )
+        != failure.get("source_governance_receipt_sha256")
+        or canonical_sha256(read_json(authorization_path))
+        != failure.get("superseded_authorization_sha256")
+    ):
+        raise StageRRank1Error(
+            "stage_r_rank1_v11_authorization_state_changed"
+        )
+    frozen_receipt = read_json(resolved["runtime_failure_receipt"])
+    live_receipt = _build_runtime_failure_receipt(
+        superseded_proposal_path=resolved["superseded_proposal"],
+        superseded_authorization_path=resolved[
+            "superseded_authorization"
+        ],
+        source_governance_receipt_path=governance_receipt_path,
+        source_attempt_registry_path=attempt_registry_path,
+        source_exploration_registry_path=exploration_registry_path,
+        failed_execution_binding_path=resolved[
+            "failed_execution_binding"
+        ],
+    )
+    if live_receipt != frozen_receipt:
+        raise StageRRank1Error(
+            "stage_r_rank1_v11_failure_state_changed"
+        )
+
+
 def prepare_stage_r_rank1_replan_governance(
     *,
     proposal_dir: Path,
@@ -1641,9 +2536,9 @@ def prepare_stage_r_rank1_replan_governance(
     governance_dir: Path,
     source_root: Path,
 ) -> dict[str, Any]:
-    """Migrate v10 and register only the approved 36 formal identities."""
+    """Migrate the bound budget and register 36 approved identities."""
 
-    proposal, raw_identities, _resolved = _validate_proposal_preflight(
+    proposal, raw_identities, resolved = _validate_proposal_preflight(
         proposal_dir=proposal_dir,
         source_root=source_root,
     )
@@ -1659,13 +2554,22 @@ def prepare_stage_r_rank1_replan_governance(
             "stage_r_rank1_governance_exists"
         )
     source_dir = Path(source_governance_dir).resolve()
-    source_budget = BudgetContract.proposed_v10_rank1_filter_revision()
+    generation = _proposal_generation(proposal)
+    source_budget, target_budget = (
+        _budget_contracts_for_generation(generation)
+    )
     if (
         read_json(source_dir / "budget_contract.json")
         != source_budget.to_dict()
     ):
         raise StageRRank1Error(
             "stage_r_rank1_source_governance_budget_mismatch"
+        )
+    if generation == 2:
+        _validate_v2_source_governance_state(
+            proposal,
+            source_dir=source_dir,
+            resolved=resolved,
         )
     exploration_payload = read_json(
         source_dir / "exploration_registry.json"
@@ -1680,7 +2584,6 @@ def prepare_stage_r_rank1_replan_governance(
         budget_contract=source_budget,
         exploration_registry=exploration,
     )
-    target_budget = BudgetContract.proposed_v11_stage_r_rank1_replan()
     frozen = _require_mapping(
         "stage_r_rank1_frozen_contracts",
         proposal["frozen_contracts"],
@@ -1694,6 +2597,23 @@ def prepare_stage_r_rank1_replan_governance(
     identities = tuple(
         _identity_from_item(item) for item in raw_identities
     )
+    existing_entries = _require_mapping(
+        "stage_r_rank1_source_governance_entries",
+        read_json(source_dir / "attempt_registry.json").get(
+            "entries"
+        ),
+    )
+    overlap = sorted(
+        identity.sha256
+        for identity in identities
+        if identity.sha256 in existing_entries
+    )
+    if overlap:
+        raise StageRRank1Error(
+            "stage_r_rank1_replacement_identity_overlap:"
+            + ",".join(overlap)
+        )
+    limits = _budget_limits(target_budget)
     amendment = BudgetAmendmentRequest(
         stage=_STAGE,
         profile_design_rule_hash=str(
@@ -1703,9 +2623,7 @@ def prepare_stage_r_rank1_replan_governance(
             proposal["record_panel_sha256"]
         ),
         added_unique_identities=36,
-        normal_unique_identity_limit=888,
-        max_unique_identities=900,
-        max_attempts=1800,
+        **limits,
     )
     governance_receipt: dict[str, Any] = {}
 
@@ -1728,7 +2646,8 @@ def prepare_stage_r_rank1_replan_governance(
         )
         governance_receipt = {
             "receipt_version": (
-                "lyx_stage_r_rank1_replan_governance_v1"
+                "lyx_stage_r_rank1_replan_governance_v"
+                + str(generation)
             ),
             "status": "prepared_zero_runs",
             "proposal_sha256": proposal["proposal_sha256"],
@@ -1745,6 +2664,14 @@ def prepare_stage_r_rank1_replan_governance(
             "independent_bo_authorized": False,
             "automatic_stage_f_execution": False,
         }
+        if generation == 2:
+            failure = _require_mapping(
+                "stage_r_rank1_runtime_failure_replacement",
+                proposal.get("runtime_failure_replacement"),
+            )
+            governance_receipt[
+                "superseded_proposal_sha256"
+            ] = failure["superseded_proposal_sha256"]
         governance_receipt["receipt_sha256"] = (
             canonical_sha256(governance_receipt)
         )
@@ -2024,6 +2951,7 @@ def _validate_completed_execution(
     baseline_metrics_path: Path,
 ) -> dict[str, Any]:
     completion = read_json(completion_path)
+    generation = _proposal_generation(proposal)
     _verify_embedded_hash(
         completion,
         hash_field="completion_sha256",
@@ -2031,6 +2959,12 @@ def _validate_completed_execution(
     )
     matrix = registry.matrix_execution_summary(identities)
     if (
+        completion.get("completion_version")
+        != (
+            "lyx_stage_r_rank1_replan_completion_v"
+            + str(generation)
+        )
+        or
         completion.get("proposal_sha256")
         != proposal.get("proposal_sha256")
         or completion.get("authorization_sha256")
@@ -2048,6 +2982,17 @@ def _validate_completed_execution(
         raise StageRRank1Error(
             "stage_r_rank1_completion_mismatch"
         )
+    if generation == 2:
+        failure = _require_mapping(
+            "stage_r_rank1_runtime_failure_replacement",
+            proposal.get("runtime_failure_replacement"),
+        )
+        if completion.get("superseded_proposal_sha256") != failure.get(
+            "superseded_proposal_sha256"
+        ):
+            raise StageRRank1Error(
+                "stage_r_rank1_completion_supersession_mismatch"
+            )
     artifacts = _require_mapping(
         "stage_r_rank1_completion_artifacts",
         completion.get("artifacts"),
@@ -2241,7 +3186,10 @@ def execute_stage_r_rank1_replan(
     )
     authorization_sha256 = canonical_sha256(authorization)
     governance_root = Path(governance_dir).resolve()
-    budget = BudgetContract.proposed_v11_stage_r_rank1_replan()
+    generation = _proposal_generation(proposal)
+    source_budget, budget = _budget_contracts_for_generation(
+        generation
+    )
     if (
         read_json(governance_root / "budget_contract.json")
         != budget.to_dict()
@@ -2255,6 +3203,57 @@ def execute_stage_r_rank1_replan(
     if governance_authorization != authorization:
         raise StageRRank1Error(
             "stage_r_rank1_governance_authorization_mismatch"
+        )
+    governance_receipt = read_json(
+        governance_root / "governance_receipt.json"
+    )
+    governance_receipt_sha256 = _verify_embedded_hash(
+        governance_receipt,
+        hash_field="receipt_sha256",
+        artifact_name="stage_r_rank1_governance_receipt",
+    )
+    expected_governance = {
+        "receipt_version": (
+            "lyx_stage_r_rank1_replan_governance_v"
+            + str(generation)
+        ),
+        "status": "prepared_zero_runs",
+        "proposal_sha256": proposal["proposal_sha256"],
+        "authorization_sha256": authorization_sha256,
+        "source_budget_contract_hash": source_budget.sha256,
+        "target_budget_contract_hash": budget.sha256,
+        "new_unique_identity_count": 36,
+        "historical_threshold_diagnostic_count": 60,
+        "new_threshold_diagnostic_count": 0,
+        "parameter_search_authorized": False,
+        "independent_bo_authorized": False,
+        "automatic_stage_f_execution": False,
+    }
+    if generation == 2:
+        expected_governance["superseded_proposal_sha256"] = (
+            _require_mapping(
+                "stage_r_rank1_runtime_failure_replacement",
+                proposal.get("runtime_failure_replacement"),
+            )["superseded_proposal_sha256"]
+        )
+    expected_governance_keys = {
+        *expected_governance,
+        "attempt_registry_summary",
+        "receipt_sha256",
+    }
+    if (
+        set(governance_receipt) != expected_governance_keys
+        or any(
+            governance_receipt.get(name) != value
+            for name, value in expected_governance.items()
+        )
+        or not isinstance(
+            governance_receipt.get("attempt_registry_summary"),
+            Mapping,
+        )
+    ):
+        raise StageRRank1Error(
+            "stage_r_rank1_governance_receipt_mismatch"
         )
     exploration_payload = read_json(
         governance_root / "exploration_registry.json"
@@ -2273,24 +3272,39 @@ def execute_stage_r_rank1_replan(
         _identity_from_item(item) for item in raw_identities
     )
     destination = Path(output_dir).resolve()
-    destination.mkdir(parents=True, exist_ok=True)
+    binding_path = destination / "execution_binding.json"
+    matrix_summary = registry.matrix_execution_summary(identities)
+    if matrix_summary["planned_identity_count"] != 36:
+        raise StageRRank1Error(
+            "stage_r_rank1_governance_identity_count_mismatch"
+        )
+    if not binding_path.is_file() and (
+        matrix_summary["identity_with_solver_attempt_count"] != 0
+        or matrix_summary["cache_only_identity_count"] != 0
+        or registry.summary()
+        != governance_receipt["attempt_registry_summary"]
+    ):
+        raise StageRRank1Error(
+            "stage_r_rank1_governance_not_zero_run"
+        )
     binding = {
         "binding_version": (
             "lyx_stage_r_rank1_execution_binding_v1"
         ),
         "proposal_sha256": proposal["proposal_sha256"],
         "authorization_sha256": authorization_sha256,
+        "governance_receipt_sha256": governance_receipt_sha256,
         "solver_source_bundle_sha256": identities[0].solver_hash,
         "evaluation_hash": identities[0].evaluation_hash,
     }
     binding["binding_sha256"] = canonical_sha256(binding)
-    binding_path = destination / "execution_binding.json"
     if binding_path.is_file():
         if read_json(binding_path) != binding:
             raise StageRRank1Error(
                 "stage_r_rank1_execution_binding_mismatch"
             )
     else:
+        destination.mkdir(parents=True, exist_ok=True)
         atomic_write_json(binding_path, binding)
     completion_path = destination / "completion.json"
     if completion_path.is_file():
@@ -2413,7 +3427,8 @@ def execute_stage_r_rank1_replan(
     )
     completion: dict[str, Any] = {
         "completion_version": (
-            "lyx_stage_r_rank1_replan_completion_v1"
+            "lyx_stage_r_rank1_replan_completion_v"
+            + str(generation)
         ),
         "status": selection["status"],
         "next_state": next_state,
@@ -2437,6 +3452,14 @@ def execute_stage_r_rank1_replan(
         "selection_sha256": selection["selection_sha256"],
         "artifacts": artifacts,
     }
+    if generation == 2:
+        failure = _require_mapping(
+            "stage_r_rank1_runtime_failure_replacement",
+            proposal.get("runtime_failure_replacement"),
+        )
+        completion["superseded_proposal_sha256"] = failure[
+            "superseded_proposal_sha256"
+        ]
     completion["completion_sha256"] = canonical_sha256(
         completion
     )

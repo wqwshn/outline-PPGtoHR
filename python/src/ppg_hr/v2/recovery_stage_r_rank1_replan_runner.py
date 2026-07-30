@@ -11,6 +11,7 @@ from .recovery_stage_r_rank1_replan import (
     execute_stage_r_rank1_replan,
     prepare_stage_r_rank1_replan_governance,
     propose_stage_r_rank1_replan,
+    publish_stage_r_rank1_failure_receipt,
 )
 
 
@@ -64,6 +65,45 @@ def _parser() -> argparse.ArgumentParser:
     propose.add_argument("--output-dir", required=True, type=Path)
     propose.add_argument("--source-root", required=True, type=Path)
     propose.add_argument("--parent-experiment-id", required=True)
+    propose.add_argument("--superseded-proposal", type=Path)
+    propose.add_argument("--superseded-authorization", type=Path)
+    propose.add_argument("--source-governance-receipt", type=Path)
+    propose.add_argument("--source-exploration-registry", type=Path)
+    propose.add_argument("--failed-execution-binding", type=Path)
+    propose.add_argument("--runtime-failure-receipt", type=Path)
+
+    failure = commands.add_parser("record-failure")
+    failure.add_argument(
+        "--superseded-proposal",
+        required=True,
+        type=Path,
+    )
+    failure.add_argument(
+        "--superseded-authorization",
+        required=True,
+        type=Path,
+    )
+    failure.add_argument(
+        "--source-governance-receipt",
+        required=True,
+        type=Path,
+    )
+    failure.add_argument(
+        "--source-attempt-registry",
+        required=True,
+        type=Path,
+    )
+    failure.add_argument(
+        "--source-exploration-registry",
+        required=True,
+        type=Path,
+    )
+    failure.add_argument(
+        "--failed-execution-binding",
+        required=True,
+        type=Path,
+    )
+    failure.add_argument("--output", required=True, type=Path)
 
     prepare = commands.add_parser("prepare")
     prepare.add_argument("--proposal-dir", required=True, type=Path)
@@ -122,6 +162,42 @@ def main(argv: Sequence[str] | None = None) -> int:
             output_dir=args.output_dir,
             source_root=args.source_root,
             parent_experiment_id=args.parent_experiment_id,
+            superseded_proposal_path=args.superseded_proposal,
+            superseded_authorization_path=(
+                args.superseded_authorization
+            ),
+            source_governance_receipt_path=(
+                args.source_governance_receipt
+            ),
+            source_exploration_registry_path=(
+                args.source_exploration_registry
+            ),
+            failed_execution_binding_path=(
+                args.failed_execution_binding
+            ),
+            runtime_failure_receipt_path=(
+                args.runtime_failure_receipt
+            ),
+        )
+    elif args.command == "record-failure":
+        result = publish_stage_r_rank1_failure_receipt(
+            superseded_proposal_path=args.superseded_proposal,
+            superseded_authorization_path=(
+                args.superseded_authorization
+            ),
+            source_governance_receipt_path=(
+                args.source_governance_receipt
+            ),
+            source_attempt_registry_path=(
+                args.source_attempt_registry
+            ),
+            source_exploration_registry_path=(
+                args.source_exploration_registry
+            ),
+            failed_execution_binding_path=(
+                args.failed_execution_binding
+            ),
+            output_path=args.output,
         )
     elif args.command == "prepare":
         result = prepare_stage_r_rank1_replan_governance(

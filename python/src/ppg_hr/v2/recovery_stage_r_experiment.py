@@ -1106,17 +1106,27 @@ def _load_or_run_spectral_audit(
         }
 
     raw_sentinel_role = item.get("sentinel_role")
+    stage = str(item.get("stage", ""))
+    if stage == "recovery_sentinel_rank1_replan":
+        if raw_sentinel_role != "fixed_rank1":
+            raise StageRPlanError(
+                "stage_r_rank1_sentinel_role_mismatch:"
+                f"{profile_id}:{record_id}"
+            )
+        profile_sentinel_role = None
+    else:
+        profile_sentinel_role = (
+            None
+            if raw_sentinel_role is None
+            else str(raw_sentinel_role)
+        )
     profile = FilterProfile(
         profile_id=profile_id,
         design_role="core",
         fs_target=int(item["config"]["parameters"]["fs_target"]),
         memory_ms=int(item["physical_memory_ms"]),
         nominal_mu=float(item["config"]["parameters"]["lms_mu_base"]),
-        recovery_sentinel_role=(
-            None
-            if raw_sentinel_role is None
-            else str(raw_sentinel_role)
-        ),
+        recovery_sentinel_role=profile_sentinel_role,
     )
     record = FilterAuditRecord(
         record_id=record_id,
@@ -1161,6 +1171,17 @@ def run_stage_r_numerical_identity(
         raise StageRPlanError(f"stage_r_data_hash_mismatch:{item['record_id']}")
     if file_sha256(reference_path) != item["reference_sha256"]:
         raise StageRPlanError(f"stage_r_reference_hash_mismatch:{item['record_id']}")
+    spectral_audit = (
+        _load_or_run_spectral_audit(
+            item,
+            spectral_audit_dir=spectral_audit_dir,
+        )
+        if (
+            item.get("spectral_audit_required") is True
+            or item["stage"] == _FORMAL_STAGE
+        )
+        else None
+    )
     config = _stage_r_run_config(item)
     result = solve_v2(config)
     metadata = dict(result.metadata)
@@ -1175,17 +1196,6 @@ def run_stage_r_numerical_identity(
         result,
         ref_data=load_v2_reference(reference_path),
         method_names=tuple(str(name) for name in item["method_names"]),
-    )
-    spectral_audit = (
-        _load_or_run_spectral_audit(
-            item,
-            spectral_audit_dir=spectral_audit_dir,
-        )
-        if (
-            item.get("spectral_audit_required") is True
-            or item["stage"] == _FORMAL_STAGE
-        )
-        else None
     )
     return StageRNumericalResult(
         solver_result=result,

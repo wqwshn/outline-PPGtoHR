@@ -1,0 +1,8 @@
+{
+  "authorization_sha256": "3023a3119181102af5ea933787efbdb4f4216c51d1bac26f8661a0a4bf1596ec",
+  "binding_sha256": "9ce8d8428f8009c0959f34a5afdd16dcb4d488471c9c3ebaf3554a4f9637a9d8",
+  "binding_version": "lyx_stage_r_rank1_execution_binding_v1",
+  "evaluation_hash": "3048837d6c9b9966749ac79b7adef112cac0b21363f015c594355f308e5c6d58",
+  "proposal_sha256": "d2d6007740da7dfe3f273e9071fd8254d731f3abdda1387e910178ce11284efd",
+  "solver_source_bundle_sha256": "3048837d6c9b9966749ac79b7adef112cac0b21363f015c594355f308e5c6d58"
+}

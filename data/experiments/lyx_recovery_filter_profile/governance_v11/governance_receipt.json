@@ -1,0 +1,24 @@
+{
+  "attempt_registry_summary": {
+    "actual_unique_run_count": 348,
+    "cache_evidence_count": 276,
+    "cache_hit_count": 228,
+    "failed_attempt_count": 3,
+    "logical_task_count": 579,
+    "planned_unique_identity_count": 384,
+    "retry_count": 3
+  },
+  "authorization_sha256": "3023a3119181102af5ea933787efbdb4f4216c51d1bac26f8661a0a4bf1596ec",
+  "automatic_stage_f_execution": false,
+  "historical_threshold_diagnostic_count": 60,
+  "independent_bo_authorized": false,
+  "new_threshold_diagnostic_count": 0,
+  "new_unique_identity_count": 36,
+  "parameter_search_authorized": false,
+  "proposal_sha256": "d2d6007740da7dfe3f273e9071fd8254d731f3abdda1387e910178ce11284efd",
+  "receipt_sha256": "cec479effc926908dc64f51b2731dd742b1a9a05588d0a26b336b4cef0068169",
+  "receipt_version": "lyx_stage_r_rank1_replan_governance_v1",
+  "source_budget_contract_hash": "fd5cb64eef0a1f967ab1cb6019fd35d434a17fa7aab1aa6aabebdc363444585d",
+  "status": "prepared_zero_runs",
+  "target_budget_contract_hash": "9f6259d92b6b500eef0d57cbd24652e06f74e1cf98f8a7fc23d6b0af2e790bf5"
+}
