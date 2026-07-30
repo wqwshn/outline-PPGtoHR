@@ -12,15 +12,12 @@ from ppg_hr.v2.recovery_independent_bo_experiment import (
     RecoveryIndependentBOAuthorizationError,
     build_recovery_independent_bo_identity,
     build_recovery_independent_bo_proposal,
+    validate_recovery_independent_bo_budget_authorization,
     validate_recovery_independent_bo_preflight,
     validate_recovery_independent_bo_execution_authorization,
 )
 from ppg_hr.v2.bo_space_generalization import build_bo_search_space
 from ppg_hr.v2.recovery_contracts import canonical_sha256
-from ppg_hr.v2.recovery_experiment_governance import (
-    BudgetAmendmentRequest,
-    validate_budget_amendment_authorization,
-)
 from ppg_hr.v2.recovery_independent_bo_runner import main as runner_main
 from ppg_hr.v2.recovery_stage_r_common import StageRPlanError
 
@@ -102,6 +99,7 @@ def test_execution_authorization_must_bind_exact_proposal_and_bo_request() -> No
         ),
         "user_authorization": BLANKET_AUTHORIZATION_USER_TEXT,
     }
+    receipt["authorization_sha256"] = canonical_sha256(receipt)
 
     assert validate_recovery_independent_bo_execution_authorization(
         proposal,
@@ -231,10 +229,8 @@ def test_blanket_authorization_cli_writes_both_exact_receipts(
         proposal,
         receipt=execution,
     )
-    validate_budget_amendment_authorization(
-        BudgetAmendmentRequest(
-            **proposal["budget_amendment_request"]
-        ),
+    validate_recovery_independent_bo_budget_authorization(
+        proposal,
         receipt=budget,
     )
     assert execution["user_authorization"] == (
@@ -243,3 +239,25 @@ def test_blanket_authorization_cli_writes_both_exact_receipts(
     assert budget["user_authorization"] == (
         BLANKET_AUTHORIZATION_USER_TEXT
     )
+
+    tampered_execution = dict(execution)
+    tampered_execution["authorization_sha256"] = "0" * 64
+    with pytest.raises(
+        RecoveryIndependentBOAuthorizationError,
+        match="independent_bo_authorization_invalid",
+    ):
+        validate_recovery_independent_bo_execution_authorization(
+            proposal,
+            receipt=tampered_execution,
+        )
+
+    tampered_budget = dict(budget)
+    tampered_budget["user_authorization"] = "different"
+    with pytest.raises(
+        RecoveryIndependentBOAuthorizationError,
+        match="independent_bo_authorization_invalid",
+    ):
+        validate_recovery_independent_bo_budget_authorization(
+            proposal,
+            receipt=tampered_budget,
+        )

@@ -735,39 +735,13 @@ def validate_recovery_independent_bo_execution_authorization(
             request,
             receipt=receipt,
         )
+        _validate_blanket_authorization_metadata(
+            validated,
+            proposal_sha256=proposal_sha,
+        )
         if (
-            validated.get("proposal_sha256") != proposal_sha
-            or validated.get("budget_contract_hash")
+            validated.get("budget_contract_hash")
             != proposal.get("budget_contract_hash")
-            or validated.get("authorization_basis")
-            != "blanket_proposal_authorization_until_deadline"
-            or validated.get(
-                "blanket_authorization_expires_at"
-            )
-            != BLANKET_AUTHORIZATION_EXPIRES_AT
-            or validated.get("user_authorization")
-            != BLANKET_AUTHORIZATION_USER_TEXT
-        ):
-            raise RecoveryIndependentBOAuthorizationError(
-                "independent_bo_authorization_invalid"
-            )
-        approved_at = datetime.fromisoformat(
-            str(validated["approved_at"])
-        )
-        expires_at = datetime.fromisoformat(
-            str(validated["blanket_authorization_expires_at"])
-        )
-        if (
-            approved_at.tzinfo is None
-            or approved_at.utcoffset()
-            != datetime.fromisoformat(
-                BLANKET_AUTHORIZATION_EXPIRES_AT
-            ).utcoffset()
-            or expires_at
-            != datetime.fromisoformat(
-                BLANKET_AUTHORIZATION_EXPIRES_AT
-            )
-            or approved_at > expires_at
         ):
             raise RecoveryIndependentBOAuthorizationError(
                 "independent_bo_authorization_invalid"
@@ -786,6 +760,86 @@ def validate_recovery_independent_bo_execution_authorization(
             raise
         raise RecoveryIndependentBOAuthorizationError(
             "independent_bo_authorization_invalid"
+        ) from error
+    return validated
+
+
+def _validate_blanket_authorization_metadata(
+    receipt: Mapping[str, Any],
+    *,
+    proposal_sha256: str,
+) -> None:
+    embedded_hash = receipt.get("authorization_sha256")
+    unsigned = {
+        key: value
+        for key, value in receipt.items()
+        if key != "authorization_sha256"
+    }
+    if (
+        not isinstance(embedded_hash, str)
+        or embedded_hash != canonical_sha256(unsigned)
+        or receipt.get("proposal_sha256") != proposal_sha256
+        or receipt.get("authorization_basis")
+        != "blanket_proposal_authorization_until_deadline"
+        or receipt.get("blanket_authorization_expires_at")
+        != BLANKET_AUTHORIZATION_EXPIRES_AT
+        or receipt.get("user_authorization")
+        != BLANKET_AUTHORIZATION_USER_TEXT
+    ):
+        raise RecoveryIndependentBOAuthorizationError(
+            "independent_bo_authorization_invalid"
+        )
+    approved_at = datetime.fromisoformat(
+        str(receipt["approved_at"])
+    )
+    deadline = datetime.fromisoformat(
+        BLANKET_AUTHORIZATION_EXPIRES_AT
+    )
+    if (
+        approved_at.tzinfo is None
+        or approved_at.utcoffset() != deadline.utcoffset()
+        or approved_at > deadline
+    ):
+        raise RecoveryIndependentBOAuthorizationError(
+            "independent_bo_authorization_invalid"
+        )
+
+
+def validate_recovery_independent_bo_budget_authorization(
+    proposal: Mapping[str, Any],
+    *,
+    receipt: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Validate the v13 budget receipt and the same fixed blanket boundary."""
+
+    try:
+        proposal_sha = _verify_embedded_hash(
+            proposal,
+            hash_field="proposal_sha256",
+            artifact_name="independent_bo_proposal",
+        )
+        validated = validate_budget_amendment_authorization(
+            _budget_amendment_from_proposal(proposal),
+            receipt=receipt,
+        )
+        _validate_blanket_authorization_metadata(
+            validated,
+            proposal_sha256=proposal_sha,
+        )
+    except (
+        GovernanceError,
+        KeyError,
+        TypeError,
+        ValueError,
+        RecoveryIndependentBOError,
+    ) as error:
+        if isinstance(
+            error,
+            RecoveryIndependentBOAuthorizationError,
+        ):
+            raise
+        raise RecoveryIndependentBOAuthorizationError(
+            "independent_bo_budget_authorization_invalid"
         ) from error
     return validated
 
@@ -970,9 +1024,11 @@ def prepare_recovery_independent_bo_governance(
         )
     )
     amendment = _budget_amendment_from_proposal(proposal)
-    validated_budget = validate_budget_amendment_authorization(
-        amendment,
+    validated_budget = (
+        validate_recovery_independent_bo_budget_authorization(
+        proposal,
         receipt=budget_authorization,
+        )
     )
     source_root = Path(source_governance_dir).resolve()
     target_root = Path(target_governance_dir).resolve()
