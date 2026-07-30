@@ -1,0 +1,1408 @@
+{
+  "algorithm_level_holdout": false,
+  "anchor_panel": [
+    {
+      "record_id": "jianpan1_LYX_0708",
+      "scene": "jianpan",
+      "source_file_sha256": "621e5b70d71360121309f5dd5a74bc5fc70a4ee2eeb3fa33990ce7cef4726639",
+      "source_identity_sha256": "1ec11b827ccbc4647ee3e88845412144c3c225a17483e2719e571c92c0ddfeaa",
+      "source_path": "profile_record_audits/p25-short-low/jianpan1_LYX_0708.json",
+      "source_result_sha256": "adaf8332bc5c1fa72a9bb4d0400f8f05afb46c63e9c6f021ce320b309bdde44d",
+      "spectral_gate_summary": {
+        "failure_reasons": [],
+        "gates": {
+          "complete_window_evidence_pass": true,
+          "hr_band_share_delta_pass": false,
+          "prominence_db_delta_pass": true,
+          "pulse_power_retention_pass": true,
+          "residual_artifact_corr_delta_pass": true,
+          "visible_top3_rate_delta_pass": true
+        },
+        "hr_band_share_delta_median": -0.020509723155374693,
+        "invalid_window_count": 0,
+        "prominence_db_delta_median": -0.25527488361090356,
+        "pulse_power_retention_median": 0.9723134216327222,
+        "residual_artifact_corr_delta_median": -0.019211655279927575,
+        "spectral_gate_pass": false,
+        "valid_window_count": 165,
+        "visible_top3_rate_delta": -0.006060606060606061
+      },
+      "spectral_gate_summary_sha256": "286ddf7f20cc155cc7e770ead9ee045454eb031cfde1733d7766e46d7192cb82"
+    },
+    {
+      "record_id": "jianpan2_LYX_0708",
+      "scene": "jianpan",
+      "source_file_sha256": "43a87e7ad5a8d1370323e3ba797c218ada9f714b2170a9cc079873fda6a0c343",
+      "source_identity_sha256": "b1b7e325a41fcf35b2ca24318e9dd4d9f3e6a77887bcaf62c8a74984f0cfbe88",
+      "source_path": "profile_record_audits/p25-short-low/jianpan2_LYX_0708.json",
+      "source_result_sha256": "5a11b647fa90bf7bca7b385bad581380b447b014c64da6cc9cff0c8967b32a96",
+      "spectral_gate_summary": {
+        "failure_reasons": [],
+        "gates": {
+          "complete_window_evidence_pass": true,
+          "hr_band_share_delta_pass": true,
+          "prominence_db_delta_pass": true,
+          "pulse_power_retention_pass": true,
+          "residual_artifact_corr_delta_pass": true,
+          "visible_top3_rate_delta_pass": true
+        },
+        "hr_band_share_delta_median": -0.013864570074781424,
+        "invalid_window_count": 0,
+        "prominence_db_delta_median": -0.1361573702567691,
+        "pulse_power_retention_median": 0.9819089564271699,
+        "residual_artifact_corr_delta_median": -0.013367570271381631,
+        "spectral_gate_pass": true,
+        "valid_window_count": 166,
+        "visible_top3_rate_delta": 0.018072289156626505
+      },
+      "spectral_gate_summary_sha256": "9a753090308559c25b86beb18c91771cd7ef1c2a4094c4876d2334d1df40a5ad"
+    },
+    {
+      "record_id": "jianpan3_LYX_0708",
+      "scene": "jianpan",
+      "source_file_sha256": "7e44ffa0e21530061a2adcf1e8c6e612c951ac7f80531fbf13d24755f8fa4ba9",
+      "source_identity_sha256": "ff611d06136bfcf0b24fcf72d35420869fc8c427758013307915005333dd8340",
+      "source_path": "profile_record_audits/p25-short-low/jianpan3_LYX_0708.json",
+      "source_result_sha256": "39ec5c4d5b0d6c0650306c380480a3a2ea44de087e2d5dd2453b2aaf5be71ebb",
+      "spectral_gate_summary": {
+        "failure_reasons": [],
+        "gates": {
+          "complete_window_evidence_pass": true,
+          "hr_band_share_delta_pass": true,
+          "prominence_db_delta_pass": true,
+          "pulse_power_retention_pass": true,
+          "residual_artifact_corr_delta_pass": true,
+          "visible_top3_rate_delta_pass": true
+        },
+        "hr_band_share_delta_median": -0.010242740034442033,
+        "invalid_window_count": 0,
+        "prominence_db_delta_median": 0.03897983644515235,
+        "pulse_power_retention_median": 0.9820495153264253,
+        "residual_artifact_corr_delta_median": -0.08002745308367357,
+        "spectral_gate_pass": true,
+        "valid_window_count": 172,
+        "visible_top3_rate_delta": -0.005813953488372093
+      },
+      "spectral_gate_summary_sha256": "22264c3b9edc8b32f62d1146bc82e0445e2c732a4508368191b4b1a4243fa721"
+    },
+    {
+      "record_id": "kaihe1_LYX_0613",
+      "scene": "kaihe",
+      "source_file_sha256": "af62fdc5089447ee9f2c45e5df55700f5064a1237e69677b759be5044977495d",
+      "source_identity_sha256": "a5ab9a25f9c2d031dde671f4fb97a416e9aa6351cc5bfe49f54177268bd6730b",
+      "source_path": "profile_record_audits/p25-short-low/kaihe1_LYX_0613.json",
+      "source_result_sha256": "4fda4b181ac68f7f34efc7bdf58438c4c66f279508b38fe5551bfa8ac1eeeca9",
+      "spectral_gate_summary": {
+        "failure_reasons": [],
+        "gates": {
+          "complete_window_evidence_pass": true,
+          "hr_band_share_delta_pass": true,
+          "prominence_db_delta_pass": true,
+          "pulse_power_retention_pass": true,
+          "residual_artifact_corr_delta_pass": true,
+          "visible_top3_rate_delta_pass": true
+        },
+        "hr_band_share_delta_median": -0.002427823974520016,
+        "invalid_window_count": 0,
+        "prominence_db_delta_median": 0.06252514748462978,
+        "pulse_power_retention_median": 1.004595221858626,
+        "residual_artifact_corr_delta_median": 0.00010648288517378646,
+        "spectral_gate_pass": true,
+        "valid_window_count": 199,
+        "visible_top3_rate_delta": 0.0
+      },
+      "spectral_gate_summary_sha256": "fd789afe4d7ef789e54f616b60f965828fbe9ac55dc4ee94fa30dc5db6ce32cc"
+    },
+    {
+      "record_id": "kaihe1_LYX_0617",
+      "scene": "kaihe",
+      "source_file_sha256": "aaa9a3df6c8e58afc918985f20b397b22fee2e21cd4786c4e2241a26b5e1b38d",
+      "source_identity_sha256": "bbb0b8017cf719ed356bc7d1377f33564db1d3eef9131b4911d82b4503d53320",
+      "source_path": "profile_record_audits/p25-short-low/kaihe1_LYX_0617.json",
+      "source_result_sha256": "1644b4334c20478d40dc4282c4b9b05c3e7e3bdbfbbc71de2de0d96ec07b50bd",
+      "spectral_gate_summary": {
+        "failure_reasons": [],
+        "gates": {
+          "complete_window_evidence_pass": true,
+          "hr_band_share_delta_pass": true,
+          "prominence_db_delta_pass": true,
+          "pulse_power_retention_pass": true,
+          "residual_artifact_corr_delta_pass": true,
+          "visible_top3_rate_delta_pass": true
+        },
+        "hr_band_share_delta_median": -0.011689839906346422,
+        "invalid_window_count": 0,
+        "prominence_db_delta_median": 0.10758005918454927,
+        "pulse_power_retention_median": 0.9889799068503974,
+        "residual_artifact_corr_delta_median": -0.038381875705882404,
+        "spectral_gate_pass": true,
+        "valid_window_count": 201,
+        "visible_top3_rate_delta": 0.009950248756218905
+      },
+      "spectral_gate_summary_sha256": "c24aea02d0b1de6ce24218258afeacce5f93df7e0d9389bf64d800de952f712d"
+    },
+    {
+      "record_id": "kaihe3_LYX_0613",
+      "scene": "kaihe",
+      "source_file_sha256": "2c04db5471742f52dd86006e5cb03b800f6d9f0cec73733b7af06ce322cb0133",
+      "source_identity_sha256": "4e7d592405b1c9791e49510ff8f9db0fc85d4e1b4138c06f5058dc5f6c36431b",
+      "source_path": "profile_record_audits/p25-short-low/kaihe3_LYX_0613.json",
+      "source_result_sha256": "7d4a857721776bdf45b0a6992bd1d829e99ef0600e4bd345716c7af3ffb8bc21",
+      "spectral_gate_summary": {
+        "failure_reasons": [],
+        "gates": {
+          "complete_window_evidence_pass": true,
+          "hr_band_share_delta_pass": true,
+          "prominence_db_delta_pass": true,
+          "pulse_power_retention_pass": true,
+          "residual_artifact_corr_delta_pass": true,
+          "visible_top3_rate_delta_pass": true
+        },
+        "hr_band_share_delta_median": -0.004009475009586483,
+        "invalid_window_count": 0,
+        "prominence_db_delta_median": 0.297852645571854,
+        "pulse_power_retention_median": 0.9972569667965264,
+        "residual_artifact_corr_delta_median": -0.06584536754533316,
+        "spectral_gate_pass": true,
+        "valid_window_count": 201,
+        "visible_top3_rate_delta": 0.03482587064676617
+      },
+      "spectral_gate_summary_sha256": "f5a971581ffb63a5964419c8963925739c17b83d85106b06ad9d7bc3ab6033c1"
+    },
+    {
+      "record_id": "run1_LYX_0708",
+      "scene": "run",
+      "source_file_sha256": "4c0955f0830c11a121f01ee5e426c2f42158a16bca0166c2e21bacd9bd93f5fe",
+      "source_identity_sha256": "7069a469df33236085ad6f1ff61b9302eee1bad635975bf956e7efa5e918c66a",
+      "source_path": "profile_record_audits/p25-short-low/run1_LYX_0708.json",
+      "source_result_sha256": "e5dec21fcf6fbd88274c8e24516a406439da5745d1dd2bbaae07ef1d7603b17d",
+      "spectral_gate_summary": {
+        "failure_reasons": [],
+        "gates": {
+          "complete_window_evidence_pass": true,
+          "hr_band_share_delta_pass": true,
+          "prominence_db_delta_pass": true,
+          "pulse_power_retention_pass": true,
+          "residual_artifact_corr_delta_pass": true,
+          "visible_top3_rate_delta_pass": true
+        },
+        "hr_band_share_delta_median": -0.002034286114771102,
+        "invalid_window_count": 0,
+        "prominence_db_delta_median": 0.011645158726572014,
+        "pulse_power_retention_median": 0.9920934417314483,
+        "residual_artifact_corr_delta_median": -0.00014587639141025455,
+        "spectral_gate_pass": true,
+        "valid_window_count": 226,
+        "visible_top3_rate_delta": 0.01327433628318584
+      },
+      "spectral_gate_summary_sha256": "857b24508f6ec15dbac6ae4727618dc05cf376a6ca2c3e03b90adb62f1072769"
+    },
+    {
+      "record_id": "run2_LYX_0708",
+      "scene": "run",
+      "source_file_sha256": "720032f4ff2a434b1503d34a0576189533486f331a497933863eea1039bc0e25",
+      "source_identity_sha256": "4b22afc0113e457c7ec1915a1b977f73e914d3a1796ff4ba318b1eca70432f40",
+      "source_path": "profile_record_audits/p25-short-low/run2_LYX_0708.json",
+      "source_result_sha256": "9cc0095686421c2075c2099cd4c7bbb575c641803482141206c900f260c8252a",
+      "spectral_gate_summary": {
+        "failure_reasons": [],
+        "gates": {
+          "complete_window_evidence_pass": true,
+          "hr_band_share_delta_pass": true,
+          "prominence_db_delta_pass": true,
+          "pulse_power_retention_pass": true,
+          "residual_artifact_corr_delta_pass": true,
+          "visible_top3_rate_delta_pass": true
+        },
+        "hr_band_share_delta_median": 0.008558884204525424,
+        "invalid_window_count": 0,
+        "prominence_db_delta_median": 0.1368233967362955,
+        "pulse_power_retention_median": 1.0299387967520661,
+        "residual_artifact_corr_delta_median": -0.022603587046749585,
+        "spectral_gate_pass": true,
+        "valid_window_count": 228,
+        "visible_top3_rate_delta": 0.0
+      },
+      "spectral_gate_summary_sha256": "f7264247798c5fb6eae214a48a3b9394106c1657aba2b65dec5e633c3dbe3706"
+    },
+    {
+      "record_id": "run3_LYX_0708",
+      "scene": "run",
+      "source_file_sha256": "a1a76bc65cc1ebaceec80a42443d3c2716d3bc52fb105c05fccf3a8d9bdcac0c",
+      "source_identity_sha256": "337eeaf47c1b8a5fc96e27e51ed56a383d6d17825b8e5e1df4ce07a8b47ebade",
+      "source_path": "profile_record_audits/p25-short-low/run3_LYX_0708.json",
+      "source_result_sha256": "d57c3f533d785ec43405990ca7fefbca896e8ccf10793bf3caab9d002f530d33",
+      "spectral_gate_summary": {
+        "failure_reasons": [],
+        "gates": {
+          "complete_window_evidence_pass": true,
+          "hr_band_share_delta_pass": true,
+          "prominence_db_delta_pass": true,
+          "pulse_power_retention_pass": true,
+          "residual_artifact_corr_delta_pass": true,
+          "visible_top3_rate_delta_pass": true
+        },
+        "hr_band_share_delta_median": -0.004990505111883703,
+        "invalid_window_count": 0,
+        "prominence_db_delta_median": -0.05486802060222873,
+        "pulse_power_retention_median": 0.999813402240818,
+        "residual_artifact_corr_delta_median": -0.016077981698610855,
+        "spectral_gate_pass": true,
+        "valid_window_count": 316,
+        "visible_top3_rate_delta": -0.006329113924050633
+      },
+      "spectral_gate_summary_sha256": "11d751b43e058ef6ede38109d62b3c3cf2fcc6f9563a5fbb38f45ed56bba0763"
+    },
+    {
+      "record_id": "xiezi2_LYX_0708",
+      "scene": "xiezi",
+      "source_file_sha256": "72a4c99fa1303c9f74947aaca51888ca9dccb8d34c5161ccdcf36958ddd57637",
+      "source_identity_sha256": "f5c4153ac99ab50aba33b28ff077c11c95ff25b58ca51ae8b2d7d2f1e973fa5d",
+      "source_path": "profile_record_audits/p25-short-low/xiezi2_LYX_0708.json",
+      "source_result_sha256": "e5605c430dd01304875d1cbe651322feb87162e0f9391a35fd411ae5b2209b05",
+      "spectral_gate_summary": {
+        "failure_reasons": [],
+        "gates": {
+          "complete_window_evidence_pass": true,
+          "hr_band_share_delta_pass": false,
+          "prominence_db_delta_pass": true,
+          "pulse_power_retention_pass": true,
+          "residual_artifact_corr_delta_pass": true,
+          "visible_top3_rate_delta_pass": true
+        },
+        "hr_band_share_delta_median": -0.02420185865899971,
+        "invalid_window_count": 0,
+        "prominence_db_delta_median": -0.1713532914726308,
+        "pulse_power_retention_median": 0.9596464729648138,
+        "residual_artifact_corr_delta_median": -0.0004045972976914336,
+        "spectral_gate_pass": false,
+        "valid_window_count": 164,
+        "visible_top3_rate_delta": 0.012195121951219513
+      },
+      "spectral_gate_summary_sha256": "6d1d77adfe90024e7517f9bf6738e19fcf6294280a504ece448104105643b9a4"
+    },
+    {
+      "record_id": "xiezi3_LYX_0708",
+      "scene": "xiezi",
+      "source_file_sha256": "ea29e5e0580589c506533dd03cf980c78a87838a9f30a95a72fbf8f68febb48d",
+      "source_identity_sha256": "fe55858d232b9b22f5c5c42c73bb896cb0615d806e64282267b7b9b954882b50",
+      "source_path": "profile_record_audits/p25-short-low/xiezi3_LYX_0708.json",
+      "source_result_sha256": "e8272dd145868f830f84083e6aefed885a2c72891714b68e02104e0f2fd0f1a6",
+      "spectral_gate_summary": {
+        "failure_reasons": [],
+        "gates": {
+          "complete_window_evidence_pass": true,
+          "hr_band_share_delta_pass": true,
+          "prominence_db_delta_pass": true,
+          "pulse_power_retention_pass": true,
+          "residual_artifact_corr_delta_pass": true,
+          "visible_top3_rate_delta_pass": true
+        },
+        "hr_band_share_delta_median": -0.017392694165362876,
+        "invalid_window_count": 0,
+        "prominence_db_delta_median": -0.18403656464664042,
+        "pulse_power_retention_median": 0.9813716136001589,
+        "residual_artifact_corr_delta_median": 0.00290467230444922,
+        "spectral_gate_pass": true,
+        "valid_window_count": 166,
+        "visible_top3_rate_delta": 0.012048192771084338
+      },
+      "spectral_gate_summary_sha256": "fcb460a9c17603d53f9b55acfe312ca62f2f63e261a92ed62a6394ba7673b08d"
+    },
+    {
+      "record_id": "xiezi4_LYX_0708",
+      "scene": "xiezi",
+      "source_file_sha256": "83edeff275cbee43921ec73c8b934ad5c2320c83ffac6075e03252af1ba0b89e",
+      "source_identity_sha256": "9ec0232366e8e20f59f3a47e042f8e2386089f71982cdc2e9c842530792fc9f3",
+      "source_path": "profile_record_audits/p25-short-low/xiezi4_LYX_0708.json",
+      "source_result_sha256": "35e0179adbf23d1452a9340c91a9e91b06c497d184dffe399e0314cbb013647b",
+      "spectral_gate_summary": {
+        "failure_reasons": [],
+        "gates": {
+          "complete_window_evidence_pass": true,
+          "hr_band_share_delta_pass": true,
+          "prominence_db_delta_pass": true,
+          "pulse_power_retention_pass": true,
+          "residual_artifact_corr_delta_pass": true,
+          "visible_top3_rate_delta_pass": true
+        },
+        "hr_band_share_delta_median": -0.01435543293412822,
+        "invalid_window_count": 0,
+        "prominence_db_delta_median": -0.039410397973091094,
+        "pulse_power_retention_median": 0.9779716511190124,
+        "residual_artifact_corr_delta_median": -0.02016064326182969,
+        "spectral_gate_pass": true,
+        "valid_window_count": 165,
+        "visible_top3_rate_delta": -0.01818181818181818
+      },
+      "spectral_gate_summary_sha256": "ee36a77a69b5fd442eb1a0c94a082d966f9c0e72ddafd1ca00396231cc0b3177"
+    }
+  ],
+  "anchor_panel_sha256": "a1a5cf418908eb77362ec44344a042135050db2fae2acefce6534892327ba139",
+  "attempt_kind": "diagnostic",
+  "authorization_state": "awaiting_human_filter_mechanism_decomposition_decision",
+  "automatic_stage_f_execution": false,
+  "automatic_stage_r_execution": false,
+  "control_profile": {
+    "actual_taps": 1,
+    "design_role": "core",
+    "fs_target": 25,
+    "memory_ms": 40,
+    "nominal_mu": 0.008,
+    "profile_id": "p25-short-low",
+    "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+    "recovery_sentinel_role": null
+  },
+  "decision_inputs": {
+    "allowed": [
+      "per_record_lane_spectral_gates",
+      "per_record_anchor_reproduction",
+      "complete_window_evidence"
+    ],
+    "forbidden": [
+      "mae",
+      "l10",
+      "l20",
+      "recovery",
+      "penalty"
+    ]
+  },
+  "deterministic_lane_count_per_identity": 6,
+  "diagnostic_run_count": 0,
+  "evidence_class": "development_reuse_pilot",
+  "frozen_contracts": {
+    "budget_contract_hash": "69d52a7711534434d573710e1d0d4da4a4e6c2c63d88887500027daf7005c3f5",
+    "control_profile_hash": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+    "evaluation_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+    "mechanism_contract_hash": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+    "solver_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+    "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+  },
+  "identities": [
+    {
+      "anchor_source_result_sha256": "adaf8332bc5c1fa72a9bb4d0400f8f05afb46c63e9c6f021ce320b309bdde44d",
+      "anchor_spectral_gate_summary": {
+        "failure_reasons": [],
+        "gates": {
+          "complete_window_evidence_pass": true,
+          "hr_band_share_delta_pass": false,
+          "prominence_db_delta_pass": true,
+          "pulse_power_retention_pass": true,
+          "residual_artifact_corr_delta_pass": true,
+          "visible_top3_rate_delta_pass": true
+        },
+        "hr_band_share_delta_median": -0.020509723155374693,
+        "invalid_window_count": 0,
+        "prominence_db_delta_median": -0.25527488361090356,
+        "pulse_power_retention_median": 0.9723134216327222,
+        "residual_artifact_corr_delta_median": -0.019211655279927575,
+        "spectral_gate_pass": false,
+        "valid_window_count": 165,
+        "visible_top3_rate_delta": -0.006060606060606061
+      },
+      "anchor_spectral_gate_summary_sha256": "286ddf7f20cc155cc7e770ead9ee045454eb031cfde1733d7766e46d7192cb82",
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "863b9b665f9d6c221be366bf0acf90e92044eff2f8bf93313b93c75c5472ca32",
+      "config": {
+        "actual_taps": 1,
+        "execution_mode": "prepared_window_filter_mechanism_decomposition",
+        "fs_target": 25,
+        "lanes": [
+          "raw_bypass",
+          "two_stage_zero_update",
+          "rank1_only_adaptive",
+          "rank2_only_adaptive",
+          "ranked_cascade_adaptive",
+          "reverse_cascade_adaptive"
+        ],
+        "lms_mu_min": 1e-06,
+        "mechanism_contract_sha256": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+        "memory_ms": 40,
+        "nominal_mu": 0.008,
+        "parameter_search": false,
+        "profile_id": "p25-short-low",
+        "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+        "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "f6362b65e960a14f4c432cd65113f88a6d4d3baf1b196b8b083bbf080d1f6e12",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708.csv",
+      "data_sha256": "b5f81d40027419f8545a399a3a8b66f4737c75d78f60d20c7de7e378fd824d8a",
+      "evaluation_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+      "identity_sha256": "863b9b665f9d6c221be366bf0acf90e92044eff2f8bf93313b93c75c5472ca32",
+      "metric_contract_hash": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "raw_data_sha256": "7c23fa243cf4c7f0a0f92d2f8a84ca3c12ee5af18df38dd4437e92ad0bb83265",
+      "record_id": "jianpan1_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708_HR_ref.csv",
+      "reference_sha256": "076fec4a8767fdf6edfee35dfac72e898659b95e5cd6d9924724145976622b2c",
+      "scene": "jianpan",
+      "solver_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+      "source_p25_identity_sha256": "1ec11b827ccbc4647ee3e88845412144c3c225a17483e2719e571c92c0ddfeaa",
+      "stage": "filter_mechanism_decomposition_diagnostic"
+    },
+    {
+      "anchor_source_result_sha256": "5a11b647fa90bf7bca7b385bad581380b447b014c64da6cc9cff0c8967b32a96",
+      "anchor_spectral_gate_summary": {
+        "failure_reasons": [],
+        "gates": {
+          "complete_window_evidence_pass": true,
+          "hr_band_share_delta_pass": true,
+          "prominence_db_delta_pass": true,
+          "pulse_power_retention_pass": true,
+          "residual_artifact_corr_delta_pass": true,
+          "visible_top3_rate_delta_pass": true
+        },
+        "hr_band_share_delta_median": -0.013864570074781424,
+        "invalid_window_count": 0,
+        "prominence_db_delta_median": -0.1361573702567691,
+        "pulse_power_retention_median": 0.9819089564271699,
+        "residual_artifact_corr_delta_median": -0.013367570271381631,
+        "spectral_gate_pass": true,
+        "valid_window_count": 166,
+        "visible_top3_rate_delta": 0.018072289156626505
+      },
+      "anchor_spectral_gate_summary_sha256": "9a753090308559c25b86beb18c91771cd7ef1c2a4094c4876d2334d1df40a5ad",
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "af87be564178eb840dad769869b62b72cc1a178836026e9b5a1cc37670ecaacf",
+      "config": {
+        "actual_taps": 1,
+        "execution_mode": "prepared_window_filter_mechanism_decomposition",
+        "fs_target": 25,
+        "lanes": [
+          "raw_bypass",
+          "two_stage_zero_update",
+          "rank1_only_adaptive",
+          "rank2_only_adaptive",
+          "ranked_cascade_adaptive",
+          "reverse_cascade_adaptive"
+        ],
+        "lms_mu_min": 1e-06,
+        "mechanism_contract_sha256": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+        "memory_ms": 40,
+        "nominal_mu": 0.008,
+        "parameter_search": false,
+        "profile_id": "p25-short-low",
+        "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+        "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "f6362b65e960a14f4c432cd65113f88a6d4d3baf1b196b8b083bbf080d1f6e12",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708.csv",
+      "data_sha256": "a7421b4146701f462dd4b033ad80a60e1fdc3f72fae3e97a9c5a7b89360ac1d2",
+      "evaluation_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+      "identity_sha256": "af87be564178eb840dad769869b62b72cc1a178836026e9b5a1cc37670ecaacf",
+      "metric_contract_hash": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "raw_data_sha256": "b4aaafa531d731c81d7e8da0e5dac4f8c6e360bda6c7520c34ae78e023dd8bb7",
+      "record_id": "jianpan2_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "c7a98e54da83d6310430276b33b88bf2306ade91ac81d5b9dd3f5d18ecf5a270",
+      "scene": "jianpan",
+      "solver_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+      "source_p25_identity_sha256": "b1b7e325a41fcf35b2ca24318e9dd4d9f3e6a77887bcaf62c8a74984f0cfbe88",
+      "stage": "filter_mechanism_decomposition_diagnostic"
+    },
+    {
+      "anchor_source_result_sha256": "39ec5c4d5b0d6c0650306c380480a3a2ea44de087e2d5dd2453b2aaf5be71ebb",
+      "anchor_spectral_gate_summary": {
+        "failure_reasons": [],
+        "gates": {
+          "complete_window_evidence_pass": true,
+          "hr_band_share_delta_pass": true,
+          "prominence_db_delta_pass": true,
+          "pulse_power_retention_pass": true,
+          "residual_artifact_corr_delta_pass": true,
+          "visible_top3_rate_delta_pass": true
+        },
+        "hr_band_share_delta_median": -0.010242740034442033,
+        "invalid_window_count": 0,
+        "prominence_db_delta_median": 0.03897983644515235,
+        "pulse_power_retention_median": 0.9820495153264253,
+        "residual_artifact_corr_delta_median": -0.08002745308367357,
+        "spectral_gate_pass": true,
+        "valid_window_count": 172,
+        "visible_top3_rate_delta": -0.005813953488372093
+      },
+      "anchor_spectral_gate_summary_sha256": "22264c3b9edc8b32f62d1146bc82e0445e2c732a4508368191b4b1a4243fa721",
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "cc1a15046924dc42ec3b58937ab342113a7b1b9691f8fb289e117841573af873",
+      "config": {
+        "actual_taps": 1,
+        "execution_mode": "prepared_window_filter_mechanism_decomposition",
+        "fs_target": 25,
+        "lanes": [
+          "raw_bypass",
+          "two_stage_zero_update",
+          "rank1_only_adaptive",
+          "rank2_only_adaptive",
+          "ranked_cascade_adaptive",
+          "reverse_cascade_adaptive"
+        ],
+        "lms_mu_min": 1e-06,
+        "mechanism_contract_sha256": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+        "memory_ms": 40,
+        "nominal_mu": 0.008,
+        "parameter_search": false,
+        "profile_id": "p25-short-low",
+        "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+        "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "f6362b65e960a14f4c432cd65113f88a6d4d3baf1b196b8b083bbf080d1f6e12",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708.csv",
+      "data_sha256": "d6ea629174441276720cb28ba416f68fba6018952bfa66105ba734bdbfdb8da5",
+      "evaluation_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+      "identity_sha256": "cc1a15046924dc42ec3b58937ab342113a7b1b9691f8fb289e117841573af873",
+      "metric_contract_hash": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "raw_data_sha256": "19b5d1c42c326cd2f868c1498bd282e7dba94141b8b51f70332fd82409c2e4b7",
+      "record_id": "jianpan3_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708_HR_ref.csv",
+      "reference_sha256": "ecf02c256cde6af1557910ee9ff769de523ffb54e8124c2f0528fad82df968e6",
+      "scene": "jianpan",
+      "solver_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+      "source_p25_identity_sha256": "ff611d06136bfcf0b24fcf72d35420869fc8c427758013307915005333dd8340",
+      "stage": "filter_mechanism_decomposition_diagnostic"
+    },
+    {
+      "anchor_source_result_sha256": "4fda4b181ac68f7f34efc7bdf58438c4c66f279508b38fe5551bfa8ac1eeeca9",
+      "anchor_spectral_gate_summary": {
+        "failure_reasons": [],
+        "gates": {
+          "complete_window_evidence_pass": true,
+          "hr_band_share_delta_pass": true,
+          "prominence_db_delta_pass": true,
+          "pulse_power_retention_pass": true,
+          "residual_artifact_corr_delta_pass": true,
+          "visible_top3_rate_delta_pass": true
+        },
+        "hr_band_share_delta_median": -0.002427823974520016,
+        "invalid_window_count": 0,
+        "prominence_db_delta_median": 0.06252514748462978,
+        "pulse_power_retention_median": 1.004595221858626,
+        "residual_artifact_corr_delta_median": 0.00010648288517378646,
+        "spectral_gate_pass": true,
+        "valid_window_count": 199,
+        "visible_top3_rate_delta": 0.0
+      },
+      "anchor_spectral_gate_summary_sha256": "fd789afe4d7ef789e54f616b60f965828fbe9ac55dc4ee94fa30dc5db6ce32cc",
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "372bad3342cff86e9946b92518dfee31f9d3b926c70d51134e1d16b832b7f290",
+      "config": {
+        "actual_taps": 1,
+        "execution_mode": "prepared_window_filter_mechanism_decomposition",
+        "fs_target": 25,
+        "lanes": [
+          "raw_bypass",
+          "two_stage_zero_update",
+          "rank1_only_adaptive",
+          "rank2_only_adaptive",
+          "ranked_cascade_adaptive",
+          "reverse_cascade_adaptive"
+        ],
+        "lms_mu_min": 1e-06,
+        "mechanism_contract_sha256": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+        "memory_ms": 40,
+        "nominal_mu": 0.008,
+        "parameter_search": false,
+        "profile_id": "p25-short-low",
+        "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+        "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "f6362b65e960a14f4c432cd65113f88a6d4d3baf1b196b8b083bbf080d1f6e12",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613.csv",
+      "data_sha256": "22927001aa2c6d6c378d5ab7897897e59f3c72dfad697fd77a165e599ca5443d",
+      "evaluation_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+      "identity_sha256": "372bad3342cff86e9946b92518dfee31f9d3b926c70d51134e1d16b832b7f290",
+      "metric_contract_hash": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "raw_data_sha256": "1dd489af27c30e2f52b911ec1e11312a7498463cdb1e737ca66ffba26bbf4bcb",
+      "record_id": "kaihe1_LYX_0613",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613_HR_ref.csv",
+      "reference_sha256": "38a5b714ee897bbeaaafa0be7017b3bf9d941826a0e534334131b1301c53e0e0",
+      "scene": "kaihe",
+      "solver_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+      "source_p25_identity_sha256": "a5ab9a25f9c2d031dde671f4fb97a416e9aa6351cc5bfe49f54177268bd6730b",
+      "stage": "filter_mechanism_decomposition_diagnostic"
+    },
+    {
+      "anchor_source_result_sha256": "1644b4334c20478d40dc4282c4b9b05c3e7e3bdbfbbc71de2de0d96ec07b50bd",
+      "anchor_spectral_gate_summary": {
+        "failure_reasons": [],
+        "gates": {
+          "complete_window_evidence_pass": true,
+          "hr_band_share_delta_pass": true,
+          "prominence_db_delta_pass": true,
+          "pulse_power_retention_pass": true,
+          "residual_artifact_corr_delta_pass": true,
+          "visible_top3_rate_delta_pass": true
+        },
+        "hr_band_share_delta_median": -0.011689839906346422,
+        "invalid_window_count": 0,
+        "prominence_db_delta_median": 0.10758005918454927,
+        "pulse_power_retention_median": 0.9889799068503974,
+        "residual_artifact_corr_delta_median": -0.038381875705882404,
+        "spectral_gate_pass": true,
+        "valid_window_count": 201,
+        "visible_top3_rate_delta": 0.009950248756218905
+      },
+      "anchor_spectral_gate_summary_sha256": "c24aea02d0b1de6ce24218258afeacce5f93df7e0d9389bf64d800de952f712d",
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "bfd765391376d72eb6e4473ae710e6b9b687ea9c8fb3f07924614eb29f614eaf",
+      "config": {
+        "actual_taps": 1,
+        "execution_mode": "prepared_window_filter_mechanism_decomposition",
+        "fs_target": 25,
+        "lanes": [
+          "raw_bypass",
+          "two_stage_zero_update",
+          "rank1_only_adaptive",
+          "rank2_only_adaptive",
+          "ranked_cascade_adaptive",
+          "reverse_cascade_adaptive"
+        ],
+        "lms_mu_min": 1e-06,
+        "mechanism_contract_sha256": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+        "memory_ms": 40,
+        "nominal_mu": 0.008,
+        "parameter_search": false,
+        "profile_id": "p25-short-low",
+        "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+        "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "f6362b65e960a14f4c432cd65113f88a6d4d3baf1b196b8b083bbf080d1f6e12",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617.csv",
+      "data_sha256": "ba3d9938e8d9e04d25ce32fa6e698b21ef512f68bc89d3adfb0a5e77fc900d6d",
+      "evaluation_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+      "identity_sha256": "bfd765391376d72eb6e4473ae710e6b9b687ea9c8fb3f07924614eb29f614eaf",
+      "metric_contract_hash": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "raw_data_sha256": "73f626f972afccccb5a0ef261e3bfe1afd60b02b24a18e5b8a2ddfb5964e7528",
+      "record_id": "kaihe1_LYX_0617",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617_HR_ref.csv",
+      "reference_sha256": "a3b779e55561da76a3d69293e73175c624e947d57de38a3f5184d324731c0739",
+      "scene": "kaihe",
+      "solver_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+      "source_p25_identity_sha256": "bbb0b8017cf719ed356bc7d1377f33564db1d3eef9131b4911d82b4503d53320",
+      "stage": "filter_mechanism_decomposition_diagnostic"
+    },
+    {
+      "anchor_source_result_sha256": "7d4a857721776bdf45b0a6992bd1d829e99ef0600e4bd345716c7af3ffb8bc21",
+      "anchor_spectral_gate_summary": {
+        "failure_reasons": [],
+        "gates": {
+          "complete_window_evidence_pass": true,
+          "hr_band_share_delta_pass": true,
+          "prominence_db_delta_pass": true,
+          "pulse_power_retention_pass": true,
+          "residual_artifact_corr_delta_pass": true,
+          "visible_top3_rate_delta_pass": true
+        },
+        "hr_band_share_delta_median": -0.004009475009586483,
+        "invalid_window_count": 0,
+        "prominence_db_delta_median": 0.297852645571854,
+        "pulse_power_retention_median": 0.9972569667965264,
+        "residual_artifact_corr_delta_median": -0.06584536754533316,
+        "spectral_gate_pass": true,
+        "valid_window_count": 201,
+        "visible_top3_rate_delta": 0.03482587064676617
+      },
+      "anchor_spectral_gate_summary_sha256": "f5a971581ffb63a5964419c8963925739c17b83d85106b06ad9d7bc3ab6033c1",
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "4d004c4b418bddf1ac0cdfef26ea67b9e39db8be12cab536b57429de0d27a189",
+      "config": {
+        "actual_taps": 1,
+        "execution_mode": "prepared_window_filter_mechanism_decomposition",
+        "fs_target": 25,
+        "lanes": [
+          "raw_bypass",
+          "two_stage_zero_update",
+          "rank1_only_adaptive",
+          "rank2_only_adaptive",
+          "ranked_cascade_adaptive",
+          "reverse_cascade_adaptive"
+        ],
+        "lms_mu_min": 1e-06,
+        "mechanism_contract_sha256": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+        "memory_ms": 40,
+        "nominal_mu": 0.008,
+        "parameter_search": false,
+        "profile_id": "p25-short-low",
+        "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+        "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "f6362b65e960a14f4c432cd65113f88a6d4d3baf1b196b8b083bbf080d1f6e12",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613.csv",
+      "data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+      "evaluation_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+      "identity_sha256": "4d004c4b418bddf1ac0cdfef26ea67b9e39db8be12cab536b57429de0d27a189",
+      "metric_contract_hash": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "raw_data_sha256": "778f75d02d47a134a5999a5641de201dfc613da915b43876398792c6833c6e84",
+      "record_id": "kaihe3_LYX_0613",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613_HR_ref.csv",
+      "reference_sha256": "5cb40473d1793f8ff91eeed993f4a1b9a59c44b7fefcfd57a0314ad34c626050",
+      "scene": "kaihe",
+      "solver_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+      "source_p25_identity_sha256": "4e7d592405b1c9791e49510ff8f9db0fc85d4e1b4138c06f5058dc5f6c36431b",
+      "stage": "filter_mechanism_decomposition_diagnostic"
+    },
+    {
+      "anchor_source_result_sha256": "e5dec21fcf6fbd88274c8e24516a406439da5745d1dd2bbaae07ef1d7603b17d",
+      "anchor_spectral_gate_summary": {
+        "failure_reasons": [],
+        "gates": {
+          "complete_window_evidence_pass": true,
+          "hr_band_share_delta_pass": true,
+          "prominence_db_delta_pass": true,
+          "pulse_power_retention_pass": true,
+          "residual_artifact_corr_delta_pass": true,
+          "visible_top3_rate_delta_pass": true
+        },
+        "hr_band_share_delta_median": -0.002034286114771102,
+        "invalid_window_count": 0,
+        "prominence_db_delta_median": 0.011645158726572014,
+        "pulse_power_retention_median": 0.9920934417314483,
+        "residual_artifact_corr_delta_median": -0.00014587639141025455,
+        "spectral_gate_pass": true,
+        "valid_window_count": 226,
+        "visible_top3_rate_delta": 0.01327433628318584
+      },
+      "anchor_spectral_gate_summary_sha256": "857b24508f6ec15dbac6ae4727618dc05cf376a6ca2c3e03b90adb62f1072769",
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "534ee3eeeda13c8603d1c8dae203c76d593fc09dc260c396508ff737a7c50f71",
+      "config": {
+        "actual_taps": 1,
+        "execution_mode": "prepared_window_filter_mechanism_decomposition",
+        "fs_target": 25,
+        "lanes": [
+          "raw_bypass",
+          "two_stage_zero_update",
+          "rank1_only_adaptive",
+          "rank2_only_adaptive",
+          "ranked_cascade_adaptive",
+          "reverse_cascade_adaptive"
+        ],
+        "lms_mu_min": 1e-06,
+        "mechanism_contract_sha256": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+        "memory_ms": 40,
+        "nominal_mu": 0.008,
+        "parameter_search": false,
+        "profile_id": "p25-short-low",
+        "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+        "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "f6362b65e960a14f4c432cd65113f88a6d4d3baf1b196b8b083bbf080d1f6e12",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708.csv",
+      "data_sha256": "971a87c06295b73d4cca7936437de8c832c7d2eed65f286a8742805543f5f87b",
+      "evaluation_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+      "identity_sha256": "534ee3eeeda13c8603d1c8dae203c76d593fc09dc260c396508ff737a7c50f71",
+      "metric_contract_hash": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "raw_data_sha256": "4e53e93fb94a8ecd17d319af41d6d010c1424baf9c0151099cb417fb0a2d6af0",
+      "record_id": "run1_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708_HR_ref.csv",
+      "reference_sha256": "c8677ec1f0e22b25100c20ab83b8faf22ddea730a973b41b1b43673acf1443a0",
+      "scene": "run",
+      "solver_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+      "source_p25_identity_sha256": "7069a469df33236085ad6f1ff61b9302eee1bad635975bf956e7efa5e918c66a",
+      "stage": "filter_mechanism_decomposition_diagnostic"
+    },
+    {
+      "anchor_source_result_sha256": "9cc0095686421c2075c2099cd4c7bbb575c641803482141206c900f260c8252a",
+      "anchor_spectral_gate_summary": {
+        "failure_reasons": [],
+        "gates": {
+          "complete_window_evidence_pass": true,
+          "hr_band_share_delta_pass": true,
+          "prominence_db_delta_pass": true,
+          "pulse_power_retention_pass": true,
+          "residual_artifact_corr_delta_pass": true,
+          "visible_top3_rate_delta_pass": true
+        },
+        "hr_band_share_delta_median": 0.008558884204525424,
+        "invalid_window_count": 0,
+        "prominence_db_delta_median": 0.1368233967362955,
+        "pulse_power_retention_median": 1.0299387967520661,
+        "residual_artifact_corr_delta_median": -0.022603587046749585,
+        "spectral_gate_pass": true,
+        "valid_window_count": 228,
+        "visible_top3_rate_delta": 0.0
+      },
+      "anchor_spectral_gate_summary_sha256": "f7264247798c5fb6eae214a48a3b9394106c1657aba2b65dec5e633c3dbe3706",
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "ec4f3882a486194f7a99db60d2a5d2480d23b2bdd451e1e015a31c1725865511",
+      "config": {
+        "actual_taps": 1,
+        "execution_mode": "prepared_window_filter_mechanism_decomposition",
+        "fs_target": 25,
+        "lanes": [
+          "raw_bypass",
+          "two_stage_zero_update",
+          "rank1_only_adaptive",
+          "rank2_only_adaptive",
+          "ranked_cascade_adaptive",
+          "reverse_cascade_adaptive"
+        ],
+        "lms_mu_min": 1e-06,
+        "mechanism_contract_sha256": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+        "memory_ms": 40,
+        "nominal_mu": 0.008,
+        "parameter_search": false,
+        "profile_id": "p25-short-low",
+        "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+        "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "f6362b65e960a14f4c432cd65113f88a6d4d3baf1b196b8b083bbf080d1f6e12",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708.csv",
+      "data_sha256": "a32ab804060f866add72e093d6bdced3d756faf967c1ac1b233fec07c5733cb7",
+      "evaluation_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+      "identity_sha256": "ec4f3882a486194f7a99db60d2a5d2480d23b2bdd451e1e015a31c1725865511",
+      "metric_contract_hash": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "raw_data_sha256": "6e06fcb2efffb234c1d7b2dc93bc8ea7b432f000fdfdc5f32639850d1e6e7d18",
+      "record_id": "run2_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "8d04fc22e8e98c5b4380a05ded28e8aa542ab5fa66d800cf602289ccf0062382",
+      "scene": "run",
+      "solver_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+      "source_p25_identity_sha256": "4b22afc0113e457c7ec1915a1b977f73e914d3a1796ff4ba318b1eca70432f40",
+      "stage": "filter_mechanism_decomposition_diagnostic"
+    },
+    {
+      "anchor_source_result_sha256": "d57c3f533d785ec43405990ca7fefbca896e8ccf10793bf3caab9d002f530d33",
+      "anchor_spectral_gate_summary": {
+        "failure_reasons": [],
+        "gates": {
+          "complete_window_evidence_pass": true,
+          "hr_band_share_delta_pass": true,
+          "prominence_db_delta_pass": true,
+          "pulse_power_retention_pass": true,
+          "residual_artifact_corr_delta_pass": true,
+          "visible_top3_rate_delta_pass": true
+        },
+        "hr_band_share_delta_median": -0.004990505111883703,
+        "invalid_window_count": 0,
+        "prominence_db_delta_median": -0.05486802060222873,
+        "pulse_power_retention_median": 0.999813402240818,
+        "residual_artifact_corr_delta_median": -0.016077981698610855,
+        "spectral_gate_pass": true,
+        "valid_window_count": 316,
+        "visible_top3_rate_delta": -0.006329113924050633
+      },
+      "anchor_spectral_gate_summary_sha256": "11d751b43e058ef6ede38109d62b3c3cf2fcc6f9563a5fbb38f45ed56bba0763",
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "b83dc59f7a9fd23d9a7c4e55d0d616f42586e2953dcd4a7e83e0dfa29ebe4ac0",
+      "config": {
+        "actual_taps": 1,
+        "execution_mode": "prepared_window_filter_mechanism_decomposition",
+        "fs_target": 25,
+        "lanes": [
+          "raw_bypass",
+          "two_stage_zero_update",
+          "rank1_only_adaptive",
+          "rank2_only_adaptive",
+          "ranked_cascade_adaptive",
+          "reverse_cascade_adaptive"
+        ],
+        "lms_mu_min": 1e-06,
+        "mechanism_contract_sha256": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+        "memory_ms": 40,
+        "nominal_mu": 0.008,
+        "parameter_search": false,
+        "profile_id": "p25-short-low",
+        "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+        "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "f6362b65e960a14f4c432cd65113f88a6d4d3baf1b196b8b083bbf080d1f6e12",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708.csv",
+      "data_sha256": "1f1ea855fba32db79c1a5d654736170f1e08d1bbc72409191b227814db685742",
+      "evaluation_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+      "identity_sha256": "b83dc59f7a9fd23d9a7c4e55d0d616f42586e2953dcd4a7e83e0dfa29ebe4ac0",
+      "metric_contract_hash": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "raw_data_sha256": "72d487748fa84ca857a1b50b09998d485359b9af63bdf9240a6e6b3415b632a8",
+      "record_id": "run3_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708_HR_ref.csv",
+      "reference_sha256": "323813b4b44f54e604bf751164616bdd3ed5859d5faee2f302b11301b612e1e3",
+      "scene": "run",
+      "solver_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+      "source_p25_identity_sha256": "337eeaf47c1b8a5fc96e27e51ed56a383d6d17825b8e5e1df4ce07a8b47ebade",
+      "stage": "filter_mechanism_decomposition_diagnostic"
+    },
+    {
+      "anchor_source_result_sha256": "e5605c430dd01304875d1cbe651322feb87162e0f9391a35fd411ae5b2209b05",
+      "anchor_spectral_gate_summary": {
+        "failure_reasons": [],
+        "gates": {
+          "complete_window_evidence_pass": true,
+          "hr_band_share_delta_pass": false,
+          "prominence_db_delta_pass": true,
+          "pulse_power_retention_pass": true,
+          "residual_artifact_corr_delta_pass": true,
+          "visible_top3_rate_delta_pass": true
+        },
+        "hr_band_share_delta_median": -0.02420185865899971,
+        "invalid_window_count": 0,
+        "prominence_db_delta_median": -0.1713532914726308,
+        "pulse_power_retention_median": 0.9596464729648138,
+        "residual_artifact_corr_delta_median": -0.0004045972976914336,
+        "spectral_gate_pass": false,
+        "valid_window_count": 164,
+        "visible_top3_rate_delta": 0.012195121951219513
+      },
+      "anchor_spectral_gate_summary_sha256": "6d1d77adfe90024e7517f9bf6738e19fcf6294280a504ece448104105643b9a4",
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "439c2edd7c4c73c10b3185e1070667dbd2272235afc33d93bf67117b44809343",
+      "config": {
+        "actual_taps": 1,
+        "execution_mode": "prepared_window_filter_mechanism_decomposition",
+        "fs_target": 25,
+        "lanes": [
+          "raw_bypass",
+          "two_stage_zero_update",
+          "rank1_only_adaptive",
+          "rank2_only_adaptive",
+          "ranked_cascade_adaptive",
+          "reverse_cascade_adaptive"
+        ],
+        "lms_mu_min": 1e-06,
+        "mechanism_contract_sha256": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+        "memory_ms": 40,
+        "nominal_mu": 0.008,
+        "parameter_search": false,
+        "profile_id": "p25-short-low",
+        "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+        "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "f6362b65e960a14f4c432cd65113f88a6d4d3baf1b196b8b083bbf080d1f6e12",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708.csv",
+      "data_sha256": "cf5e2d02bd1f874b3b55883e351cb6cf5107b6f0eb4d7acf142d6f5e6d93e7ee",
+      "evaluation_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+      "identity_sha256": "439c2edd7c4c73c10b3185e1070667dbd2272235afc33d93bf67117b44809343",
+      "metric_contract_hash": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "raw_data_sha256": "eaba17c0d527c7a8b099dfa3f9587496bce5095ab91528c2b371d5d795e852b1",
+      "record_id": "xiezi2_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "fc1a913849322295413e3ecf1ca48cefa477420ac4c34ea3cc2a5b74070d2877",
+      "scene": "xiezi",
+      "solver_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+      "source_p25_identity_sha256": "f5c4153ac99ab50aba33b28ff077c11c95ff25b58ca51ae8b2d7d2f1e973fa5d",
+      "stage": "filter_mechanism_decomposition_diagnostic"
+    },
+    {
+      "anchor_source_result_sha256": "e8272dd145868f830f84083e6aefed885a2c72891714b68e02104e0f2fd0f1a6",
+      "anchor_spectral_gate_summary": {
+        "failure_reasons": [],
+        "gates": {
+          "complete_window_evidence_pass": true,
+          "hr_band_share_delta_pass": true,
+          "prominence_db_delta_pass": true,
+          "pulse_power_retention_pass": true,
+          "residual_artifact_corr_delta_pass": true,
+          "visible_top3_rate_delta_pass": true
+        },
+        "hr_band_share_delta_median": -0.017392694165362876,
+        "invalid_window_count": 0,
+        "prominence_db_delta_median": -0.18403656464664042,
+        "pulse_power_retention_median": 0.9813716136001589,
+        "residual_artifact_corr_delta_median": 0.00290467230444922,
+        "spectral_gate_pass": true,
+        "valid_window_count": 166,
+        "visible_top3_rate_delta": 0.012048192771084338
+      },
+      "anchor_spectral_gate_summary_sha256": "fcb460a9c17603d53f9b55acfe312ca62f2f63e261a92ed62a6394ba7673b08d",
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "5a123ace188e86b0e20e4981a989cfc7dc36e423b6f2e1dca71c91e6f0e16a2a",
+      "config": {
+        "actual_taps": 1,
+        "execution_mode": "prepared_window_filter_mechanism_decomposition",
+        "fs_target": 25,
+        "lanes": [
+          "raw_bypass",
+          "two_stage_zero_update",
+          "rank1_only_adaptive",
+          "rank2_only_adaptive",
+          "ranked_cascade_adaptive",
+          "reverse_cascade_adaptive"
+        ],
+        "lms_mu_min": 1e-06,
+        "mechanism_contract_sha256": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+        "memory_ms": 40,
+        "nominal_mu": 0.008,
+        "parameter_search": false,
+        "profile_id": "p25-short-low",
+        "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+        "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "f6362b65e960a14f4c432cd65113f88a6d4d3baf1b196b8b083bbf080d1f6e12",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708.csv",
+      "data_sha256": "7b32139c8969ebcd6a8c1bedf8bb9191c916187a7716f43db6ad03d60f165619",
+      "evaluation_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+      "identity_sha256": "5a123ace188e86b0e20e4981a989cfc7dc36e423b6f2e1dca71c91e6f0e16a2a",
+      "metric_contract_hash": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "raw_data_sha256": "111b11e3120c793eae426f7361f73ac8c0b5b6418057b2531f9fd62cf1a1be79",
+      "record_id": "xiezi3_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708_HR_ref.csv",
+      "reference_sha256": "34c0a25bf5953ba8968108170ddcf3b6664fb15c7cecd8f1dfc1728c5cca0916",
+      "scene": "xiezi",
+      "solver_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+      "source_p25_identity_sha256": "fe55858d232b9b22f5c5c42c73bb896cb0615d806e64282267b7b9b954882b50",
+      "stage": "filter_mechanism_decomposition_diagnostic"
+    },
+    {
+      "anchor_source_result_sha256": "35e0179adbf23d1452a9340c91a9e91b06c497d184dffe399e0314cbb013647b",
+      "anchor_spectral_gate_summary": {
+        "failure_reasons": [],
+        "gates": {
+          "complete_window_evidence_pass": true,
+          "hr_band_share_delta_pass": true,
+          "prominence_db_delta_pass": true,
+          "pulse_power_retention_pass": true,
+          "residual_artifact_corr_delta_pass": true,
+          "visible_top3_rate_delta_pass": true
+        },
+        "hr_band_share_delta_median": -0.01435543293412822,
+        "invalid_window_count": 0,
+        "prominence_db_delta_median": -0.039410397973091094,
+        "pulse_power_retention_median": 0.9779716511190124,
+        "residual_artifact_corr_delta_median": -0.02016064326182969,
+        "spectral_gate_pass": true,
+        "valid_window_count": 165,
+        "visible_top3_rate_delta": -0.01818181818181818
+      },
+      "anchor_spectral_gate_summary_sha256": "ee36a77a69b5fd442eb1a0c94a082d966f9c0e72ddafd1ca00396231cc0b3177",
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "02ce192c85acf0c28b7e45a9faee1d3fbc8ec0110d9d05d5b6e246aad175fcd7",
+      "config": {
+        "actual_taps": 1,
+        "execution_mode": "prepared_window_filter_mechanism_decomposition",
+        "fs_target": 25,
+        "lanes": [
+          "raw_bypass",
+          "two_stage_zero_update",
+          "rank1_only_adaptive",
+          "rank2_only_adaptive",
+          "ranked_cascade_adaptive",
+          "reverse_cascade_adaptive"
+        ],
+        "lms_mu_min": 1e-06,
+        "mechanism_contract_sha256": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+        "memory_ms": 40,
+        "nominal_mu": 0.008,
+        "parameter_search": false,
+        "profile_id": "p25-short-low",
+        "profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+        "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "f6362b65e960a14f4c432cd65113f88a6d4d3baf1b196b8b083bbf080d1f6e12",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708.csv",
+      "data_sha256": "8044c3d7fb32f520f6ba5940508814f69cef5e3ec0b8f3ca8b9fb750961f897f",
+      "evaluation_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+      "identity_sha256": "02ce192c85acf0c28b7e45a9faee1d3fbc8ec0110d9d05d5b6e246aad175fcd7",
+      "metric_contract_hash": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "raw_data_sha256": "1d18872f230a8ed75fdf9653196193557da946dcdb6b6375afe220ad9c71bdf4",
+      "record_id": "xiezi4_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708_HR_ref.csv",
+      "reference_sha256": "9db5f78f018e87128771f45cc3af8004e51ef7530ae1358dcf873b8f547cb0f7",
+      "scene": "xiezi",
+      "solver_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+      "source_p25_identity_sha256": "9ec0232366e8e20f59f3a47e042f8e2386089f71982cdc2e9c842530792fc9f3",
+      "stage": "filter_mechanism_decomposition_diagnostic"
+    }
+  ],
+  "identity_panel_sha256": "f121144b5e088691732eff08b84a1a6034ba745955383ece568ae2876e595c48",
+  "identity_sha256": [
+    "863b9b665f9d6c221be366bf0acf90e92044eff2f8bf93313b93c75c5472ca32",
+    "af87be564178eb840dad769869b62b72cc1a178836026e9b5a1cc37670ecaacf",
+    "cc1a15046924dc42ec3b58937ab342113a7b1b9691f8fb289e117841573af873",
+    "372bad3342cff86e9946b92518dfee31f9d3b926c70d51134e1d16b832b7f290",
+    "bfd765391376d72eb6e4473ae710e6b9b687ea9c8fb3f07924614eb29f614eaf",
+    "4d004c4b418bddf1ac0cdfef26ea67b9e39db8be12cab536b57429de0d27a189",
+    "534ee3eeeda13c8603d1c8dae203c76d593fc09dc260c396508ff737a7c50f71",
+    "ec4f3882a486194f7a99db60d2a5d2480d23b2bdd451e1e015a31c1725865511",
+    "b83dc59f7a9fd23d9a7c4e55d0d616f42586e2953dcd4a7e83e0dfa29ebe4ac0",
+    "439c2edd7c4c73c10b3185e1070667dbd2272235afc33d93bf67117b44809343",
+    "5a123ace188e86b0e20e4981a989cfc7dc36e423b6f2e1dca71c91e6f0e16a2a",
+    "02ce192c85acf0c28b7e45a9faee1d3fbc8ec0110d9d05d5b6e246aad175fcd7"
+  ],
+  "independent_bo_authorized": false,
+  "may_nominate_recovery_candidate": false,
+  "mechanism_contract": {
+    "actual_taps": 1,
+    "automatic_stage_f_execution": false,
+    "automatic_stage_r_execution": false,
+    "contract_version": "lyx_filter_mechanism_decomposition_v1",
+    "decision_precedence": [
+      "control_invalid",
+      "baseline_reproduction_invalid",
+      "rank1_single_stage_mechanism_candidate",
+      "rank2_reference_selection_mechanism_candidate",
+      "reverse_order_mechanism_candidate",
+      "partial_mechanism_relief_requires_factorial",
+      "no_mechanism_relief_requires_factorial_or_bo_review"
+    ],
+    "effective_mu_formula": "max(lms_mu_min, nominal_mu - abs(corrcoef(current_desired, reference)) / 100)",
+    "expected_record_count": 12,
+    "expected_reference_count": 2,
+    "fs_target": 25,
+    "identity_grain": "record",
+    "independent_bo_authorized": false,
+    "lanes": {
+      "rank1_only_adaptive": {
+        "adaptive_updates": 1,
+        "mu_rule": "current_effective_mu",
+        "reference_rank_sequence": [
+          1
+        ]
+      },
+      "rank2_only_adaptive": {
+        "adaptive_updates": 1,
+        "mu_rule": "current_effective_mu",
+        "reference_rank_sequence": [
+          2
+        ]
+      },
+      "ranked_cascade_adaptive": {
+        "adaptive_updates": 2,
+        "mu_rule": "current_effective_mu",
+        "reference_rank_sequence": [
+          1,
+          2
+        ],
+        "role": "committed_baseline_reproduction"
+      },
+      "raw_bypass": {
+        "adaptive_updates": 0,
+        "mu_rule": "none",
+        "reference_rank_sequence": []
+      },
+      "reverse_cascade_adaptive": {
+        "adaptive_updates": 2,
+        "mu_rule": "current_effective_mu",
+        "reference_rank_sequence": [
+          2,
+          1
+        ]
+      },
+      "two_stage_zero_update": {
+        "adaptive_updates": 0,
+        "mu_rule": "forced_zero",
+        "reference_rank_sequence": [
+          1,
+          2
+        ]
+      }
+    },
+    "lms_mu_min": 1e-06,
+    "may_nominate_recovery_candidate": false,
+    "memory_ms": 40,
+    "no_parameter_search": true,
+    "nominal_mu": 0.008,
+    "paired_within_record": true,
+    "profile_id": "p25-short-low",
+    "require_complete_windows": true
+  },
+  "parameter_search_authorized": false,
+  "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+  "proposal_sha256": "94c9264dbbdd8cdd299cf502c1ef1ba0e859000c9c72a1c35fc490eb46eccfab",
+  "proposal_version": "lyx_filter_mechanism_decomposition_proposal_v1",
+  "record_panel": [
+    {
+      "data_sha256": "b5f81d40027419f8545a399a3a8b66f4737c75d78f60d20c7de7e378fd824d8a",
+      "raw_data_sha256": "7c23fa243cf4c7f0a0f92d2f8a84ca3c12ee5af18df38dd4437e92ad0bb83265",
+      "record_id": "jianpan1_LYX_0708",
+      "reference_sha256": "076fec4a8767fdf6edfee35dfac72e898659b95e5cd6d9924724145976622b2c",
+      "scene": "jianpan"
+    },
+    {
+      "data_sha256": "a7421b4146701f462dd4b033ad80a60e1fdc3f72fae3e97a9c5a7b89360ac1d2",
+      "raw_data_sha256": "b4aaafa531d731c81d7e8da0e5dac4f8c6e360bda6c7520c34ae78e023dd8bb7",
+      "record_id": "jianpan2_LYX_0708",
+      "reference_sha256": "c7a98e54da83d6310430276b33b88bf2306ade91ac81d5b9dd3f5d18ecf5a270",
+      "scene": "jianpan"
+    },
+    {
+      "data_sha256": "d6ea629174441276720cb28ba416f68fba6018952bfa66105ba734bdbfdb8da5",
+      "raw_data_sha256": "19b5d1c42c326cd2f868c1498bd282e7dba94141b8b51f70332fd82409c2e4b7",
+      "record_id": "jianpan3_LYX_0708",
+      "reference_sha256": "ecf02c256cde6af1557910ee9ff769de523ffb54e8124c2f0528fad82df968e6",
+      "scene": "jianpan"
+    },
+    {
+      "data_sha256": "22927001aa2c6d6c378d5ab7897897e59f3c72dfad697fd77a165e599ca5443d",
+      "raw_data_sha256": "1dd489af27c30e2f52b911ec1e11312a7498463cdb1e737ca66ffba26bbf4bcb",
+      "record_id": "kaihe1_LYX_0613",
+      "reference_sha256": "38a5b714ee897bbeaaafa0be7017b3bf9d941826a0e534334131b1301c53e0e0",
+      "scene": "kaihe"
+    },
+    {
+      "data_sha256": "ba3d9938e8d9e04d25ce32fa6e698b21ef512f68bc89d3adfb0a5e77fc900d6d",
+      "raw_data_sha256": "73f626f972afccccb5a0ef261e3bfe1afd60b02b24a18e5b8a2ddfb5964e7528",
+      "record_id": "kaihe1_LYX_0617",
+      "reference_sha256": "a3b779e55561da76a3d69293e73175c624e947d57de38a3f5184d324731c0739",
+      "scene": "kaihe"
+    },
+    {
+      "data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+      "raw_data_sha256": "778f75d02d47a134a5999a5641de201dfc613da915b43876398792c6833c6e84",
+      "record_id": "kaihe3_LYX_0613",
+      "reference_sha256": "5cb40473d1793f8ff91eeed993f4a1b9a59c44b7fefcfd57a0314ad34c626050",
+      "scene": "kaihe"
+    },
+    {
+      "data_sha256": "971a87c06295b73d4cca7936437de8c832c7d2eed65f286a8742805543f5f87b",
+      "raw_data_sha256": "4e53e93fb94a8ecd17d319af41d6d010c1424baf9c0151099cb417fb0a2d6af0",
+      "record_id": "run1_LYX_0708",
+      "reference_sha256": "c8677ec1f0e22b25100c20ab83b8faf22ddea730a973b41b1b43673acf1443a0",
+      "scene": "run"
+    },
+    {
+      "data_sha256": "a32ab804060f866add72e093d6bdced3d756faf967c1ac1b233fec07c5733cb7",
+      "raw_data_sha256": "6e06fcb2efffb234c1d7b2dc93bc8ea7b432f000fdfdc5f32639850d1e6e7d18",
+      "record_id": "run2_LYX_0708",
+      "reference_sha256": "8d04fc22e8e98c5b4380a05ded28e8aa542ab5fa66d800cf602289ccf0062382",
+      "scene": "run"
+    },
+    {
+      "data_sha256": "1f1ea855fba32db79c1a5d654736170f1e08d1bbc72409191b227814db685742",
+      "raw_data_sha256": "72d487748fa84ca857a1b50b09998d485359b9af63bdf9240a6e6b3415b632a8",
+      "record_id": "run3_LYX_0708",
+      "reference_sha256": "323813b4b44f54e604bf751164616bdd3ed5859d5faee2f302b11301b612e1e3",
+      "scene": "run"
+    },
+    {
+      "data_sha256": "cf5e2d02bd1f874b3b55883e351cb6cf5107b6f0eb4d7acf142d6f5e6d93e7ee",
+      "raw_data_sha256": "eaba17c0d527c7a8b099dfa3f9587496bce5095ab91528c2b371d5d795e852b1",
+      "record_id": "xiezi2_LYX_0708",
+      "reference_sha256": "fc1a913849322295413e3ecf1ca48cefa477420ac4c34ea3cc2a5b74070d2877",
+      "scene": "xiezi"
+    },
+    {
+      "data_sha256": "7b32139c8969ebcd6a8c1bedf8bb9191c916187a7716f43db6ad03d60f165619",
+      "raw_data_sha256": "111b11e3120c793eae426f7361f73ac8c0b5b6418057b2531f9fd62cf1a1be79",
+      "record_id": "xiezi3_LYX_0708",
+      "reference_sha256": "34c0a25bf5953ba8968108170ddcf3b6664fb15c7cecd8f1dfc1728c5cca0916",
+      "scene": "xiezi"
+    },
+    {
+      "data_sha256": "8044c3d7fb32f520f6ba5940508814f69cef5e3ec0b8f3ca8b9fb750961f897f",
+      "raw_data_sha256": "1d18872f230a8ed75fdf9653196193557da946dcdb6b6375afe220ad9c71bdf4",
+      "record_id": "xiezi4_LYX_0708",
+      "reference_sha256": "9db5f78f018e87128771f45cc3af8004e51ef7530ae1358dcf873b8f547cb0f7",
+      "scene": "xiezi"
+    }
+  ],
+  "record_panel_sha256": "5db7aac87885cd8c0af8fa071085699fd2b820555bbe2b2784bd7e3fa7169e4b",
+  "retry_limit": 1,
+  "source_artifacts": {
+    "anchor:jianpan1_LYX_0708": {
+      "file_sha256": "621e5b70d71360121309f5dd5a74bc5fc70a4ee2eeb3fa33990ce7cef4726639",
+      "path": "data/experiments/lyx_recovery_filter_profile/p25_spectral_recheck_execution_v2/profile_record_audits/p25-short-low/jianpan1_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "anchor:jianpan2_LYX_0708": {
+      "file_sha256": "43a87e7ad5a8d1370323e3ba797c218ada9f714b2170a9cc079873fda6a0c343",
+      "path": "data/experiments/lyx_recovery_filter_profile/p25_spectral_recheck_execution_v2/profile_record_audits/p25-short-low/jianpan2_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "anchor:jianpan3_LYX_0708": {
+      "file_sha256": "7e44ffa0e21530061a2adcf1e8c6e612c951ac7f80531fbf13d24755f8fa4ba9",
+      "path": "data/experiments/lyx_recovery_filter_profile/p25_spectral_recheck_execution_v2/profile_record_audits/p25-short-low/jianpan3_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "anchor:kaihe1_LYX_0613": {
+      "file_sha256": "af62fdc5089447ee9f2c45e5df55700f5064a1237e69677b759be5044977495d",
+      "path": "data/experiments/lyx_recovery_filter_profile/p25_spectral_recheck_execution_v2/profile_record_audits/p25-short-low/kaihe1_LYX_0613.json",
+      "path_base": "repository_root"
+    },
+    "anchor:kaihe1_LYX_0617": {
+      "file_sha256": "aaa9a3df6c8e58afc918985f20b397b22fee2e21cd4786c4e2241a26b5e1b38d",
+      "path": "data/experiments/lyx_recovery_filter_profile/p25_spectral_recheck_execution_v2/profile_record_audits/p25-short-low/kaihe1_LYX_0617.json",
+      "path_base": "repository_root"
+    },
+    "anchor:kaihe3_LYX_0613": {
+      "file_sha256": "2c04db5471742f52dd86006e5cb03b800f6d9f0cec73733b7af06ce322cb0133",
+      "path": "data/experiments/lyx_recovery_filter_profile/p25_spectral_recheck_execution_v2/profile_record_audits/p25-short-low/kaihe3_LYX_0613.json",
+      "path_base": "repository_root"
+    },
+    "anchor:run1_LYX_0708": {
+      "file_sha256": "4c0955f0830c11a121f01ee5e426c2f42158a16bca0166c2e21bacd9bd93f5fe",
+      "path": "data/experiments/lyx_recovery_filter_profile/p25_spectral_recheck_execution_v2/profile_record_audits/p25-short-low/run1_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "anchor:run2_LYX_0708": {
+      "file_sha256": "720032f4ff2a434b1503d34a0576189533486f331a497933863eea1039bc0e25",
+      "path": "data/experiments/lyx_recovery_filter_profile/p25_spectral_recheck_execution_v2/profile_record_audits/p25-short-low/run2_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "anchor:run3_LYX_0708": {
+      "file_sha256": "a1a76bc65cc1ebaceec80a42443d3c2716d3bc52fb105c05fccf3a8d9bdcac0c",
+      "path": "data/experiments/lyx_recovery_filter_profile/p25_spectral_recheck_execution_v2/profile_record_audits/p25-short-low/run3_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "anchor:xiezi2_LYX_0708": {
+      "file_sha256": "72a4c99fa1303c9f74947aaca51888ca9dccb8d34c5161ccdcf36958ddd57637",
+      "path": "data/experiments/lyx_recovery_filter_profile/p25_spectral_recheck_execution_v2/profile_record_audits/p25-short-low/xiezi2_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "anchor:xiezi3_LYX_0708": {
+      "file_sha256": "ea29e5e0580589c506533dd03cf980c78a87838a9f30a95a72fbf8f68febb48d",
+      "path": "data/experiments/lyx_recovery_filter_profile/p25_spectral_recheck_execution_v2/profile_record_audits/p25-short-low/xiezi3_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "anchor:xiezi4_LYX_0708": {
+      "file_sha256": "83edeff275cbee43921ec73c8b934ad5c2320c83ffac6075e03252af1ba0b89e",
+      "path": "data/experiments/lyx_recovery_filter_profile/p25_spectral_recheck_execution_v2/profile_record_audits/p25-short-low/xiezi4_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "experiment_spec": {
+      "file_sha256": "239237b746d37c7063a5f4e88b3bc83de9ea7dd31d921568c0e3bae751783eb9",
+      "path": "docs/experiments/2026-07-30-lyx-filter-mechanism-decomposition-spec.md",
+      "path_base": "repository_root"
+    },
+    "p25_completion": {
+      "file_sha256": "5c2f6c6904530b1a4658befcc8df22a4f8d2d6fafe25f12b26ce4db7515f7eb1",
+      "path": "data/experiments/lyx_recovery_filter_profile/p25_spectral_recheck_execution_v2/completion.json",
+      "path_base": "repository_root"
+    },
+    "p25_decision": {
+      "file_sha256": "f53448a1e1430f803130d1f6c00d4455e20b45357cf3d284255e7daab28595bb",
+      "path": "data/experiments/lyx_recovery_filter_profile/p25_spectral_recheck_execution_v2/decision_receipt.json",
+      "path_base": "repository_root"
+    },
+    "p25_manifest": {
+      "file_sha256": "5acc4555ae2b5f36b4006b892ee49b13e537b69dffcf58a7bd6cc5c522ef6aeb",
+      "path": "data/experiments/lyx_recovery_filter_profile/p25_spectral_recheck_execution_v2/result_manifest.json",
+      "path_base": "repository_root"
+    },
+    "p25_proposal": {
+      "file_sha256": "8db3770656b90b2e3ad2ae7b0bacef5e3ec8813730d7be6d812eaa48dbd2f9f9",
+      "path": "data/experiments/lyx_recovery_filter_profile/p25_spectral_recheck_v2/p25_spectral_recheck_proposal.json",
+      "path_base": "repository_root"
+    },
+    "source_budget_contract": {
+      "file_sha256": "c5114f8497821f8d090133a5b55a12ecc0cf0baa4ffa294efeaff24691e8b0ed",
+      "path": "data/experiments/lyx_recovery_filter_profile/governance_v8/budget_contract.json",
+      "path_base": "repository_root"
+    },
+    "spectral_gate_contract": {
+      "file_sha256": "bf2ee4deca720850b9030293b36c3db7b87bec621d9f4827388166da18460c19",
+      "path": "data/experiments/lyx_recovery_filter_profile/p25_spectral_recheck_v2/spectral_gate_contract.json",
+      "path_base": "repository_root"
+    }
+  },
+  "stage": "filter_mechanism_decomposition_diagnostic",
+  "status": "awaiting_human_execution_authorization",
+  "unique_budget": 12,
+  "upstream_p25_recheck": {
+    "completion_sha256": "f66ac4bde326ce3b2cc25738176ea5613cec9c9b9ee91862557ddf44d9009076",
+    "decision_sha256": "fd05114792fd04b276a114a6ac9e9292089da544883d1b98a6f7e91832fd5684",
+    "manifest_file_sha256": "5acc4555ae2b5f36b4006b892ee49b13e537b69dffcf58a7bd6cc5c522ef6aeb",
+    "manifest_sha256": "4a11dde3a3cc70804cc0f40cec747cd6ff0cc40bd20a5217050e12e5be232850",
+    "proposal_sha256": "83081d8081def70b356b2737864b552c3fc2376817bbc595db32f4f650616c26",
+    "status": "p25_failure_review_required"
+  },
+  "worst_case_attempt_budget": 24
+}

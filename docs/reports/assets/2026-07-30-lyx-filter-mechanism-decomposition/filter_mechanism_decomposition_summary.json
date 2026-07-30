@@ -1,0 +1,133 @@
+{
+  "algorithm_level_holdout": false,
+  "automatic_stage_f_execution": false,
+  "automatic_stage_r_execution": false,
+  "completion_sha256": "4099eac8231342b014ed0363a49db28afd682a7b623f07248f8f4d88320ee8e8",
+  "decision": "rank1_single_stage_mechanism_candidate",
+  "decision_sha256": "b01ff36a82596b11de10290f8225f7bc979e7886ecda8f84ec138e4301ff3304",
+  "evidence_class": "development_reuse_pilot",
+  "forward_failure_record_ids": [
+    "jianpan1_LYX_0708",
+    "xiezi2_LYX_0708"
+  ],
+  "gate_pass_counts": {
+    "rank1_only_adaptive": {
+      "complete_window_evidence_pass": 12,
+      "hr_band_share_delta_pass": 12,
+      "prominence_db_delta_pass": 12,
+      "pulse_power_retention_pass": 12,
+      "residual_artifact_corr_delta_pass": 12,
+      "visible_top3_rate_delta_pass": 12
+    },
+    "rank2_only_adaptive": {
+      "complete_window_evidence_pass": 12,
+      "hr_band_share_delta_pass": 12,
+      "prominence_db_delta_pass": 12,
+      "pulse_power_retention_pass": 12,
+      "residual_artifact_corr_delta_pass": 12,
+      "visible_top3_rate_delta_pass": 12
+    },
+    "ranked_cascade_adaptive": {
+      "complete_window_evidence_pass": 12,
+      "hr_band_share_delta_pass": 10,
+      "prominence_db_delta_pass": 12,
+      "pulse_power_retention_pass": 12,
+      "residual_artifact_corr_delta_pass": 12,
+      "visible_top3_rate_delta_pass": 12
+    },
+    "raw_bypass": {
+      "complete_window_evidence_pass": 12,
+      "hr_band_share_delta_pass": 12,
+      "prominence_db_delta_pass": 12,
+      "pulse_power_retention_pass": 12,
+      "residual_artifact_corr_delta_pass": 12,
+      "visible_top3_rate_delta_pass": 12
+    },
+    "reverse_cascade_adaptive": {
+      "complete_window_evidence_pass": 12,
+      "hr_band_share_delta_pass": 10,
+      "prominence_db_delta_pass": 12,
+      "pulse_power_retention_pass": 12,
+      "residual_artifact_corr_delta_pass": 12,
+      "visible_top3_rate_delta_pass": 12
+    },
+    "two_stage_zero_update": {
+      "complete_window_evidence_pass": 12,
+      "hr_band_share_delta_pass": 12,
+      "prominence_db_delta_pass": 12,
+      "pulse_power_retention_pass": 12,
+      "residual_artifact_corr_delta_pass": 12,
+      "visible_top3_rate_delta_pass": 12
+    }
+  },
+  "hr_band_share_delta_threshold": -0.02,
+  "implementation_candidate": "rank1_only_adaptive",
+  "independent_bo_run_count": 0,
+  "lane_complete_pass_counts": {
+    "rank1_only_adaptive": 12,
+    "rank2_only_adaptive": 12,
+    "ranked_cascade_adaptive": 10,
+    "raw_bypass": 12,
+    "reverse_cascade_adaptive": 10,
+    "two_stage_zero_update": 12
+  },
+  "lane_hr_band_share_delta": {
+    "rank1_only_adaptive": {
+      "max": -0.0002127623172988452,
+      "median": -0.0033267776983426645,
+      "min": -0.008374280373351584
+    },
+    "rank2_only_adaptive": {
+      "max": 0.007209971854382394,
+      "median": -0.004521875270671431,
+      "min": -0.010824510151126177
+    },
+    "ranked_cascade_adaptive": {
+      "max": 0.008558884204525424,
+      "median": -0.010966289970394227,
+      "min": -0.02420185865899971
+    },
+    "raw_bypass": {
+      "max": 0.0,
+      "median": 0.0,
+      "min": 0.0
+    },
+    "reverse_cascade_adaptive": {
+      "max": 0.013328635828346869,
+      "median": -0.011373496522045681,
+      "min": -0.026681562380426016
+    },
+    "two_stage_zero_update": {
+      "max": 0.0,
+      "median": 0.0,
+      "min": 0.0
+    }
+  },
+  "lane_result_count": 72,
+  "may_nominate_recovery_candidate": false,
+  "mechanical_inference": "serial_two_stage_composition_is_the_local_failure_mechanism",
+  "next_state": "awaiting_rank1_filter_revision_proposal",
+  "parameter_search_run_count": 0,
+  "proposal_sha256": "94c9264dbbdd8cdd299cf502c1ef1ba0e859000c9c72a1c35fc490eb46eccfab",
+  "rank1_failure_record_ids": [],
+  "rank1_vs_forward_transitions": {
+    "fail_to_fail": 0,
+    "fail_to_pass": 2,
+    "pass_to_fail": 0,
+    "pass_to_pass": 10
+  },
+  "rank2_failure_record_ids": [],
+  "rank2_vs_forward_transitions": {
+    "fail_to_fail": 0,
+    "fail_to_pass": 2,
+    "pass_to_fail": 0,
+    "pass_to_pass": 10
+  },
+  "record_count": 12,
+  "reverse_failure_record_ids": [
+    "jianpan1_LYX_0708",
+    "xiezi2_LYX_0708"
+  ],
+  "summary_sha256": "acef3394055a8f31f954ea0d28b51f01cdd682d9b55989aca1a98fb04b45fbdb",
+  "summary_version": "lyx_filter_mechanism_decomposition_figure_summary_v1"
+}

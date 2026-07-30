@@ -1343,6 +1343,24 @@ def test_v6_v7_and_proposed_v8_add_only_the_diagnostic_panels() -> None:
     assert sum(v8.stage_unique_limits.values()) == 840
 
 
+def test_proposed_v9_adds_only_12_filter_mechanism_diagnostics() -> None:
+    v8 = BudgetContract.proposed_v8_p25_spectral_recheck()
+    v9 = BudgetContract.proposed_v9_filter_mechanism_decomposition()
+
+    assert v9.stage_unique_limits == {
+        **v8.stage_unique_limits,
+        "filter_mechanism_decomposition_diagnostic": 12,
+    }
+    assert v9.normal_unique_identity_limit == 840
+    assert v9.max_unique_identities == 852
+    assert v9.max_attempts == 1704
+    assert v9.retry_limit == 1
+    assert v9.stage_attempt_kinds[
+        "filter_mechanism_decomposition_diagnostic"
+    ] == "diagnostic"
+    assert sum(v9.stage_unique_limits.values()) == 852
+
+
 def test_rate_normalized_exploration_authorization_is_exact() -> None:
     request = ExplorationBudgetAmendmentRequest(
         stage="filter_profile_rate_normalization_exploration",

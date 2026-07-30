@@ -1,0 +1,21 @@
+{
+  "artifact_sha256": {
+    "budget_amendment_request.json": "6bae7de651d7a52722e7e092a6d3be9d548e80e5caef1334fda445dd66294887",
+    "budget_contract_v9.json": "aa6a4f55651f8165a7250094a348bb6b8c28d6a35b599b8b3e80acbc0dea92ff",
+    "filter_mechanism_decomposition_proposal.json": "d8ccede83e26ff537321dffc114e7ff3d61071fe95d3fd785abde9c00cc1e148",
+    "mechanism_contract.json": "c50a31c6a3e37c6c7306e4c38aa2fda39ad3b7ec29f628b666e1245984c249ec",
+    "source_identity.json": "decac5815125af705beb4b8364437d782196efd134d2d5ea49626aba888a371f",
+    "spectral_gate_contract.json": "bf2ee4deca720850b9030293b36c3db7b87bec621d9f4827388166da18460c19"
+  },
+  "budget_request_sha256": "4cc296d6e0b7b47a165e854b227bcea26602831d48541935ecb43da78c0e9272",
+  "deterministic_lane_count_per_identity": 6,
+  "diagnostic_run_count": 0,
+  "identity_count": 12,
+  "independent_bo_run_count": 0,
+  "may_execute_under_scope_bound_user_authorization": true,
+  "parameter_search_run_count": 0,
+  "proposal_sha256": "94c9264dbbdd8cdd299cf502c1ef1ba0e859000c9c72a1c35fc490eb46eccfab",
+  "receipt_sha256": "8052b8832004141ae4e029fae814fe8d2cbd4ecccda3a9a457e91e87d6025ac2",
+  "receipt_version": "lyx_filter_mechanism_decomposition_proposal_receipt_v1",
+  "status": "frozen_zero_runs"
+}

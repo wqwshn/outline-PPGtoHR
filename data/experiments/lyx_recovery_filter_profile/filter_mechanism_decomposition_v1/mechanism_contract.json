@@ -1,0 +1,76 @@
+{
+  "actual_taps": 1,
+  "automatic_stage_f_execution": false,
+  "automatic_stage_r_execution": false,
+  "contract_sha256": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+  "contract_version": "lyx_filter_mechanism_decomposition_v1",
+  "decision_precedence": [
+    "control_invalid",
+    "baseline_reproduction_invalid",
+    "rank1_single_stage_mechanism_candidate",
+    "rank2_reference_selection_mechanism_candidate",
+    "reverse_order_mechanism_candidate",
+    "partial_mechanism_relief_requires_factorial",
+    "no_mechanism_relief_requires_factorial_or_bo_review"
+  ],
+  "effective_mu_formula": "max(lms_mu_min, nominal_mu - abs(corrcoef(current_desired, reference)) / 100)",
+  "expected_record_count": 12,
+  "expected_reference_count": 2,
+  "fs_target": 25,
+  "identity_grain": "record",
+  "independent_bo_authorized": false,
+  "lanes": {
+    "rank1_only_adaptive": {
+      "adaptive_updates": 1,
+      "mu_rule": "current_effective_mu",
+      "reference_rank_sequence": [
+        1
+      ]
+    },
+    "rank2_only_adaptive": {
+      "adaptive_updates": 1,
+      "mu_rule": "current_effective_mu",
+      "reference_rank_sequence": [
+        2
+      ]
+    },
+    "ranked_cascade_adaptive": {
+      "adaptive_updates": 2,
+      "mu_rule": "current_effective_mu",
+      "reference_rank_sequence": [
+        1,
+        2
+      ],
+      "role": "committed_baseline_reproduction"
+    },
+    "raw_bypass": {
+      "adaptive_updates": 0,
+      "mu_rule": "none",
+      "reference_rank_sequence": []
+    },
+    "reverse_cascade_adaptive": {
+      "adaptive_updates": 2,
+      "mu_rule": "current_effective_mu",
+      "reference_rank_sequence": [
+        2,
+        1
+      ]
+    },
+    "two_stage_zero_update": {
+      "adaptive_updates": 0,
+      "mu_rule": "forced_zero",
+      "reference_rank_sequence": [
+        1,
+        2
+      ]
+    }
+  },
+  "lms_mu_min": 1e-06,
+  "may_nominate_recovery_candidate": false,
+  "memory_ms": 40,
+  "no_parameter_search": true,
+  "nominal_mu": 0.008,
+  "paired_within_record": true,
+  "profile_id": "p25-short-low",
+  "require_complete_windows": true
+}

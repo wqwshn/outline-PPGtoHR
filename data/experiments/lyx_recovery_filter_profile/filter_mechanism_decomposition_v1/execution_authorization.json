@@ -1,0 +1,29 @@
+{
+  "approved": true,
+  "approved_at": "2026-07-30T18:30:15.4843182+08:00",
+  "approved_by": "user",
+  "authorization_basis": {
+    "bound_after_proposal_freeze": true,
+    "scope": "write_and_execute_filter_mechanism_decomposition_then_continue_issue_102",
+    "user_statement": "我同意进行A：撰写滤波机制分解的零运行 spec/proposal，并且允许之后可以推进执行这个子实验，基于子实验的结论继续完成这一轮大实验。"
+  },
+  "authorization_version": "lyx_filter_mechanism_decomposition_execution_authorization_v1",
+  "automatic_stage_f_execution": false,
+  "automatic_stage_r_execution": false,
+  "anchor_panel_sha256": "a1a5cf418908eb77362ec44344a042135050db2fae2acefce6534892327ba139",
+  "budget_contract_hash": "69d52a7711534434d573710e1d0d4da4a4e6c2c63d88887500027daf7005c3f5",
+  "control_profile_hash": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+  "decision_state": "awaiting_human_filter_mechanism_decomposition_decision",
+  "evaluation_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+  "identity_panel_sha256": "f121144b5e088691732eff08b84a1a6034ba745955383ece568ae2876e595c48",
+  "independent_bo_authorized": false,
+  "may_nominate_recovery_candidate": false,
+  "mechanism_contract_hash": "ac4633b55d5ca082966041e905e851807a4301eac8595a05ba2482714a7b9312",
+  "parameter_search_authorized": false,
+  "proposal_sha256": "94c9264dbbdd8cdd299cf502c1ef1ba0e859000c9c72a1c35fc490eb46eccfab",
+  "record_panel_sha256": "5db7aac87885cd8c0af8fa071085699fd2b820555bbe2b2784bd7e3fa7169e4b",
+  "solver_hash": "9480fce3e94c5a43f5e2723b64c89c0b47b3ce869c2c4fa7965f57ef2cfb62e4",
+  "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+  "stage": "filter_mechanism_decomposition_diagnostic",
+  "unique_budget": 12
+}
