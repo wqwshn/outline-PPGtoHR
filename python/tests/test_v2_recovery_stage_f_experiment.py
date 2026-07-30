@@ -495,7 +495,7 @@ def _patch_stage_f_runtime(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         stage_f_plan,
-        "stage_r_spectral_gate_contract_v1",
+        "stage_r_spectral_gate_contract_v2",
         lambda: {
             "contract_version": "test_spectral",
             "contract_sha256": canonical_sha256({"contract_version": "test_spectral"}),

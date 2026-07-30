@@ -1,0 +1,26 @@
+{
+  "artifacts": {
+    "decision_receipt.json": "815b4446e6b1cdc5ffeee1bc4eacaf3f96dae4a6b54d4d57adeb423029e2b0f0",
+    "result_manifest.json": "fa708684e663f6a5a8c689c8a22a715f5d0d2318c1da15ba6c5a8aa7ff1bea3a"
+  },
+  "authorization_sha256": "c7eb38f0c97aaebcf4e5727a07c13b4ea6a7f6371642e44cf584b7aa987e92dd",
+  "completion_sha256": "338c73c2360b7bd0d7fad849fbdd84e6b991c1fa1eb823068e8a990ff937a5d0",
+  "completion_version": "lyx_spectral_metric_scale_control_completion_v1",
+  "decision_sha256": "4aa202167f754532e8e23318906ba3075ae4807f58080f4ae4a9eed00782f980",
+  "diagnostic_result_count": 12,
+  "diagnostic_run_count": 12,
+  "independent_bo_run_count": 0,
+  "matrix_execution_summary": {
+    "cache_only_identity_count": 0,
+    "failed_attempt_count": 0,
+    "identity_with_solver_attempt_count": 12,
+    "planned_identity_count": 12,
+    "retry_count": 0,
+    "total_attempt_count": 12
+  },
+  "may_nominate_recovery_candidate": false,
+  "next_state": "awaiting_spectral_metric_scale_correction",
+  "parameter_search_run_count": 0,
+  "proposal_sha256": "429233ecadf92cc2d669b59c8f2cc4516b3d767547d98919655a18918e1a60bd",
+  "status": "legacy_scale_mismatch_confirmed"
+}

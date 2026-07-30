@@ -605,6 +605,28 @@ class BudgetContract:
             },
         )
 
+    @classmethod
+    def proposed_v8_p25_spectral_recheck(cls) -> BudgetContract:
+        """Return the proposed contract for 36 corrected p25 rechecks."""
+
+        prior = cls.proposed_v7_spectral_metric_control()
+        return cls(
+            stage_unique_limits={
+                **prior.stage_unique_limits,
+                "filter_profile_p25_spectral_recheck_v2": 36,
+            },
+            normal_unique_identity_limit=828,
+            supplemental_stage=prior.supplemental_stage,
+            max_unique_identities=840,
+            max_attempts=1680,
+            retry_limit=prior.retry_limit,
+            contract_version="lyx_recovery_filter_budget_v8",
+            stage_attempt_kinds={
+                **prior.stage_attempt_kinds,
+                "filter_profile_p25_spectral_recheck_v2": "diagnostic",
+            },
+        )
+
     @property
     def sha256(self) -> str:
         return _canonical_sha256(self.to_dict())
@@ -857,6 +879,9 @@ class AttemptRegistry:
             ),
             BudgetContract.approved_v6_p25_diagnostic().sha256: (
                 BudgetContract.proposed_v7_spectral_metric_control().sha256
+            ),
+            BudgetContract.proposed_v7_spectral_metric_control().sha256: (
+                BudgetContract.proposed_v8_p25_spectral_recheck().sha256
             ),
         }
         expected_known_target = known_transitions.get(self.budget_contract.sha256)

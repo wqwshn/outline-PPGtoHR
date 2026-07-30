@@ -1304,10 +1304,11 @@ def test_approved_v5_budget_adds_only_eight_rate_normalized_audits() -> None:
     assert sum(contract.stage_unique_limits.values()) == 756
 
 
-def test_v6_and_proposed_v7_add_only_the_approved_diagnostic_panels() -> None:
+def test_v6_v7_and_proposed_v8_add_only_the_diagnostic_panels() -> None:
     v5 = BudgetContract.approved_v5()
     v6 = BudgetContract.approved_v6_p25_diagnostic()
     v7 = BudgetContract.proposed_v7_spectral_metric_control()
+    v8 = BudgetContract.proposed_v8_p25_spectral_recheck()
 
     assert v6.stage_unique_limits == {
         **v5.stage_unique_limits,
@@ -1328,6 +1329,18 @@ def test_v6_and_proposed_v7_add_only_the_approved_diagnostic_panels() -> None:
     assert v7.max_attempts == 1608
     assert v7.retry_limit == v6.retry_limit
     assert sum(v7.stage_unique_limits.values()) == 804
+    assert v8.stage_unique_limits == {
+        **v7.stage_unique_limits,
+        "filter_profile_p25_spectral_recheck_v2": 36,
+    }
+    assert v8.stage_attempt_kinds[
+        "filter_profile_p25_spectral_recheck_v2"
+    ] == "diagnostic"
+    assert v8.normal_unique_identity_limit == 828
+    assert v8.max_unique_identities == 840
+    assert v8.max_attempts == 1680
+    assert v8.retry_limit == v7.retry_limit
+    assert sum(v8.stage_unique_limits.values()) == 840
 
 
 def test_rate_normalized_exploration_authorization_is_exact() -> None:

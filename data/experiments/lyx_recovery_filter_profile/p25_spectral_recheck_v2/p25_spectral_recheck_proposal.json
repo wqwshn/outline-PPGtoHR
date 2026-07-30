@@ -1,0 +1,2712 @@
+{
+  "algorithm_level_holdout": false,
+  "attempt_kind": "diagnostic",
+  "authorization_state": "awaiting_human_p25_spectral_recheck_v2_decision",
+  "automatic_stage_f_execution": false,
+  "automatic_stage_r_execution": false,
+  "decision_contract": {
+    "automatic_independent_bo_execution": false,
+    "automatic_stage_f_execution": false,
+    "automatic_stage_r_execution": false,
+    "branches": {
+      "p25_failure_review_required": "no profile passes the corrected complete gate on all 12 records; a human must choose mechanism diagnostics or whether to prepare an independent-BO review package",
+      "stage_r_sentinel_revision_candidate": "at least one profile passes stability and the complete corrected spectral gate on all 12 records"
+    },
+    "contract_sha256": "04f3a67854432a1d03fb393eb348747bc639dd7a5f41f16ae552936bda5acad0",
+    "contract_version": "lyx_p25_spectral_recheck_decision_contract_v2",
+    "forbidden_decision_inputs": [
+      "metrics",
+      "mae",
+      "l10",
+      "l20",
+      "recovery"
+    ],
+    "may_nominate_recovery_candidate": false,
+    "reads_only": [
+      "spectral_audit.stability_pass",
+      "spectral_audit.stage_r_spectral_gate"
+    ]
+  },
+  "evidence_class": "development_reuse_pilot",
+  "frozen_contracts": {
+    "budget_contract_hash": "bcc55f467c19e6e1c0975c776d3d4356d4034ce5cf8e0ec343c99877f8a84109",
+    "decision_contract_hash": "04f3a67854432a1d03fb393eb348747bc639dd7a5f41f16ae552936bda5acad0",
+    "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+    "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+    "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+    "source_metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+    "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+  },
+  "identities": [
+    {
+      "actual_taps": 1,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "1ec11b827ccbc4647ee3e88845412144c3c225a17483e2719e571c92c0ddfeaa",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.008,
+            "lms_mu_min": 1e-06,
+            "max_order": 1,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.05,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "b98cec95bc2da5e41b68ab670515f5303488b327db52bc2eaaa477572cd637c0",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "3716266eef072cc49cc774201802ab908322eed6b3397f891b36915e921a824e",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708.csv",
+      "data_sha256": "b5f81d40027419f8545a399a3a8b66f4737c75d78f60d20c7de7e378fd824d8a",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-short-low",
+      "filter_profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+      "fs_target": 25,
+      "identity_sha256": "1ec11b827ccbc4647ee3e88845412144c3c225a17483e2719e571c92c0ddfeaa",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "7c23fa243cf4c7f0a0f92d2f8a84ca3c12ee5af18df38dd4437e92ad0bb83265",
+      "record_id": "jianpan1_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708_HR_ref.csv",
+      "reference_sha256": "076fec4a8767fdf6edfee35dfac72e898659b95e5cd6d9924724145976622b2c",
+      "scene": "jianpan",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "d2691ceeb9551e75ef5bed44c806704f3323bdfb57f9e5837e426e8120c1c1a3",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "b1b7e325a41fcf35b2ca24318e9dd4d9f3e6a77887bcaf62c8a74984f0cfbe88",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.008,
+            "lms_mu_min": 1e-06,
+            "max_order": 1,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.2,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "074f814ac8b31fb897c4ae2d80cb1a317bc9426199f73846bf63eb7686584b81",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "247c7dc8f3abd18b7557d532a0fd32c39aec48f6885848afe618ce2c068f30a4",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708.csv",
+      "data_sha256": "a7421b4146701f462dd4b033ad80a60e1fdc3f72fae3e97a9c5a7b89360ac1d2",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-short-low",
+      "filter_profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+      "fs_target": 25,
+      "identity_sha256": "b1b7e325a41fcf35b2ca24318e9dd4d9f3e6a77887bcaf62c8a74984f0cfbe88",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "b4aaafa531d731c81d7e8da0e5dac4f8c6e360bda6c7520c34ae78e023dd8bb7",
+      "record_id": "jianpan2_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "c7a98e54da83d6310430276b33b88bf2306ade91ac81d5b9dd3f5d18ecf5a270",
+      "scene": "jianpan",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "b181f01a5ab58e4b015492a1d0ac929e2993c55d029dc34872bc4f53e343da27",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "ff611d06136bfcf0b24fcf72d35420869fc8c427758013307915005333dd8340",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.008,
+            "lms_mu_min": 1e-06,
+            "max_order": 1,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.2,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "5c1503770ce65f14ebd30a7dec23f18075e869259204a8ed523f3f5ab6a97b8c",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "99aa26595f5dddc1bb19e49eb83c67a3df199de6c709cc4cb872651f86565f75",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708.csv",
+      "data_sha256": "d6ea629174441276720cb28ba416f68fba6018952bfa66105ba734bdbfdb8da5",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-short-low",
+      "filter_profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+      "fs_target": 25,
+      "identity_sha256": "ff611d06136bfcf0b24fcf72d35420869fc8c427758013307915005333dd8340",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "19b5d1c42c326cd2f868c1498bd282e7dba94141b8b51f70332fd82409c2e4b7",
+      "record_id": "jianpan3_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708_HR_ref.csv",
+      "reference_sha256": "ecf02c256cde6af1557910ee9ff769de523ffb54e8124c2f0528fad82df968e6",
+      "scene": "jianpan",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "22db5388d53bcd2b24b49d8564c71eb95ca61519439d3c65b8b6d708522a80ec",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "a5ab9a25f9c2d031dde671f4fb97a416e9aa6351cc5bfe49f54177268bd6730b",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.008,
+            "lms_mu_min": 1e-06,
+            "max_order": 1,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.05,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613_HR_ref.csv"
+        },
+        "source_config_hash": "31f940356333db4a37ef027be4e8b77b5faa19402e952be658f26ff216a8aa46",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "5142c9daee1fc48b1772f65d656d09e2f45b8a007e418254ab8060d1f8a0f829",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613.csv",
+      "data_sha256": "22927001aa2c6d6c378d5ab7897897e59f3c72dfad697fd77a165e599ca5443d",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-short-low",
+      "filter_profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+      "fs_target": 25,
+      "identity_sha256": "a5ab9a25f9c2d031dde671f4fb97a416e9aa6351cc5bfe49f54177268bd6730b",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "1dd489af27c30e2f52b911ec1e11312a7498463cdb1e737ca66ffba26bbf4bcb",
+      "record_id": "kaihe1_LYX_0613",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613_HR_ref.csv",
+      "reference_sha256": "38a5b714ee897bbeaaafa0be7017b3bf9d941826a0e534334131b1301c53e0e0",
+      "scene": "kaihe",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "9cf02621931703d6ef65f63f269981c7aad16477178ba485c8592f4445bbc7af",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "bbb0b8017cf719ed356bc7d1377f33564db1d3eef9131b4911d82b4503d53320",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.008,
+            "lms_mu_min": 1e-06,
+            "max_order": 1,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.1,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617_HR_ref.csv"
+        },
+        "source_config_hash": "76a249d323e8b68dd130860f2a1aac205feb270f1c4fe8688405b6ac5ea60c17",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "0fe5395e01aee13941b643a22a3d305ef7c99f6be3bf750dfe051122a6d302d2",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617.csv",
+      "data_sha256": "ba3d9938e8d9e04d25ce32fa6e698b21ef512f68bc89d3adfb0a5e77fc900d6d",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-short-low",
+      "filter_profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+      "fs_target": 25,
+      "identity_sha256": "bbb0b8017cf719ed356bc7d1377f33564db1d3eef9131b4911d82b4503d53320",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "73f626f972afccccb5a0ef261e3bfe1afd60b02b24a18e5b8a2ddfb5964e7528",
+      "record_id": "kaihe1_LYX_0617",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617_HR_ref.csv",
+      "reference_sha256": "a3b779e55561da76a3d69293e73175c624e947d57de38a3f5184d324731c0739",
+      "scene": "kaihe",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "25fce5d35765c001d99025bf70925f6b022b22e3a329c29ba8b37d5c5a6602ab",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "4e7d592405b1c9791e49510ff8f9db0fc85d4e1b4138c06f5058dc5f6c36431b",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.008,
+            "lms_mu_min": 1e-06,
+            "max_order": 1,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.2,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613_HR_ref.csv"
+        },
+        "source_config_hash": "f971100412d693427c49bc377e0dba526b1e9b548040254363a12f2063ce0efd",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "918f468dcecd264b1d127e6a011b41245160d406672f01d3d436e6f0e2c1975b",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613.csv",
+      "data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-short-low",
+      "filter_profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+      "fs_target": 25,
+      "identity_sha256": "4e7d592405b1c9791e49510ff8f9db0fc85d4e1b4138c06f5058dc5f6c36431b",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "778f75d02d47a134a5999a5641de201dfc613da915b43876398792c6833c6e84",
+      "record_id": "kaihe3_LYX_0613",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613_HR_ref.csv",
+      "reference_sha256": "5cb40473d1793f8ff91eeed993f4a1b9a59c44b7fefcfd57a0314ad34c626050",
+      "scene": "kaihe",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "c082cf66c669a4f5678880abc2ff9a017f33a144311c8fbfeb53ef26cba83301",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "7069a469df33236085ad6f1ff61b9302eee1bad635975bf956e7efa5e918c66a",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.008,
+            "lms_mu_min": 1e-06,
+            "max_order": 1,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.1,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "8ac390908bf188bcce0ffb7c94c71fb569fe2257a47f5b093d5f549ce14a08f8",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "8f46918ba583b18b56920ba5657156a4f256c42ac5fcb15d75ed83f39092b659",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708.csv",
+      "data_sha256": "971a87c06295b73d4cca7936437de8c832c7d2eed65f286a8742805543f5f87b",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-short-low",
+      "filter_profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+      "fs_target": 25,
+      "identity_sha256": "7069a469df33236085ad6f1ff61b9302eee1bad635975bf956e7efa5e918c66a",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "4e53e93fb94a8ecd17d319af41d6d010c1424baf9c0151099cb417fb0a2d6af0",
+      "record_id": "run1_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708_HR_ref.csv",
+      "reference_sha256": "c8677ec1f0e22b25100c20ab83b8faf22ddea730a973b41b1b43673acf1443a0",
+      "scene": "run",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "28e589cdf41325a303adc8b8574f873c23aaa97df34d78ed4b13603a0b8c90de",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "4b22afc0113e457c7ec1915a1b977f73e914d3a1796ff4ba318b1eca70432f40",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.008,
+            "lms_mu_min": 1e-06,
+            "max_order": 1,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.05,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "125a747bb17dd4f7c29776268b5f133971ed578b9cfce1f77e969158da8c6657",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "5eb380051f8807b934cc441240da7d8d98f9664f7c3de59020816882b8685f05",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708.csv",
+      "data_sha256": "a32ab804060f866add72e093d6bdced3d756faf967c1ac1b233fec07c5733cb7",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-short-low",
+      "filter_profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+      "fs_target": 25,
+      "identity_sha256": "4b22afc0113e457c7ec1915a1b977f73e914d3a1796ff4ba318b1eca70432f40",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "6e06fcb2efffb234c1d7b2dc93bc8ea7b432f000fdfdc5f32639850d1e6e7d18",
+      "record_id": "run2_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "8d04fc22e8e98c5b4380a05ded28e8aa542ab5fa66d800cf602289ccf0062382",
+      "scene": "run",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "1a64e31f1c3273ad0b11201f1842c863323f6564a8ac954bbb7243320e37a7d6",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "337eeaf47c1b8a5fc96e27e51ed56a383d6d17825b8e5e1df4ce07a8b47ebade",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.008,
+            "lms_mu_min": 1e-06,
+            "max_order": 1,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.2,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "04e47fa2a607b76245d0ce73aeba65048b9135fa207b88982c23aafaf7d986cd",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "58c716c823da6958f749181ea221b2c24f7c071277ab9824f55323b8fc89af04",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708.csv",
+      "data_sha256": "1f1ea855fba32db79c1a5d654736170f1e08d1bbc72409191b227814db685742",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-short-low",
+      "filter_profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+      "fs_target": 25,
+      "identity_sha256": "337eeaf47c1b8a5fc96e27e51ed56a383d6d17825b8e5e1df4ce07a8b47ebade",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "72d487748fa84ca857a1b50b09998d485359b9af63bdf9240a6e6b3415b632a8",
+      "record_id": "run3_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708_HR_ref.csv",
+      "reference_sha256": "323813b4b44f54e604bf751164616bdd3ed5859d5faee2f302b11301b612e1e3",
+      "scene": "run",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "d12146f6a2faddbea9332265e582495cc65e3d8de6ced3a7b5e886e0cbb450ec",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "f5c4153ac99ab50aba33b28ff077c11c95ff25b58ca51ae8b2d7d2f1e973fa5d",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.008,
+            "lms_mu_min": 1e-06,
+            "max_order": 1,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.2,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "b19091b4fd845e3f728279101bdeadae220b2a8bf7a4533c608d7a46d0b0c5f2",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "290537be2a9847b5007ce8e546fbe7641b59b27137b77c77d765c84c68754865",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708.csv",
+      "data_sha256": "cf5e2d02bd1f874b3b55883e351cb6cf5107b6f0eb4d7acf142d6f5e6d93e7ee",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-short-low",
+      "filter_profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+      "fs_target": 25,
+      "identity_sha256": "f5c4153ac99ab50aba33b28ff077c11c95ff25b58ca51ae8b2d7d2f1e973fa5d",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "eaba17c0d527c7a8b099dfa3f9587496bce5095ab91528c2b371d5d795e852b1",
+      "record_id": "xiezi2_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "fc1a913849322295413e3ecf1ca48cefa477420ac4c34ea3cc2a5b74070d2877",
+      "scene": "xiezi",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "04901d800c9aaf87404329c83bbaba273245ab215d18b197bf798326df91459c",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "fe55858d232b9b22f5c5c42c73bb896cb0615d806e64282267b7b9b954882b50",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.008,
+            "lms_mu_min": 1e-06,
+            "max_order": 1,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.1,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "d594042c096507d1189a9e115ad6466a92beb63b00507344bd6f27ef6119fa3b",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "084f87bee642247d2e3581dbf8945e5513784eca288d30fab623822a009a68f3",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708.csv",
+      "data_sha256": "7b32139c8969ebcd6a8c1bedf8bb9191c916187a7716f43db6ad03d60f165619",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-short-low",
+      "filter_profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+      "fs_target": 25,
+      "identity_sha256": "fe55858d232b9b22f5c5c42c73bb896cb0615d806e64282267b7b9b954882b50",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "111b11e3120c793eae426f7361f73ac8c0b5b6418057b2531f9fd62cf1a1be79",
+      "record_id": "xiezi3_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708_HR_ref.csv",
+      "reference_sha256": "34c0a25bf5953ba8968108170ddcf3b6664fb15c7cecd8f1dfc1728c5cca0916",
+      "scene": "xiezi",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "dad1ee88eb62e362f4eb697972d07eb22b732393a5c18fce4250ed40b106be38",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "9ec0232366e8e20f59f3a47e042f8e2386089f71982cdc2e9c842530792fc9f3",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.008,
+            "lms_mu_min": 1e-06,
+            "max_order": 1,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.3,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "ee7ed3391633e40a9b7bdf2d77fecfa12959f05b5bb4f6e0db76f8b1e80e58f9",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "beb9cceeba85f73dfb46b5a1bab9187e151799f8cc597c6a4eac399449c61b35",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708.csv",
+      "data_sha256": "8044c3d7fb32f520f6ba5940508814f69cef5e3ec0b8f3ca8b9fb750961f897f",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-short-low",
+      "filter_profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+      "fs_target": 25,
+      "identity_sha256": "9ec0232366e8e20f59f3a47e042f8e2386089f71982cdc2e9c842530792fc9f3",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "1d18872f230a8ed75fdf9653196193557da946dcdb6b6375afe220ad9c71bdf4",
+      "record_id": "xiezi4_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708_HR_ref.csv",
+      "reference_sha256": "9db5f78f018e87128771f45cc3af8004e51ef7530ae1358dcf873b8f547cb0f7",
+      "scene": "xiezi",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "d6293ab6c83d43a788db820297230ca0c7614dcd71635dbd32a0b26ded770e6d",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "00f839b4ffbdbb983f26e21b6d06f1ab230493f3791486a232a94ad426931554",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.012,
+            "lms_mu_min": 1e-06,
+            "max_order": 1,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.05,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "aa2413f894f3c82ec57e064cf3e44a274bdd4bbc9651da9765c8ee622bac2f52",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "e2de3edf7243ea4190139269bf139a1845f99ddf4d7b8b0bf6c18eba880bf71c",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708.csv",
+      "data_sha256": "b5f81d40027419f8545a399a3a8b66f4737c75d78f60d20c7de7e378fd824d8a",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-short-mid",
+      "filter_profile_sha256": "79e6036878bc69a614082ba174f28a55bca49b9fc87745de397e68b545ecedde",
+      "fs_target": 25,
+      "identity_sha256": "00f839b4ffbdbb983f26e21b6d06f1ab230493f3791486a232a94ad426931554",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.012,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "7c23fa243cf4c7f0a0f92d2f8a84ca3c12ee5af18df38dd4437e92ad0bb83265",
+      "record_id": "jianpan1_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708_HR_ref.csv",
+      "reference_sha256": "076fec4a8767fdf6edfee35dfac72e898659b95e5cd6d9924724145976622b2c",
+      "scene": "jianpan",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "e6945d70e698294c3eb91d63c0a3ecce5af7deefe23b455739872f26dfa77564",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "f415fdfeabc61ebf6d6f55c12a4f04bc86b7e8917736e83af5d586371e3cf788",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.012,
+            "lms_mu_min": 1e-06,
+            "max_order": 1,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.2,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "229bdc1c952af0976cd411688f52d23730c714f352a06a4d9a13a9a4182c8c16",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "88fc82dfcf42e7c2817f8330a4883236e0dc855bbefa9054e14e6f4ca2514e65",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708.csv",
+      "data_sha256": "a7421b4146701f462dd4b033ad80a60e1fdc3f72fae3e97a9c5a7b89360ac1d2",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-short-mid",
+      "filter_profile_sha256": "79e6036878bc69a614082ba174f28a55bca49b9fc87745de397e68b545ecedde",
+      "fs_target": 25,
+      "identity_sha256": "f415fdfeabc61ebf6d6f55c12a4f04bc86b7e8917736e83af5d586371e3cf788",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.012,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "b4aaafa531d731c81d7e8da0e5dac4f8c6e360bda6c7520c34ae78e023dd8bb7",
+      "record_id": "jianpan2_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "c7a98e54da83d6310430276b33b88bf2306ade91ac81d5b9dd3f5d18ecf5a270",
+      "scene": "jianpan",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "42eff06c7fd5cf6c449a0a04b0f0f4058c9cbb2240686782313333584f3546aa",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "cd86e5c82fedfdd654b893101fe79f0c772eca72258ec0ede2edb9a70b11ebe4",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.012,
+            "lms_mu_min": 1e-06,
+            "max_order": 1,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.2,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "8e10941ec44ce7608e67771104187f1e55501f7c2917259f0021d14259e682c3",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "4aaea339b58a05f86331cfe42592fdd7ad3d067bb44c7cbd6559efd9ad355808",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708.csv",
+      "data_sha256": "d6ea629174441276720cb28ba416f68fba6018952bfa66105ba734bdbfdb8da5",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-short-mid",
+      "filter_profile_sha256": "79e6036878bc69a614082ba174f28a55bca49b9fc87745de397e68b545ecedde",
+      "fs_target": 25,
+      "identity_sha256": "cd86e5c82fedfdd654b893101fe79f0c772eca72258ec0ede2edb9a70b11ebe4",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.012,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "19b5d1c42c326cd2f868c1498bd282e7dba94141b8b51f70332fd82409c2e4b7",
+      "record_id": "jianpan3_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708_HR_ref.csv",
+      "reference_sha256": "ecf02c256cde6af1557910ee9ff769de523ffb54e8124c2f0528fad82df968e6",
+      "scene": "jianpan",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "1c038172b95147fcd803befcee10b283b3a7441b07364e6779aed62e72084cbb",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "4938be61fbaaeb908ac09177738ec117506aa6f6b37fb6b4d80d93de5c723ad7",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.012,
+            "lms_mu_min": 1e-06,
+            "max_order": 1,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.05,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613_HR_ref.csv"
+        },
+        "source_config_hash": "b42bb1e56397bc741dfd3a950ac6c344f58afbf62b88f728109367971aa72db0",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "e61832e302478a266da4ed9dbb7a2ff8696649e9ba8093c9e1ddc8660eecb566",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613.csv",
+      "data_sha256": "22927001aa2c6d6c378d5ab7897897e59f3c72dfad697fd77a165e599ca5443d",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-short-mid",
+      "filter_profile_sha256": "79e6036878bc69a614082ba174f28a55bca49b9fc87745de397e68b545ecedde",
+      "fs_target": 25,
+      "identity_sha256": "4938be61fbaaeb908ac09177738ec117506aa6f6b37fb6b4d80d93de5c723ad7",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.012,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "1dd489af27c30e2f52b911ec1e11312a7498463cdb1e737ca66ffba26bbf4bcb",
+      "record_id": "kaihe1_LYX_0613",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613_HR_ref.csv",
+      "reference_sha256": "38a5b714ee897bbeaaafa0be7017b3bf9d941826a0e534334131b1301c53e0e0",
+      "scene": "kaihe",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "6bec2d8c47e3ea7277f2fc97edc83dd84a5919e514ad03b1a2328d34d75bbadf",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "e4bab62eea87cbb38e8bc6ecd2b1a43546edd46b0dd1f50cb7b0d1d9283df5c3",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.012,
+            "lms_mu_min": 1e-06,
+            "max_order": 1,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.1,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617_HR_ref.csv"
+        },
+        "source_config_hash": "a1c55e2c4ec9607787ea338f5bf8f9116a192a17de7fa87532351fc6dcedede8",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "4337bbb842db5f16e15516da547586831bbc0f84ad9d3c5599614b25eecc0778",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617.csv",
+      "data_sha256": "ba3d9938e8d9e04d25ce32fa6e698b21ef512f68bc89d3adfb0a5e77fc900d6d",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-short-mid",
+      "filter_profile_sha256": "79e6036878bc69a614082ba174f28a55bca49b9fc87745de397e68b545ecedde",
+      "fs_target": 25,
+      "identity_sha256": "e4bab62eea87cbb38e8bc6ecd2b1a43546edd46b0dd1f50cb7b0d1d9283df5c3",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.012,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "73f626f972afccccb5a0ef261e3bfe1afd60b02b24a18e5b8a2ddfb5964e7528",
+      "record_id": "kaihe1_LYX_0617",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617_HR_ref.csv",
+      "reference_sha256": "a3b779e55561da76a3d69293e73175c624e947d57de38a3f5184d324731c0739",
+      "scene": "kaihe",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "99693c5196f6c9aeac1d7414a1ad6337bc8a59ca298e7da2f186a0e204b701b1",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "81ec21690d56651c0291884f343d29c8dd6ccf03ef647795b8d4eb416349901b",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.012,
+            "lms_mu_min": 1e-06,
+            "max_order": 1,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.2,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613_HR_ref.csv"
+        },
+        "source_config_hash": "cf5aca82f096bc4b03241573083112cf877d815836309168d5ec07811bce8c14",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "93e7c29fed62292f0f1074734d66219d742943e0a40264450af03b50e3dab91a",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613.csv",
+      "data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-short-mid",
+      "filter_profile_sha256": "79e6036878bc69a614082ba174f28a55bca49b9fc87745de397e68b545ecedde",
+      "fs_target": 25,
+      "identity_sha256": "81ec21690d56651c0291884f343d29c8dd6ccf03ef647795b8d4eb416349901b",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.012,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "778f75d02d47a134a5999a5641de201dfc613da915b43876398792c6833c6e84",
+      "record_id": "kaihe3_LYX_0613",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613_HR_ref.csv",
+      "reference_sha256": "5cb40473d1793f8ff91eeed993f4a1b9a59c44b7fefcfd57a0314ad34c626050",
+      "scene": "kaihe",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "bde9c68c3f6db2e28928ead2c8018719992628af29893fd70f977b73c4bf972f",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "2fa69f82bf9e257f123028ae4e16d6cefe2ccaf20b6f3b4e2ae326f106f8e4ad",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.012,
+            "lms_mu_min": 1e-06,
+            "max_order": 1,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.1,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "272e7c5854ea7feb33601402646ac8e37f24f8bb2894e756f2bfd1e25010d842",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "1fefa54763402c7abb0d948da379385022f176901bce1a7d397b45eeab54e607",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708.csv",
+      "data_sha256": "971a87c06295b73d4cca7936437de8c832c7d2eed65f286a8742805543f5f87b",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-short-mid",
+      "filter_profile_sha256": "79e6036878bc69a614082ba174f28a55bca49b9fc87745de397e68b545ecedde",
+      "fs_target": 25,
+      "identity_sha256": "2fa69f82bf9e257f123028ae4e16d6cefe2ccaf20b6f3b4e2ae326f106f8e4ad",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.012,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "4e53e93fb94a8ecd17d319af41d6d010c1424baf9c0151099cb417fb0a2d6af0",
+      "record_id": "run1_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708_HR_ref.csv",
+      "reference_sha256": "c8677ec1f0e22b25100c20ab83b8faf22ddea730a973b41b1b43673acf1443a0",
+      "scene": "run",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "7b607e37ccc7a348c0e6b371917b2922b57591d33101aaae2cf531d3571eb054",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "548837fcff619c927e098193c743a45a014e7700c320ff3f0b176e145691e9d5",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.012,
+            "lms_mu_min": 1e-06,
+            "max_order": 1,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.05,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "7d685cb2e316424e75e5bc3b98383b8497240973289c516804d6ec87613c15a2",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "e1f6ceb5326ada22484506647b497063aa83974e445f5b2777b0446696061892",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708.csv",
+      "data_sha256": "a32ab804060f866add72e093d6bdced3d756faf967c1ac1b233fec07c5733cb7",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-short-mid",
+      "filter_profile_sha256": "79e6036878bc69a614082ba174f28a55bca49b9fc87745de397e68b545ecedde",
+      "fs_target": 25,
+      "identity_sha256": "548837fcff619c927e098193c743a45a014e7700c320ff3f0b176e145691e9d5",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.012,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "6e06fcb2efffb234c1d7b2dc93bc8ea7b432f000fdfdc5f32639850d1e6e7d18",
+      "record_id": "run2_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "8d04fc22e8e98c5b4380a05ded28e8aa542ab5fa66d800cf602289ccf0062382",
+      "scene": "run",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "4fa3624aae1958a841d2ae847e4d15c83c899e8c552c993f4d9d50cde59cbff9",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "deca4aa492edd8c526ac3b0aa4c5b3dfc87c1eea3d129215794766f2ca81c77c",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.012,
+            "lms_mu_min": 1e-06,
+            "max_order": 1,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.2,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "91b3d0e35ab56f6a37083c5c6a8ea305f7417faadefe792f6123136b16283d7c",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "8dcf3387e980eb7b6b01729be9f05f8105b79830108d13b0becbf482609d5b4a",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708.csv",
+      "data_sha256": "1f1ea855fba32db79c1a5d654736170f1e08d1bbc72409191b227814db685742",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-short-mid",
+      "filter_profile_sha256": "79e6036878bc69a614082ba174f28a55bca49b9fc87745de397e68b545ecedde",
+      "fs_target": 25,
+      "identity_sha256": "deca4aa492edd8c526ac3b0aa4c5b3dfc87c1eea3d129215794766f2ca81c77c",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.012,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "72d487748fa84ca857a1b50b09998d485359b9af63bdf9240a6e6b3415b632a8",
+      "record_id": "run3_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708_HR_ref.csv",
+      "reference_sha256": "323813b4b44f54e604bf751164616bdd3ed5859d5faee2f302b11301b612e1e3",
+      "scene": "run",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "903053add57c377e04cb4a80e9bb8b933214bcc46c2969732abddd60fa2a3b51",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "2f31b44e603283bdeda406892c373a7edbd5b82457eed967a0806ba9e4845ac9",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.012,
+            "lms_mu_min": 1e-06,
+            "max_order": 1,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.2,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "10a091b8db6a75b0cd86c1e7275b685077f14b1085c9f8ffbfd4b0703ac15d1a",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "178bdaf7d1d5590d2a7f0d2052611955ce9d6ea39390722fbdd4377e677d912e",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708.csv",
+      "data_sha256": "cf5e2d02bd1f874b3b55883e351cb6cf5107b6f0eb4d7acf142d6f5e6d93e7ee",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-short-mid",
+      "filter_profile_sha256": "79e6036878bc69a614082ba174f28a55bca49b9fc87745de397e68b545ecedde",
+      "fs_target": 25,
+      "identity_sha256": "2f31b44e603283bdeda406892c373a7edbd5b82457eed967a0806ba9e4845ac9",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.012,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "eaba17c0d527c7a8b099dfa3f9587496bce5095ab91528c2b371d5d795e852b1",
+      "record_id": "xiezi2_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "fc1a913849322295413e3ecf1ca48cefa477420ac4c34ea3cc2a5b74070d2877",
+      "scene": "xiezi",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "057dccb872711d01e498c6ceafc8b08ab49ece94b97a586c21bb0a746ab01ff6",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "8d76a529955df0a2a182e299fc7db4a658267797ba9aba81b3920c3744dc969e",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.012,
+            "lms_mu_min": 1e-06,
+            "max_order": 1,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.1,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "5457e4b18dfa76746861280759bea93dc48ea7a95643f09a26ecf089534820c9",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "ab739210957ad842b0e19130f115555e788a7cb54f657d93840833578b8a3113",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708.csv",
+      "data_sha256": "7b32139c8969ebcd6a8c1bedf8bb9191c916187a7716f43db6ad03d60f165619",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-short-mid",
+      "filter_profile_sha256": "79e6036878bc69a614082ba174f28a55bca49b9fc87745de397e68b545ecedde",
+      "fs_target": 25,
+      "identity_sha256": "8d76a529955df0a2a182e299fc7db4a658267797ba9aba81b3920c3744dc969e",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.012,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "111b11e3120c793eae426f7361f73ac8c0b5b6418057b2531f9fd62cf1a1be79",
+      "record_id": "xiezi3_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708_HR_ref.csv",
+      "reference_sha256": "34c0a25bf5953ba8968108170ddcf3b6664fb15c7cecd8f1dfc1728c5cca0916",
+      "scene": "xiezi",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "10c27b5cb74d620dd894c63b1e451a977260ed39927e2f5e4b050fce23d3d9f7",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "f186842f6a5d3edd0600f4501884b886e22f5d6c9223987dd2fb9af0dfc4706b",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.012,
+            "lms_mu_min": 1e-06,
+            "max_order": 1,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.3,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "192e1211a9172d8354673e7d369e0d87f68d45ce121c50c7178dbeeb948c6662",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "ab67f25fd3f5ec2ad51cdfd5297fdb882a9bf4c799676528c3f14bf4c2acf7d3",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708.csv",
+      "data_sha256": "8044c3d7fb32f520f6ba5940508814f69cef5e3ec0b8f3ca8b9fb750961f897f",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-short-mid",
+      "filter_profile_sha256": "79e6036878bc69a614082ba174f28a55bca49b9fc87745de397e68b545ecedde",
+      "fs_target": 25,
+      "identity_sha256": "f186842f6a5d3edd0600f4501884b886e22f5d6c9223987dd2fb9af0dfc4706b",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.012,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "1d18872f230a8ed75fdf9653196193557da946dcdb6b6375afe220ad9c71bdf4",
+      "record_id": "xiezi4_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708_HR_ref.csv",
+      "reference_sha256": "9db5f78f018e87128771f45cc3af8004e51ef7530ae1358dcf873b8f547cb0f7",
+      "scene": "xiezi",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "8557fde4681a4405639e8604989be82f056fa8e79a73e7cbf1c3eacc7c174d39",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 5,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "26a5b85fe3a3217a6d699bd08ea21a9b50d98eff2ba9f173108e77c1a27ba8df",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.01,
+            "lms_mu_min": 1e-06,
+            "max_order": 5,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.05,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "18b2b7fc6bf48fedd964306d0fadc8ad1069d5d57fc6f69d1a36f964fdaf651b",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "04e00c208078e2a4dd4f46dbe874cc0a15492d5ca1a94e386accf2b306ef71eb",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708.csv",
+      "data_sha256": "b5f81d40027419f8545a399a3a8b66f4737c75d78f60d20c7de7e378fd824d8a",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-long-mid",
+      "filter_profile_sha256": "4f088d4248e5a5f6f508c0d3fc3521b1a98836e4d4ff33b44041aefc5cc174f9",
+      "fs_target": 25,
+      "identity_sha256": "26a5b85fe3a3217a6d699bd08ea21a9b50d98eff2ba9f173108e77c1a27ba8df",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.01,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 200,
+      "raw_data_sha256": "7c23fa243cf4c7f0a0f92d2f8a84ca3c12ee5af18df38dd4437e92ad0bb83265",
+      "record_id": "jianpan1_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708_HR_ref.csv",
+      "reference_sha256": "076fec4a8767fdf6edfee35dfac72e898659b95e5cd6d9924724145976622b2c",
+      "scene": "jianpan",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "8e80249bf7d218b4a350254128607c1c39331753f22dcbb8046bd721a694a97b",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 5,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "fc5a1af9be3ae1d6520ef0079efb75000ba7db4d1949cb2069c965d9173288bd",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.01,
+            "lms_mu_min": 1e-06,
+            "max_order": 5,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.2,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "a4b41e23923ff300f34fd272f5a3fc7ee60ca6fd7e5c8551746e86102cad371f",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "a8843c23c4ac8b7c7a5e8546f290ca6b2e5e1187ea25e33b8c547a8ab6f9adc5",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708.csv",
+      "data_sha256": "a7421b4146701f462dd4b033ad80a60e1fdc3f72fae3e97a9c5a7b89360ac1d2",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-long-mid",
+      "filter_profile_sha256": "4f088d4248e5a5f6f508c0d3fc3521b1a98836e4d4ff33b44041aefc5cc174f9",
+      "fs_target": 25,
+      "identity_sha256": "fc5a1af9be3ae1d6520ef0079efb75000ba7db4d1949cb2069c965d9173288bd",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.01,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 200,
+      "raw_data_sha256": "b4aaafa531d731c81d7e8da0e5dac4f8c6e360bda6c7520c34ae78e023dd8bb7",
+      "record_id": "jianpan2_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "c7a98e54da83d6310430276b33b88bf2306ade91ac81d5b9dd3f5d18ecf5a270",
+      "scene": "jianpan",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "5bfd14237566a22f698c2e04bbed3a053d8e0acecc8bb792977aaadbcae503f4",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 5,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "eccc760278ceca4019921e0c748943d5928241c6244dd12b1e0c333d1248dd0b",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.01,
+            "lms_mu_min": 1e-06,
+            "max_order": 5,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.2,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "186db1ae6710084f149b3c425ab3fdff8be36f26366aabe8e697b92a92a3fe47",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "144c4c4e9c98f32f0563d7160b7c1f62ae9fd57e23a118b24dc7c5fa4a311954",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708.csv",
+      "data_sha256": "d6ea629174441276720cb28ba416f68fba6018952bfa66105ba734bdbfdb8da5",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-long-mid",
+      "filter_profile_sha256": "4f088d4248e5a5f6f508c0d3fc3521b1a98836e4d4ff33b44041aefc5cc174f9",
+      "fs_target": 25,
+      "identity_sha256": "eccc760278ceca4019921e0c748943d5928241c6244dd12b1e0c333d1248dd0b",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.01,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 200,
+      "raw_data_sha256": "19b5d1c42c326cd2f868c1498bd282e7dba94141b8b51f70332fd82409c2e4b7",
+      "record_id": "jianpan3_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708_HR_ref.csv",
+      "reference_sha256": "ecf02c256cde6af1557910ee9ff769de523ffb54e8124c2f0528fad82df968e6",
+      "scene": "jianpan",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "e1f713a33cffe177274bfa591182253d8f62523dec069667b643b38db473e48c",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 5,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "ab35c4daa32f5b0078c089f3455e4b2e33689a9935a37b697291da2bc6c39691",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.01,
+            "lms_mu_min": 1e-06,
+            "max_order": 5,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.05,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613_HR_ref.csv"
+        },
+        "source_config_hash": "9b76a07757cc97ef5ef96e82b7ff7224678fdc4d6a1ac5bc58fdbc3c204e297e",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "b66ae087a6787d2a5c1e9edc152be707a4cdfbd104a2b5aff056d066cebcdd56",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613.csv",
+      "data_sha256": "22927001aa2c6d6c378d5ab7897897e59f3c72dfad697fd77a165e599ca5443d",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-long-mid",
+      "filter_profile_sha256": "4f088d4248e5a5f6f508c0d3fc3521b1a98836e4d4ff33b44041aefc5cc174f9",
+      "fs_target": 25,
+      "identity_sha256": "ab35c4daa32f5b0078c089f3455e4b2e33689a9935a37b697291da2bc6c39691",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.01,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 200,
+      "raw_data_sha256": "1dd489af27c30e2f52b911ec1e11312a7498463cdb1e737ca66ffba26bbf4bcb",
+      "record_id": "kaihe1_LYX_0613",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613_HR_ref.csv",
+      "reference_sha256": "38a5b714ee897bbeaaafa0be7017b3bf9d941826a0e534334131b1301c53e0e0",
+      "scene": "kaihe",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "217d83db4398aeac41811ef439822e8ae351d0914060d3ef228d77755f811080",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 5,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "3bf15f6068dcc35f46efbdfafcab303abe7c644571dac3a93468efc4ed278ae1",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.01,
+            "lms_mu_min": 1e-06,
+            "max_order": 5,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.1,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617_HR_ref.csv"
+        },
+        "source_config_hash": "98c00653028e503ea949527b79f40754b5899cee0a5c1635d474467dc5813186",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "bae6e57e0ab85b0a91e76a943b6fe6c8cbb274b880da928c9a9aa95b8ff9fb24",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617.csv",
+      "data_sha256": "ba3d9938e8d9e04d25ce32fa6e698b21ef512f68bc89d3adfb0a5e77fc900d6d",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-long-mid",
+      "filter_profile_sha256": "4f088d4248e5a5f6f508c0d3fc3521b1a98836e4d4ff33b44041aefc5cc174f9",
+      "fs_target": 25,
+      "identity_sha256": "3bf15f6068dcc35f46efbdfafcab303abe7c644571dac3a93468efc4ed278ae1",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.01,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 200,
+      "raw_data_sha256": "73f626f972afccccb5a0ef261e3bfe1afd60b02b24a18e5b8a2ddfb5964e7528",
+      "record_id": "kaihe1_LYX_0617",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617_HR_ref.csv",
+      "reference_sha256": "a3b779e55561da76a3d69293e73175c624e947d57de38a3f5184d324731c0739",
+      "scene": "kaihe",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "f131b5e6e9e8573346be4e531806cf4d7026ef8d0b431e55ce9e4d479a94c302",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 5,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "510b6b1b978bf768fa7092a369e6010117e2c82ac22363ef2580f9dfe0c665b3",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.01,
+            "lms_mu_min": 1e-06,
+            "max_order": 5,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.2,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613_HR_ref.csv"
+        },
+        "source_config_hash": "9ba0285e8ae36f88f092709366f1a38728c54523caaa735507cab80f21baad17",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "0d5293d31a726d4d3ccda9a6440dd2809f1e8fa668aef1d74e234712ac94eee7",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613.csv",
+      "data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-long-mid",
+      "filter_profile_sha256": "4f088d4248e5a5f6f508c0d3fc3521b1a98836e4d4ff33b44041aefc5cc174f9",
+      "fs_target": 25,
+      "identity_sha256": "510b6b1b978bf768fa7092a369e6010117e2c82ac22363ef2580f9dfe0c665b3",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.01,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 200,
+      "raw_data_sha256": "778f75d02d47a134a5999a5641de201dfc613da915b43876398792c6833c6e84",
+      "record_id": "kaihe3_LYX_0613",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613_HR_ref.csv",
+      "reference_sha256": "5cb40473d1793f8ff91eeed993f4a1b9a59c44b7fefcfd57a0314ad34c626050",
+      "scene": "kaihe",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "6dbfcbeb23338dc4204a62487e2a58d6cc5e5d7c26f1fbed6c1f1187089e6f15",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 5,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "54da76ac498a1766d7dc72b97d8a9a32a6a8c6f88324e320196ee13bbeb016e2",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.01,
+            "lms_mu_min": 1e-06,
+            "max_order": 5,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.1,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "73b1110cc1e4348080a5d0ebd1982aaa9930b96b807bd0ad3e6af1e7a5bb0ccb",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "bf74f52150b67fe9e5dc1c4f1095368c3c0541b2deb66fdefd3f3be1eca576c9",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708.csv",
+      "data_sha256": "971a87c06295b73d4cca7936437de8c832c7d2eed65f286a8742805543f5f87b",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-long-mid",
+      "filter_profile_sha256": "4f088d4248e5a5f6f508c0d3fc3521b1a98836e4d4ff33b44041aefc5cc174f9",
+      "fs_target": 25,
+      "identity_sha256": "54da76ac498a1766d7dc72b97d8a9a32a6a8c6f88324e320196ee13bbeb016e2",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.01,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 200,
+      "raw_data_sha256": "4e53e93fb94a8ecd17d319af41d6d010c1424baf9c0151099cb417fb0a2d6af0",
+      "record_id": "run1_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708_HR_ref.csv",
+      "reference_sha256": "c8677ec1f0e22b25100c20ab83b8faf22ddea730a973b41b1b43673acf1443a0",
+      "scene": "run",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "7e420f3d3c9b0ace702b8defa316a7420da6ee5e93d994a88810ddd7354f0fa5",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 5,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "e4e631a687d0f740985b847074bef040fefcf9adde70d31e896ffadd3689f6e0",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.01,
+            "lms_mu_min": 1e-06,
+            "max_order": 5,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.05,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "08cd3bb8e7d24224a74139fc9db0324e05fdb7982ffcd2aae793b0f580bc3313",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "d6226243aef8cabf99e0a129a153e6e968a30bc99575777cabcd90744b159b0a",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708.csv",
+      "data_sha256": "a32ab804060f866add72e093d6bdced3d756faf967c1ac1b233fec07c5733cb7",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-long-mid",
+      "filter_profile_sha256": "4f088d4248e5a5f6f508c0d3fc3521b1a98836e4d4ff33b44041aefc5cc174f9",
+      "fs_target": 25,
+      "identity_sha256": "e4e631a687d0f740985b847074bef040fefcf9adde70d31e896ffadd3689f6e0",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.01,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 200,
+      "raw_data_sha256": "6e06fcb2efffb234c1d7b2dc93bc8ea7b432f000fdfdc5f32639850d1e6e7d18",
+      "record_id": "run2_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "8d04fc22e8e98c5b4380a05ded28e8aa542ab5fa66d800cf602289ccf0062382",
+      "scene": "run",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "db9212ffc56e70e77ea3641e78179ce1876335106213dd0859d8273fb5a92c75",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 5,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "df545dafb478b7fc09019ff303385e19c68f429014f07a545d28cd7975d339a7",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.01,
+            "lms_mu_min": 1e-06,
+            "max_order": 5,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.2,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "0538e45728d6ef8b03a20c83b776e67b483030419c940b9cbb8e58c21e523da3",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "c2bca629ca1c3df44f95115735f7d902bf41416fa171bd5cb7e2c896fd81776a",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708.csv",
+      "data_sha256": "1f1ea855fba32db79c1a5d654736170f1e08d1bbc72409191b227814db685742",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-long-mid",
+      "filter_profile_sha256": "4f088d4248e5a5f6f508c0d3fc3521b1a98836e4d4ff33b44041aefc5cc174f9",
+      "fs_target": 25,
+      "identity_sha256": "df545dafb478b7fc09019ff303385e19c68f429014f07a545d28cd7975d339a7",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.01,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 200,
+      "raw_data_sha256": "72d487748fa84ca857a1b50b09998d485359b9af63bdf9240a6e6b3415b632a8",
+      "record_id": "run3_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708_HR_ref.csv",
+      "reference_sha256": "323813b4b44f54e604bf751164616bdd3ed5859d5faee2f302b11301b612e1e3",
+      "scene": "run",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "787bf925e9e16fe8e930ef2f3d89a06b6712de8e2168dee3a4efd5afbd559b30",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 5,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "c72362c1b58e25fcce1540e5872298d53898ed621f17bd98f56cf31c964bd5bf",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.01,
+            "lms_mu_min": 1e-06,
+            "max_order": 5,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.2,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "000319cb1a08bf4287f2784ba0483a620884935071efbfe05bef03b0914fdd3d",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "8e56de3f0e9d6cb9752a5e91548042679fcdfcbbd71b843af3432397ae17fea3",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708.csv",
+      "data_sha256": "cf5e2d02bd1f874b3b55883e351cb6cf5107b6f0eb4d7acf142d6f5e6d93e7ee",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-long-mid",
+      "filter_profile_sha256": "4f088d4248e5a5f6f508c0d3fc3521b1a98836e4d4ff33b44041aefc5cc174f9",
+      "fs_target": 25,
+      "identity_sha256": "c72362c1b58e25fcce1540e5872298d53898ed621f17bd98f56cf31c964bd5bf",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.01,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 200,
+      "raw_data_sha256": "eaba17c0d527c7a8b099dfa3f9587496bce5095ab91528c2b371d5d795e852b1",
+      "record_id": "xiezi2_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "fc1a913849322295413e3ecf1ca48cefa477420ac4c34ea3cc2a5b74070d2877",
+      "scene": "xiezi",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "539b4c817a93d2cb5bb8db00e9d62cb1fef945321a7fa65131e1928d8c001002",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 5,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "a9e1fcc0f4dd082192b732deacb27b42131fd3caf655d42ef11b4793e01ce568",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.01,
+            "lms_mu_min": 1e-06,
+            "max_order": 5,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.1,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "3df93a04392e74dfc00adf1bbaaecf319ae5615c5a54f2c336340dee0760964e",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "6547535d4efcdf436aa974db6d72e392334e11baaa1148324455e16aa75da12a",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708.csv",
+      "data_sha256": "7b32139c8969ebcd6a8c1bedf8bb9191c916187a7716f43db6ad03d60f165619",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-long-mid",
+      "filter_profile_sha256": "4f088d4248e5a5f6f508c0d3fc3521b1a98836e4d4ff33b44041aefc5cc174f9",
+      "fs_target": 25,
+      "identity_sha256": "a9e1fcc0f4dd082192b732deacb27b42131fd3caf655d42ef11b4793e01ce568",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.01,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 200,
+      "raw_data_sha256": "111b11e3120c793eae426f7361f73ac8c0b5b6418057b2531f9fd62cf1a1be79",
+      "record_id": "xiezi3_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708_HR_ref.csv",
+      "reference_sha256": "34c0a25bf5953ba8968108170ddcf3b6664fb15c7cecd8f1dfc1728c5cca0916",
+      "scene": "xiezi",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "22eda10a98d8b8b501cb1ecd9f515b8d6c832e8d59d7f162aa3969567460d0f8",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 5,
+      "attempt_kind": "diagnostic",
+      "cache_identity_sha256": "e133955a608924fcdda587b02b993e237da330921aafcb7f1a01b10d0364704a",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "execution_mode": "prepared_window_spectral_reaudit",
+        "parameter_search": false,
+        "source_config": {
+          "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708.csv",
+          "method_names": [
+            "reset FFT",
+            "LMS+H"
+          ],
+          "parameters": {
+            "adaptive_filter": "lms",
+            "algorithm_preset": "lite",
+            "analysis_scope": "full",
+            "fs_target": 25,
+            "lms_mu_base": 0.01,
+            "lms_mu_min": 1e-06,
+            "max_order": 5,
+            "penalty_candidate_id": "current_soft_penalty_control_v1",
+            "recovery_candidate_id": "current_fixed_floor_control_v1",
+            "reference_groups_order": [
+              "HF"
+            ],
+            "smooth_win_len": 5,
+            "spec_penalty_width": 0.3,
+            "time_bias": 5.0
+          },
+          "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708_HR_ref.csv"
+        },
+        "source_config_hash": "c6babc3e3eb92a0e7f9b5014fc2085e215afd080065cb79ad188cf3bf219f28d",
+        "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+      },
+      "config_hash": "3375bb60b8cecb4745b2ae725eb122e774ebb1238909f72a8bea160f35df008d",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708.csv",
+      "data_sha256": "8044c3d7fb32f520f6ba5940508814f69cef5e3ec0b8f3ca8b9fb750961f897f",
+      "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "filter_profile_id": "p25-long-mid",
+      "filter_profile_sha256": "4f088d4248e5a5f6f508c0d3fc3521b1a98836e4d4ff33b44041aefc5cc174f9",
+      "fs_target": 25,
+      "identity_sha256": "e133955a608924fcdda587b02b993e237da330921aafcb7f1a01b10d0364704a",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+      "nominal_mu": 0.01,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 200,
+      "raw_data_sha256": "1d18872f230a8ed75fdf9653196193557da946dcdb6b6375afe220ad9c71bdf4",
+      "record_id": "xiezi4_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708_HR_ref.csv",
+      "reference_sha256": "9db5f78f018e87128771f45cc3af8004e51ef7530ae1358dcf873b8f547cb0f7",
+      "scene": "xiezi",
+      "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+      "source_p25_identity_sha256": "5c353986b8455de0c09e30c5ce9c0cb994133d4a2521b396bb421377c6b80da0",
+      "spectral_audit_required": true,
+      "stage": "filter_profile_p25_spectral_recheck_v2",
+      "true_rise_applicable": false
+    }
+  ],
+  "identity_panel_sha256": "9d14deba850ecf05da70dc79cc46ad12fbbfdfd36f5c59af77a5c0867273e645",
+  "identity_sha256": [
+    "1ec11b827ccbc4647ee3e88845412144c3c225a17483e2719e571c92c0ddfeaa",
+    "b1b7e325a41fcf35b2ca24318e9dd4d9f3e6a77887bcaf62c8a74984f0cfbe88",
+    "ff611d06136bfcf0b24fcf72d35420869fc8c427758013307915005333dd8340",
+    "a5ab9a25f9c2d031dde671f4fb97a416e9aa6351cc5bfe49f54177268bd6730b",
+    "bbb0b8017cf719ed356bc7d1377f33564db1d3eef9131b4911d82b4503d53320",
+    "4e7d592405b1c9791e49510ff8f9db0fc85d4e1b4138c06f5058dc5f6c36431b",
+    "7069a469df33236085ad6f1ff61b9302eee1bad635975bf956e7efa5e918c66a",
+    "4b22afc0113e457c7ec1915a1b977f73e914d3a1796ff4ba318b1eca70432f40",
+    "337eeaf47c1b8a5fc96e27e51ed56a383d6d17825b8e5e1df4ce07a8b47ebade",
+    "f5c4153ac99ab50aba33b28ff077c11c95ff25b58ca51ae8b2d7d2f1e973fa5d",
+    "fe55858d232b9b22f5c5c42c73bb896cb0615d806e64282267b7b9b954882b50",
+    "9ec0232366e8e20f59f3a47e042f8e2386089f71982cdc2e9c842530792fc9f3",
+    "00f839b4ffbdbb983f26e21b6d06f1ab230493f3791486a232a94ad426931554",
+    "f415fdfeabc61ebf6d6f55c12a4f04bc86b7e8917736e83af5d586371e3cf788",
+    "cd86e5c82fedfdd654b893101fe79f0c772eca72258ec0ede2edb9a70b11ebe4",
+    "4938be61fbaaeb908ac09177738ec117506aa6f6b37fb6b4d80d93de5c723ad7",
+    "e4bab62eea87cbb38e8bc6ecd2b1a43546edd46b0dd1f50cb7b0d1d9283df5c3",
+    "81ec21690d56651c0291884f343d29c8dd6ccf03ef647795b8d4eb416349901b",
+    "2fa69f82bf9e257f123028ae4e16d6cefe2ccaf20b6f3b4e2ae326f106f8e4ad",
+    "548837fcff619c927e098193c743a45a014e7700c320ff3f0b176e145691e9d5",
+    "deca4aa492edd8c526ac3b0aa4c5b3dfc87c1eea3d129215794766f2ca81c77c",
+    "2f31b44e603283bdeda406892c373a7edbd5b82457eed967a0806ba9e4845ac9",
+    "8d76a529955df0a2a182e299fc7db4a658267797ba9aba81b3920c3744dc969e",
+    "f186842f6a5d3edd0600f4501884b886e22f5d6c9223987dd2fb9af0dfc4706b",
+    "26a5b85fe3a3217a6d699bd08ea21a9b50d98eff2ba9f173108e77c1a27ba8df",
+    "fc5a1af9be3ae1d6520ef0079efb75000ba7db4d1949cb2069c965d9173288bd",
+    "eccc760278ceca4019921e0c748943d5928241c6244dd12b1e0c333d1248dd0b",
+    "ab35c4daa32f5b0078c089f3455e4b2e33689a9935a37b697291da2bc6c39691",
+    "3bf15f6068dcc35f46efbdfafcab303abe7c644571dac3a93468efc4ed278ae1",
+    "510b6b1b978bf768fa7092a369e6010117e2c82ac22363ef2580f9dfe0c665b3",
+    "54da76ac498a1766d7dc72b97d8a9a32a6a8c6f88324e320196ee13bbeb016e2",
+    "e4e631a687d0f740985b847074bef040fefcf9adde70d31e896ffadd3689f6e0",
+    "df545dafb478b7fc09019ff303385e19c68f429014f07a545d28cd7975d339a7",
+    "c72362c1b58e25fcce1540e5872298d53898ed621f17bd98f56cf31c964bd5bf",
+    "a9e1fcc0f4dd082192b732deacb27b42131fd3caf655d42ef11b4793e01ce568",
+    "e133955a608924fcdda587b02b993e237da330921aafcb7f1a01b10d0364704a"
+  ],
+  "independent_bo_authorized": false,
+  "may_nominate_recovery_candidate": false,
+  "metric_contract": {
+    "contract_sha256": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+    "contract_version": "lyx_p25_spectral_recheck_metric_contract_v2",
+    "decision_contract_hash": "04f3a67854432a1d03fb393eb348747bc639dd7a5f41f16ae552936bda5acad0",
+    "evaluation_grain": "filter_profile_x_record",
+    "parameter_search": false,
+    "scale_control_decision_sha256": "4aa202167f754532e8e23318906ba3075ae4807f58080f4ae4a9eed00782f980",
+    "source_metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+    "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+    "spectral_signal_domain": "sample_zscore_ddof_1_per_window"
+  },
+  "parameter_search_authorized": false,
+  "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+  "profile_panel": [
+    {
+      "actual_taps": 1,
+      "filter_profile_id": "p25-short-low",
+      "filter_profile_sha256": "f836283d6be0924a7518a3fb4bd723ce7b485c1eb1e9890bf03c17758add8100",
+      "fs_target": 25,
+      "nominal_mu": 0.008,
+      "physical_memory_ms": 40
+    },
+    {
+      "actual_taps": 1,
+      "filter_profile_id": "p25-short-mid",
+      "filter_profile_sha256": "79e6036878bc69a614082ba174f28a55bca49b9fc87745de397e68b545ecedde",
+      "fs_target": 25,
+      "nominal_mu": 0.012,
+      "physical_memory_ms": 40
+    },
+    {
+      "actual_taps": 5,
+      "filter_profile_id": "p25-long-mid",
+      "filter_profile_sha256": "4f088d4248e5a5f6f508c0d3fc3521b1a98836e4d4ff33b44041aefc5cc174f9",
+      "fs_target": 25,
+      "nominal_mu": 0.01,
+      "physical_memory_ms": 200
+    }
+  ],
+  "profile_panel_sha256": "983ef1489f05e14398db0372bef1df6175c7dee7172e76873c8ee1bb5aacf328",
+  "proposal_sha256": "83081d8081def70b356b2737864b552c3fc2376817bbc595db32f4f650616c26",
+  "proposal_version": "lyx_p25_spectral_recheck_proposal_v2",
+  "record_panel": [
+    {
+      "data_sha256": "b5f81d40027419f8545a399a3a8b66f4737c75d78f60d20c7de7e378fd824d8a",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "raw_data_sha256": "7c23fa243cf4c7f0a0f92d2f8a84ca3c12ee5af18df38dd4437e92ad0bb83265",
+      "record_id": "jianpan1_LYX_0708",
+      "reference_sha256": "076fec4a8767fdf6edfee35dfac72e898659b95e5cd6d9924724145976622b2c",
+      "scene": "jianpan",
+      "true_rise_applicable": false
+    },
+    {
+      "data_sha256": "a7421b4146701f462dd4b033ad80a60e1fdc3f72fae3e97a9c5a7b89360ac1d2",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "raw_data_sha256": "b4aaafa531d731c81d7e8da0e5dac4f8c6e360bda6c7520c34ae78e023dd8bb7",
+      "record_id": "jianpan2_LYX_0708",
+      "reference_sha256": "c7a98e54da83d6310430276b33b88bf2306ade91ac81d5b9dd3f5d18ecf5a270",
+      "scene": "jianpan",
+      "true_rise_applicable": false
+    },
+    {
+      "data_sha256": "d6ea629174441276720cb28ba416f68fba6018952bfa66105ba734bdbfdb8da5",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "raw_data_sha256": "19b5d1c42c326cd2f868c1498bd282e7dba94141b8b51f70332fd82409c2e4b7",
+      "record_id": "jianpan3_LYX_0708",
+      "reference_sha256": "ecf02c256cde6af1557910ee9ff769de523ffb54e8124c2f0528fad82df968e6",
+      "scene": "jianpan",
+      "true_rise_applicable": false
+    },
+    {
+      "data_sha256": "22927001aa2c6d6c378d5ab7897897e59f3c72dfad697fd77a165e599ca5443d",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "raw_data_sha256": "1dd489af27c30e2f52b911ec1e11312a7498463cdb1e737ca66ffba26bbf4bcb",
+      "record_id": "kaihe1_LYX_0613",
+      "reference_sha256": "38a5b714ee897bbeaaafa0be7017b3bf9d941826a0e534334131b1301c53e0e0",
+      "scene": "kaihe",
+      "true_rise_applicable": true
+    },
+    {
+      "data_sha256": "ba3d9938e8d9e04d25ce32fa6e698b21ef512f68bc89d3adfb0a5e77fc900d6d",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "raw_data_sha256": "73f626f972afccccb5a0ef261e3bfe1afd60b02b24a18e5b8a2ddfb5964e7528",
+      "record_id": "kaihe1_LYX_0617",
+      "reference_sha256": "a3b779e55561da76a3d69293e73175c624e947d57de38a3f5184d324731c0739",
+      "scene": "kaihe",
+      "true_rise_applicable": true
+    },
+    {
+      "data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "raw_data_sha256": "778f75d02d47a134a5999a5641de201dfc613da915b43876398792c6833c6e84",
+      "record_id": "kaihe3_LYX_0613",
+      "reference_sha256": "5cb40473d1793f8ff91eeed993f4a1b9a59c44b7fefcfd57a0314ad34c626050",
+      "scene": "kaihe",
+      "true_rise_applicable": true
+    },
+    {
+      "data_sha256": "971a87c06295b73d4cca7936437de8c832c7d2eed65f286a8742805543f5f87b",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "raw_data_sha256": "4e53e93fb94a8ecd17d319af41d6d010c1424baf9c0151099cb417fb0a2d6af0",
+      "record_id": "run1_LYX_0708",
+      "reference_sha256": "c8677ec1f0e22b25100c20ab83b8faf22ddea730a973b41b1b43673acf1443a0",
+      "scene": "run",
+      "true_rise_applicable": true
+    },
+    {
+      "data_sha256": "a32ab804060f866add72e093d6bdced3d756faf967c1ac1b233fec07c5733cb7",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "raw_data_sha256": "6e06fcb2efffb234c1d7b2dc93bc8ea7b432f000fdfdc5f32639850d1e6e7d18",
+      "record_id": "run2_LYX_0708",
+      "reference_sha256": "8d04fc22e8e98c5b4380a05ded28e8aa542ab5fa66d800cf602289ccf0062382",
+      "scene": "run",
+      "true_rise_applicable": true
+    },
+    {
+      "data_sha256": "1f1ea855fba32db79c1a5d654736170f1e08d1bbc72409191b227814db685742",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "raw_data_sha256": "72d487748fa84ca857a1b50b09998d485359b9af63bdf9240a6e6b3415b632a8",
+      "record_id": "run3_LYX_0708",
+      "reference_sha256": "323813b4b44f54e604bf751164616bdd3ed5859d5faee2f302b11301b612e1e3",
+      "scene": "run",
+      "true_rise_applicable": true
+    },
+    {
+      "data_sha256": "cf5e2d02bd1f874b3b55883e351cb6cf5107b6f0eb4d7acf142d6f5e6d93e7ee",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "raw_data_sha256": "eaba17c0d527c7a8b099dfa3f9587496bce5095ab91528c2b371d5d795e852b1",
+      "record_id": "xiezi2_LYX_0708",
+      "reference_sha256": "fc1a913849322295413e3ecf1ca48cefa477420ac4c34ea3cc2a5b74070d2877",
+      "scene": "xiezi",
+      "true_rise_applicable": false
+    },
+    {
+      "data_sha256": "7b32139c8969ebcd6a8c1bedf8bb9191c916187a7716f43db6ad03d60f165619",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "raw_data_sha256": "111b11e3120c793eae426f7361f73ac8c0b5b6418057b2531f9fd62cf1a1be79",
+      "record_id": "xiezi3_LYX_0708",
+      "reference_sha256": "34c0a25bf5953ba8968108170ddcf3b6664fb15c7cecd8f1dfc1728c5cca0916",
+      "scene": "xiezi",
+      "true_rise_applicable": false
+    },
+    {
+      "data_sha256": "8044c3d7fb32f520f6ba5940508814f69cef5e3ec0b8f3ca8b9fb750961f897f",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "raw_data_sha256": "1d18872f230a8ed75fdf9653196193557da946dcdb6b6375afe220ad9c71bdf4",
+      "record_id": "xiezi4_LYX_0708",
+      "reference_sha256": "9db5f78f018e87128771f45cc3af8004e51ef7530ae1358dcf873b8f547cb0f7",
+      "scene": "xiezi",
+      "true_rise_applicable": false
+    }
+  ],
+  "record_panel_sha256": "dc636a649a978f22f0f0c2dc6c71fd326a9af8ed5d71ba721511b0463ee9a257",
+  "retry_limit": 1,
+  "source_artifacts": {
+    "prior_p25_completion": {
+      "file_sha256": "7fd5bc3f219d130d74b2731070e32a6aae96f96fa1c8280329aa8a380537af6a",
+      "path": "data/experiments/lyx_recovery_filter_profile/p25_spectral_diagnostic_execution_v1/completion.json",
+      "path_base": "repository_root"
+    },
+    "prior_p25_decision": {
+      "file_sha256": "95a89e411c7cf44df5485f08c58908346bb417b4c68167c59a207e6f48cba38d",
+      "path": "data/experiments/lyx_recovery_filter_profile/p25_spectral_diagnostic_execution_v1/decision_receipt.json",
+      "path_base": "repository_root"
+    },
+    "prior_p25_proposal": {
+      "file_sha256": "63255082d8126f24d7c1f4659a670fbb45f18373967c244c7801d1d8dd1847df",
+      "path": "data/experiments/lyx_recovery_filter_profile/p25_spectral_diagnostic_v1/p25_spectral_diagnostic_proposal.json",
+      "path_base": "repository_root"
+    },
+    "scale_control_completion": {
+      "file_sha256": "00dbabbe50870f8df9fb976a476403cfbfc9a1adfb0de9af9a5a64e7123f1704",
+      "path": "data/experiments/lyx_recovery_filter_profile/spectral_metric_scale_control_execution_v1/completion.json",
+      "path_base": "repository_root"
+    },
+    "scale_control_decision": {
+      "file_sha256": "815b4446e6b1cdc5ffeee1bc4eacaf3f96dae4a6b54d4d57adeb423029e2b0f0",
+      "path": "data/experiments/lyx_recovery_filter_profile/spectral_metric_scale_control_execution_v1/decision_receipt.json",
+      "path_base": "repository_root"
+    },
+    "scale_control_proposal": {
+      "file_sha256": "a81a79573fd7315096f6820936c95246a7b816a66d9fe68f7b8cc14fe467b57f",
+      "path": "data/experiments/lyx_recovery_filter_profile/spectral_metric_scale_control_v1/spectral_metric_control_proposal.json",
+      "path_base": "repository_root"
+    },
+    "source_budget_contract": {
+      "file_sha256": "350fa88f75c19d06e18e8179dd6a236ceff6b1b74f787996ac9fb6894817300e",
+      "path": "data/experiments/lyx_recovery_filter_profile/governance_v7/budget_contract.json",
+      "path_base": "repository_root"
+    }
+  },
+  "spectral_gate_contract": {
+    "analysis_band_high_bpm": 210.0,
+    "analysis_band_low_bpm": 30.0,
+    "candidate_invariant": true,
+    "contract_version": "lyx_stage_r_spectral_gate_v2",
+    "cross_record_window_pooling": false,
+    "evaluation_grain": "sentinel_profile_x_record",
+    "fail_on_any_uncomputable_window": true,
+    "failure_rule": "any_uncomputable_metric_or_insufficient_window_fails_closed",
+    "filter_stability_contract": {
+      "contract_version": "lyx_filter_stability_audit_v2",
+      "max_residual_artifact_abs_corr_median": 0.95,
+      "max_residual_rms_ratio_p95": 2.0,
+      "max_residual_tail_head_ratio": 2.0,
+      "max_stability_load": 1.0,
+      "max_weight_norm": 25.0,
+      "min_motion_artifact_suppression_db_median": -1.0,
+      "min_true_peak_retention_ratio_median": 0.8,
+      "tail_head_gate": "descriptive_only"
+    },
+    "filter_stability_contract_sha256": "8e46582997dc08db81a7430d4443c0b84bdbc2558c4f638afce1fbd67a667ac4",
+    "max_residual_artifact_corr_delta_median": 0.05,
+    "metrics": [
+      "visible_top3",
+      "prominence_db",
+      "hr_band_share",
+      "pulse_power_retention",
+      "residual_artifact_corr"
+    ],
+    "min_hr_band_share_delta_median": -0.02,
+    "min_prominence_db_delta_median": -0.5,
+    "min_pulse_power_retention_median": 0.8,
+    "min_visible_top3_rate_delta": -0.05,
+    "minimum_valid_window_count": 3,
+    "motion_reference_rule": "largest_archive_style_absolute_correlation_after_frozen_choose_delay",
+    "record_aggregation": "equal_weight_window_then_record",
+    "reference_neighborhood_half_width_bpm": 10.0,
+    "relative_control": "same_window_sample_zscore_pre_filter_signal_shared_by_the_same_sentinel_current_recovery_control",
+    "reuse_within_same_sentinel_record": true,
+    "spectral_signal_domain": {
+      "after": "sample_zscore_ddof_1_per_window",
+      "before": "sample_zscore_ddof_1_per_window",
+      "implementation": "ppg_hr.core.lms_filter.standardize_lms_signal"
+    },
+    "visible_top_k": 3
+  },
+  "stage": "filter_profile_p25_spectral_recheck_v2",
+  "status": "awaiting_human_execution_authorization",
+  "unique_budget": 36,
+  "upstream_p25": {
+    "completion_sha256": "81171332c7c29e80f329c9140874480321bf101ca7f91c853c3ae453015251ac",
+    "decision_sha256": "29f042e080441ae979fea32e0b38c9de8ac778fc71d3bd5d99d78ba8ba763f55",
+    "proposal_sha256": "db1f5d2278458592c08d7e6217d52090a8ab1f94b96262de99e84a466e2c6128",
+    "status": "spectral_metric_control_audit_required"
+  },
+  "upstream_scale_control": {
+    "completion_sha256": "338c73c2360b7bd0d7fad849fbdd84e6b991c1fa1eb823068e8a990ff937a5d0",
+    "decision_sha256": "4aa202167f754532e8e23318906ba3075ae4807f58080f4ae4a9eed00782f980",
+    "proposal_sha256": "429233ecadf92cc2d669b59c8f2cc4516b3d767547d98919655a18918e1a60bd",
+    "status": "legacy_scale_mismatch_confirmed"
+  },
+  "worst_case_attempt_budget": 72
+}

@@ -373,7 +373,10 @@ def audit_spectral_metric_scale_record(
 ) -> dict[str, Any]:
     """Run the frozen control lanes once for one LYX development record."""
 
-    spectral = spectral_contract or StageRSpectralGateContract()
+    spectral = (
+        spectral_contract
+        or StageRSpectralGateContract.legacy_v1()
+    )
     control = control_contract or SpectralMetricScaleControlContract()
     prepared = prepare_stage_r_record_windows(_CONTROL_PROFILE, record)
     result = evaluate_spectral_metric_scale_controls(
@@ -544,7 +547,7 @@ def build_spectral_metric_control_proposal(
     solver_hash = _require_hash("solver_hash", solver_hash)
     evaluation_hash = _require_hash("evaluation_hash", evaluation_hash)
     control = SpectralMetricScaleControlContract()
-    spectral = StageRSpectralGateContract()
+    spectral = StageRSpectralGateContract.legacy_v1()
     budget = BudgetContract.proposed_v7_spectral_metric_control()
     identities = [
         _identity_item(
@@ -655,7 +658,7 @@ def propose_spectral_metric_control(
         spectral_payload,
         hash_field="contract_sha256",
         artifact_name="stage_r_spectral_gate_contract",
-    ) != StageRSpectralGateContract().sha256:
+    ) != StageRSpectralGateContract.legacy_v1().sha256:
         raise SpectralMetricControlError("spectral_metric_control_spectral_contract_mismatch")
 
     source_root = Path(source_root).resolve()
@@ -890,7 +893,7 @@ def _validate_proposal_preflight(
             "spectral_metric_control_source_identity_artifact_mismatch"
         )
     control = SpectralMetricScaleControlContract()
-    spectral = StageRSpectralGateContract()
+    spectral = StageRSpectralGateContract.legacy_v1()
     budget = BudgetContract.proposed_v7_spectral_metric_control()
     control_artifact = read_json(proposal_dir / "control_contract.json")
     if (
@@ -1305,7 +1308,7 @@ def _validate_control_result_file(
         or payload.get("control_contract_sha256")
         != SpectralMetricScaleControlContract().sha256
         or payload.get("spectral_gate_contract_sha256")
-        != StageRSpectralGateContract().sha256
+        != StageRSpectralGateContract.legacy_v1().sha256
     ):
         raise SpectralMetricControlError(
             f"spectral_metric_control_result_identity_mismatch:{identity.record_id}"

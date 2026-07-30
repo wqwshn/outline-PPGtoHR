@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from ppg_hr.v2.recovery_spectral_gate import (
     StageRSpectralGateContract,
@@ -50,6 +51,54 @@ def test_stage_r_spectral_gate_reports_all_five_relative_metrics() -> None:
         "residual_artifact_corr_delta_pass",
         "complete_window_evidence_pass",
     }
+
+
+def test_stage_r_spectral_gate_compares_lms_inputs_in_standardized_domain() -> None:
+    fs = 25
+    time_s = np.arange(0.0, 8.0, 1.0 / fs)
+    pulse = np.sin(2.0 * np.pi * 1.5 * time_s)
+    artifact = 0.2 * np.sin(2.0 * np.pi * 2.5 * time_s)
+    raw_before = 120.0 + 25.0 * (pulse + artifact)
+    lms_after = (raw_before - raw_before.mean()) / raw_before.std(ddof=1)
+    window = {
+        "before": raw_before,
+        "after": lms_after,
+        "motion_reference": artifact,
+        "fs": fs,
+        "reference_hr_bpm": 90.0,
+        "window_center_s": 4.0,
+    }
+
+    result = evaluate_stage_r_spectral_gate_windows(
+        [window for _ in range(3)],
+        contract=StageRSpectralGateContract(),
+    )
+
+    assert result["pulse_power_retention_median"] == pytest.approx(
+        1.0,
+        abs=1e-12,
+    )
+    assert result["gates"]["pulse_power_retention_pass"] is True
+
+
+def test_stage_r_spectral_gate_contract_freezes_standardized_v2_domain() -> None:
+    payload = StageRSpectralGateContract().to_dict()
+
+    assert payload["contract_version"] == "lyx_stage_r_spectral_gate_v2"
+    assert payload["spectral_signal_domain"] == {
+        "before": "sample_zscore_ddof_1_per_window",
+        "after": "sample_zscore_ddof_1_per_window",
+        "implementation": "ppg_hr.core.lms_filter.standardize_lms_signal",
+    }
+
+
+def test_stage_r_spectral_gate_can_reconstruct_historical_v1_contract() -> None:
+    contract = StageRSpectralGateContract.legacy_v1()
+
+    assert contract.sha256 == (
+        "46ccbaebe3f7eafcc14853066a5173cb3ff5ce0b8400b2a1fc1c8e6f59f0ee08"
+    )
+    assert "spectral_signal_domain" not in contract.to_dict()
 
 
 def test_stage_r_spectral_gate_fails_closed_on_pulse_damage_or_bad_window() -> None:

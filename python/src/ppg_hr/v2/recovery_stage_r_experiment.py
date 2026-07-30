@@ -752,7 +752,7 @@ def stage_r_metric_contract_v1() -> dict[str, Any]:
     return payload
 
 
-def stage_r_spectral_gate_contract_v1() -> dict[str, Any]:
+def stage_r_spectral_gate_contract_v2() -> dict[str, Any]:
     contract = StageRSpectralGateContract()
     payload = contract.to_dict()
     payload["contract_sha256"] = canonical_sha256(payload)
@@ -795,7 +795,7 @@ def propose_stage_r_execution(
     if destination.exists():
         raise StageRPlanError(f"stage_r_output_already_exists:{destination}")
     metric_contract = stage_r_metric_contract_v1()
-    spectral_contract = stage_r_spectral_gate_contract_v1()
+    spectral_contract = stage_r_spectral_gate_contract_v2()
     evaluation = _evaluation_source_identity(source_root)
     solver = runtime_source_identity(Path(source_root).resolve())
     proposal = build_stage_r_proposal(

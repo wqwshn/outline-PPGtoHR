@@ -1,0 +1,11 @@
+{
+  "contract_sha256": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+  "contract_version": "lyx_p25_spectral_recheck_metric_contract_v2",
+  "decision_contract_hash": "04f3a67854432a1d03fb393eb348747bc639dd7a5f41f16ae552936bda5acad0",
+  "evaluation_grain": "filter_profile_x_record",
+  "parameter_search": false,
+  "scale_control_decision_sha256": "4aa202167f754532e8e23318906ba3075ae4807f58080f4ae4a9eed00782f980",
+  "source_metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+  "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+  "spectral_signal_domain": "sample_zscore_ddof_1_per_window"
+}

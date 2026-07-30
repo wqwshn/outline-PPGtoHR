@@ -61,7 +61,7 @@ def _prepared_window(center_s: float) -> StageRPreparedWindow:
 def test_scale_controls_isolate_legacy_raw_vs_standardized_mismatch() -> None:
     result = evaluate_spectral_metric_scale_controls(
         [_prepared_window(center) for center in (4.0, 6.0, 8.0)],
-        spectral_contract=StageRSpectralGateContract(),
+        spectral_contract=StageRSpectralGateContract.legacy_v1(),
         control_contract=SpectralMetricScaleControlContract(),
     )
 
@@ -343,7 +343,7 @@ def test_prepare_and_execute_control_panel_obey_exact_human_gate(
         **_kwargs: object,
     ) -> dict[str, object]:
         control = SpectralMetricScaleControlContract()
-        spectral = StageRSpectralGateContract()
+        spectral = StageRSpectralGateContract.legacy_v1()
         return {
             "record_id": record.record_id,
             "scene": record.scene,

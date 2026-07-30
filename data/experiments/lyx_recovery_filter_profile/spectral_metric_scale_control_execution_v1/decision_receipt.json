@@ -1,0 +1,15 @@
+{
+  "automatic_stage_r_execution": false,
+  "complete_window_evidence_count": 12,
+  "decision": "legacy_scale_mismatch_confirmed",
+  "decision_sha256": "4aa202167f754532e8e23318906ba3075ae4807f58080f4ae4a9eed00782f980",
+  "decision_version": "lyx_spectral_metric_scale_control_decision_v1",
+  "direct_bypass_pass_count": 12,
+  "independent_bo_authorized": false,
+  "legacy_scale_mismatch_reproduced_count": 12,
+  "may_nominate_recovery_candidate": false,
+  "next_state": "awaiting_spectral_metric_scale_correction",
+  "proposal_sha256": "429233ecadf92cc2d669b59c8f2cc4516b3d767547d98919655a18918e1a60bd",
+  "record_count": 12,
+  "same_scale_zero_update_pass_count": 12
+}

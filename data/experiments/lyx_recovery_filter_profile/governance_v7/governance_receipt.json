@@ -1,0 +1,20 @@
+{
+  "attempt_registry_summary": {
+    "actual_unique_run_count": 276,
+    "cache_evidence_count": 276,
+    "cache_hit_count": 228,
+    "failed_attempt_count": 3,
+    "logical_task_count": 507,
+    "planned_unique_identity_count": 288,
+    "retry_count": 3
+  },
+  "independent_bo_authorized": false,
+  "new_unique_identity_count": 12,
+  "parameter_search_authorized": false,
+  "proposal_sha256": "429233ecadf92cc2d669b59c8f2cc4516b3d767547d98919655a18918e1a60bd",
+  "receipt_sha256": "c752cecef04a22c1c29205740f0c612037e141771911fd8c8353e5c55ea939cb",
+  "receipt_version": "lyx_spectral_metric_scale_control_governance_v1",
+  "source_budget_contract_hash": "7ce85ea070fdbdc61ef6f7456c5878cba313bf889b68ce33cf9719d8c7837d85",
+  "status": "prepared_zero_runs",
+  "target_budget_contract_hash": "d47b32fc86e34b8352277d296f85d41fe248420d3b7afeb83457396e0d4ef4cf"
+}

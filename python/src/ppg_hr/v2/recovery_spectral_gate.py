@@ -13,7 +13,7 @@ import numpy as np
 from scipy.signal import find_peaks, periodogram
 
 from ppg_hr.core.choose_delay import choose_delay
-from ppg_hr.core.lms_filter import lms_filter
+from ppg_hr.core.lms_filter import lms_filter, standardize_lms_signal
 
 from .phase2_experiment_io import file_sha256
 from .recovery_contracts import canonical_sha256
@@ -48,7 +48,13 @@ class StageRSpectralGateContract:
     fail_on_any_uncomputable_window: bool = True
     record_aggregation: str = "equal_weight_window_then_record"
     cross_record_window_pooling: bool = False
-    contract_version: str = "lyx_stage_r_spectral_gate_v1"
+    contract_version: str = "lyx_stage_r_spectral_gate_v2"
+
+    @classmethod
+    def legacy_v1(cls) -> StageRSpectralGateContract:
+        """Reconstruct the historical raw-domain contract for audit replay."""
+
+        return cls(contract_version="lyx_stage_r_spectral_gate_v1")
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -65,10 +71,23 @@ class StageRSpectralGateContract:
         payload["failure_rule"] = (
             "any_uncomputable_metric_or_insufficient_window_fails_closed"
         )
-        payload["relative_control"] = (
-            "same_window_pre_filter_signal_shared_by_the_same_sentinel_"
-            "current_recovery_control"
-        )
+        if self.contract_version == "lyx_stage_r_spectral_gate_v1":
+            payload["relative_control"] = (
+                "same_window_pre_filter_signal_shared_by_the_"
+                "same_sentinel_current_recovery_control"
+            )
+        else:
+            payload["relative_control"] = (
+                "same_window_sample_zscore_pre_filter_signal_shared_by_the_"
+                "same_sentinel_current_recovery_control"
+            )
+            payload["spectral_signal_domain"] = {
+                "before": "sample_zscore_ddof_1_per_window",
+                "after": "sample_zscore_ddof_1_per_window",
+                "implementation": (
+                    "ppg_hr.core.lms_filter.standardize_lms_signal"
+                ),
+            }
         payload["motion_reference_rule"] = (
             "largest_archive_style_absolute_correlation_after_"
             "frozen_choose_delay"
@@ -224,8 +243,12 @@ def evaluate_stage_r_spectral_gate_windows(
     failures: list[str] = []
     for index, window in enumerate(windows):
         try:
-            before = np.asarray(window["before"], dtype=float)
-            after = np.asarray(window["after"], dtype=float)
+            if contract.contract_version == "lyx_stage_r_spectral_gate_v1":
+                before = np.asarray(window["before"], dtype=float)
+                after = np.asarray(window["after"], dtype=float)
+            else:
+                before = standardize_lms_signal(window["before"])
+                after = standardize_lms_signal(window["after"])
             motion_reference = np.asarray(
                 window["motion_reference"],
                 dtype=float,

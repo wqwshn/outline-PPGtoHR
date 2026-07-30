@@ -35,7 +35,7 @@ from .recovery_stage_f_contracts import (
 )
 from .recovery_stage_r_experiment import (
     stage_r_metric_contract_v1,
-    stage_r_spectral_gate_contract_v1,
+    stage_r_spectral_gate_contract_v2,
 )
 
 
@@ -888,7 +888,7 @@ def propose_stage_f_execution(
         baseline_contract_receipt=baseline_contract_receipt,
     )
     metric_contract = stage_r_metric_contract_v1()
-    spectral_contract = stage_r_spectral_gate_contract_v1()
+    spectral_contract = stage_r_spectral_gate_contract_v2()
     solver = runtime_source_identity(Path(source_root).resolve())
     evaluation_roots = (
         "ppg_hr.v2.recovery_stage_f_contracts",
