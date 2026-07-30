@@ -1057,6 +1057,15 @@ def _load_or_run_spectral_audit(
 ) -> dict[str, Any]:
     profile_id = str(item["filter_profile_id"])
     record_id = str(item["record_id"])
+    parameters = _require_mapping(
+        "identity_config_parameters",
+        _require_mapping("identity_config", item.get("config")).get(
+            "parameters"
+        ),
+    )
+    reference_stage_limit = parameters.get(
+        "adaptive_reference_stage_limit"
+    )
     audit_path = spectral_audit_dir / profile_id / f"{record_id}.json"
     if audit_path.is_file():
         payload = read_json(audit_path)
@@ -1077,13 +1086,22 @@ def _load_or_run_spectral_audit(
             raise StageRPlanError(
                 f"stage_r_spectral_audit_identity_mismatch:{profile_id}:{record_id}"
             )
+        audit_payload = _require_mapping(
+            "stage_r_spectral_audit",
+            payload.get("audit"),
+        )
+        if (
+            payload.get("reference_stage_limit")
+            != reference_stage_limit
+            or audit_payload.get("reference_stage_limit")
+            != reference_stage_limit
+        ):
+            raise StageRPlanError(
+                "stage_r_spectral_audit_reference_stage_limit_mismatch:"
+                f"{profile_id}:{record_id}"
+            )
         return {
-            **dict(
-                _require_mapping(
-                    "stage_r_spectral_audit",
-                    payload.get("audit"),
-                )
-            ),
+            **dict(audit_payload),
             "audit_sha256": payload["audit_sha256"],
         }
 
@@ -1113,6 +1131,7 @@ def _load_or_run_spectral_audit(
         profile,
         record,
         contract=contract,
+        reference_stage_limit=reference_stage_limit,
     )
     payload = {
         "audit_version": "lyx_stage_r_spectral_record_audit_v1",
@@ -1125,6 +1144,8 @@ def _load_or_run_spectral_audit(
         "candidate_invariant": True,
         "audit": audit,
     }
+    if reference_stage_limit is not None:
+        payload["reference_stage_limit"] = reference_stage_limit
     payload["audit_sha256"] = canonical_sha256(payload)
     atomic_write_json(audit_path, payload)
     return {**audit, "audit_sha256": payload["audit_sha256"]}

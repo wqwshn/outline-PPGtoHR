@@ -11,6 +11,7 @@ from ppg_hr.v2 import recovery_stage_r_experiment as stage_r_module
 from ppg_hr.v2.phase2_experiment_io import (
     atomic_write_json,
     file_sha256,
+    read_json,
 )
 from ppg_hr.v2.recovery_contracts import canonical_sha256
 from ppg_hr.v2.recovery_experiment_governance import (
@@ -728,6 +729,138 @@ def test_stage_r_numerical_runner_uses_frozen_config_and_metric_inputs(
     assert observed["reference_shape"] == (2, 2)
     assert result.metrics["metric_contract_version"] == ("lyx_recovery_profile_metric_v1")
     assert result.spectral_audit["spectral_gate_pass"] is True
+
+
+def test_stage_r_spectral_audit_honors_rank1_reference_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    proposal = _proposal(tmp_path)
+    identity = dict(
+        next(
+            item
+            for item in proposal["identities"]
+            if item["stage"] == "recovery_sentinel"
+        )
+    )
+    identity["config"] = {
+        **identity["config"],
+        "parameters": {
+            **identity["config"]["parameters"],
+            "adaptive_reference_stage_limit": 1,
+        },
+    }
+    observed: dict[str, object] = {}
+
+    def fake_audit(
+        _profile: object,
+        _record: object,
+        *,
+        contract: object,
+        reference_stage_limit: int | None,
+    ) -> dict[str, object]:
+        observed["contract"] = contract
+        observed["reference_stage_limit"] = reference_stage_limit
+        return {
+            "stability_pass": True,
+            "spectral_gate_pass": True,
+            "reference_stage_limit": reference_stage_limit,
+        }
+
+    monkeypatch.setattr(
+        stage_r_module,
+        "audit_stage_r_profile_record",
+        fake_audit,
+    )
+
+    audit = stage_r_module._load_or_run_spectral_audit(
+        identity,
+        spectral_audit_dir=tmp_path / "spectral",
+    )
+
+    assert observed["reference_stage_limit"] == 1
+    assert audit["spectral_gate_pass"] is True
+    persisted = read_json(
+        tmp_path
+        / "spectral"
+        / str(identity["filter_profile_id"])
+        / f"{identity['record_id']}.json"
+    )
+    assert persisted["reference_stage_limit"] == 1
+    assert persisted["audit"]["reference_stage_limit"] == 1
+
+
+def test_stage_r_spectral_audit_preserves_legacy_full_cascade_shape(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    proposal = _proposal(tmp_path)
+    identity = dict(
+        next(
+            item
+            for item in proposal["identities"]
+            if item["stage"] == "recovery_sentinel"
+        )
+    )
+
+    def fake_audit(
+        _profile: object,
+        _record: object,
+        *,
+        contract: object,
+        reference_stage_limit: int | None,
+    ) -> dict[str, object]:
+        del contract
+        assert reference_stage_limit is None
+        return {
+            "stability_pass": True,
+            "spectral_gate_pass": True,
+        }
+
+    monkeypatch.setattr(
+        stage_r_module,
+        "audit_stage_r_profile_record",
+        fake_audit,
+    )
+    spectral_dir = tmp_path / "spectral"
+    stage_r_module._load_or_run_spectral_audit(
+        identity,
+        spectral_audit_dir=spectral_dir,
+    )
+    persisted_path = (
+        spectral_dir
+        / str(identity["filter_profile_id"])
+        / f"{identity['record_id']}.json"
+    )
+    persisted = read_json(persisted_path)
+
+    assert "reference_stage_limit" not in persisted
+    assert "reference_stage_limit" not in persisted["audit"]
+
+    incompatible = {
+        **persisted,
+        "audit": {
+            **persisted["audit"],
+            "reference_stage_limit": 1,
+        },
+    }
+    incompatible["audit_sha256"] = canonical_sha256(
+        {
+            key: value
+            for key, value in incompatible.items()
+            if key != "audit_sha256"
+        }
+    )
+    atomic_write_json(persisted_path, incompatible)
+
+    with pytest.raises(
+        StageRPlanError,
+        match="stage_r_spectral_audit_reference_stage_limit_mismatch",
+    ):
+        stage_r_module._load_or_run_spectral_audit(
+            identity,
+            spectral_audit_dir=spectral_dir,
+        )
 
 
 def test_stage_r_execution_registers_runs_and_selects_exact_matrix(

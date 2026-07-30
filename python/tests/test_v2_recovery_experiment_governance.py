@@ -1379,6 +1379,24 @@ def test_proposed_v10_adds_only_12_rank1_revision_diagnostics() -> None:
     assert sum(v10.stage_unique_limits.values()) == 864
 
 
+def test_proposed_v11_adds_only_36_rank1_stage_r_identities() -> None:
+    v10 = BudgetContract.proposed_v10_rank1_filter_revision()
+    v11 = BudgetContract.proposed_v11_stage_r_rank1_replan()
+
+    assert v11.stage_unique_limits == {
+        **v10.stage_unique_limits,
+        "recovery_sentinel_rank1_replan": 36,
+    }
+    assert v11.normal_unique_identity_limit == 888
+    assert v11.max_unique_identities == 900
+    assert v11.max_attempts == 1800
+    assert v11.retry_limit == 1
+    assert v11.stage_attempt_kinds[
+        "recovery_sentinel_rank1_replan"
+    ] == "formal"
+    assert sum(v11.stage_unique_limits.values()) == 900
+
+
 def test_rate_normalized_exploration_authorization_is_exact() -> None:
     request = ExplorationBudgetAmendmentRequest(
         stage="filter_profile_rate_normalization_exploration",

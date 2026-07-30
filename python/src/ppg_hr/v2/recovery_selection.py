@@ -144,6 +144,103 @@ def recovery_selection_contract_v1() -> dict[str, Any]:
     return payload
 
 
+def recovery_selection_contract_rank1_replan_v1() -> dict[str, Any]:
+    """Freeze the one-profile Stage R repair after the rank-1 revision."""
+
+    payload = {
+        "contract_version": (
+            "lyx_recovery_selection_contract_rank1_replan_v1"
+        ),
+        "status": "frozen_zero_formal_runs",
+        "continuation_of": "lyx_recovery_selection_contract_v1",
+        "filter_revision_id": "p25-short-low-rank1-v1",
+        "per_record_hard_gates": [
+            "spectral_gate_contract_v2",
+            "l10_engineering_gate",
+            "l20_engineering_gate",
+            "mae_independent_delta_le_2_bpm",
+            "no_new_right_censored_recovery",
+            "true_rise_underestimate_delta_le_2_bpm",
+            "current_l10_catastrophic_regression_gate",
+            "mae_current_delta_le_2_bpm",
+            "loo_training_pair_mean_independent_mae_delta_le_1_bpm",
+        ],
+        "hard_gate_formulas": {
+            "l10_engineering_gate": (
+                "candidate_l10 <= max(10, independent_l10 + 2)"
+            ),
+            "l20_engineering_gate": (
+                "candidate_l20 <= max(2, independent_l20)"
+            ),
+            "mae_independent_delta_le_2_bpm": (
+                "candidate_mae - independent_mae <= 2 BPM"
+            ),
+            "no_new_right_censored_recovery": (
+                "candidate_right_censored <= current_right_censored"
+            ),
+            "true_rise_underestimate_delta_le_2_bpm": (
+                "run/kaihe candidate underestimate - current underestimate "
+                "<= 2 BPM"
+            ),
+            "current_l10_catastrophic_regression_gate": (
+                "if current_l10 <= 10 then candidate_l10 < 20"
+            ),
+            "mae_current_delta_le_2_bpm": (
+                "candidate_mae - current_mae <= 2 BPM"
+            ),
+            "loo_training_pair_mean_independent_mae_delta_le_1_bpm": (
+                "for the fixed rank-1 profile, each scene and held-out "
+                "record, mean(candidate_mae - independent_mae) over the "
+                "other two scene records <= 1 BPM"
+            ),
+        },
+        "motion_scene_additional_gate": (
+            "run_or_kaihe_must_not_add_right_censored_recovery"
+        ),
+        "evaluation_panel_contract": {
+            "record_count": 12,
+            "sentinel_count": 1,
+            "result_count_per_candidate": 12,
+            "coordinate_identity": [
+                "candidate_id",
+                "sentinel_id",
+                "record_id",
+                "scene",
+            ],
+            "scene_record_counts": {
+                "run": 3,
+                "kaihe": 3,
+                "xiezi": 3,
+                "jianpan": 3,
+            },
+            "true_rise_not_applicable": (
+                "candidate and current must both be None exactly when the "
+                "frozen panel marks the record not_applicable"
+            ),
+        },
+        "ranking_key": [
+            "worst_l10",
+            "right_censored_recovery_count",
+            "worst_recovery_delay",
+            "worst_mae",
+            "mean_mae",
+            "mechanism_complexity",
+            "candidate_id",
+        ],
+        "sort_direction": "ascending_all_fields",
+        "tie_rule": "candidate_id_ascending",
+        "no_candidate_state": "no_safe_recovery_candidate",
+        "single_candidate_rollback_backup_id": None,
+        "control_receives_no_preference": True,
+        "formal_solver_run_count": 0,
+        "parameter_search_authorized": False,
+        "independent_bo_authorized": False,
+        "automatic_stage_f_execution": False,
+    }
+    payload["contract_sha256"] = canonical_sha256(payload)
+    return payload
+
+
 def select_recovery_candidate_evaluations(
     evaluations: Sequence[RecoveryCandidateEvaluation],
     *,
@@ -151,6 +248,45 @@ def select_recovery_candidate_evaluations(
     expected_sentinel_ids: Sequence[str],
 ) -> dict[str, Any]:
     """Apply the frozen 3×12 panel, hard gates and lexicographic selector."""
+
+    return _select_recovery_candidate_evaluations(
+        evaluations,
+        expected_records=expected_records,
+        expected_sentinel_ids=expected_sentinel_ids,
+        expected_sentinel_count=3,
+        contract=recovery_selection_contract_v1(),
+        spectral_gate_reason="spectral_gate_contract_v1",
+    )
+
+
+def select_rank1_recovery_candidate_evaluations(
+    evaluations: Sequence[RecoveryCandidateEvaluation],
+    *,
+    expected_records: Sequence[RecoveryPanelRecord],
+    expected_sentinel_ids: Sequence[str],
+) -> dict[str, Any]:
+    """Apply the fixed rank-1 profile, hard gates and frozen selector."""
+
+    return _select_recovery_candidate_evaluations(
+        evaluations,
+        expected_records=expected_records,
+        expected_sentinel_ids=expected_sentinel_ids,
+        expected_sentinel_count=1,
+        contract=recovery_selection_contract_rank1_replan_v1(),
+        spectral_gate_reason="spectral_gate_contract_v2",
+    )
+
+
+def _select_recovery_candidate_evaluations(
+    evaluations: Sequence[RecoveryCandidateEvaluation],
+    *,
+    expected_records: Sequence[RecoveryPanelRecord],
+    expected_sentinel_ids: Sequence[str],
+    expected_sentinel_count: int,
+    contract: dict[str, Any],
+    spectral_gate_reason: str,
+) -> dict[str, Any]:
+    """Apply one frozen panel without weakening the original hard gates."""
 
     expected = {
         candidate.candidate_id: candidate
@@ -172,9 +308,13 @@ def select_recovery_candidate_evaluations(
         raise RecoveryCandidateError(
             "recovery_selection_requires_12_unique_records"
         )
-    if len(sentinel_ids) != 3 or len(set(sentinel_ids)) != 3:
+    if (
+        len(sentinel_ids) != expected_sentinel_count
+        or len(set(sentinel_ids)) != expected_sentinel_count
+    ):
         raise RecoveryCandidateError(
-            "recovery_selection_requires_3_unique_sentinels"
+            "recovery_selection_requires_"
+            f"{expected_sentinel_count}_unique_sentinels"
         )
     scene_counts = {
         scene: sum(record.scene == scene for record in panel_records)
@@ -203,9 +343,12 @@ def select_recovery_candidate_evaluations(
             (record.sentinel_id, record.record_id)
             for record in evaluation.records
         ]
+        expected_coordinate_count = (
+            len(record_ids) * expected_sentinel_count
+        )
         if (
-            len(coordinates) != 36
-            or len(set(coordinates)) != 36
+            len(coordinates) != expected_coordinate_count
+            or len(set(coordinates)) != expected_coordinate_count
             or set(coordinates) != expected_coordinates
         ):
             raise RecoveryCandidateError(
@@ -266,7 +409,7 @@ def select_recovery_candidate_evaluations(
                 reasons.append(prefix + "non_finite_metrics")
                 continue
             if not record.spectral_gate_passed:
-                reasons.append(prefix + "spectral_gate_contract_v1")
+                reasons.append(prefix + spectral_gate_reason)
             if record.l10 > max(
                 10.0,
                 record.independent_l10 + 2.0,
@@ -358,7 +501,7 @@ def select_recovery_candidate_evaluations(
                 ),
             }
         )
-    key_fields = recovery_selection_contract_v1()["ranking_key"]
+    key_fields = contract["ranking_key"]
     ranking_rows.sort(
         key=lambda row: tuple(row[field] for field in key_fields)
     )
@@ -378,9 +521,7 @@ def select_recovery_candidate_evaluations(
         "eligible_candidate_ids": eligible,
         "eliminated_candidates": eliminated,
         "ranking": ranking_rows,
-        "selection_contract_sha256": (
-            recovery_selection_contract_v1()["contract_sha256"]
-        ),
+        "selection_contract_sha256": contract["contract_sha256"],
         "panel_sha256": canonical_sha256(
             [
                 {

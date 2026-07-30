@@ -20,7 +20,9 @@ from ppg_hr.v2.recovery_selection import (
     RecoveryCandidateEvaluation,
     RecoveryPanelRecord,
     RecoveryRecordEvaluation,
+    recovery_selection_contract_rank1_replan_v1,
     recovery_selection_contract_v1,
+    select_rank1_recovery_candidate_evaluations,
     select_recovery_candidate_evaluations,
 )
 from ppg_hr.v2.runtime_policy import runtime_policy_from_config
@@ -164,6 +166,24 @@ def test_recovery_selection_contract_is_fail_closed_and_lexicographic() -> None:
     )
     assert contract["formal_solver_run_count"] == 0
     assert len(contract["contract_sha256"]) == 64
+
+
+def test_rank1_replan_selection_contract_freezes_one_profile() -> None:
+    contract = recovery_selection_contract_rank1_replan_v1()
+
+    assert contract["filter_revision_id"] == "p25-short-low-rank1-v1"
+    assert contract["per_record_hard_gates"][0] == (
+        "spectral_gate_contract_v2"
+    )
+    assert contract["evaluation_panel_contract"]["record_count"] == 12
+    assert contract["evaluation_panel_contract"]["sentinel_count"] == 1
+    assert (
+        contract["evaluation_panel_contract"]["result_count_per_candidate"]
+        == 12
+    )
+    assert contract["parameter_search_authorized"] is False
+    assert contract["independent_bo_authorized"] is False
+    assert contract["automatic_stage_f_execution"] is False
 
 
 def _record_evaluation(
@@ -323,6 +343,76 @@ def test_recovery_selector_fails_closed_when_no_candidate_is_safe() -> None:
     assert decision["status"] == "no_safe_recovery_candidate"
     assert decision["provisional_recovery_id"] is None
     assert decision["rollback_backup_id"] is None
+
+
+def test_rank1_replan_selector_accepts_exact_one_by_twelve_panel() -> None:
+    sentinel_id = "p25-short-low-rank1-v1"
+    evaluations = tuple(
+        RecoveryCandidateEvaluation(
+            candidate_id=candidate.candidate_id,
+            mechanism_complexity=candidate.mechanism_complexity,
+            records=tuple(
+                _record_evaluation(
+                    record_id=record_id,
+                    sentinel_id=sentinel_id,
+                    scene=scene,
+                    l10=(
+                        7.0
+                        if candidate.candidate_id
+                        == "relative_gap_timeout_v1"
+                        else 8.0
+                    ),
+                    true_rise_underestimate=(
+                        1.0
+                        if (
+                            scene in {"run", "kaihe"}
+                            and record_id != "kaihe3"
+                        )
+                        else None
+                    ),
+                )
+                for record_id, scene in _SELECTION_RECORDS
+            ),
+        )
+        for candidate in recovery_candidates_v1()
+    )
+
+    decision = select_rank1_recovery_candidate_evaluations(
+        evaluations,
+        expected_records=_SELECTION_PANEL,
+        expected_sentinel_ids=(sentinel_id,),
+    )
+
+    assert decision["status"] == "selected"
+    assert decision["provisional_recovery_id"] == (
+        "relative_gap_timeout_v1"
+    )
+    assert decision["selection_contract_sha256"] == (
+        recovery_selection_contract_rank1_replan_v1()[
+            "contract_sha256"
+        ]
+    )
+
+
+def test_rank1_replan_selector_rejects_three_sentinels() -> None:
+    complete = tuple(
+        _candidate_evaluation(
+            candidate_id=candidate.candidate_id,
+            mechanism_complexity=candidate.mechanism_complexity,
+            l10=8.0,
+        )
+        for candidate in recovery_candidates_v1()
+    )
+
+    with pytest.raises(
+        RecoveryCandidateError,
+        match="recovery_selection_requires_1_unique_sentinels",
+    ):
+        select_rank1_recovery_candidate_evaluations(
+            complete,
+            expected_records=_SELECTION_PANEL,
+            expected_sentinel_ids=_SELECTION_SENTINEL_IDS,
+        )
 
 
 def test_recovery_selector_rejects_incomplete_sentinel_record_panel() -> None:

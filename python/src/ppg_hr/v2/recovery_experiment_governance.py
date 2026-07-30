@@ -671,6 +671,28 @@ class BudgetContract:
             },
         )
 
+    @classmethod
+    def proposed_v11_stage_r_rank1_replan(cls) -> BudgetContract:
+        """Return the proposed contract for 36 rank-1 Stage R identities."""
+
+        prior = cls.proposed_v10_rank1_filter_revision()
+        return cls(
+            stage_unique_limits={
+                **prior.stage_unique_limits,
+                "recovery_sentinel_rank1_replan": 36,
+            },
+            normal_unique_identity_limit=888,
+            supplemental_stage=prior.supplemental_stage,
+            max_unique_identities=900,
+            max_attempts=1800,
+            retry_limit=prior.retry_limit,
+            contract_version="lyx_recovery_filter_budget_v11",
+            stage_attempt_kinds={
+                **prior.stage_attempt_kinds,
+                "recovery_sentinel_rank1_replan": "formal",
+            },
+        )
+
     @property
     def sha256(self) -> str:
         return _canonical_sha256(self.to_dict())
@@ -932,6 +954,9 @@ class AttemptRegistry:
             ),
             BudgetContract.proposed_v9_filter_mechanism_decomposition().sha256: (
                 BudgetContract.proposed_v10_rank1_filter_revision().sha256
+            ),
+            BudgetContract.proposed_v10_rank1_filter_revision().sha256: (
+                BudgetContract.proposed_v11_stage_r_rank1_replan().sha256
             ),
         }
         expected_known_target = known_transitions.get(self.budget_contract.sha256)
