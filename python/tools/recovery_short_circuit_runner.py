@@ -28,6 +28,7 @@ from typing import Any
 from recovery_independent_bo_supervisor import (
     _exclusive_supervisor_lock,
     _finalize_ready_cell_locked,
+    _require_runner_stopped,
     _validate_existing_completion,
     is_mappingproxy_completion_failure,
     validate_repair_authorization,
@@ -64,13 +65,15 @@ class RecoveryShortCircuitError(RuntimeError):
     """The short-circuit experiment violates its frozen contract."""
 
 
-PROPOSAL_VERSION = "lyx_recovery_short_circuit_shared_validation_proposal_v1"
+PROPOSAL_VERSION = (
+    "lyx_recovery_short_circuit_selector_replay_proposal_v1"
+)
 AUTHORIZATION_VERSION = (
-    "lyx_recovery_short_circuit_shared_validation_authorization_v1"
+    "lyx_recovery_short_circuit_selector_replay_authorization_v1"
 )
 GATE_A_COMPLETION_VERSION = "lyx_recovery_short_circuit_gate_a_completion_v1"
 GATE_B_COMPLETION_VERSION = (
-    "lyx_recovery_scene_shared_validation_completion_v1"
+    "lyx_recovery_scene_selector_replay_audit_completion_v1"
 )
 CONTROL_RECOVERY_ID = "current_fixed_floor_control_v1"
 REMAINING_RECOVERY_IDS = (
@@ -358,7 +361,7 @@ def build_proposal(
             "recovery_candidate_id_asc",
         ],
         "gate_b_admit_count": 1,
-        "gate_b_evidence_role": "scene_shared_validation",
+        "gate_b_evidence_role": "scene_selector_replay_audit",
         "gate_b_fs_target": SHARED_FS_TARGET,
         "gate_b_grid_size_per_record": SHARED_GRID_SIZE,
         "gate_b_scene_count": 4,
@@ -450,10 +453,11 @@ def build_authorization(
     *,
     proposal: Mapping[str, Any],
     granted_at: str,
+    repository_root: Path,
 ) -> dict[str, Any]:
     validate_proposal(
         proposal=proposal,
-        repository_root=Path.cwd(),
+        repository_root=repository_root,
     )
     granted = datetime.fromisoformat(granted_at)
     cutoff = datetime.fromisoformat(AUTHORIZATION_CUTOFF)
@@ -476,7 +480,7 @@ def build_authorization(
             "stop_original_matrix_after_run3_sealed",
             "execute_gate_a_with_candidate_short_circuit",
             "admit_at_most_one_survivor_to_gate_b",
-            "execute_scene_shared_validation",
+            "execute_scene_selector_replay_audit",
         ],
         "authorized_new_unique_identity_upper_bound": (
             GATE_A_IDENTITY_UPPER_BOUND
@@ -493,6 +497,7 @@ def validate_authorization(
     *,
     proposal: Mapping[str, Any],
     receipt: Mapping[str, Any],
+    execution_time: str | None = None,
 ) -> Mapping[str, Any]:
     _verify_hash(
         receipt,
@@ -520,6 +525,12 @@ def validate_authorization(
         raise RecoveryShortCircuitError(
             "short_circuit_authorization_time_invalid"
         )
+    if execution_time is not None:
+        started = datetime.fromisoformat(execution_time)
+        if started.tzinfo is None or started > cutoff:
+            raise RecoveryShortCircuitError(
+                "short_circuit_execution_outside_authorized_window"
+            )
     return receipt
 
 
@@ -537,7 +548,7 @@ def _write_proposal_artifacts(
     atomic_write_json(destination / "proposal.json", dict(proposal))
     receipt: dict[str, Any] = {
         "receipt_version": (
-            "lyx_recovery_short_circuit_shared_validation_"
+            "lyx_recovery_short_circuit_selector_replay_"
             "proposal_receipt_v1"
         ),
         "status": "awaiting_user_blanket_authorization",
@@ -590,6 +601,7 @@ def _validated_runtime(
         receipt=read_json(
             Path(proposal_dir).resolve() / "authorization.json"
         ),
+        execution_time=_iso_now(),
     )
     original = read_json(Path(original_proposal_path).resolve())
     validate_recovery_independent_bo_preflight(
@@ -643,6 +655,10 @@ def _validated_runtime(
         budget_contract=budget,
         exploration_registry=exploration,
     )
+    _assert_amendment_identity_capacity(
+        registry,
+        additional_upper_bound=0,
+    )
     return (
         amendment,
         original,
@@ -652,9 +668,58 @@ def _validated_runtime(
     )
 
 
+def _recovery_stage_identity_count(
+    registry: AttemptRegistry,
+) -> int:
+    fresh = AttemptRegistry.open(
+        registry.path,
+        budget_contract=registry.budget_contract,
+        exploration_registry=registry.exploration_registry,
+    )
+    return sum(
+        _mapping(
+            "short_circuit_registry_identity",
+            entry.get("identity"),
+        ).get("stage")
+        == "recovery_independent_bo"
+        for entry in fresh._entries.values()
+    )
+
+
+def _assert_amendment_identity_capacity(
+    registry: AttemptRegistry,
+    *,
+    additional_upper_bound: int,
+) -> None:
+    count = _recovery_stage_identity_count(registry)
+    if (
+        additional_upper_bound < 0
+        or count + additional_upper_bound
+        > TOTAL_IDENTITY_UPPER_BOUND
+    ):
+        raise RecoveryShortCircuitError(
+            "short_circuit_amendment_identity_budget_exceeded"
+        )
+
+
+def _identity_already_registered(
+    registry: AttemptRegistry,
+    *,
+    identity_sha256: str,
+) -> bool:
+    fresh = AttemptRegistry.open(
+        registry.path,
+        budget_contract=registry.budget_contract,
+        exploration_registry=registry.exploration_registry,
+    )
+    return identity_sha256 in fresh._entries
+
+
 def _execute_or_repair_cell(
     *,
     original: Mapping[str, Any],
+    repair_proposal: Mapping[str, Any],
+    repair_authorization: Mapping[str, Any],
     cell: Mapping[str, Any],
     registry: AttemptRegistry,
     execution_dir: Path,
@@ -671,10 +736,22 @@ def _execute_or_repair_cell(
         record_id=str(cell["record_id"]),
     )
     if completion_path.is_file():
+        _validate_existing_completion(
+            completion_path=completion_path,
+            cell=cell,
+            original_proposal=original,
+            repair_proposal=repair_proposal,
+            repair_authorization=repair_authorization,
+            repository_root=repository_root,
+        )
         return _mapping(
             "short_circuit_existing_completion",
             read_json(completion_path),
         )
+    _assert_amendment_identity_capacity(
+        registry,
+        additional_upper_bound=150,
+    )
     try:
         return _execute_search_cell(
             proposal=original,
@@ -726,8 +803,13 @@ def _candidate_summary(
     *,
     recovery_id: str,
     completions: Sequence[Mapping[str, Any]],
+    fs25_eligible_counts: Sequence[int],
     mechanism_complexity: int,
 ) -> dict[str, Any]:
+    if len(completions) != len(fs25_eligible_counts):
+        raise RecoveryShortCircuitError(
+            "short_circuit_fs25_count_alignment_invalid"
+        )
     selected_maes = [
         float(
             _mapping(
@@ -763,6 +845,10 @@ def _candidate_summary(
             for item in completions
         ),
         "mechanism_complexity": mechanism_complexity,
+        "fs25_ready_for_selector_replay": (
+            len(completions) == len(HARD_RECORD_ORDER)
+            and all(count > 0 for count in fs25_eligible_counts)
+        ),
         "cell_results": [
             {
                 "record_id": item["record_id"],
@@ -775,10 +861,47 @@ def _candidate_summary(
                 "selected_mae": item["selected"]["metrics"][
                     "final_motion_mae_bpm"
                 ],
+                "fs25_eligible_candidate_count": fs25_count,
             }
-            for item in completions
+            for item, fs25_count in zip(
+                completions,
+                fs25_eligible_counts,
+                strict=True,
+            )
         ],
     }
+
+
+def _fs25_eligible_count(
+    *,
+    execution_dir: Path,
+    recovery_id: str,
+    record_id: str,
+) -> int:
+    path = (
+        Path(execution_dir)
+        / "cells"
+        / recovery_id
+        / record_id
+        / "candidate_results.json"
+    )
+    payload = read_json(path)
+    results = payload.get("results")
+    if not isinstance(results, list) or len(results) != 150:
+        raise RecoveryShortCircuitError(
+            "short_circuit_candidate_results_invalid"
+        )
+    return sum(
+        bool(row.get("eligible"))
+        and int(
+            _mapping(
+                "short_circuit_candidate_identity",
+                row.get("identity"),
+            )["bo_requested_params"]["fs_target"]
+        )
+        == SHARED_FS_TARGET
+        for row in results
+    )
 
 
 def execute_gate_a(
@@ -798,8 +921,8 @@ def execute_gate_a(
     (
         amendment,
         original,
-        _repair_proposal,
-        _repair_authorization,
+        repair_proposal,
+        repair_authorization,
         registry,
     ) = _validated_runtime(
         proposal_dir=proposal_dir,
@@ -810,6 +933,8 @@ def execute_gate_a(
         governance_dir=governance_dir,
         repository_root=repository_root,
     )
+    locked_execution_dir = Path(execution_dir).resolve()
+    _require_runner_stopped(locked_execution_dir)
     cells = _cell_index(original)
     destination = Path(output_dir).resolve()
     destination.mkdir(parents=True, exist_ok=True)
@@ -821,19 +946,38 @@ def execute_gate_a(
             hash_field="completion_sha256",
             artifact="short_circuit_gate_a_completion",
         )
+        if (
+            completion.get("proposal_sha256")
+            != amendment.get("proposal_sha256")
+            or completion.get("original_proposal_sha256")
+            != original.get("proposal_sha256")
+            or completion.get("status")
+            not in {
+                "survivor_selected",
+                "survivor_requires_sampling_rate_decision",
+                "no_recovery_survivor",
+            }
+        ):
+            raise RecoveryShortCircuitError(
+                "short_circuit_gate_a_completion_binding_drift"
+            )
         return completion
     recovery_complexity = {
         str(item["candidate_id"]): int(item["mechanism_complexity"])
         for item in original["recovery_candidates"]
     }
     summaries: list[dict[str, Any]] = []
-    with _exclusive_supervisor_lock(Path(execution_dir).resolve()):
+    with _exclusive_supervisor_lock(locked_execution_dir):
+        _require_runner_stopped(locked_execution_dir)
         for recovery_id in REMAINING_RECOVERY_IDS:
             completed: list[Mapping[str, Any]] = []
+            fs25_counts: list[int] = []
             for record_id in HARD_RECORD_ORDER:
                 cell = cells[(recovery_id, record_id)]
                 cell_completion = _execute_or_repair_cell(
                     original=original,
+                    repair_proposal=repair_proposal,
+                    repair_authorization=repair_authorization,
                     cell=cell,
                     registry=registry,
                     execution_dir=Path(execution_dir).resolve(),
@@ -851,6 +995,13 @@ def execute_gate_a(
                     failure_log_dir=destination / "failure_logs",
                 )
                 completed.append(cell_completion)
+                fs25_counts.append(
+                    _fs25_eligible_count(
+                        execution_dir=Path(execution_dir).resolve(),
+                        recovery_id=recovery_id,
+                        record_id=record_id,
+                    )
+                )
                 progress: dict[str, Any] = {
                     "progress_version": (
                         "lyx_recovery_short_circuit_gate_a_progress_v1"
@@ -888,6 +1039,7 @@ def execute_gate_a(
                 _candidate_summary(
                     recovery_id=recovery_id,
                     completions=completed,
+                    fs25_eligible_counts=fs25_counts,
                     mechanism_complexity=recovery_complexity[
                         recovery_id
                     ],
@@ -896,7 +1048,12 @@ def execute_gate_a(
     survivors = [
         item for item in summaries if item["status"] == "survivor"
     ]
-    survivors.sort(
+    gate_b_survivors = [
+        item
+        for item in survivors
+        if item["fs25_ready_for_selector_replay"]
+    ]
+    gate_b_survivors.sort(
         key=lambda item: (
             float(item["max_selected_eligible_mae"]),
             -int(item["eligible_candidate_count_sum"]),
@@ -905,17 +1062,22 @@ def execute_gate_a(
         )
     )
     selected = (
-        str(survivors[0]["recovery_candidate_id"])
-        if survivors
+        str(gate_b_survivors[0]["recovery_candidate_id"])
+        if gate_b_survivors
         else None
+    )
+    status = (
+        "survivor_selected"
+        if selected is not None
+        else (
+            "survivor_requires_sampling_rate_decision"
+            if survivors
+            else "no_recovery_survivor"
+        )
     )
     completion = {
         "completion_version": GATE_A_COMPLETION_VERSION,
-        "status": (
-            "survivor_selected"
-            if selected is not None
-            else "no_recovery_survivor"
-        ),
+        "status": status,
         "proposal_sha256": amendment["proposal_sha256"],
         "original_proposal_sha256": original["proposal_sha256"],
         "control_recovery_status": "eliminated_before_gate_a",
@@ -923,13 +1085,21 @@ def execute_gate_a(
         "survivor_ids": [
             item["recovery_candidate_id"] for item in survivors
         ],
+        "gate_b_eligible_survivor_ids": [
+            item["recovery_candidate_id"]
+            for item in gate_b_survivors
+        ],
         "selected_recovery_candidate_id": selected,
         "automatic_gate_b_execution": False,
         "completed_at": _iso_now(),
         "next_state": (
             "ready_for_authorized_gate_b"
             if selected is not None
-            else "terminal_no_safe_recovery_candidate"
+            else (
+                "awaiting_sampling_rate_mechanism_decision"
+                if survivors
+                else "terminal_no_safe_recovery_candidate"
+            )
         ),
     }
     completion["completion_sha256"] = canonical_sha256(completion)
@@ -954,7 +1124,7 @@ def _shared_candidates() -> tuple[BOCandidate, ...]:
         != SHARED_GRID_SIZE
     ):
         raise RecoveryShortCircuitError(
-            "shared_validation_grid_invalid"
+            "selector_replay_grid_invalid"
         )
     return tuple(sorted(candidates, key=lambda item: item.coordinate))
 
@@ -973,6 +1143,14 @@ def _evaluate_shared_candidate(
         candidate=candidate,
     )
     identity = _attempt_identity_from_item(item)
+    if not _identity_already_registered(
+        registry,
+        identity_sha256=identity.sha256,
+    ):
+        _assert_amendment_identity_capacity(
+            registry,
+            additional_upper_bound=1,
+        )
     registry.register_identity(identity)
     before = registry.matrix_execution_summary((identity,))
     if (
@@ -980,7 +1158,7 @@ def _evaluate_shared_candidate(
         or before["retry_count"] != 0
     ):
         raise RecoveryShortCircuitError(
-            "shared_validation_retry_requires_new_proposal:"
+            "selector_replay_retry_requires_new_proposal:"
             + identity.sha256
         )
     result = stage_r_cache.execute_stage_r_identity(
@@ -991,22 +1169,22 @@ def _evaluate_shared_candidate(
         allow_retry=False,
     )
     metrics = _mapping(
-        "shared_validation_metrics",
+        "selector_replay_metrics",
         result.get("metrics"),
     )
     spectral = _mapping(
-        "shared_validation_spectral",
+        "selector_replay_spectral",
         result.get("spectral_audit"),
     )
     constraints = _constraint_values(
         metrics=metrics,
         spectral=spectral,
         current=_mapping(
-            "shared_validation_current_metrics",
+            "selector_replay_current_metrics",
             cell.get("current_metrics"),
         ),
         independent=_mapping(
-            "shared_validation_independent_metrics",
+            "selector_replay_independent_metrics",
             cell.get("independent_metrics"),
         ),
         true_rise_applicable=bool(
@@ -1056,7 +1234,7 @@ def _rank_training_candidates(
 ) -> list[dict[str, Any]]:
     if len(train_record_ids) != 2:
         raise RecoveryShortCircuitError(
-            "shared_validation_train_pair_invalid"
+            "selector_replay_train_pair_invalid"
         )
     by_coordinate = {
         candidate.coordinate: candidate for candidate in candidates
@@ -1152,7 +1330,7 @@ def _rank_training_candidates(
     return ranked
 
 
-def _scene_shared_decision(
+def _scene_selector_replay_decision(
     *,
     scene: str,
     folds: Sequence[Mapping[str, Any]],
@@ -1164,7 +1342,7 @@ def _scene_shared_decision(
         return {
             "scene": scene,
             "status": "no_safe_shared_parameter",
-            "passed": False,
+            "met_reference_lines": False,
             "reason": "one_or_more_folds_have_no_training_candidate",
             "fold_count": len(folds),
             "revealed_fold_count": len(revealed),
@@ -1190,7 +1368,7 @@ def _scene_shared_decision(
     median_gap = statistics.median(train_gaps)
     max_gap = max(train_gaps)
     no_disaster = max(held_maes) < 10.0
-    run_delta_pass = (
+    run_delta_within_reference = (
         True
         if scene != "run"
         else (
@@ -1198,22 +1376,22 @@ def _scene_shared_decision(
             and max(lite_deltas) <= 2.0
         )
     )
-    passed = (
+    met_reference_lines = (
         all_eligible
         and mean_mae <= 5.0
         and median_gap <= 2.0
         and max_gap <= 5.0
         and no_disaster
-        and run_delta_pass
+        and run_delta_within_reference
     )
     return {
         "scene": scene,
         "status": (
-            "scene_shared_validation_passed"
-            if passed
-            else "scene_shared_validation_failed"
+            "selector_replay_audit_met_reference_lines"
+            if met_reference_lines
+            else "selector_replay_audit_missed_reference_lines"
         ),
-        "passed": passed,
+        "met_reference_lines": met_reference_lines,
         "fold_count": 3,
         "revealed_fold_count": 3,
         "all_held_out_eligible": all_eligible,
@@ -1226,8 +1404,145 @@ def _scene_shared_decision(
         ),
         "max_independent_bo_lite_delta": max(lite_deltas),
         "no_new_mae_disaster": no_disaster,
-        "run_delta_pass": run_delta_pass,
+        "run_delta_within_reference": run_delta_within_reference,
     }
+
+
+def _validate_training_audit_binding(
+    audit: Mapping[str, Any],
+    *,
+    amendment: Mapping[str, Any],
+    gate_a: Mapping[str, Any],
+    recovery_id: str,
+    fold_id: str,
+    scene: str,
+    train_ids: Sequence[str],
+    held_out_id: str,
+) -> None:
+    _verify_hash(
+        audit,
+        hash_field="audit_sha256",
+        artifact="selector_replay_training_audit",
+    )
+    if (
+        audit.get("proposal_sha256")
+        != amendment.get("proposal_sha256")
+        or audit.get("gate_a_completion_sha256")
+        != gate_a.get("completion_sha256")
+        or audit.get("recovery_candidate_id") != recovery_id
+        or audit.get("fold_id") != fold_id
+        or audit.get("scene") != scene
+        or audit.get("train_record_ids") != list(train_ids)
+        or audit.get("held_out_record_id") != held_out_id
+        or audit.get("candidate_count") != SHARED_GRID_SIZE
+    ):
+        raise RecoveryShortCircuitError(
+            "selector_replay_training_audit_binding_drift"
+        )
+
+
+def _validate_freeze_binding(
+    freeze: Mapping[str, Any],
+    *,
+    amendment: Mapping[str, Any],
+    gate_a: Mapping[str, Any],
+    recovery_id: str,
+    fold_id: str,
+    scene: str,
+    train_ids: Sequence[str],
+    held_out_id: str,
+    training_audit_sha256: str,
+    expected_status: str,
+    expected_selection: Mapping[str, Any] | None,
+) -> None:
+    _verify_hash(
+        freeze,
+        hash_field="receipt_sha256",
+        artifact="selector_replay_freeze",
+    )
+    selected_candidate_id = (
+        None
+        if expected_selection is None
+        else expected_selection.get("candidate_id")
+    )
+    if (
+        freeze.get("proposal_sha256")
+        != amendment.get("proposal_sha256")
+        or freeze.get("gate_a_completion_sha256")
+        != gate_a.get("completion_sha256")
+        or freeze.get("training_candidate_audit_sha256")
+        != training_audit_sha256
+        or freeze.get("recovery_candidate_id") != recovery_id
+        or freeze.get("fold_id") != fold_id
+        or freeze.get("scene") != scene
+        or freeze.get("train_record_ids") != list(train_ids)
+        or freeze.get("held_out_record_id") != held_out_id
+        or freeze.get("candidate_count") != SHARED_GRID_SIZE
+        or freeze.get("status") != expected_status
+        or freeze.get("selected_candidate_id")
+        != selected_candidate_id
+        or freeze.get("selection") != expected_selection
+    ):
+        raise RecoveryShortCircuitError(
+            "selector_replay_freeze_binding_drift"
+        )
+
+
+def _validate_reveal_binding(
+    reveal: Mapping[str, Any],
+    *,
+    amendment: Mapping[str, Any],
+    freeze: Mapping[str, Any],
+    fold_id: str,
+    scene: str,
+    train_ids: Sequence[str],
+    held_out_id: str,
+    expected_held_identity_sha256: str | None,
+) -> None:
+    _verify_hash(
+        reveal,
+        hash_field="receipt_sha256",
+        artifact="selector_replay_reveal",
+    )
+    freeze_status = freeze.get("status")
+    expected_status = (
+        "revealed"
+        if freeze_status == "parameter_frozen"
+        else "no_safe_training_candidate"
+    )
+    held_out = reveal.get("held_out")
+    held_identity = (
+        held_out.get("identity_sha256")
+        if isinstance(held_out, Mapping)
+        else None
+    )
+    if (
+        reveal.get("proposal_sha256")
+        != amendment.get("proposal_sha256")
+        or reveal.get("freeze_receipt_sha256")
+        != freeze.get("receipt_sha256")
+        or reveal.get("fold_id") != fold_id
+        or reveal.get("scene") != scene
+        or reveal.get("train_record_ids") != list(train_ids)
+        or reveal.get("held_out_record_id") != held_out_id
+        or reveal.get("status") != expected_status
+        or reveal.get("selection") != freeze.get("selection")
+        or held_identity != expected_held_identity_sha256
+        or (
+            expected_status == "revealed"
+            and reveal.get("revealed_at") is None
+        )
+        or (
+            expected_status == "no_safe_training_candidate"
+            and (
+                held_out is not None
+                or reveal.get("revealed_at") is not None
+            )
+        )
+    ):
+        raise RecoveryShortCircuitError(
+            "selector_replay_reveal_binding_drift"
+        )
 
 
 def execute_gate_b(
@@ -1260,6 +1575,8 @@ def execute_gate_b(
         governance_dir=governance_dir,
         repository_root=repository_root,
     )
+    locked_execution_dir = Path(execution_dir).resolve()
+    _require_runner_stopped(locked_execution_dir)
     gate_a_path = (
         Path(gate_a_output_dir).resolve()
         / "gate_a_completion.json"
@@ -1276,14 +1593,14 @@ def execute_gate_b(
         or gate_a.get("status") != "survivor_selected"
     ):
         raise RecoveryShortCircuitError(
-            "shared_validation_gate_a_not_ready"
+            "selector_replay_gate_a_not_ready"
         )
     recovery_id = str(
         gate_a["selected_recovery_candidate_id"]
     )
     if recovery_id not in REMAINING_RECOVERY_IDS:
         raise RecoveryShortCircuitError(
-            "shared_validation_recovery_not_authorized"
+            "selector_replay_recovery_not_authorized"
         )
     destination = Path(output_dir).resolve()
     destination.mkdir(parents=True, exist_ok=True)
@@ -1293,8 +1610,24 @@ def execute_gate_b(
         _verify_hash(
             completion,
             hash_field="completion_sha256",
-            artifact="shared_validation_completion",
+            artifact="selector_replay_completion",
         )
+        if (
+            completion.get("proposal_sha256")
+            != amendment.get("proposal_sha256")
+            or completion.get("gate_a_completion_sha256")
+            != gate_a.get("completion_sha256")
+            or completion.get("recovery_candidate_id")
+            != recovery_id
+            or completion.get("status")
+            not in {
+                "all_scenes_met_reference_lines",
+                "one_or_more_scenes_missed_reference_lines",
+            }
+        ):
+            raise RecoveryShortCircuitError(
+                "selector_replay_completion_binding_drift"
+            )
         return completion
     candidates = _shared_candidates()
     candidate_by_id = {
@@ -1313,13 +1646,14 @@ def execute_gate_b(
         or any(len(records) != 3 for records in scene_records.values())
     ):
         raise RecoveryShortCircuitError(
-            "shared_validation_record_panel_invalid"
+            "selector_replay_record_panel_invalid"
         )
     rows: dict[tuple[str, str], Mapping[str, Any]] = {}
     folds: list[dict[str, Any]] = []
     spectral_dir = destination / "spectral_audits"
     fold_root = destination / "folds"
-    with _exclusive_supervisor_lock(Path(execution_dir).resolve()):
+    with _exclusive_supervisor_lock(locked_execution_dir):
+        _require_runner_stopped(locked_execution_dir)
         for scene in ("xiezi", "jianpan", "run", "kaihe"):
             records = sorted(scene_records[scene])
             for held_out_id in records:
@@ -1330,12 +1664,95 @@ def execute_gate_b(
                 fold_dir = fold_root / fold_id
                 freeze_path = fold_dir / "freeze_receipt.json"
                 reveal_path = fold_dir / "reveal_receipt.json"
+                audit_path = (
+                    fold_dir / "training_candidate_audit.json"
+                )
                 if reveal_path.is_file():
+                    if (
+                        not freeze_path.is_file()
+                        or not audit_path.is_file()
+                    ):
+                        raise RecoveryShortCircuitError(
+                            "selector_replay_reveal_without_prerequisites"
+                        )
                     reveal = read_json(reveal_path)
-                    _verify_hash(
+                    existing_freeze = read_json(freeze_path)
+                    existing_audit = read_json(audit_path)
+                    _validate_training_audit_binding(
+                        existing_audit,
+                        amendment=amendment,
+                        gate_a=gate_a,
+                        recovery_id=recovery_id,
+                        fold_id=fold_id,
+                        scene=scene,
+                        train_ids=train_ids,
+                        held_out_id=held_out_id,
+                    )
+                    freeze_status = str(
+                        existing_freeze.get("status")
+                    )
+                    if freeze_status == "parameter_frozen":
+                        expected_selection = _mapping(
+                            "selector_replay_existing_selection",
+                            existing_freeze.get("selection"),
+                        )
+                        selected_candidate_id = str(
+                            expected_selection.get("candidate_id")
+                        )
+                        selected_candidate = candidate_by_id.get(
+                            selected_candidate_id
+                        )
+                        if selected_candidate is None:
+                            raise RecoveryShortCircuitError(
+                                "selector_replay_frozen_candidate_unknown"
+                            )
+                        expected_held_identity_sha256 = (
+                            _attempt_identity_from_item(
+                                build_recovery_independent_bo_identity(
+                                    proposal=original,
+                                    cell=cells[
+                                        (recovery_id, held_out_id)
+                                    ],
+                                    candidate=selected_candidate,
+                                )
+                            ).sha256
+                        )
+                    elif (
+                        freeze_status
+                        == "no_safe_training_candidate"
+                    ):
+                        expected_selection = None
+                        expected_held_identity_sha256 = None
+                    else:
+                        raise RecoveryShortCircuitError(
+                            "selector_replay_freeze_status_invalid"
+                        )
+                    _validate_freeze_binding(
+                        existing_freeze,
+                        amendment=amendment,
+                        gate_a=gate_a,
+                        recovery_id=recovery_id,
+                        fold_id=fold_id,
+                        scene=scene,
+                        train_ids=train_ids,
+                        held_out_id=held_out_id,
+                        training_audit_sha256=str(
+                            existing_audit["audit_sha256"]
+                        ),
+                        expected_status=freeze_status,
+                        expected_selection=expected_selection,
+                    )
+                    _validate_reveal_binding(
                         reveal,
-                        hash_field="receipt_sha256",
-                        artifact="shared_validation_reveal",
+                        amendment=amendment,
+                        freeze=existing_freeze,
+                        fold_id=fold_id,
+                        scene=scene,
+                        train_ids=train_ids,
+                        held_out_id=held_out_id,
+                        expected_held_identity_sha256=(
+                            expected_held_identity_sha256
+                        ),
                     )
                     folds.append(reveal)
                     continue
@@ -1357,35 +1774,91 @@ def execute_gate_b(
                     rows=rows,
                 )
                 fold_dir.mkdir(parents=True, exist_ok=True)
+                audit = {
+                    "audit_version": (
+                        "lyx_recovery_scene_selector_replay_"
+                        "training_candidate_audit_v1"
+                    ),
+                    "proposal_sha256": amendment[
+                        "proposal_sha256"
+                    ],
+                    "gate_a_completion_sha256": gate_a[
+                        "completion_sha256"
+                    ],
+                    "recovery_candidate_id": recovery_id,
+                    "fold_id": fold_id,
+                    "scene": scene,
+                    "train_record_ids": train_ids,
+                    "held_out_record_id": held_out_id,
+                    "candidate_count": SHARED_GRID_SIZE,
+                    "eligible_training_candidate_count": len(
+                        ranked
+                    ),
+                    "ranked_eligible_candidates": ranked,
+                }
+                audit["audit_sha256"] = canonical_sha256(audit)
+                if audit_path.is_file():
+                    existing_audit = read_json(audit_path)
+                    if existing_audit != audit:
+                        raise RecoveryShortCircuitError(
+                            "selector_replay_training_audit_drift"
+                        )
+                else:
+                    atomic_write_json(audit_path, audit)
                 if not ranked:
-                    freeze = {
-                        "receipt_version": (
-                            "lyx_recovery_scene_shared_freeze_v1"
-                        ),
-                        "status": "no_safe_training_candidate",
-                        "proposal_sha256": amendment[
-                            "proposal_sha256"
-                        ],
-                        "gate_a_completion_sha256": gate_a[
-                            "completion_sha256"
-                        ],
-                        "recovery_candidate_id": recovery_id,
-                        "fold_id": fold_id,
-                        "scene": scene,
-                        "train_record_ids": train_ids,
-                        "held_out_record_id": held_out_id,
-                        "candidate_count": SHARED_GRID_SIZE,
-                        "eligible_training_candidate_count": 0,
-                        "selected_candidate_id": None,
-                        "frozen_at": _iso_now(),
-                    }
-                    freeze["receipt_sha256"] = canonical_sha256(
-                        freeze
-                    )
-                    atomic_write_json(freeze_path, freeze)
+                    if freeze_path.is_file():
+                        freeze = read_json(freeze_path)
+                        _validate_freeze_binding(
+                            freeze,
+                            amendment=amendment,
+                            gate_a=gate_a,
+                            recovery_id=recovery_id,
+                            fold_id=fold_id,
+                            scene=scene,
+                            train_ids=train_ids,
+                            held_out_id=held_out_id,
+                            training_audit_sha256=str(
+                                audit["audit_sha256"]
+                            ),
+                            expected_status=(
+                                "no_safe_training_candidate"
+                            ),
+                            expected_selection=None,
+                        )
+                    else:
+                        freeze = {
+                            "receipt_version": (
+                                "lyx_recovery_scene_selector_"
+                                "replay_freeze_v1"
+                            ),
+                            "status": "no_safe_training_candidate",
+                            "proposal_sha256": amendment[
+                                "proposal_sha256"
+                            ],
+                            "gate_a_completion_sha256": gate_a[
+                                "completion_sha256"
+                            ],
+                            "training_candidate_audit_sha256": audit[
+                                "audit_sha256"
+                            ],
+                            "recovery_candidate_id": recovery_id,
+                            "fold_id": fold_id,
+                            "scene": scene,
+                            "train_record_ids": train_ids,
+                            "held_out_record_id": held_out_id,
+                            "candidate_count": SHARED_GRID_SIZE,
+                            "eligible_training_candidate_count": 0,
+                            "selected_candidate_id": None,
+                            "frozen_at": _iso_now(),
+                        }
+                        freeze["receipt_sha256"] = canonical_sha256(
+                            freeze
+                        )
+                        atomic_write_json(freeze_path, freeze)
                     fold_result = {
                         "receipt_version": (
-                            "lyx_recovery_scene_shared_reveal_v1"
+                            "lyx_recovery_scene_selector_replay_"
+                            "reveal_v1"
                         ),
                         "status": "no_safe_training_candidate",
                         "proposal_sha256": amendment[
@@ -1409,34 +1882,58 @@ def execute_gate_b(
                     folds.append(fold_result)
                     continue
                 selected = ranked[0]
-                freeze = {
-                    "receipt_version": (
-                        "lyx_recovery_scene_shared_freeze_v1"
-                    ),
-                    "status": "parameter_frozen",
-                    "proposal_sha256": amendment[
-                        "proposal_sha256"
-                    ],
-                    "gate_a_completion_sha256": gate_a[
-                        "completion_sha256"
-                    ],
-                    "recovery_candidate_id": recovery_id,
-                    "fold_id": fold_id,
-                    "scene": scene,
-                    "train_record_ids": train_ids,
-                    "held_out_record_id": held_out_id,
-                    "candidate_count": SHARED_GRID_SIZE,
-                    "eligible_training_candidate_count": len(
-                        ranked
-                    ),
-                    "selected_candidate_id": selected[
-                        "candidate_id"
-                    ],
-                    "selection": selected,
-                    "frozen_at": _iso_now(),
-                }
-                freeze["receipt_sha256"] = canonical_sha256(freeze)
-                atomic_write_json(freeze_path, freeze)
+                if freeze_path.is_file():
+                    freeze = read_json(freeze_path)
+                    _validate_freeze_binding(
+                        freeze,
+                        amendment=amendment,
+                        gate_a=gate_a,
+                        recovery_id=recovery_id,
+                        fold_id=fold_id,
+                        scene=scene,
+                        train_ids=train_ids,
+                        held_out_id=held_out_id,
+                        training_audit_sha256=str(
+                            audit["audit_sha256"]
+                        ),
+                        expected_status="parameter_frozen",
+                        expected_selection=selected,
+                    )
+                else:
+                    freeze = {
+                        "receipt_version": (
+                            "lyx_recovery_scene_selector_replay_"
+                            "freeze_v1"
+                        ),
+                        "status": "parameter_frozen",
+                        "proposal_sha256": amendment[
+                            "proposal_sha256"
+                        ],
+                        "gate_a_completion_sha256": gate_a[
+                            "completion_sha256"
+                        ],
+                        "training_candidate_audit_sha256": audit[
+                            "audit_sha256"
+                        ],
+                        "recovery_candidate_id": recovery_id,
+                        "fold_id": fold_id,
+                        "scene": scene,
+                        "train_record_ids": train_ids,
+                        "held_out_record_id": held_out_id,
+                        "candidate_count": SHARED_GRID_SIZE,
+                        "eligible_training_candidate_count": len(
+                            ranked
+                        ),
+                        "selected_candidate_id": selected[
+                            "candidate_id"
+                        ],
+                        "selection": selected,
+                        "frozen_at": _iso_now(),
+                    }
+                    freeze["receipt_sha256"] = canonical_sha256(
+                        freeze
+                    )
+                    atomic_write_json(freeze_path, freeze)
                 selected_candidate = candidate_by_id[
                     str(selected["candidate_id"])
                 ]
@@ -1454,14 +1951,15 @@ def execute_gate_b(
                     )
                 held = rows[held_key]
                 independent = _mapping(
-                    "shared_validation_held_independent",
+                    "selector_replay_held_independent",
                     cells[(recovery_id, held_out_id)][
                         "independent_metrics"
                     ],
                 )
                 fold_result = {
                     "receipt_version": (
-                        "lyx_recovery_scene_shared_reveal_v1"
+                        "lyx_recovery_scene_selector_replay_"
+                        "reveal_v1"
                     ),
                     "status": "revealed",
                     "proposal_sha256": amendment[
@@ -1515,7 +2013,8 @@ def execute_gate_b(
                 folds.append(fold_result)
                 progress = {
                     "progress_version": (
-                        "lyx_recovery_scene_shared_progress_v1"
+                        "lyx_recovery_scene_selector_replay_"
+                        "progress_v1"
                     ),
                     "proposal_sha256": amendment[
                         "proposal_sha256"
@@ -1534,7 +2033,7 @@ def execute_gate_b(
                     progress,
                 )
     scene_decisions = [
-        _scene_shared_decision(
+        _scene_selector_replay_decision(
             scene=scene,
             folds=[
                 fold for fold in folds if fold["scene"] == scene
@@ -1545,9 +2044,12 @@ def execute_gate_b(
     completion = {
         "completion_version": GATE_B_COMPLETION_VERSION,
         "status": (
-            "all_scenes_passed"
-            if all(item["passed"] for item in scene_decisions)
-            else "one_or_more_scenes_failed"
+            "all_scenes_met_reference_lines"
+            if all(
+                item["met_reference_lines"]
+                for item in scene_decisions
+            )
+            else "one_or_more_scenes_missed_reference_lines"
         ),
         "proposal_sha256": amendment["proposal_sha256"],
         "gate_a_completion_sha256": gate_a[
@@ -1556,8 +2058,9 @@ def execute_gate_b(
         "recovery_candidate_id": recovery_id,
         "fold_count": len(folds),
         "scene_decisions": scene_decisions,
-        "all_scene_shared_validation_passed": all(
-            item["passed"] for item in scene_decisions
+        "all_scene_selector_replay_met_reference_lines": all(
+            item["met_reference_lines"]
+            for item in scene_decisions
         ),
         "completed_at": _iso_now(),
         "evidence_class": "development_reuse_pilot",
@@ -1680,6 +2183,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         receipt = build_authorization(
             proposal=proposal,
             granted_at=args.granted_at,
+            repository_root=Path(args.repository_root),
         )
         _write_authorization_artifact(
             proposal_dir=proposal_dir,

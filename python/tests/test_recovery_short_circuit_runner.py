@@ -10,6 +10,7 @@ TOOLS_ROOT = REPOSITORY_ROOT / "python" / "tools"
 if str(TOOLS_ROOT) not in sys.path:
     sys.path.insert(0, str(TOOLS_ROOT))
 
+import recovery_short_circuit_runner as short_circuit  # noqa: E402
 from recovery_short_circuit_runner import (  # noqa: E402
     AUTHORIZATION_CUTOFF,
     GATE_A_IDENTITY_UPPER_BOUND,
@@ -21,10 +22,13 @@ from recovery_short_circuit_runner import (  # noqa: E402
     USER_AUTHORIZATION_TEXT,
     V13_IDENTITY_LIMIT,
     RecoveryShortCircuitError,
+    _assert_amendment_identity_capacity,
     _candidate_summary,
     _rank_training_candidates,
-    _scene_shared_decision,
+    _scene_selector_replay_decision,
     _shared_candidates,
+    _validate_freeze_binding,
+    _validate_reveal_binding,
     build_authorization,
     validate_authorization,
     validate_proposal,
@@ -104,6 +108,7 @@ def test_authorization_is_bound_to_user_window(
     receipt = build_authorization(
         proposal=proposal,
         granted_at="2026-07-31T16:30:00+08:00",
+        repository_root=tmp_path,
     )
     assert receipt["user_authorization_text"] == USER_AUTHORIZATION_TEXT
     assert receipt["expires_at"] == AUTHORIZATION_CUTOFF
@@ -127,6 +132,29 @@ def test_authorization_after_cutoff_is_rejected(
         build_authorization(
             proposal=proposal,
             granted_at="2026-07-31T20:00:01+08:00",
+            repository_root=tmp_path,
+        )
+
+
+def test_authorized_receipt_cannot_start_after_cutoff(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    proposal = _proposal(tmp_path)
+    receipt = build_authorization(
+        proposal=proposal,
+        granted_at="2026-07-31T16:30:00+08:00",
+        repository_root=tmp_path,
+    )
+    with pytest.raises(
+        RecoveryShortCircuitError,
+        match="execution_outside_authorized_window",
+    ):
+        validate_authorization(
+            proposal=proposal,
+            receipt=receipt,
+            execution_time="2026-07-31T20:00:01+08:00",
         )
 
 
@@ -162,6 +190,7 @@ def test_candidate_stops_at_first_zero_eligible_cell() -> None:
     summary = _candidate_summary(
         recovery_id=REMAINING_RECOVERY_IDS[0],
         completions=completions,
+        fs25_eligible_counts=(1, 0),
         mechanism_complexity=1,
     )
     assert summary["status"] == "eliminated"
@@ -184,12 +213,14 @@ def test_candidate_survives_only_after_all_six_cells() -> None:
     summary = _candidate_summary(
         recovery_id=REMAINING_RECOVERY_IDS[1],
         completions=completions,
+        fs25_eligible_counts=(1, 2, 3, 4, 5, 6),
         mechanism_complexity=2,
     )
     assert summary["status"] == "survivor"
     assert summary["eliminated_at_record_id"] is None
     assert summary["max_selected_eligible_mae"] == 7.0
     assert summary["eligible_candidate_count_sum"] == 21
+    assert summary["fs25_ready_for_selector_replay"] is True
 
 
 def test_shared_grid_is_exact_fs25_hundred() -> None:
@@ -251,9 +282,108 @@ def test_scene_decision_requires_all_three_eligible_folds() -> None:
         }
         for index in range(3)
     ]
-    decision = _scene_shared_decision(
+    decision = _scene_selector_replay_decision(
         scene="jianpan",
         folds=folds,
     )
-    assert decision["passed"] is False
+    assert decision["met_reference_lines"] is False
     assert decision["all_held_out_eligible"] is False
+
+
+def test_existing_registry_above_amendment_cap_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        short_circuit,
+        "_recovery_stage_identity_count",
+        lambda _registry: TOTAL_IDENTITY_UPPER_BOUND + 1,
+    )
+    with pytest.raises(
+        RecoveryShortCircuitError,
+        match="amendment_identity_budget_exceeded",
+    ):
+        _assert_amendment_identity_capacity(
+            object(),
+            additional_upper_bound=0,
+        )
+
+
+def test_freeze_and_reveal_reject_semantic_rebinding() -> None:
+    amendment = {"proposal_sha256": "p" * 64}
+    gate_a = {"completion_sha256": "g" * 64}
+    selection = {
+        "candidate_id": "candidate-1",
+        "requested_params": {"fs_target": 25},
+    }
+    freeze: dict[str, object] = {
+        "status": "parameter_frozen",
+        "proposal_sha256": amendment["proposal_sha256"],
+        "gate_a_completion_sha256": gate_a["completion_sha256"],
+        "training_candidate_audit_sha256": "a" * 64,
+        "recovery_candidate_id": REMAINING_RECOVERY_IDS[0],
+        "fold_id": "run__held_out__run3",
+        "scene": "run",
+        "train_record_ids": ["run1", "run2"],
+        "held_out_record_id": "run3",
+        "candidate_count": 100,
+        "selected_candidate_id": "candidate-1",
+        "selection": selection,
+    }
+    freeze["receipt_sha256"] = canonical_sha256(freeze)
+    _validate_freeze_binding(
+        freeze,
+        amendment=amendment,
+        gate_a=gate_a,
+        recovery_id=REMAINING_RECOVERY_IDS[0],
+        fold_id="run__held_out__run3",
+        scene="run",
+        train_ids=["run1", "run2"],
+        held_out_id="run3",
+        training_audit_sha256="a" * 64,
+        expected_status="parameter_frozen",
+        expected_selection=selection,
+    )
+    reveal: dict[str, object] = {
+        "status": "revealed",
+        "proposal_sha256": amendment["proposal_sha256"],
+        "freeze_receipt_sha256": freeze["receipt_sha256"],
+        "fold_id": "run__held_out__run3",
+        "scene": "run",
+        "train_record_ids": ["run1", "run2"],
+        "held_out_record_id": "run3",
+        "selection": selection,
+        "held_out": {"identity_sha256": "i" * 64},
+        "revealed_at": "2026-07-31T17:00:00+08:00",
+    }
+    reveal["receipt_sha256"] = canonical_sha256(reveal)
+    _validate_reveal_binding(
+        reveal,
+        amendment=amendment,
+        freeze=freeze,
+        fold_id="run__held_out__run3",
+        scene="run",
+        train_ids=["run1", "run2"],
+        held_out_id="run3",
+        expected_held_identity_sha256="i" * 64,
+    )
+    rebound = dict(reveal)
+    rebound["selection"] = {
+        "candidate_id": "candidate-2",
+        "requested_params": {"fs_target": 25},
+    }
+    rebound.pop("receipt_sha256")
+    rebound["receipt_sha256"] = canonical_sha256(rebound)
+    with pytest.raises(
+        RecoveryShortCircuitError,
+        match="reveal_binding_drift",
+    ):
+        _validate_reveal_binding(
+            rebound,
+            amendment=amendment,
+            freeze=freeze,
+            fold_id="run__held_out__run3",
+            scene="run",
+            train_ids=["run1", "run2"],
+            held_out_id="run3",
+            expected_held_identity_sha256="i" * 64,
+        )
