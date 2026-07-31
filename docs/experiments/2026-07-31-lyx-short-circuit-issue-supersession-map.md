@@ -1,7 +1,14 @@
 # LYX 大实验短路改线后的 Issue 处置映射
 
-状态：执行中。本文只记录 2026-07-31 用户批准的实验方向变更如何作用于原
+状态：已完成。本文记录 2026-07-31 用户批准的实验方向变更如何作用于原
 Issue #102、#104、#105、#106；它不把未执行的旧验收项伪装成已完成。
+
+2026-08-01 结果补记：Gate A 的两个待筛恢复机制均在第一困难记录
+`kaihe3_LYX_0613` 得到 `0/150` 安全候选；固定恢复对照也已由同一记录预先
+淘汰。最终 survivor 为 0，Gate B 按冻结规则未执行。最终报告见
+`docs/reports/2026-08-01-lyx-bo-space-generalization-final-report.md`，下一轮未见
+场景移交见
+`docs/experiments/2026-08-01-lyx-next-unseen-scene-challenge-handoff.md`。
 
 ## 1. 最新决策优先级
 

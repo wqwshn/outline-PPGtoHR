@@ -1,0 +1,38 @@
+{
+  "challenge_scene": "burpee",
+  "development_subject_id": "LYX",
+  "evidence_role": "first_unseen_scene_migration_acceptance",
+  "execution_authorized": false,
+  "freeze_conditions": [
+    "new_recovery_mechanism_frozen",
+    "existing_lyx_gate_a_fs25_survivor",
+    "existing_lyx_gate_b_complete",
+    "source_selector_metric_seed_budget_hashes_frozen"
+  ],
+  "invalidation_rule": "any_pre_freeze_challenge_metric_read_reclassifies_records_as_development_data",
+  "intended_algorithm_level_holdout": true,
+  "minimum_record_count": 3,
+  "parent_gate_a_completion_sha256": "bc8d6344e5a84236c78286f68b0b97d894ce0403dd6c6c9b25563795ab207c19",
+  "post_freeze_engineering_anchor": "per_record_independent_bo_lite",
+  "pre_registered_reference_lines": {
+    "all_record_safety_gates_pass": true,
+    "max_independent_bo_lite_mae_delta_bpm": 2.0,
+    "record_mae_bpm_must_be_below": 10.0,
+    "max_true_rise_underestimate_regression_bpm": 2.0,
+    "no_new_catastrophic_l10_l20_regression": true,
+    "no_new_right_censored_recovery": true,
+    "scene_mean_mae_bpm": 5.0
+  },
+  "recording_requirements": {
+    "independent_recordings": 3,
+    "must_cover": [
+      "rest",
+      "physiological_rise",
+      "sustained_motion",
+      "post_motion_recovery"
+    ],
+    "re_donning_required": true
+  },
+  "status": "frozen_not_activated",
+  "version": "lyx_next_unseen_scene_challenge_handoff_v1"
+}
