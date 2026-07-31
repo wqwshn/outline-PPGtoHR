@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import sys
 from pathlib import Path
 
@@ -37,6 +38,20 @@ from recovery_short_circuit_runner import (  # noqa: E402
 from ppg_hr.v2.recovery_contracts import (  # noqa: E402
     canonical_sha256,
 )
+
+V2_RUNNER_PATH = (
+    TOOLS_ROOT
+    / "recovery_short_circuit_v2"
+    / "recovery_short_circuit_runner.py"
+)
+V2_RUNNER_SPEC = importlib.util.spec_from_file_location(
+    "recovery_short_circuit_runner_v2",
+    V2_RUNNER_PATH,
+)
+assert V2_RUNNER_SPEC is not None
+assert V2_RUNNER_SPEC.loader is not None
+short_circuit_v2 = importlib.util.module_from_spec(V2_RUNNER_SPEC)
+V2_RUNNER_SPEC.loader.exec_module(short_circuit_v2)
 
 
 def _proposal(tmp_path: Path) -> dict[str, object]:
@@ -172,6 +187,58 @@ def test_source_drift_is_rejected(tmp_path: Path) -> None:
             proposal=proposal,
             repository_root=tmp_path,
         )
+
+
+@pytest.mark.parametrize(
+    ("reporting_proposal_sha256", "expected_validator"),
+    [
+        ("d" * 64, "direct"),
+        ("c" * 64, "historical"),
+    ],
+)
+def test_bound_completion_routes_to_matching_repair_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    reporting_proposal_sha256: str,
+    expected_validator: str,
+) -> None:
+    completion_path = tmp_path / "cell_completion.json"
+    completion_path.write_text("{}", encoding="utf-8")
+    completion = {
+        "reporting_repair": {
+            "repair_proposal_sha256": reporting_proposal_sha256,
+        }
+    }
+    calls: list[str] = []
+    monkeypatch.setattr(
+        short_circuit_v2,
+        "read_json",
+        lambda _path: completion,
+    )
+    monkeypatch.setattr(
+        short_circuit_v2,
+        "validate_existing_direct_completion",
+        lambda **_kwargs: calls.append("direct"),
+    )
+    monkeypatch.setattr(
+        short_circuit_v2,
+        "_validate_existing_completion",
+        lambda **_kwargs: calls.append("historical"),
+    )
+
+    result = short_circuit_v2._validate_bound_completion(
+        completion_path=completion_path,
+        cell={"cell_sha256": "a" * 64},
+        original={"proposal_sha256": "b" * 64},
+        repair_proposal={"proposal_sha256": "c" * 64},
+        repair_authorization={},
+        direct_repair_proposal={"proposal_sha256": "d" * 64},
+        direct_repair_authorization={},
+        repository_root=tmp_path,
+    )
+
+    assert result == completion
+    assert calls == [expected_validator]
 
 
 def test_candidate_stops_at_first_zero_eligible_cell() -> None:
