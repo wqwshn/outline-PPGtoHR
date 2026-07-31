@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import statistics
 import traceback
 from collections.abc import Mapping, Sequence
 from datetime import datetime
@@ -33,7 +34,11 @@ from recovery_independent_bo_supervisor import (
     validate_repair_proposal,
 )
 
-from ppg_hr.v2.bo_space_generalization import build_bo_search_space
+from ppg_hr.v2 import recovery_stage_r_cache as stage_r_cache
+from ppg_hr.v2.bo_space_generalization import (
+    BOCandidate,
+    build_bo_search_space,
+)
 from ppg_hr.v2.experiment_freeze_utils import file_sha256
 from ppg_hr.v2.phase2_experiment_io import atomic_write_json, read_json
 from ppg_hr.v2.recovery_contracts import canonical_sha256
@@ -42,10 +47,16 @@ from ppg_hr.v2.recovery_experiment_governance import (
     BudgetContract,
 )
 from ppg_hr.v2.recovery_independent_bo_experiment import (
+    _attempt_identity_from_item,
+    _constraint_values,
     _execute_search_cell,
     _exploration_from_payload,
+    build_recovery_independent_bo_identity,
     validate_recovery_independent_bo_execution_authorization,
     validate_recovery_independent_bo_preflight,
+)
+from ppg_hr.v2.recovery_stage_r_experiment import (
+    run_stage_r_numerical_identity,
 )
 
 
@@ -58,6 +69,9 @@ AUTHORIZATION_VERSION = (
     "lyx_recovery_short_circuit_shared_validation_authorization_v1"
 )
 GATE_A_COMPLETION_VERSION = "lyx_recovery_short_circuit_gate_a_completion_v1"
+GATE_B_COMPLETION_VERSION = (
+    "lyx_recovery_scene_shared_validation_completion_v1"
+)
 CONTROL_RECOVERY_ID = "current_fixed_floor_control_v1"
 REMAINING_RECOVERY_IDS = (
     "relative_gap_timeout_v1",
@@ -923,6 +937,640 @@ def execute_gate_a(
     return completion
 
 
+def _shared_candidates() -> tuple[BOCandidate, ...]:
+    candidates = tuple(
+        candidate
+        for candidate in build_bo_search_space(
+            "physical_v1"
+        ).candidates
+        if int(candidate.requested_params["fs_target"])
+        == SHARED_FS_TARGET
+    )
+    if (
+        len(candidates) != SHARED_GRID_SIZE
+        or len({item.candidate_id for item in candidates})
+        != SHARED_GRID_SIZE
+        or len({item.coordinate for item in candidates})
+        != SHARED_GRID_SIZE
+    ):
+        raise RecoveryShortCircuitError(
+            "shared_validation_grid_invalid"
+        )
+    return tuple(sorted(candidates, key=lambda item: item.coordinate))
+
+
+def _evaluate_shared_candidate(
+    *,
+    original: Mapping[str, Any],
+    cell: Mapping[str, Any],
+    candidate: BOCandidate,
+    registry: AttemptRegistry,
+    spectral_dir: Path,
+) -> dict[str, Any]:
+    item = build_recovery_independent_bo_identity(
+        proposal=original,
+        cell=cell,
+        candidate=candidate,
+    )
+    identity = _attempt_identity_from_item(item)
+    registry.register_identity(identity)
+    before = registry.matrix_execution_summary((identity,))
+    if (
+        before["failed_attempt_count"] != 0
+        or before["retry_count"] != 0
+    ):
+        raise RecoveryShortCircuitError(
+            "shared_validation_retry_requires_new_proposal:"
+            + identity.sha256
+        )
+    result = stage_r_cache.execute_stage_r_identity(
+        registry=registry,
+        item=item,
+        numerical_runner=run_stage_r_numerical_identity,
+        spectral_audit_dir=Path(spectral_dir),
+        allow_retry=False,
+    )
+    metrics = _mapping(
+        "shared_validation_metrics",
+        result.get("metrics"),
+    )
+    spectral = _mapping(
+        "shared_validation_spectral",
+        result.get("spectral_audit"),
+    )
+    constraints = _constraint_values(
+        metrics=metrics,
+        spectral=spectral,
+        current=_mapping(
+            "shared_validation_current_metrics",
+            cell.get("current_metrics"),
+        ),
+        independent=_mapping(
+            "shared_validation_independent_metrics",
+            cell.get("independent_metrics"),
+        ),
+        true_rise_applicable=bool(
+            cell["true_rise_applicable"]
+        ),
+    )
+    row = {
+        "candidate_id": candidate.candidate_id,
+        "coordinate": list(candidate.coordinate),
+        "requested_params": dict(candidate.requested_params),
+        "identity_sha256": identity.sha256,
+        "cache_hit": bool(result["cache_hit"]),
+        "metrics": dict(metrics),
+        "spectral_audit": dict(spectral),
+        "constraints": [float(value) for value in constraints],
+        "eligible": all(value <= 0.0 for value in constraints),
+        "objective": float(metrics["final_motion_mae_bpm"]),
+    }
+    # Do not allow MappingProxyType or another runtime view into any receipt.
+    return json.loads(json.dumps(row, ensure_ascii=False))
+
+
+def _direct_shared_neighbors(
+    candidate: BOCandidate,
+    *,
+    by_coordinate: Mapping[tuple[int, ...], BOCandidate],
+) -> tuple[BOCandidate, ...]:
+    neighbors: list[BOCandidate] = []
+    coordinate = candidate.coordinate
+    for dimension in (1, 2, 3):
+        for delta in (-1, 1):
+            adjacent = list(coordinate)
+            adjacent[dimension] += delta
+            found = by_coordinate.get(tuple(adjacent))
+            if found is not None:
+                neighbors.append(found)
+    return tuple(
+        sorted(neighbors, key=lambda item: item.coordinate)
+    )
+
+
+def _rank_training_candidates(
+    *,
+    candidates: Sequence[BOCandidate],
+    train_record_ids: Sequence[str],
+    rows: Mapping[tuple[str, str], Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    if len(train_record_ids) != 2:
+        raise RecoveryShortCircuitError(
+            "shared_validation_train_pair_invalid"
+        )
+    by_coordinate = {
+        candidate.coordinate: candidate for candidate in candidates
+    }
+    ranked: list[dict[str, Any]] = []
+    for candidate in candidates:
+        train_rows = [
+            rows[(record_id, candidate.candidate_id)]
+            for record_id in train_record_ids
+        ]
+        if not all(bool(row["eligible"]) for row in train_rows):
+            continue
+        train_maes = [
+            float(row["metrics"]["final_motion_mae_bpm"])
+            for row in train_rows
+        ]
+        worst = max(train_maes)
+        mean = statistics.fmean(train_maes)
+        neighbors = _direct_shared_neighbors(
+            candidate,
+            by_coordinate=by_coordinate,
+        )
+        supported: list[str] = []
+        cliffs: list[str] = []
+        for neighbor in neighbors:
+            neighbor_rows = [
+                rows[(record_id, neighbor.candidate_id)]
+                for record_id in train_record_ids
+            ]
+            neighbor_maes = [
+                float(
+                    row["metrics"]["final_motion_mae_bpm"]
+                )
+                for row in neighbor_rows
+            ]
+            if (
+                all(bool(row["eligible"]) for row in neighbor_rows)
+                and max(neighbor_maes) <= worst + 1.0
+            ):
+                supported.append(neighbor.candidate_id)
+            if worst <= 5.0 and max(neighbor_maes) >= 10.0:
+                cliffs.append(neighbor.candidate_id)
+        support_ratio = (
+            len(supported) / len(neighbors) if neighbors else 0.0
+        )
+        ranked.append(
+            {
+                "candidate_id": candidate.candidate_id,
+                "coordinate": list(candidate.coordinate),
+                "requested_params": dict(
+                    candidate.requested_params
+                ),
+                "worst_train_mae": worst,
+                "mean_train_mae": mean,
+                "support_neighbor_count": len(supported),
+                "neighbor_count": len(neighbors),
+                "support_ratio": support_ratio,
+                "supported_neighbor_ids": supported,
+                "parameter_cliff_count": len(cliffs),
+                "parameter_cliff_neighbor_ids": cliffs,
+                "train_rows": [
+                    {
+                        "record_id": record_id,
+                        "identity_sha256": row["identity_sha256"],
+                        "eligible": row["eligible"],
+                        "mae": row["metrics"][
+                            "final_motion_mae_bpm"
+                        ],
+                        "longest_e10_run_windows": row[
+                            "metrics"
+                        ]["longest_e10_run_windows"],
+                        "longest_e20_run_windows": row[
+                            "metrics"
+                        ]["longest_e20_run_windows"],
+                    }
+                    for record_id, row in zip(
+                        train_record_ids,
+                        train_rows,
+                        strict=True,
+                    )
+                ],
+            }
+        )
+    ranked.sort(
+        key=lambda item: (
+            float(item["worst_train_mae"]),
+            float(item["mean_train_mae"]),
+            -float(item["support_ratio"]),
+            int(item["parameter_cliff_count"]),
+            tuple(item["coordinate"]),
+        )
+    )
+    return ranked
+
+
+def _scene_shared_decision(
+    *,
+    scene: str,
+    folds: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    revealed = [
+        fold for fold in folds if fold["status"] == "revealed"
+    ]
+    if len(revealed) != 3:
+        return {
+            "scene": scene,
+            "status": "no_safe_shared_parameter",
+            "passed": False,
+            "reason": "one_or_more_folds_have_no_training_candidate",
+            "fold_count": len(folds),
+            "revealed_fold_count": len(revealed),
+        }
+    held_maes = [
+        float(fold["held_out"]["mae"]) for fold in revealed
+    ]
+    train_gaps = [
+        float(fold["held_out"]["mae"])
+        - float(fold["selection"]["worst_train_mae"])
+        for fold in revealed
+    ]
+    lite_deltas = [
+        float(fold["held_out"]["mae"])
+        - float(fold["held_out"]["independent_bo_lite_mae"])
+        for fold in revealed
+    ]
+    all_eligible = all(
+        bool(fold["held_out"]["eligible"])
+        for fold in revealed
+    )
+    mean_mae = statistics.fmean(held_maes)
+    median_gap = statistics.median(train_gaps)
+    max_gap = max(train_gaps)
+    no_disaster = max(held_maes) < 10.0
+    run_delta_pass = (
+        True
+        if scene != "run"
+        else (
+            statistics.fmean(lite_deltas) <= 1.0
+            and max(lite_deltas) <= 2.0
+        )
+    )
+    passed = (
+        all_eligible
+        and mean_mae <= 5.0
+        and median_gap <= 2.0
+        and max_gap <= 5.0
+        and no_disaster
+        and run_delta_pass
+    )
+    return {
+        "scene": scene,
+        "status": (
+            "scene_shared_validation_passed"
+            if passed
+            else "scene_shared_validation_failed"
+        ),
+        "passed": passed,
+        "fold_count": 3,
+        "revealed_fold_count": 3,
+        "all_held_out_eligible": all_eligible,
+        "mean_held_out_mae": mean_mae,
+        "max_held_out_mae": max(held_maes),
+        "median_train_to_test_gap": median_gap,
+        "max_train_to_test_gap": max_gap,
+        "mean_independent_bo_lite_delta": statistics.fmean(
+            lite_deltas
+        ),
+        "max_independent_bo_lite_delta": max(lite_deltas),
+        "no_new_mae_disaster": no_disaster,
+        "run_delta_pass": run_delta_pass,
+    }
+
+
+def execute_gate_b(
+    *,
+    proposal_dir: Path,
+    original_proposal_path: Path,
+    original_authorization_path: Path,
+    repair_proposal_path: Path,
+    repair_authorization_path: Path,
+    governance_dir: Path,
+    execution_dir: Path,
+    repository_root: Path,
+    gate_a_output_dir: Path,
+    output_dir: Path,
+) -> dict[str, Any]:
+    """Execute deterministic scene-wise LOO selection for one survivor."""
+
+    (
+        amendment,
+        original,
+        _repair_proposal,
+        _repair_authorization,
+        registry,
+    ) = _validated_runtime(
+        proposal_dir=proposal_dir,
+        original_proposal_path=original_proposal_path,
+        original_authorization_path=original_authorization_path,
+        repair_proposal_path=repair_proposal_path,
+        repair_authorization_path=repair_authorization_path,
+        governance_dir=governance_dir,
+        repository_root=repository_root,
+    )
+    gate_a_path = (
+        Path(gate_a_output_dir).resolve()
+        / "gate_a_completion.json"
+    )
+    gate_a = read_json(gate_a_path)
+    _verify_hash(
+        gate_a,
+        hash_field="completion_sha256",
+        artifact="short_circuit_gate_a_completion",
+    )
+    if (
+        gate_a.get("proposal_sha256")
+        != amendment.get("proposal_sha256")
+        or gate_a.get("status") != "survivor_selected"
+    ):
+        raise RecoveryShortCircuitError(
+            "shared_validation_gate_a_not_ready"
+        )
+    recovery_id = str(
+        gate_a["selected_recovery_candidate_id"]
+    )
+    if recovery_id not in REMAINING_RECOVERY_IDS:
+        raise RecoveryShortCircuitError(
+            "shared_validation_recovery_not_authorized"
+        )
+    destination = Path(output_dir).resolve()
+    destination.mkdir(parents=True, exist_ok=True)
+    completion_path = destination / "gate_b_completion.json"
+    if completion_path.is_file():
+        completion = read_json(completion_path)
+        _verify_hash(
+            completion,
+            hash_field="completion_sha256",
+            artifact="shared_validation_completion",
+        )
+        return completion
+    candidates = _shared_candidates()
+    candidate_by_id = {
+        item.candidate_id: item for item in candidates
+    }
+    cells = _cell_index(original)
+    scene_records: dict[str, list[str]] = {}
+    for (candidate_id, record_id), cell in cells.items():
+        if candidate_id != recovery_id:
+            continue
+        scene_records.setdefault(str(cell["scene"]), []).append(
+            record_id
+        )
+    if (
+        set(scene_records) != {"xiezi", "jianpan", "run", "kaihe"}
+        or any(len(records) != 3 for records in scene_records.values())
+    ):
+        raise RecoveryShortCircuitError(
+            "shared_validation_record_panel_invalid"
+        )
+    rows: dict[tuple[str, str], Mapping[str, Any]] = {}
+    folds: list[dict[str, Any]] = []
+    spectral_dir = destination / "spectral_audits"
+    fold_root = destination / "folds"
+    with _exclusive_supervisor_lock(Path(execution_dir).resolve()):
+        for scene in ("xiezi", "jianpan", "run", "kaihe"):
+            records = sorted(scene_records[scene])
+            for held_out_id in records:
+                train_ids = [
+                    item for item in records if item != held_out_id
+                ]
+                fold_id = f"{scene}__held_out__{held_out_id}"
+                fold_dir = fold_root / fold_id
+                freeze_path = fold_dir / "freeze_receipt.json"
+                reveal_path = fold_dir / "reveal_receipt.json"
+                if reveal_path.is_file():
+                    reveal = read_json(reveal_path)
+                    _verify_hash(
+                        reveal,
+                        hash_field="receipt_sha256",
+                        artifact="shared_validation_reveal",
+                    )
+                    folds.append(reveal)
+                    continue
+                for train_id in train_ids:
+                    cell = cells[(recovery_id, train_id)]
+                    for candidate in candidates:
+                        key = (train_id, candidate.candidate_id)
+                        if key not in rows:
+                            rows[key] = _evaluate_shared_candidate(
+                                original=original,
+                                cell=cell,
+                                candidate=candidate,
+                                registry=registry,
+                                spectral_dir=spectral_dir,
+                            )
+                ranked = _rank_training_candidates(
+                    candidates=candidates,
+                    train_record_ids=train_ids,
+                    rows=rows,
+                )
+                fold_dir.mkdir(parents=True, exist_ok=True)
+                if not ranked:
+                    freeze = {
+                        "receipt_version": (
+                            "lyx_recovery_scene_shared_freeze_v1"
+                        ),
+                        "status": "no_safe_training_candidate",
+                        "proposal_sha256": amendment[
+                            "proposal_sha256"
+                        ],
+                        "gate_a_completion_sha256": gate_a[
+                            "completion_sha256"
+                        ],
+                        "recovery_candidate_id": recovery_id,
+                        "fold_id": fold_id,
+                        "scene": scene,
+                        "train_record_ids": train_ids,
+                        "held_out_record_id": held_out_id,
+                        "candidate_count": SHARED_GRID_SIZE,
+                        "eligible_training_candidate_count": 0,
+                        "selected_candidate_id": None,
+                        "frozen_at": _iso_now(),
+                    }
+                    freeze["receipt_sha256"] = canonical_sha256(
+                        freeze
+                    )
+                    atomic_write_json(freeze_path, freeze)
+                    fold_result = {
+                        "receipt_version": (
+                            "lyx_recovery_scene_shared_reveal_v1"
+                        ),
+                        "status": "no_safe_training_candidate",
+                        "proposal_sha256": amendment[
+                            "proposal_sha256"
+                        ],
+                        "freeze_receipt_sha256": freeze[
+                            "receipt_sha256"
+                        ],
+                        "fold_id": fold_id,
+                        "scene": scene,
+                        "train_record_ids": train_ids,
+                        "held_out_record_id": held_out_id,
+                        "selection": None,
+                        "held_out": None,
+                        "revealed_at": None,
+                    }
+                    fold_result["receipt_sha256"] = (
+                        canonical_sha256(fold_result)
+                    )
+                    atomic_write_json(reveal_path, fold_result)
+                    folds.append(fold_result)
+                    continue
+                selected = ranked[0]
+                freeze = {
+                    "receipt_version": (
+                        "lyx_recovery_scene_shared_freeze_v1"
+                    ),
+                    "status": "parameter_frozen",
+                    "proposal_sha256": amendment[
+                        "proposal_sha256"
+                    ],
+                    "gate_a_completion_sha256": gate_a[
+                        "completion_sha256"
+                    ],
+                    "recovery_candidate_id": recovery_id,
+                    "fold_id": fold_id,
+                    "scene": scene,
+                    "train_record_ids": train_ids,
+                    "held_out_record_id": held_out_id,
+                    "candidate_count": SHARED_GRID_SIZE,
+                    "eligible_training_candidate_count": len(
+                        ranked
+                    ),
+                    "selected_candidate_id": selected[
+                        "candidate_id"
+                    ],
+                    "selection": selected,
+                    "frozen_at": _iso_now(),
+                }
+                freeze["receipt_sha256"] = canonical_sha256(freeze)
+                atomic_write_json(freeze_path, freeze)
+                selected_candidate = candidate_by_id[
+                    str(selected["candidate_id"])
+                ]
+                held_key = (
+                    held_out_id,
+                    selected_candidate.candidate_id,
+                )
+                if held_key not in rows:
+                    rows[held_key] = _evaluate_shared_candidate(
+                        original=original,
+                        cell=cells[(recovery_id, held_out_id)],
+                        candidate=selected_candidate,
+                        registry=registry,
+                        spectral_dir=spectral_dir,
+                    )
+                held = rows[held_key]
+                independent = _mapping(
+                    "shared_validation_held_independent",
+                    cells[(recovery_id, held_out_id)][
+                        "independent_metrics"
+                    ],
+                )
+                fold_result = {
+                    "receipt_version": (
+                        "lyx_recovery_scene_shared_reveal_v1"
+                    ),
+                    "status": "revealed",
+                    "proposal_sha256": amendment[
+                        "proposal_sha256"
+                    ],
+                    "freeze_receipt_sha256": freeze[
+                        "receipt_sha256"
+                    ],
+                    "fold_id": fold_id,
+                    "scene": scene,
+                    "train_record_ids": train_ids,
+                    "held_out_record_id": held_out_id,
+                    "selection": selected,
+                    "held_out": {
+                        "identity_sha256": held[
+                            "identity_sha256"
+                        ],
+                        "eligible": held["eligible"],
+                        "mae": held["metrics"][
+                            "final_motion_mae_bpm"
+                        ],
+                        "independent_bo_lite_mae": independent[
+                            "final_motion_mae_bpm"
+                        ],
+                        "longest_e10_run_windows": held[
+                            "metrics"
+                        ]["longest_e10_run_windows"],
+                        "longest_e20_run_windows": held[
+                            "metrics"
+                        ]["longest_e20_run_windows"],
+                        "right_censored_recovery_count": held[
+                            "metrics"
+                        ]["right_censored_recovery_count"],
+                        "max_rise_underestimate_bpm": held[
+                            "metrics"
+                        ]["max_rise_underestimate_bpm"],
+                        "spectral_gate_pass": held[
+                            "spectral_audit"
+                        ]["spectral_gate_pass"],
+                        "stability_pass": held[
+                            "spectral_audit"
+                        ]["stability_pass"],
+                        "constraints": held["constraints"],
+                    },
+                    "revealed_at": _iso_now(),
+                }
+                fold_result["receipt_sha256"] = canonical_sha256(
+                    fold_result
+                )
+                atomic_write_json(reveal_path, fold_result)
+                folds.append(fold_result)
+                progress = {
+                    "progress_version": (
+                        "lyx_recovery_scene_shared_progress_v1"
+                    ),
+                    "proposal_sha256": amendment[
+                        "proposal_sha256"
+                    ],
+                    "recovery_candidate_id": recovery_id,
+                    "completed_fold_count": len(folds),
+                    "total_fold_count": 12,
+                    "last_fold_id": fold_id,
+                    "updated_at": _iso_now(),
+                }
+                progress["progress_sha256"] = canonical_sha256(
+                    progress
+                )
+                atomic_write_json(
+                    destination / "progress.json",
+                    progress,
+                )
+    scene_decisions = [
+        _scene_shared_decision(
+            scene=scene,
+            folds=[
+                fold for fold in folds if fold["scene"] == scene
+            ],
+        )
+        for scene in ("xiezi", "jianpan", "run", "kaihe")
+    ]
+    completion = {
+        "completion_version": GATE_B_COMPLETION_VERSION,
+        "status": (
+            "all_scenes_passed"
+            if all(item["passed"] for item in scene_decisions)
+            else "one_or_more_scenes_failed"
+        ),
+        "proposal_sha256": amendment["proposal_sha256"],
+        "gate_a_completion_sha256": gate_a[
+            "completion_sha256"
+        ],
+        "recovery_candidate_id": recovery_id,
+        "fold_count": len(folds),
+        "scene_decisions": scene_decisions,
+        "all_scene_shared_validation_passed": all(
+            item["passed"] for item in scene_decisions
+        ),
+        "completed_at": _iso_now(),
+        "evidence_class": "development_reuse_pilot",
+        "automatic_stage_f_execution": False,
+        "next_state": "ready_for_final_reporting",
+    }
+    completion["completion_sha256"] = canonical_sha256(
+        completion
+    )
+    atomic_write_json(completion_path, completion)
+    return completion
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(
@@ -962,6 +1610,23 @@ def _parser() -> argparse.ArgumentParser:
         "output_dir",
     ):
         gate_a.add_argument(
+            f"--{name.replace('_', '-')}",
+            required=True,
+        )
+    gate_b = subparsers.add_parser("execute-gate-b")
+    for name in (
+        "proposal_dir",
+        "original_proposal",
+        "original_authorization",
+        "repair_proposal",
+        "repair_authorization",
+        "governance_dir",
+        "execution_dir",
+        "repository_root",
+        "gate_a_output_dir",
+        "output_dir",
+    ):
+        gate_b.add_argument(
             f"--{name.replace('_', '-')}",
             required=True,
         )
@@ -1055,6 +1720,38 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "status": completion["status"],
                     "selected_recovery_candidate_id": completion[
                         "selected_recovery_candidate_id"
+                    ],
+                    "completion_sha256": completion[
+                        "completion_sha256"
+                    ],
+                },
+                ensure_ascii=False,
+            )
+        )
+        return 0
+    if args.command == "execute-gate-b":
+        completion = execute_gate_b(
+            proposal_dir=Path(args.proposal_dir),
+            original_proposal_path=Path(args.original_proposal),
+            original_authorization_path=Path(
+                args.original_authorization
+            ),
+            repair_proposal_path=Path(args.repair_proposal),
+            repair_authorization_path=Path(
+                args.repair_authorization
+            ),
+            governance_dir=Path(args.governance_dir),
+            execution_dir=Path(args.execution_dir),
+            repository_root=Path(args.repository_root),
+            gate_a_output_dir=Path(args.gate_a_output_dir),
+            output_dir=Path(args.output_dir),
+        )
+        print(
+            json.dumps(
+                {
+                    "status": completion["status"],
+                    "recovery_candidate_id": completion[
+                        "recovery_candidate_id"
                     ],
                     "completion_sha256": completion[
                         "completion_sha256"

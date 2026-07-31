@@ -22,6 +22,9 @@ from recovery_short_circuit_runner import (  # noqa: E402
     V13_IDENTITY_LIMIT,
     RecoveryShortCircuitError,
     _candidate_summary,
+    _rank_training_candidates,
+    _scene_shared_decision,
+    _shared_candidates,
     build_authorization,
     validate_authorization,
     validate_proposal,
@@ -187,3 +190,70 @@ def test_candidate_survives_only_after_all_six_cells() -> None:
     assert summary["eliminated_at_record_id"] is None
     assert summary["max_selected_eligible_mae"] == 7.0
     assert summary["eligible_candidate_count_sum"] == 21
+
+
+def test_shared_grid_is_exact_fs25_hundred() -> None:
+    candidates = _shared_candidates()
+    assert len(candidates) == 100
+    assert {
+        item.requested_params["fs_target"]
+        for item in candidates
+    } == {25}
+    assert len(
+        {
+            (
+                item.requested_params["memory_ms"],
+                item.requested_params["mu_base"],
+                item.requested_params[
+                    "exclusion_half_width_bpm"
+                ],
+            )
+            for item in candidates
+        }
+    ) == 100
+
+
+def test_training_ranking_uses_worst_record_before_neighbors() -> None:
+    candidates = _shared_candidates()[:2]
+    records = ("train_a", "train_b")
+    rows: dict[tuple[str, str], dict[str, object]] = {}
+    maes = ((2.0, 4.0), (3.0, 3.5))
+    for candidate, pair in zip(candidates, maes, strict=True):
+        for record_id, mae in zip(records, pair, strict=True):
+            rows[(record_id, candidate.candidate_id)] = {
+                "eligible": True,
+                "identity_sha256": "a" * 64,
+                "metrics": {
+                    "final_motion_mae_bpm": mae,
+                    "longest_e10_run_windows": 0,
+                    "longest_e20_run_windows": 0,
+                },
+            }
+    ranked = _rank_training_candidates(
+        candidates=candidates,
+        train_record_ids=records,
+        rows=rows,
+    )
+    assert ranked[0]["candidate_id"] == candidates[1].candidate_id
+    assert ranked[0]["worst_train_mae"] == 3.5
+
+
+def test_scene_decision_requires_all_three_eligible_folds() -> None:
+    folds = [
+        {
+            "status": "revealed",
+            "selection": {"worst_train_mae": 2.0},
+            "held_out": {
+                "eligible": index != 2,
+                "mae": 2.5,
+                "independent_bo_lite_mae": 2.0,
+            },
+        }
+        for index in range(3)
+    ]
+    decision = _scene_shared_decision(
+        scene="jianpan",
+        folds=folds,
+    )
+    assert decision["passed"] is False
+    assert decision["all_held_out_eligible"] is False
