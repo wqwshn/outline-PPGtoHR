@@ -9,9 +9,10 @@ changes scheduling:
 * eliminate a recovery immediately after a 0/150 eligible cell;
 * admit at most one survivor to the separately governed shared-profile phase.
 
-The original runner has one known JSON ``mappingproxy`` receipt defect.  This
-tool uses the already-authorized zero-run repair path after observing the same
-exact failure and never retries a solver identity.
+The numerical search has one known JSON ``mappingproxy`` receipt defect.  This
+tool keeps the original-runner repair contract immutable and uses a separately
+authorized direct-call repair contract for its own exact traceback.  Neither
+path retries or recomputes a completed solver identity.
 """
 
 from __future__ import annotations
@@ -27,12 +28,17 @@ from typing import Any
 
 from recovery_independent_bo_supervisor import (
     _exclusive_supervisor_lock,
-    _finalize_ready_cell_locked,
     _require_runner_stopped,
     _validate_existing_completion,
-    is_mappingproxy_completion_failure,
     validate_repair_authorization,
     validate_repair_proposal,
+)
+from recovery_short_circuit_mappingproxy_repair import (
+    finalize_direct_ready_cell_locked,
+    is_short_circuit_mappingproxy_completion_failure,
+    validate_direct_repair_authorization,
+    validate_direct_repair_proposal,
+    validate_existing_direct_completion,
 )
 
 from ppg_hr.v2 import recovery_stage_r_cache as stage_r_cache
@@ -66,10 +72,10 @@ class RecoveryShortCircuitError(RuntimeError):
 
 
 PROPOSAL_VERSION = (
-    "lyx_recovery_short_circuit_selector_replay_proposal_v1"
+    "lyx_recovery_short_circuit_selector_replay_proposal_v2"
 )
 AUTHORIZATION_VERSION = (
-    "lyx_recovery_short_circuit_selector_replay_authorization_v1"
+    "lyx_recovery_short_circuit_selector_replay_authorization_v2"
 )
 GATE_A_COMPLETION_VERSION = "lyx_recovery_short_circuit_gate_a_completion_v1"
 GATE_B_COMPLETION_VERSION = (
@@ -111,11 +117,11 @@ TOTAL_IDENTITY_UPPER_BOUND = (
 )
 V13_IDENTITY_LIMIT = 5400
 USER_AUTHORIZATION_TEXT = (
-    "好的，先按照你提出的：不再批准“机械跑满 36”，改为“run3 封存后停止 + "
-    "困难样本优先短路 + 直接场景内共享参数验证”。调整实验方向，我批准编写计划后"
-    "可以直接执行。\n\n在北京时间20：00前你拥有完全授权，可以自行执行。"
+    "批准编写并执行短路调度器直接调用栈的零运行替换修复 proposal，批准生成绑定"
+    "修复后源码的新短路 proposal，并授权继续执行 Gate A 和必要的 Gate B，直至本轮"
+    "大实验完成；不得重算已完成身份或自动重试失败身份。"
 )
-AUTHORIZATION_CUTOFF = "2026-07-31T20:00:00+08:00"
+AUTHORIZATION_SCOPE_END = "experiment_complete"
 
 
 def _mapping(name: str, value: object) -> Mapping[str, Any]:
@@ -182,6 +188,8 @@ def _validate_bound_completion(
     original: Mapping[str, Any],
     repair_proposal: Mapping[str, Any],
     repair_authorization: Mapping[str, Any],
+    direct_repair_proposal: Mapping[str, Any],
+    direct_repair_authorization: Mapping[str, Any],
     repository_root: Path,
 ) -> Mapping[str, Any]:
     if not completion_path.is_file():
@@ -207,6 +215,8 @@ def build_proposal(
     original_authorization_path: Path,
     repair_proposal_path: Path,
     repair_authorization_path: Path,
+    direct_repair_proposal_path: Path,
+    direct_repair_authorization_path: Path,
     governance_dir: Path,
     execution_dir: Path,
     spec_path: Path,
@@ -244,6 +254,22 @@ def build_proposal(
     ):
         raise RecoveryShortCircuitError(
             "repair_original_proposal_binding_mismatch"
+        )
+    direct_repair_proposal = validate_direct_repair_proposal(
+        proposal=read_json(Path(direct_repair_proposal_path).resolve()),
+        repository_root=root,
+    )
+    direct_repair_authorization = validate_direct_repair_authorization(
+        proposal=direct_repair_proposal,
+        receipt=read_json(
+            Path(direct_repair_authorization_path).resolve()
+        ),
+    )
+    if direct_repair_proposal.get(
+        "original_proposal_sha256"
+    ) != original.get("proposal_sha256"):
+        raise RecoveryShortCircuitError(
+            "direct_repair_original_proposal_binding_mismatch"
         )
     cells = _cell_index(original)
     completion_bindings: list[dict[str, Any]] = []
@@ -322,7 +348,7 @@ def build_proposal(
     tool = Path(tool_path).resolve()
     proposal: dict[str, Any] = {
         "proposal_version": PROPOSAL_VERSION,
-        "status": "awaiting_user_blanket_authorization",
+        "status": "awaiting_user_authorization",
         "parent_experiment_id": original["parent_experiment_id"],
         "original_proposal_sha256": original["proposal_sha256"],
         "original_authorization_sha256": canonical_sha256(
@@ -331,6 +357,12 @@ def build_proposal(
         "repair_proposal_sha256": repair_proposal["proposal_sha256"],
         "repair_authorization_sha256": canonical_sha256(
             repair_authorization
+        ),
+        "direct_repair_proposal_sha256": direct_repair_proposal[
+            "proposal_sha256"
+        ],
+        "direct_repair_authorization_sha256": canonical_sha256(
+            direct_repair_authorization
         ),
         "spec_path": str(spec.relative_to(root)).replace("\\", "/"),
         "spec_file_sha256": file_sha256(spec),
@@ -382,7 +414,7 @@ def build_proposal(
         },
         "automatic_stage_f_execution": False,
         "created_at": _iso_now(),
-        "authorization_cutoff": AUTHORIZATION_CUTOFF,
+        "authorization_scope_end": AUTHORIZATION_SCOPE_END,
         "next_state": "awaiting_authorized_gate_a_execution",
     }
     proposal["proposal_sha256"] = canonical_sha256(proposal)
@@ -413,8 +445,14 @@ def validate_proposal(
         or proposal.get("gate_b_fs_target") != SHARED_FS_TARGET
         or proposal.get("gate_b_grid_size_per_record")
         != SHARED_GRID_SIZE
-        or proposal.get("authorization_cutoff")
-        != AUTHORIZATION_CUTOFF
+        or proposal.get("authorization_scope_end")
+        != AUTHORIZATION_SCOPE_END
+        or not isinstance(
+            proposal.get("direct_repair_proposal_sha256"), str
+        )
+        or not isinstance(
+            proposal.get("direct_repair_authorization_sha256"), str
+        )
     ):
         raise RecoveryShortCircuitError(
             "short_circuit_proposal_contract_invalid"
@@ -460,27 +498,23 @@ def build_authorization(
         repository_root=repository_root,
     )
     granted = datetime.fromisoformat(granted_at)
-    cutoff = datetime.fromisoformat(AUTHORIZATION_CUTOFF)
-    if (
-        granted.tzinfo is None
-        or granted > cutoff
-        or granted.date() != cutoff.date()
-    ):
+    if granted.tzinfo is None:
         raise RecoveryShortCircuitError(
-            "short_circuit_authorization_outside_window"
+            "short_circuit_authorization_time_invalid"
         )
     receipt: dict[str, Any] = {
         "authorization_version": AUTHORIZATION_VERSION,
         "status": "authorized",
         "proposal_sha256": proposal["proposal_sha256"],
         "granted_at": granted.isoformat(timespec="seconds"),
-        "expires_at": AUTHORIZATION_CUTOFF,
+        "authorization_scope_end": AUTHORIZATION_SCOPE_END,
         "user_authorization_text": USER_AUTHORIZATION_TEXT,
         "authorized_actions": [
             "stop_original_matrix_after_run3_sealed",
             "execute_gate_a_with_candidate_short_circuit",
             "admit_at_most_one_survivor_to_gate_b",
             "execute_scene_selector_replay_audit",
+            "continue_until_round_experiment_complete",
         ],
         "authorized_new_unique_identity_upper_bound": (
             GATE_A_IDENTITY_UPPER_BOUND
@@ -497,7 +531,6 @@ def validate_authorization(
     *,
     proposal: Mapping[str, Any],
     receipt: Mapping[str, Any],
-    execution_time: str | None = None,
 ) -> Mapping[str, Any]:
     _verify_hash(
         receipt,
@@ -510,7 +543,8 @@ def validate_authorization(
         or receipt.get("status") != "authorized"
         or receipt.get("proposal_sha256")
         != proposal.get("proposal_sha256")
-        or receipt.get("expires_at") != AUTHORIZATION_CUTOFF
+        or receipt.get("authorization_scope_end")
+        != AUTHORIZATION_SCOPE_END
         or receipt.get("user_authorization_text")
         != USER_AUTHORIZATION_TEXT
         or receipt.get("budget_expansion") != 0
@@ -520,17 +554,10 @@ def validate_authorization(
             "short_circuit_authorization_invalid"
         )
     granted = datetime.fromisoformat(str(receipt["granted_at"]))
-    cutoff = datetime.fromisoformat(AUTHORIZATION_CUTOFF)
-    if granted.tzinfo is None or granted > cutoff:
+    if granted.tzinfo is None:
         raise RecoveryShortCircuitError(
             "short_circuit_authorization_time_invalid"
         )
-    if execution_time is not None:
-        started = datetime.fromisoformat(execution_time)
-        if started.tzinfo is None or started > cutoff:
-            raise RecoveryShortCircuitError(
-                "short_circuit_execution_outside_authorized_window"
-            )
     return receipt
 
 
@@ -549,9 +576,9 @@ def _write_proposal_artifacts(
     receipt: dict[str, Any] = {
         "receipt_version": (
             "lyx_recovery_short_circuit_selector_replay_"
-            "proposal_receipt_v1"
+            "proposal_receipt_v2"
         ),
-        "status": "awaiting_user_blanket_authorization",
+        "status": "awaiting_user_authorization",
         "proposal_sha256": proposal["proposal_sha256"],
         "created_at": proposal["created_at"],
         "new_unique_identity_upper_bound": (
@@ -584,9 +611,13 @@ def _validated_runtime(
     original_authorization_path: Path,
     repair_proposal_path: Path,
     repair_authorization_path: Path,
+    direct_repair_proposal_path: Path,
+    direct_repair_authorization_path: Path,
     governance_dir: Path,
     repository_root: Path,
 ) -> tuple[
+    Mapping[str, Any],
+    Mapping[str, Any],
     Mapping[str, Any],
     Mapping[str, Any],
     Mapping[str, Any],
@@ -601,7 +632,6 @@ def _validated_runtime(
         receipt=read_json(
             Path(proposal_dir).resolve() / "authorization.json"
         ),
-        execution_time=_iso_now(),
     )
     original = read_json(Path(original_proposal_path).resolve())
     validate_recovery_independent_bo_preflight(
@@ -638,6 +668,25 @@ def _validated_runtime(
         raise RecoveryShortCircuitError(
             "short_circuit_repair_binding_drift"
         )
+    direct_repair_proposal = validate_direct_repair_proposal(
+        proposal=read_json(Path(direct_repair_proposal_path).resolve()),
+        repository_root=root,
+    )
+    direct_repair_authorization = validate_direct_repair_authorization(
+        proposal=direct_repair_proposal,
+        receipt=read_json(
+            Path(direct_repair_authorization_path).resolve()
+        ),
+    )
+    if (
+        direct_repair_proposal.get("proposal_sha256")
+        != amendment.get("direct_repair_proposal_sha256")
+        or canonical_sha256(direct_repair_authorization)
+        != amendment.get("direct_repair_authorization_sha256")
+    ):
+        raise RecoveryShortCircuitError(
+            "short_circuit_direct_repair_binding_drift"
+        )
     governance = Path(governance_dir).resolve()
     budget = BudgetContract.proposed_v13_recovery_independent_bo()
     if (
@@ -664,6 +713,8 @@ def _validated_runtime(
         original,
         repair_proposal,
         repair_authorization,
+        direct_repair_proposal,
+        direct_repair_authorization,
         registry,
     )
 
@@ -720,11 +771,15 @@ def _execute_or_repair_cell(
     original: Mapping[str, Any],
     repair_proposal: Mapping[str, Any],
     repair_authorization: Mapping[str, Any],
+    direct_repair_proposal: Mapping[str, Any],
+    direct_repair_authorization: Mapping[str, Any],
     cell: Mapping[str, Any],
     registry: AttemptRegistry,
     execution_dir: Path,
     repair_proposal_path: Path,
     repair_authorization_path: Path,
+    direct_repair_proposal_path: Path,
+    direct_repair_authorization_path: Path,
     original_proposal_path: Path,
     governance_dir: Path,
     repository_root: Path,
@@ -736,17 +791,36 @@ def _execute_or_repair_cell(
         record_id=str(cell["record_id"]),
     )
     if completion_path.is_file():
-        _validate_existing_completion(
-            completion_path=completion_path,
-            cell=cell,
-            original_proposal=original,
-            repair_proposal=repair_proposal,
-            repair_authorization=repair_authorization,
-            repository_root=repository_root,
+        completion = read_json(completion_path)
+        reporting = completion.get("reporting_repair")
+        reporting_proposal_sha256 = (
+            reporting.get("repair_proposal_sha256")
+            if isinstance(reporting, Mapping)
+            else None
         )
+        if reporting_proposal_sha256 == direct_repair_proposal.get(
+            "proposal_sha256"
+        ):
+            validate_existing_direct_completion(
+                completion_path=completion_path,
+                cell=cell,
+                original_proposal=original,
+                repair_proposal=direct_repair_proposal,
+                repair_authorization=direct_repair_authorization,
+                repository_root=repository_root,
+            )
+        else:
+            _validate_existing_completion(
+                completion_path=completion_path,
+                cell=cell,
+                original_proposal=original,
+                repair_proposal=repair_proposal,
+                repair_authorization=repair_authorization,
+                repository_root=repository_root,
+            )
         return _mapping(
             "short_circuit_existing_completion",
-            read_json(completion_path),
+            completion,
         )
     _assert_amendment_identity_capacity(
         registry,
@@ -764,7 +838,9 @@ def _execute_or_repair_cell(
         )
     except TypeError as error:
         failure_text = traceback.format_exc()
-        if not is_mappingproxy_completion_failure(failure_text):
+        if not is_short_circuit_mappingproxy_completion_failure(
+            failure_text
+        ):
             raise
         failure_root = Path(failure_log_dir).resolve()
         failure_root.mkdir(parents=True, exist_ok=True)
@@ -778,15 +854,14 @@ def _execute_or_repair_cell(
             )
         )
         failure_path.write_text(failure_text, encoding="utf-8")
-        _finalize_ready_cell_locked(
+        finalize_direct_ready_cell_locked(
             original_proposal_path=original_proposal_path,
-            repair_proposal_path=repair_proposal_path,
-            repair_authorization_path=repair_authorization_path,
+            repair_proposal_path=direct_repair_proposal_path,
+            repair_authorization_path=direct_repair_authorization_path,
             governance_dir=governance_dir,
             execution_dir=execution_dir,
             repository_root=repository_root,
             observed_failure_log_path=failure_path,
-            require_ready=True,
             expected_cell_sha256=str(cell["cell_sha256"]),
         )
         if not completion_path.is_file():
@@ -911,6 +986,8 @@ def execute_gate_a(
     original_authorization_path: Path,
     repair_proposal_path: Path,
     repair_authorization_path: Path,
+    direct_repair_proposal_path: Path,
+    direct_repair_authorization_path: Path,
     governance_dir: Path,
     execution_dir: Path,
     repository_root: Path,
@@ -923,6 +1000,8 @@ def execute_gate_a(
         original,
         repair_proposal,
         repair_authorization,
+        direct_repair_proposal,
+        direct_repair_authorization,
         registry,
     ) = _validated_runtime(
         proposal_dir=proposal_dir,
@@ -930,6 +1009,10 @@ def execute_gate_a(
         original_authorization_path=original_authorization_path,
         repair_proposal_path=repair_proposal_path,
         repair_authorization_path=repair_authorization_path,
+        direct_repair_proposal_path=direct_repair_proposal_path,
+        direct_repair_authorization_path=(
+            direct_repair_authorization_path
+        ),
         governance_dir=governance_dir,
         repository_root=repository_root,
     )
@@ -978,6 +1061,10 @@ def execute_gate_a(
                     original=original,
                     repair_proposal=repair_proposal,
                     repair_authorization=repair_authorization,
+                    direct_repair_proposal=direct_repair_proposal,
+                    direct_repair_authorization=(
+                        direct_repair_authorization
+                    ),
                     cell=cell,
                     registry=registry,
                     execution_dir=Path(execution_dir).resolve(),
@@ -986,6 +1073,12 @@ def execute_gate_a(
                     ).resolve(),
                     repair_authorization_path=Path(
                         repair_authorization_path
+                    ).resolve(),
+                    direct_repair_proposal_path=Path(
+                        direct_repair_proposal_path
+                    ).resolve(),
+                    direct_repair_authorization_path=Path(
+                        direct_repair_authorization_path
                     ).resolve(),
                     original_proposal_path=Path(
                         original_proposal_path
@@ -1552,6 +1645,8 @@ def execute_gate_b(
     original_authorization_path: Path,
     repair_proposal_path: Path,
     repair_authorization_path: Path,
+    direct_repair_proposal_path: Path,
+    direct_repair_authorization_path: Path,
     governance_dir: Path,
     execution_dir: Path,
     repository_root: Path,
@@ -1565,6 +1660,8 @@ def execute_gate_b(
         original,
         _repair_proposal,
         _repair_authorization,
+        _direct_repair_proposal,
+        _direct_repair_authorization,
         registry,
     ) = _validated_runtime(
         proposal_dir=proposal_dir,
@@ -1572,6 +1669,10 @@ def execute_gate_b(
         original_authorization_path=original_authorization_path,
         repair_proposal_path=repair_proposal_path,
         repair_authorization_path=repair_authorization_path,
+        direct_repair_proposal_path=direct_repair_proposal_path,
+        direct_repair_authorization_path=(
+            direct_repair_authorization_path
+        ),
         governance_dir=governance_dir,
         repository_root=repository_root,
     )
@@ -2086,6 +2187,8 @@ def _parser() -> argparse.ArgumentParser:
         "original_authorization",
         "repair_proposal",
         "repair_authorization",
+        "direct_repair_proposal",
+        "direct_repair_authorization",
         "governance_dir",
         "execution_dir",
         "spec",
@@ -2107,6 +2210,8 @@ def _parser() -> argparse.ArgumentParser:
         "original_authorization",
         "repair_proposal",
         "repair_authorization",
+        "direct_repair_proposal",
+        "direct_repair_authorization",
         "governance_dir",
         "execution_dir",
         "repository_root",
@@ -2123,6 +2228,8 @@ def _parser() -> argparse.ArgumentParser:
         "original_authorization",
         "repair_proposal",
         "repair_authorization",
+        "direct_repair_proposal",
+        "direct_repair_authorization",
         "governance_dir",
         "execution_dir",
         "repository_root",
@@ -2147,6 +2254,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             repair_proposal_path=Path(args.repair_proposal),
             repair_authorization_path=Path(
                 args.repair_authorization
+            ),
+            direct_repair_proposal_path=Path(
+                args.direct_repair_proposal
+            ),
+            direct_repair_authorization_path=Path(
+                args.direct_repair_authorization
             ),
             governance_dir=Path(args.governance_dir),
             execution_dir=Path(args.execution_dir),
@@ -2196,7 +2309,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "authorization_sha256": receipt[
                         "authorization_sha256"
                     ],
-                    "expires_at": receipt["expires_at"],
+                    "authorization_scope_end": receipt[
+                        "authorization_scope_end"
+                    ],
                 },
                 ensure_ascii=False,
             )
@@ -2212,6 +2327,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             repair_proposal_path=Path(args.repair_proposal),
             repair_authorization_path=Path(
                 args.repair_authorization
+            ),
+            direct_repair_proposal_path=Path(
+                args.direct_repair_proposal
+            ),
+            direct_repair_authorization_path=Path(
+                args.direct_repair_authorization
             ),
             governance_dir=Path(args.governance_dir),
             execution_dir=Path(args.execution_dir),
@@ -2243,6 +2364,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             repair_proposal_path=Path(args.repair_proposal),
             repair_authorization_path=Path(
                 args.repair_authorization
+            ),
+            direct_repair_proposal_path=Path(
+                args.direct_repair_proposal
+            ),
+            direct_repair_authorization_path=Path(
+                args.direct_repair_authorization
             ),
             governance_dir=Path(args.governance_dir),
             execution_dir=Path(args.execution_dir),

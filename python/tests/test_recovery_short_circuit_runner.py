@@ -12,7 +12,7 @@ if str(TOOLS_ROOT) not in sys.path:
 
 import recovery_short_circuit_runner as short_circuit  # noqa: E402
 from recovery_short_circuit_runner import (  # noqa: E402
-    AUTHORIZATION_CUTOFF,
+    AUTHORIZATION_SCOPE_END,
     GATE_A_IDENTITY_UPPER_BOUND,
     GATE_B_IDENTITY_UPPER_BOUND,
     HARD_RECORD_ORDER,
@@ -54,7 +54,9 @@ def _proposal(tmp_path: Path) -> dict[str, object]:
         "gate_b_admit_count": 1,
         "gate_b_fs_target": 25,
         "gate_b_grid_size_per_record": 100,
-        "authorization_cutoff": AUTHORIZATION_CUTOFF,
+        "authorization_scope_end": AUTHORIZATION_SCOPE_END,
+        "direct_repair_proposal_sha256": "d" * 64,
+        "direct_repair_authorization_sha256": "e" * 64,
         "spec_path": "spec.md",
         "spec_file_sha256": file_sha256(spec),
         "scheduler_path": "scheduler.py",
@@ -95,7 +97,7 @@ def test_budget_is_strictly_below_existing_v13_limit() -> None:
     assert TOTAL_IDENTITY_UPPER_BOUND < V13_IDENTITY_LIMIT
 
 
-def test_authorization_is_bound_to_user_window(
+def test_authorization_is_bound_until_experiment_complete(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -111,7 +113,10 @@ def test_authorization_is_bound_to_user_window(
         repository_root=tmp_path,
     )
     assert receipt["user_authorization_text"] == USER_AUTHORIZATION_TEXT
-    assert receipt["expires_at"] == AUTHORIZATION_CUTOFF
+    assert (
+        receipt["authorization_scope_end"]
+        == AUTHORIZATION_SCOPE_END
+    )
     assert receipt["budget_expansion"] == 0
     assert validate_authorization(
         proposal=proposal,
@@ -119,7 +124,7 @@ def test_authorization_is_bound_to_user_window(
     ) == receipt
 
 
-def test_authorization_after_cutoff_is_rejected(
+def test_authorization_requires_timezone(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -127,16 +132,16 @@ def test_authorization_after_cutoff_is_rejected(
     proposal = _proposal(tmp_path)
     with pytest.raises(
         RecoveryShortCircuitError,
-        match="authorization_outside_window",
+        match="authorization_time_invalid",
     ):
         build_authorization(
             proposal=proposal,
-            granted_at="2026-07-31T20:00:01+08:00",
+            granted_at="2026-07-31T21:50:00",
             repository_root=tmp_path,
         )
 
 
-def test_authorized_receipt_cannot_start_after_cutoff(
+def test_authorized_receipt_remains_valid_after_old_cutoff(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -147,15 +152,10 @@ def test_authorized_receipt_cannot_start_after_cutoff(
         granted_at="2026-07-31T16:30:00+08:00",
         repository_root=tmp_path,
     )
-    with pytest.raises(
-        RecoveryShortCircuitError,
-        match="execution_outside_authorized_window",
-    ):
-        validate_authorization(
-            proposal=proposal,
-            receipt=receipt,
-            execution_time="2026-07-31T20:00:01+08:00",
-        )
+    assert validate_authorization(
+        proposal=proposal,
+        receipt=receipt,
+    ) == receipt
 
 
 def test_source_drift_is_rejected(tmp_path: Path) -> None:
