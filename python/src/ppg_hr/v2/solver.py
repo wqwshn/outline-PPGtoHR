@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field, replace
 from typing import Any, Literal
 
 import numpy as np
@@ -32,7 +32,12 @@ from .algorithm_presets import (
 )
 from .penalty_candidates import (
     PenaltyPolicyObservation,
+    SuppressedProtectedShadowDecision,
+    SuppressedProtectedShadowState,
+    advance_suppressed_protected_shadow,
+    apply_candidate_visibility,
     decide_penalty_policy,
+    finalize_suppressed_protected_shadow,
     penalty_candidate_by_id,
 )
 from .post_motion_dual_reset_runtime import (
@@ -61,6 +66,7 @@ from .recovery_candidates import (
     legacy_recovery_candidate_from_solver_settings,
     recovery_candidate_by_id,
 )
+from .recovery_contracts import canonical_sha256
 from .reference_groups import (
     channel_names_for_group,
     normalise_reference_order,
@@ -69,6 +75,13 @@ from .reference_groups import (
 from .reference_overlap import (
     reference_overlap_mask,
     reference_time_bounds,
+)
+from .rise_candidate_lineage import (
+    LEGACY_RISE_CONFIRMATION_POLICY_ID,
+    RiseCandidateLineageDecision,
+    RiseCandidateLineageState,
+    advance_rise_candidate_lineage,
+    finalize_rise_candidate_lineage,
 )
 from .runtime_policy import V2RuntimePolicy, runtime_policy_from_config
 from .signal_preparation import (
@@ -87,20 +100,61 @@ from .types import V2RunConfig
 
 WindowKind = Literal["rest", "motion", "recovery"]
 
+_SUPPRESSED_PROTECTED_SHADOW_POLICY_ID = "suppressed_protected_shadow_v1"
+_SUPPRESSED_PROTECTED_CONTINUOUS_POLICY_ID = (
+    "suppressed_protected_continuous_visibility_v1"
+)
+_SUPPRESSED_PROTECTED_OWNER_POLICY_IDS = frozenset(
+    {
+        _SUPPRESSED_PROTECTED_SHADOW_POLICY_ID,
+        _SUPPRESSED_PROTECTED_CONTINUOUS_POLICY_ID,
+    }
+)
+
+_SHADOW_ACQUIRE_PROJECTION_EXCLUDED_FIELDS = frozenset(
+    {
+        "smoothed_path_hr_bpm",
+        "final_hr_bpm",
+        "ref_hr_bpm",
+        "source",
+    }
+)
+
+
+def _shadow_acquire_inert_projection(
+    trace_payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Science/state projection frozen immediately before shadow acquisition."""
+
+    projection = {
+        key: value
+        for key, value in trace_payload.items()
+        if not key.startswith("shadow_")
+        and key not in _SHADOW_ACQUIRE_PROJECTION_EXCLUDED_FIELDS
+    }
+    ownership = projection.get("mechanism_target_ownership")
+    if isinstance(ownership, dict):
+        ownership = dict(ownership)
+        ownership.pop("suppressed_protected_shadow", None)
+        projection["mechanism_target_ownership"] = ownership
+    return projection
+
 _MOTION_PENALTY_EDGE_GUARD_HZ = 1.0 / 60.0
 _REACQUIRE_MIN_JUMP_HZ = 20.0 / 60.0
-_REACQUIRE_MIN_AMP_RATIO = 0.45
+_REACQUIRE_MIN_AMP_RATIO = 0.50
 _REACQUIRE_STABLE_HZ = 10.0 / 60.0
 _REACQUIRE_CONFIRM_WINDOWS = 3
 _REACQUIRE_STEP_HZ = 30.0 / 60.0
+_REACQUIRE_REPAIR_RANGE_MARGIN_HZ = 5.0 / 60.0
+_REACQUIRE_PENALTY_EXCLUSION_HZ = 10.0 / 60.0
 _REACQUIRE_LOW_LOCK_MIN_HZ = 50.0 / 60.0
 _REACQUIRE_LOW_LOCK_MAX_HZ = 80.0 / 60.0
 _REACQUIRE_LOW_LOCK_MIN_WINDOWS = 4
 _REACQUIRE_TARGET_MIN_HZ = 90.0 / 60.0
 _REACQUIRE_SUSPICIOUS_HIGH_HZ = 180.0 / 60.0
-_REACQUIRE_MIN_RANGE_UP_MULTIPLIER = 1.5
-_REACQUIRE_MIN_DRIFT_TO_TARGET_RATIO = 0.12
-_REACQUIRE_CONFIRM_DRIFT_STEP_FRACTION = 0.75
+_REACQUIRE_MIN_CANDIDATE_DRIFT_HZ = -1.0 / 60.0
+_REACQUIRE_MIN_LOW_TRACK_DRIFT_TO_TARGET_RATIO = 0.12
+_REACQUIRE_CONFIRM_LOW_TRACK_DRIFT_STEP_FRACTION = 0.75
 _HIGH_LOCK_CONFIRM_WINDOWS = 3
 _HIGH_LOCK_COOLDOWN_WINDOWS = 4
 _HIGH_LOCK_MIN_GAP_HZ = 20.0 / 60.0
@@ -112,6 +166,8 @@ _HIGH_LOCK_DOWN_STEP_HZ = 20.0 / 60.0
 _HIGH_LOCK_UP_STEP_HZ = 3.0 / 60.0
 _MOTION_PENALTY_MIN_EFFECTIVE_CONFIDENCE = 0.9
 _PROTECTION_CHALLENGER_MIN_AMP_RATIO = 0.45
+
+
 @dataclass(frozen=True)
 class SpectrumReacquireDecision:
     hr_hz: float
@@ -123,12 +179,22 @@ class SpectrumReacquireDecision:
     candidate_rejected_reason: str
     action: str
     triggered: bool
+    evidence_route: str = ""
+    candidate_drift_hz: float | None = None
+    low_track_drift_hz: float | None = None
+    required_low_track_drift_hz: float | None = None
+    candidate_bin: int | None = None
+    candidate_source: str = ""
+    observed_candidate_role: str = "none"
+    ownership_trace: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class SpectrumReacquireCandidateDecision:
     candidate_hz: float | None
     rejected_reason: str
+    candidate_bin: int | None = None
+    candidate_source: str = ""
 
 
 @dataclass
@@ -138,6 +204,14 @@ class SpectrumHighLockEscapeState:
     count: int = 0
     age: int = 0
     cooldown: int = 0
+    trace_target_origin_window: int | None = None
+    trace_target_revision_window: int | None = None
+    trace_target_candidate_bin: int | None = None
+    trace_target_source: str = ""
+    trace_last_observed_hz: float | None = None
+    trace_last_observed_bin: int | None = None
+    trace_last_observed_source: str = ""
+    trace_last_observed_role: str = "none"
 
 
 @dataclass(frozen=True)
@@ -155,6 +229,10 @@ class SpectrumHighLockEscapeDecision:
     exit_from_mode: str | None = None
     exit_age: int | None = None
     timeout_windows: int = 0
+    candidate_bin: int | None = None
+    candidate_source: str = ""
+    observed_candidate_role: str = "none"
+    ownership_trace: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -163,6 +241,115 @@ class V2SolverResult:
     err_stats: dict[str, float]
     metadata: dict[str, Any]
     window_table: list[dict[str, Any]]
+
+
+def _ownership_trace_payload(
+    *,
+    mechanism: str,
+    window_id: int,
+    observed_candidate_hz: float | None = None,
+    observed_candidate_bin: int | None = None,
+    observed_candidate_source: str = "",
+    observed_candidate_role: str = "none",
+    owner_before: tuple[int | None, int | None, float | None, int | None, str] = (
+        None,
+        None,
+        None,
+        None,
+        "",
+    ),
+    owner_after: tuple[int | None, int | None, float | None, int | None, str] = (
+        None,
+        None,
+        None,
+        None,
+        "",
+    ),
+    ownership_event: str = "none",
+    lineage_action: str = "none",
+) -> dict[str, Any]:
+    before_origin, before_revision, before_hz, before_bin, before_source = owner_before
+    after_origin, after_revision, after_hz, after_bin, after_source = owner_after
+    return {
+        "window_id": int(window_id),
+        "mechanism": str(mechanism),
+        "observed_candidate_bpm": (
+            None if observed_candidate_hz is None else float(observed_candidate_hz) * 60.0
+        ),
+        "observed_candidate_bin": (
+            None if observed_candidate_bin is None else int(observed_candidate_bin)
+        ),
+        "observed_candidate_source": str(observed_candidate_source),
+        "observed_candidate_role": str(observed_candidate_role),
+        "owner_before_exists": before_hz is not None,
+        "owner_before_origin_window": before_origin,
+        "owner_before_revision_window": before_revision,
+        "owner_before_candidate_bpm": (
+            None if before_hz is None else float(before_hz) * 60.0
+        ),
+        "owner_before_candidate_bin": before_bin,
+        "owner_before_source": str(before_source),
+        "owner_after_exists": after_hz is not None,
+        "owner_after_origin_window": after_origin,
+        "owner_after_revision_window": after_revision,
+        "owner_after_candidate_bpm": (
+            None if after_hz is None else float(after_hz) * 60.0
+        ),
+        "owner_after_candidate_bin": after_bin,
+        "owner_after_source": str(after_source),
+        "ownership_event": str(ownership_event),
+        "lineage_action": str(lineage_action),
+    }
+
+
+def _ownership_rank_bin(payload: dict[str, Any]) -> int | None:
+    """Return the exact bin for the decision's retained target, if present."""
+
+    if payload.get("owner_after_exists"):
+        value = payload.get("owner_after_candidate_bin")
+    elif payload.get("owner_before_exists"):
+        value = payload.get("owner_before_candidate_bin")
+    else:
+        value = None
+    return None if value is None else int(value)
+
+
+def _decorate_ownership_trace(
+    payload: dict[str, Any],
+    *,
+    path: str,
+    window_kind: WindowKind,
+) -> dict[str, Any]:
+    """Add the runtime source namespace without changing the decision payload."""
+
+    decorated = dict(payload)
+    runtime_path = str(path)
+    active_view = {
+        "adaptive": "after",
+        "fft": "fft_double_hamming",
+        "fft_post_motion_reset": "fft_double_hamming",
+    }.get(runtime_path, "")
+    for field_name in (
+        "observed_candidate_source",
+        "owner_before_source",
+        "owner_after_source",
+    ):
+        source = str(decorated.get(field_name) or "")
+        decorated[field_name] = (
+            f"runtime.{runtime_path}.{source}" if source else ""
+        )
+    decorated["path"] = runtime_path
+    decorated["window_kind"] = str(window_kind)
+    decorated["observed_candidate_active_view"] = (
+        active_view if decorated.get("observed_candidate_bin") is not None else ""
+    )
+    decorated["owner_before_active_view"] = (
+        active_view if decorated.get("owner_before_exists") else ""
+    )
+    decorated["owner_after_active_view"] = (
+        active_view if decorated.get("owner_after_exists") else ""
+    )
+    return decorated
 
 
 def _process_spectrum_with_trace(
@@ -179,9 +366,13 @@ def _process_spectrum_with_trace(
     window_kind: WindowKind,
     reacquire_state: SpectrumReacquireState | None = None,
     reacquire_enable: bool = False,
+    rise_lineage_state: RiseCandidateLineageState | None = None,
+    rise_lineage_enable: bool = False,
+    rise_confirmation_policy_id: str = LEGACY_RISE_CONFIRMATION_POLICY_ID,
     high_lock_state: SpectrumHighLockEscapeState | None = None,
     high_lock_enable: bool = False,
     high_lock_params: dict[str, float | int | str] | None = None,
+    suppressed_shadow_state: SuppressedProtectedShadowState | None = None,
     penalty_policy_id: str = "legacy_config",
     penalty_confidence_enable: bool = False,
 ) -> tuple[float, SpectrumTrackingTrace]:
@@ -198,9 +389,13 @@ def _process_spectrum_with_trace(
         window_kind=window_kind,
         reacquire_state=reacquire_state,
         reacquire_enable=reacquire_enable,
+        rise_lineage_state=rise_lineage_state,
+        rise_lineage_enable=rise_lineage_enable,
+        rise_confirmation_policy_id=rise_confirmation_policy_id,
         high_lock_state=high_lock_state,
         high_lock_enable=high_lock_enable,
         high_lock_params=high_lock_params,
+        suppressed_shadow_state=suppressed_shadow_state,
         penalty_policy_id=penalty_policy_id,
         penalty_confidence_enable=penalty_confidence_enable,
         implementation=_process_spectrum_with_trace_impl,
@@ -221,9 +416,13 @@ def _process_spectrum_with_trace_impl(
     window_kind: WindowKind,
     reacquire_state: SpectrumReacquireState | None = None,
     reacquire_enable: bool = False,
+    rise_lineage_state: RiseCandidateLineageState | None = None,
+    rise_lineage_enable: bool = False,
+    rise_confirmation_policy_id: str = LEGACY_RISE_CONFIRMATION_POLICY_ID,
     high_lock_state: SpectrumHighLockEscapeState | None = None,
     high_lock_enable: bool = False,
     high_lock_params: dict[str, float | int | str] | None = None,
+    suppressed_shadow_state: SuppressedProtectedShadowState | None = None,
     penalty_policy_id: str = "legacy_config",
     penalty_confidence_enable: bool = False,
 ) -> tuple[float, SpectrumTrackingTrace]:
@@ -271,9 +470,7 @@ def _process_spectrum_with_trace_impl(
         else None
     )
     recovery_reacquire_active = bool(
-        reacquire_enable
-        and reacquire_state is not None
-        and reacquire_state.mode == "reacquiring"
+        reacquire_enable and reacquire_state is not None and reacquire_state.mode == "reacquiring"
     )
     penalty_policy_decision = decide_penalty_policy(
         runtime_penalty_candidate,
@@ -292,9 +489,7 @@ def _process_spectrum_with_trace_impl(
             recovery_reacquire_active=recovery_reacquire_active,
         ),
     )
-    effective_penalty_width = (
-        penalty_policy_decision.effective_half_width_hz
-    )
+    effective_penalty_width = penalty_policy_decision.effective_half_width_hz
     penalty_state = _spectrum_penalty_state(
         freqs,
         (),
@@ -316,9 +511,7 @@ def _process_spectrum_with_trace_impl(
                 runtime_penalty_candidate,
                 _penalty_policy_observation(
                     window_kind=window_kind,
-                    configured_half_width_hz=float(
-                        params.spec_penalty_width
-                    ),
+                    configured_half_width_hz=float(params.spec_penalty_width),
                     fs=fs,
                     window_samples=len(sig_in),
                     previous_hz=previous_hz,
@@ -326,20 +519,12 @@ def _process_spectrum_with_trace_impl(
                     times_idx=times_idx,
                     raw_candidate_freqs=freqs[raw_order],
                     raw_candidate_amps=raw_amps[raw_order],
-                    motion_reference_confidence=(
-                        observed_motion_confidence
-                    ),
-                    base_protection_half_width_hz=(
-                        base_protection_half_width_hz
-                    ),
-                    recovery_reacquire_active=(
-                        recovery_reacquire_active
-                    ),
+                    motion_reference_confidence=(observed_motion_confidence),
+                    base_protection_half_width_hz=(base_protection_half_width_hz),
+                    recovery_reacquire_active=(recovery_reacquire_active),
                 ),
             )
-            effective_penalty_width = (
-                penalty_policy_decision.effective_half_width_hz
-            )
+            effective_penalty_width = penalty_policy_decision.effective_half_width_hz
             if penalty_confidence_enable:
                 penalty_confidence = observed_motion_confidence
                 penalty_centers_hz = _motion_penalty_centers(
@@ -357,12 +542,8 @@ def _process_spectrum_with_trace_impl(
             )
             protection_half_width_hz = (
                 None
-                if penalty_policy_decision.protection_half_width_bpm
-                is None
-                else (
-                    penalty_policy_decision.protection_half_width_bpm
-                    / 60.0
-                )
+                if penalty_policy_decision.protection_half_width_bpm is None
+                else (penalty_policy_decision.protection_half_width_bpm / 60.0)
             )
             penalty_state = _spectrum_penalty_state(
                 freqs,
@@ -380,9 +561,18 @@ def _process_spectrum_with_trace_impl(
 
     def _orders_for_state(
         state: SpectrumPenaltyState,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        *,
+        released_peak_index: int | None = None,
+    ) -> tuple[
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        bool,
+    ]:
         scored = raw_amps * state.weights
-        selectable, removed = _preferred_candidate_partition(
+        hard_selectable, hard_removed = _preferred_candidate_partition(
             freqs,
             peak_indices,
             penalty_centers_hz=penalty_centers_hz,
@@ -395,17 +585,72 @@ def _process_spectrum_with_trace_impl(
                 previous_hz is not None and penalty_applied and window_kind == "motion"
             ),
         )
+        visibility = apply_candidate_visibility(
+            runtime_penalty_candidate.candidate_visibility_mode,
+            all_peak_indices=tuple(int(value) for value in peak_indices),
+            hard_selectable_indices=tuple(
+                int(value) for value in hard_selectable
+            ),
+            hard_removed_indices=tuple(int(value) for value in hard_removed),
+            released_peak_index=released_peak_index,
+        )
+        selectable = np.asarray(visibility.selectable_indices, dtype=int)
+        removed = np.asarray(visibility.removed_indices, dtype=int)
+        would_remove = np.asarray(visibility.would_remove_indices, dtype=int)
         preferred_order = selectable[np.argsort(-scored[selectable], kind="stable")]
         full_order = peak_indices[np.argsort(-scored[peak_indices], kind="stable")]
-        return scored, preferred_order, full_order, removed
+        return (
+            scored,
+            preferred_order,
+            full_order,
+            removed,
+            would_remove,
+            visibility.hard_removal_applied,
+        )
 
-    scored_amps, order, all_order, removed_peak_indices = _orders_for_state(
-        penalty_state
-    )
+    (
+        scored_amps,
+        order,
+        all_order,
+        removed_peak_indices,
+        would_remove_peak_indices,
+        hard_removal_applied,
+    ) = _orders_for_state(penalty_state)
+    shadow_decision: SuppressedProtectedShadowDecision | None = None
+    if (
+        penalty_policy_id in _SUPPRESSED_PROTECTED_OWNER_POLICY_IDS
+        and suppressed_shadow_state is not None
+    ):
+        shadow_decision = advance_suppressed_protected_shadow(
+            suppressed_shadow_state,
+            window_id=times_idx,
+            window_kind=window_kind,
+            candidate_bins=tuple(int(value) for value in peak_indices),
+            candidate_bpms=tuple(float(freqs[int(value)]) * 60.0 for value in peak_indices),
+            would_remove_bins=tuple(int(value) for value in would_remove_peak_indices),
+            continuous_visibility=(
+                penalty_policy_id == _SUPPRESSED_PROTECTED_CONTINUOUS_POLICY_ID
+            ),
+        )
+        if shadow_decision.released_candidate_bin is not None:
+            (
+                scored_amps,
+                order,
+                all_order,
+                removed_peak_indices,
+                would_remove_peak_indices,
+                hard_removal_applied,
+            ) = _orders_for_state(
+                penalty_state,
+                released_peak_index=shadow_decision.released_candidate_bin,
+            )
     selected_peak_idx: int | None = None
     protection_suppressed = False
     protection_suppression_reason = ""
     protection_challenger_hz: float | None = None
+    suppressed_protected_target_idx: int | None = None
+    same_window_visibility_active = False
+    same_window_challenger_selected_idx: int | None = None
     candidate_source = "raw_local_peaks"
 
     if previous_hz is not None:
@@ -460,18 +705,93 @@ def _process_spectrum_with_trace_impl(
                 current_peak_idx=int(selected_peak_idx),
             )
             if challenger_idx is not None:
+                suppressed_protected_target_idx = int(selected_peak_idx)
                 penalty_state = unprotected_state
                 (
                     scored_amps,
                     order,
                     all_order,
                     removed_peak_indices,
-                ) = _orders_for_state(penalty_state)
+                    would_remove_peak_indices,
+                    hard_removal_applied,
+                ) = _orders_for_state(
+                    penalty_state,
+                    released_peak_index=(
+                        None
+                        if shadow_decision is None
+                        else shadow_decision.released_candidate_bin
+                    ),
+                )
                 selected_peak_idx = int(challenger_idx)
                 protection_suppressed = True
                 protection_suppression_reason = "motion_core_challenger"
                 protection_challenger_hz = float(freqs[selected_peak_idx])
                 candidate_source = "protection_suppressed"
+
+    if (
+        penalty_policy_id == "suppressed_protected_same_window_visibility_v1"
+        and protection_suppressed
+        and suppressed_protected_target_idx is not None
+    ):
+        same_window_challenger_selected_idx = selected_peak_idx
+        (
+            scored_amps,
+            order,
+            all_order,
+            removed_peak_indices,
+            would_remove_peak_indices,
+            hard_removal_applied,
+        ) = _orders_for_state(
+            penalty_state,
+            released_peak_index=suppressed_protected_target_idx,
+        )
+        same_window_visibility_active = bool(
+            suppressed_protected_target_idx in set(order.tolist())
+            and selected_peak_idx == same_window_challenger_selected_idx
+        )
+
+    pending_shadow_acquire = bool(
+        penalty_policy_id in _SUPPRESSED_PROTECTED_OWNER_POLICY_IDS
+        and suppressed_shadow_state is not None
+        and protection_suppressed
+        and suppressed_protected_target_idx is not None
+        and not suppressed_shadow_state.active
+        and (
+            shadow_decision is None
+            or not shadow_decision.owner_before_exists
+        )
+    )
+
+    rise_lineage_decision = RiseCandidateLineageDecision(
+        selected_peak_idx=selected_peak_idx,
+        candidate_hz=None,
+        count=0,
+        age=0,
+        reason="disabled",
+        reanchored=False,
+    )
+    if rise_lineage_enable and rise_lineage_state is not None:
+        rise_lineage_decision = advance_rise_candidate_lineage(
+            state=rise_lineage_state,
+            freqs=freqs,
+            candidate_order=order,
+            selected_peak_idx=selected_peak_idx,
+            previous_hz=previous_hz,
+            tracking=tracking,
+            window_kind=window_kind,
+            motion_fundamental_hz=(
+                penalty_centers_hz[0] if harmonic_penalty_applied else None
+            ),
+            harmonic_guard_half_width_hz=effective_penalty_width,
+            raw_amplitudes=raw_amps,
+            raw_candidate_order=raw_order,
+            selected_candidate_source=candidate_source,
+            window_id=times_idx,
+            confirmation_policy_id=rise_confirmation_policy_id,
+        )
+        if rise_lineage_decision.reanchored:
+            selected_peak_idx = rise_lineage_decision.selected_peak_idx
+            candidate_source = "rise_candidate_lineage"
 
     ordered_freqs = freqs[order]
     ordered_amps = scored_amps[order]
@@ -497,6 +817,15 @@ def _process_spectrum_with_trace_impl(
         else:
             candidate_source = "held_previous"
 
+        if (
+            rise_lineage_decision.reanchored
+            and rise_lineage_decision.candidate_hz is not None
+        ):
+            tracked_hz = float(rise_lineage_decision.candidate_hz)
+            candidate_source = "rise_candidate_lineage"
+            if rise_lineage_decision.selected_peak_idx is None:
+                selected_rank = 0
+
         diff_hz = tracked_hz - previous_hz
         if diff_hz >= 0.0:
             limit_hz = float(tracking.limit_up_bpm) / 60.0
@@ -521,14 +850,13 @@ def _process_spectrum_with_trace_impl(
         enabled=bool(reacquire_enable),
         window_kind=window_kind,
         penalty_centers_hz=penalty_centers_hz,
-        min_jump_hz=max(
+        window_id=times_idx,
+        max_jump_hz=max(
             _REACQUIRE_MIN_JUMP_HZ,
-            float(tracking.range_up_hz) * _REACQUIRE_MIN_RANGE_UP_MULTIPLIER,
+            float(tracking.range_up_hz) + _REACQUIRE_REPAIR_RANGE_MARGIN_HZ,
         ),
-        min_confirm_drift_hz=max(
-            float(tracking.step_up_bpm)
-            * _REACQUIRE_CONFIRM_DRIFT_STEP_FRACTION
-            / 60.0,
+        min_low_track_drift_hz=max(
+            float(tracking.step_up_bpm) * _REACQUIRE_CONFIRM_LOW_TRACK_DRIFT_STEP_FRACTION / 60.0,
             0.0,
         ),
     )
@@ -536,7 +864,9 @@ def _process_spectrum_with_trace_impl(
     if reacquire_decision.triggered or reacquire_decision.mode == "reacquiring":
         if reacquire_decision.candidate_hz is not None:
             tracked_hz = reacquire_decision.candidate_hz
-            raw_rank = np.flatnonzero(np.isclose(freqs[raw_order], reacquire_decision.candidate_hz))
+            raw_rank = np.flatnonzero(
+                np.isclose(freqs[raw_order], reacquire_decision.candidate_hz)
+            )
             selected_rank = int(raw_rank[0]) + 1 if raw_rank.size else selected_rank
             candidate_source = "reacquire"
 
@@ -554,6 +884,7 @@ def _process_spectrum_with_trace_impl(
         selected_peak_rank=selected_rank,
         candidate_source=candidate_source,
         penalty_centers_hz=penalty_centers_hz,
+        window_id=times_idx,
         protection_applied=bool(protected_penalty_state.protected_mask.any()),
         protected_penalty_overlap=bool(protected_penalty_state.protected_penalty_overlap),
     )
@@ -562,15 +893,20 @@ def _process_spectrum_with_trace_impl(
     if high_lock_decision.triggered or high_lock_decision.mode == "reacquiring":
         if high_lock_decision.candidate_hz is not None:
             tracked_hz = high_lock_decision.candidate_hz
-            raw_rank = np.flatnonzero(np.isclose(freqs[raw_order], high_lock_decision.candidate_hz))
+            raw_rank = np.flatnonzero(
+                np.isclose(freqs[raw_order], high_lock_decision.candidate_hz)
+            )
             selected_rank = int(raw_rank[0]) + 1 if raw_rank.size else selected_rank
             candidate_source = "high_lock_escape"
 
     trace_protection_state = protected_penalty_state
     protection_has_corridor = bool(trace_protection_state.protected_mask.any())
     removed_candidate_peaks_bpm = tuple(
+        float(freqs[int(peak_idx)]) * 60.0 for peak_idx in removed_peak_indices
+    )
+    would_remove_candidate_peaks_bpm = tuple(
         float(freqs[int(peak_idx)]) * 60.0
-        for peak_idx in removed_peak_indices
+        for peak_idx in would_remove_peak_indices
     )
     if not params.spec_penalty_enable or not enable_penalty:
         history_protection_status = "penalty_disabled"
@@ -587,6 +923,8 @@ def _process_spectrum_with_trace_impl(
         tracking_nonadoption_reason = "high_lock_escape_override"
     elif reacquire_decision.triggered or reacquire_decision.mode == "reacquiring":
         tracking_nonadoption_reason = "motion_reacquire_override"
+    elif rise_lineage_decision.reanchored:
+        tracking_nonadoption_reason = "rise_candidate_lineage_reanchor"
     elif candidate_source == "held_previous":
         tracking_nonadoption_reason = "no_reachable_preferred_candidate"
     elif not np.isclose(limited_hz, tracked_hz):
@@ -635,26 +973,128 @@ def _process_spectrum_with_trace_impl(
         harmonic_penalty_applied=bool(harmonic_penalty_applied),
         penalty_policy_id=str(penalty_policy_id),
         penalty_width_source=penalty_policy_decision.width_source,
-        penalty_effective_half_width_bpm=(
-            effective_penalty_width * 60.0
-        ),
+        penalty_effective_half_width_bpm=(effective_penalty_width * 60.0),
         penalty_candidate_exclusion_half_width_bpm=(
             penalty_policy_decision.candidate_exclusion_half_width_hz * 60.0
         ),
         penalty_resolution_hz=penalty_policy_decision.resolution_hz,
-        history_protection_confidence=(
-            penalty_policy_decision.history_confidence
-        ),
-        history_protection_status=(
-            history_protection_status
-        ),
+        history_protection_confidence=(penalty_policy_decision.history_confidence),
+        history_protection_status=(history_protection_status),
         unpenalized_previous_support_visible=(
             penalty_policy_decision.unpenalized_previous_support_visible
         ),
-        penalty_removed_candidate_peaks_bpm=(
-            removed_candidate_peaks_bpm
+        penalty_removed_candidate_peaks_bpm=(removed_candidate_peaks_bpm),
+        candidate_visibility_mode=(
+            runtime_penalty_candidate.candidate_visibility_mode.value
+        ),
+        penalty_would_remove_candidate_peak_bins=tuple(
+            int(value) for value in would_remove_peak_indices
+        ),
+        penalty_would_remove_candidate_peaks_bpm=(
+            would_remove_candidate_peaks_bpm
+        ),
+        penalty_hard_removal_applied=bool(hard_removal_applied),
+        same_window_visibility_active=bool(same_window_visibility_active),
+        same_window_protected_target_bin=(
+            suppressed_protected_target_idx
+            if same_window_visibility_active
+            else None
+        ),
+        same_window_protected_target_bpm=(
+            float(freqs[suppressed_protected_target_idx]) * 60.0
+            if same_window_visibility_active
+            and suppressed_protected_target_idx is not None
+            else None
+        ),
+        same_window_challenger_selected_bin=(
+            same_window_challenger_selected_idx
+            if same_window_visibility_active
+            else None
+        ),
+        same_window_challenger_selected_bpm=(
+            float(freqs[same_window_challenger_selected_idx]) * 60.0
+            if same_window_visibility_active
+            and same_window_challenger_selected_idx is not None
+            else None
+        ),
+        same_window_candidate_order_bins=(
+            tuple(int(value) for value in order)
+            if penalty_policy_id
+            == "suppressed_protected_same_window_visibility_v1"
+            else ()
+        ),
+        same_window_candidate_order_bpms=(
+            tuple(float(freqs[int(value)]) * 60.0 for value in order)
+            if penalty_policy_id
+            == "suppressed_protected_same_window_visibility_v1"
+            else ()
+        ),
+        shadow_owner_event=(
+            "inactive" if shadow_decision is None else shadow_decision.owner_event
+        ),
+        shadow_owner_reason=(
+            "no_owner" if shadow_decision is None else shadow_decision.owner_reason
+        ),
+        shadow_owner_before_exists=(
+            False if shadow_decision is None else shadow_decision.owner_before_exists
+        ),
+        shadow_owner_after_exists=(
+            False if shadow_decision is None else shadow_decision.owner_after_exists
+        ),
+        shadow_owner_origin_window=(
+            None if shadow_decision is None else shadow_decision.owner_origin_window
+        ),
+        shadow_owner_origin_bin=(
+            None if shadow_decision is None else shadow_decision.owner_origin_bin
+        ),
+        shadow_owner_origin_bpm=(
+            None if shadow_decision is None else shadow_decision.owner_origin_bpm
+        ),
+        shadow_owner_age=(0 if shadow_decision is None else shadow_decision.owner_age),
+        shadow_owner_current_window=(
+            None if shadow_decision is None else shadow_decision.owner_current_window
+        ),
+        shadow_owner_current_bin=(
+            None if shadow_decision is None else shadow_decision.owner_current_bin
+        ),
+        shadow_owner_current_bpm=(
+            None if shadow_decision is None else shadow_decision.owner_current_bpm
+        ),
+        shadow_owner_match_result=(
+            "not_requested"
+            if shadow_decision is None
+            else shadow_decision.owner_match_result
+        ),
+        shadow_released_candidate_bin=(
+            None if shadow_decision is None else shadow_decision.released_candidate_bin
+        ),
+        shadow_released_candidate_bpm=(
+            None if shadow_decision is None else shadow_decision.released_candidate_bpm
         ),
         tracking_nonadoption_reason=tracking_nonadoption_reason,
+        rise_lineage_candidate_bpm=(
+            None
+            if rise_lineage_decision.candidate_hz is None
+            else rise_lineage_decision.candidate_hz * 60.0
+        ),
+        rise_lineage_count=int(rise_lineage_decision.count),
+        rise_lineage_age=int(rise_lineage_decision.age),
+        rise_lineage_age_semantics=(
+            "legacy_decision_compatibility"
+            if rise_lineage_decision.confirmation.policy_id
+            == LEGACY_RISE_CONFIRMATION_POLICY_ID
+            else "formal_owner_motion_windows"
+        ),
+        rise_lineage_reason=rise_lineage_decision.reason,
+        rise_lineage_reanchored=bool(rise_lineage_decision.reanchored),
+        rise_confirmation_policy_id=rise_lineage_decision.confirmation.policy_id,
+        rise_confirmation_action=rise_lineage_decision.confirmation.action,
+        rise_confirmation_reason=rise_lineage_decision.confirmation.reason,
+        rise_confirmation_observation=(
+            {}
+            if rise_lineage_decision.observation is None
+            else asdict(rise_lineage_decision.observation)
+        ),
         reacquire_mode=reacquire_decision.mode,
         reacquire_candidate_bpm=(
             None
@@ -667,6 +1107,22 @@ def _process_spectrum_with_trace_impl(
         reacquire_candidate_rejected_reason=reacquire_decision.candidate_rejected_reason,
         reacquire_action=reacquire_decision.action,
         reacquire_triggered=bool(reacquire_decision.triggered),
+        reacquire_evidence_route=reacquire_decision.evidence_route,
+        reacquire_candidate_drift_bpm=(
+            None
+            if reacquire_decision.candidate_drift_hz is None
+            else reacquire_decision.candidate_drift_hz * 60.0
+        ),
+        reacquire_low_track_drift_bpm=(
+            None
+            if reacquire_decision.low_track_drift_hz is None
+            else reacquire_decision.low_track_drift_hz * 60.0
+        ),
+        reacquire_required_low_track_drift_bpm=(
+            None
+            if reacquire_decision.required_low_track_drift_hz is None
+            else reacquire_decision.required_low_track_drift_hz * 60.0
+        ),
         high_lock_mode=high_lock_decision.mode,
         high_lock_candidate_bpm=(
             None
@@ -685,14 +1141,11 @@ def _process_spectrum_with_trace_impl(
         high_lock_gate_mode=str(high_lock_settings["gate_mode"]),
         high_lock_effective_gap_bpm=max(
             float(high_lock_settings["min_gap_hz"]),
-            float(high_lock_input_hz)
-            * float(high_lock_settings["relative_gap_ratio"]),
+            float(high_lock_input_hz) * float(high_lock_settings["relative_gap_ratio"]),
         )
         * 60.0,
         high_lock_age=0 if high_lock_state is None else int(high_lock_state.age),
-        high_lock_timeout_windows=int(
-            high_lock_decision.timeout_windows
-        ),
+        high_lock_timeout_windows=int(high_lock_decision.timeout_windows),
         high_lock_exit_from_mode=high_lock_decision.exit_from_mode,
         high_lock_exit_age=high_lock_decision.exit_age,
         high_lock_true_rise_guard=(
@@ -700,6 +1153,76 @@ def _process_spectrum_with_trace_impl(
         ),
         high_lock_triggered=bool(high_lock_decision.triggered),
     )
+    trace.mechanism_target_ownership["low"] = _decorate_ownership_trace(
+        reacquire_decision.ownership_trace
+        or _ownership_trace_payload(mechanism="low", window_id=times_idx),
+        path=path,
+        window_kind=window_kind,
+    )
+    trace.mechanism_target_ownership["high"] = _decorate_ownership_trace(
+        high_lock_decision.ownership_trace
+        or _ownership_trace_payload(mechanism="high", window_id=times_idx),
+        path=path,
+        window_kind=window_kind,
+    )
+    trace.mechanism_target_ownership["rise"] = _decorate_ownership_trace(
+        rise_lineage_decision.ownership_trace
+        or _ownership_trace_payload(mechanism="rise", window_id=times_idx),
+        path=path,
+        window_kind=window_kind,
+    )
+    if pending_shadow_acquire:
+        inert_projection_sha256 = canonical_sha256(
+            _shadow_acquire_inert_projection(trace.to_dict())
+        )
+        if suppressed_shadow_state is None or suppressed_protected_target_idx is None:
+            raise RuntimeError("shadow_acquire_identity_missing")
+        shadow_decision = advance_suppressed_protected_shadow(
+            suppressed_shadow_state,
+            window_id=times_idx,
+            window_kind=window_kind,
+            candidate_bins=tuple(int(value) for value in peak_indices),
+            candidate_bpms=tuple(
+                float(freqs[int(value)]) * 60.0 for value in peak_indices
+            ),
+            would_remove_bins=tuple(int(value) for value in would_remove_peak_indices),
+            protection_suppressed=True,
+            protected_target_bin=suppressed_protected_target_idx,
+            protected_target_bpm=(
+                float(freqs[suppressed_protected_target_idx]) * 60.0
+            ),
+            continuous_visibility=(
+                penalty_policy_id == _SUPPRESSED_PROTECTED_CONTINUOUS_POLICY_ID
+            ),
+        )
+        if shadow_decision.owner_event != "acquire":
+            raise RuntimeError("shadow_acquire_transition_missing")
+        trace.shadow_owner_event = shadow_decision.owner_event
+        trace.shadow_owner_reason = shadow_decision.owner_reason
+        trace.shadow_owner_before_exists = shadow_decision.owner_before_exists
+        trace.shadow_owner_after_exists = shadow_decision.owner_after_exists
+        trace.shadow_owner_origin_window = shadow_decision.owner_origin_window
+        trace.shadow_owner_origin_bin = shadow_decision.owner_origin_bin
+        trace.shadow_owner_origin_bpm = shadow_decision.owner_origin_bpm
+        trace.shadow_owner_age = shadow_decision.owner_age
+        trace.shadow_owner_current_window = shadow_decision.owner_current_window
+        trace.shadow_owner_current_bin = shadow_decision.owner_current_bin
+        trace.shadow_owner_current_bpm = shadow_decision.owner_current_bpm
+        trace.shadow_owner_match_result = shadow_decision.owner_match_result
+        trace.shadow_released_candidate_bin = shadow_decision.released_candidate_bin
+        trace.shadow_released_candidate_bpm = shadow_decision.released_candidate_bpm
+        trace.mechanism_target_ownership["suppressed_protected_shadow"] = asdict(
+            shadow_decision
+        )
+        if canonical_sha256(
+            _shadow_acquire_inert_projection(trace.to_dict())
+        ) != inert_projection_sha256:
+            raise RuntimeError("shadow_acquire_changed_science_projection")
+        trace.shadow_acquire_inert_projection_sha256 = inert_projection_sha256
+    if shadow_decision is not None and shadow_decision.owner_event != "inactive":
+        trace.mechanism_target_ownership["suppressed_protected_shadow"] = asdict(
+            shadow_decision
+        )
     return limited_hz, trace
 
 
@@ -719,41 +1242,25 @@ def _penalty_policy_observation(
     recovery_reacquire_active: bool,
 ) -> PenaltyPolicyObservation:
     amplitudes = np.asarray(raw_candidate_amps, dtype=float)
-    finite_positive = amplitudes[
-        np.isfinite(amplitudes) & (amplitudes > 0.0)
-    ]
-    max_amp = (
-        float(np.max(finite_positive))
-        if finite_positive.size
-        else 0.0
-    )
-    amp_ratios = tuple(
-        0.0 if max_amp <= 0.0 else float(value) / max_amp
-        for value in amplitudes
-    )
+    finite_positive = amplitudes[np.isfinite(amplitudes) & (amplitudes > 0.0)]
+    max_amp = float(np.max(finite_positive)) if finite_positive.size else 0.0
+    amp_ratios = tuple(0.0 if max_amp <= 0.0 else float(value) / max_amp for value in amplitudes)
     history = np.asarray(history_arr, dtype=float)[: max(0, times_idx)]
     recent = tuple(
-        float(value) * 60.0
-        for value in history[-3:]
-        if np.isfinite(value) and value > 0.0
+        float(value) * 60.0 for value in history[-3:] if np.isfinite(value) and value > 0.0
     )
     return PenaltyPolicyObservation(
         window_kind=window_kind,
         configured_half_width_hz=float(configured_half_width_hz),
         fs_hz=float(fs),
         window_samples=int(window_samples),
-        previous_track_bpm=(
-            None if previous_hz is None else float(previous_hz) * 60.0
-        ),
+        previous_track_bpm=(None if previous_hz is None else float(previous_hz) * 60.0),
         recent_track_bpm=recent,
         unpenalized_candidate_bpm=tuple(
-            float(value) * 60.0
-            for value in np.asarray(raw_candidate_freqs, dtype=float)
+            float(value) * 60.0 for value in np.asarray(raw_candidate_freqs, dtype=float)
         ),
         unpenalized_candidate_amp_ratio=amp_ratios,
-        motion_reference_confidence=float(
-            motion_reference_confidence
-        ),
+        motion_reference_confidence=float(motion_reference_confidence),
         base_corridor_half_width_bpm=(
             None
             if base_protection_half_width_hz is None
@@ -867,7 +1374,7 @@ def _has_local_peak_near(
     return bool(np.any(np.abs(peak_freqs - float(target_hz)) <= width))
 
 
-def _apply_motion_reacquire(
+def _apply_motion_reacquire_core(
     *,
     freqs: np.ndarray,
     raw_amps: np.ndarray,
@@ -879,7 +1386,8 @@ def _apply_motion_reacquire(
     window_kind: WindowKind,
     penalty_centers_hz: tuple[float, ...] = (),
     min_jump_hz: float = _REACQUIRE_MIN_JUMP_HZ,
-    min_confirm_drift_hz: float = 0.0,
+    max_jump_hz: float | None = None,
+    min_low_track_drift_hz: float = 0.0,
 ) -> SpectrumReacquireDecision:
     if state is None or not enabled:
         return SpectrumReacquireDecision(
@@ -918,7 +1426,8 @@ def _apply_motion_reacquire(
     if state.mode != "reacquiring" and state.low_lock_count < _REACQUIRE_LOW_LOCK_MIN_WINDOWS:
         state.mode = "locked"
         state.candidate_hz = None
-        state.challenge_start_hz = None
+        state.challenge_candidate_start_hz = None
+        state.challenge_low_track_start_hz = None
         state.count = 0
         return SpectrumReacquireDecision(
             legacy_hz,
@@ -932,66 +1441,132 @@ def _apply_motion_reacquire(
             False,
         )
 
-    candidate_decision = _strongest_reacquire_candidate_hz(
-        freqs=freqs,
-        raw_amps=raw_amps,
-        raw_order=raw_order,
-        previous_hz=float(previous_hz),
-        penalty_centers_hz=penalty_centers_hz,
-        min_jump_hz=min_jump_hz,
+    continuation_decision = SpectrumReacquireCandidateDecision(None, "")
+    if state.mode == "reacquiring" and state.candidate_hz is not None:
+        continuation_decision = _strongest_reacquire_support_hz(
+            freqs=freqs,
+            raw_amps=raw_amps,
+            raw_order=raw_order,
+            target_hz=float(state.candidate_hz),
+            settings={
+                "min_amp_ratio": _REACQUIRE_MIN_AMP_RATIO,
+                "candidate_stable_hz": _REACQUIRE_STABLE_HZ,
+            },
+            penalty_centers_hz=penalty_centers_hz,
+            penalty_exclusion_hz=_REACQUIRE_PENALTY_EXCLUSION_HZ,
+        )
+    continuation_hz = continuation_decision.candidate_hz
+    candidate_decision = (
+        SpectrumReacquireCandidateDecision(
+            float(state.candidate_hz),
+            continuation_decision.rejected_reason,
+            candidate_bin=continuation_decision.candidate_bin,
+            candidate_source=continuation_decision.candidate_source,
+        )
+        if continuation_hz is not None
+        else _strongest_reacquire_candidate_hz(
+            freqs=freqs,
+            raw_amps=raw_amps,
+            raw_order=raw_order,
+            previous_hz=float(previous_hz),
+            penalty_centers_hz=penalty_centers_hz,
+            min_jump_hz=min_jump_hz,
+            max_jump_hz=max_jump_hz,
+        )
+    )
+    observed_decision = continuation_decision if continuation_hz is not None else candidate_decision
+    state.trace_last_observed_hz = observed_decision.candidate_hz
+    state.trace_last_observed_bin = observed_decision.candidate_bin
+    state.trace_last_observed_source = observed_decision.candidate_source
+    state.trace_last_observed_role = (
+        "support"
+        if continuation_hz is not None
+        else "challenger"
+        if candidate_decision.candidate_hz is not None
+        else "none"
     )
     challenger_hz = candidate_decision.candidate_hz
 
     if state.mode == "reacquiring":
-        if challenger_hz is not None:
-            if (
-                state.candidate_hz is None
-                or abs(challenger_hz - state.candidate_hz) <= _REACQUIRE_STABLE_HZ
-            ):
-                state.candidate_hz = challenger_hz
-                if state.challenge_start_hz is None:
-                    state.challenge_start_hz = float(previous_hz)
-        if state.candidate_hz is None:
-            _reset_reacquire_state(state)
+        if challenger_hz is None:
+            lost_candidate_hz = state.candidate_hz
+            count = state.count
+            low_lock_count = state.low_lock_count
+            evidence_route = state.accepted_evidence_route
+            candidate_drift_hz = state.accepted_candidate_drift_hz
+            low_track_drift_hz = state.accepted_low_track_drift_hz
+            required_low_track_drift_hz = state.accepted_required_low_track_drift_hz
+            _reset_reacquire_state(state, reset_low_lock=False)
             return SpectrumReacquireDecision(
                 legacy_hz,
                 state.mode,
-                state.candidate_hz,
-                state.count,
-                state.low_lock_count,
+                lost_candidate_hz,
+                count,
+                low_lock_count,
                 "reacquire_lost_candidate",
                 candidate_decision.rejected_reason,
                 "reset",
                 False,
+                evidence_route=evidence_route,
+                candidate_drift_hz=candidate_drift_hz,
+                low_track_drift_hz=low_track_drift_hz,
+                required_low_track_drift_hz=required_low_track_drift_hz,
             )
-        next_hz = _move_toward_hz(float(previous_hz), state.candidate_hz, _REACQUIRE_STEP_HZ)
-        if abs(next_hz - state.candidate_hz) <= np.finfo(float).eps:
-            completed_candidate = state.candidate_hz
-            count = state.count
-            low_lock_count = state.low_lock_count
-            _reset_reacquire_state(state)
+        if (
+            state.candidate_hz is not None
+            and abs(challenger_hz - state.candidate_hz) > _REACQUIRE_STABLE_HZ
+        ):
+            state.mode = "locked"
+            state.candidate_hz = None
+            state.challenge_candidate_start_hz = None
+            state.challenge_low_track_start_hz = None
+            state.accepted_evidence_route = ""
+            state.accepted_candidate_drift_hz = None
+            state.accepted_low_track_drift_hz = None
+            state.accepted_required_low_track_drift_hz = None
+            state.count = 0
+        else:
+            state.candidate_hz = challenger_hz
+            next_hz = _move_toward_hz(float(previous_hz), state.candidate_hz, _REACQUIRE_STEP_HZ)
+            if abs(next_hz - state.candidate_hz) <= np.finfo(float).eps:
+                completed_candidate = state.candidate_hz
+                count = state.count
+                low_lock_count = state.low_lock_count
+                evidence_route = state.accepted_evidence_route
+                candidate_drift_hz = state.accepted_candidate_drift_hz
+                low_track_drift_hz = state.accepted_low_track_drift_hz
+                required_low_track_drift_hz = state.accepted_required_low_track_drift_hz
+                _reset_reacquire_state(state)
+                return SpectrumReacquireDecision(
+                    next_hz,
+                    state.mode,
+                    completed_candidate,
+                    count,
+                    low_lock_count,
+                    "reacquire_reached_candidate",
+                    candidate_decision.rejected_reason,
+                    "complete",
+                    False,
+                    evidence_route=evidence_route,
+                    candidate_drift_hz=candidate_drift_hz,
+                    low_track_drift_hz=low_track_drift_hz,
+                    required_low_track_drift_hz=required_low_track_drift_hz,
+                )
             return SpectrumReacquireDecision(
                 next_hz,
                 state.mode,
-                completed_candidate,
-                count,
-                low_lock_count,
-                "reacquire_reached_candidate",
+                state.candidate_hz,
+                state.count,
+                state.low_lock_count,
+                "reacquire_slew_toward_candidate",
                 candidate_decision.rejected_reason,
-                "complete",
+                "slew_toward_candidate",
                 False,
+                evidence_route=state.accepted_evidence_route,
+                candidate_drift_hz=state.accepted_candidate_drift_hz,
+                low_track_drift_hz=state.accepted_low_track_drift_hz,
+                required_low_track_drift_hz=(state.accepted_required_low_track_drift_hz),
             )
-        return SpectrumReacquireDecision(
-            next_hz,
-            state.mode,
-            state.candidate_hz,
-            state.count,
-            state.low_lock_count,
-            "reacquire_slew_toward_candidate",
-            candidate_decision.rejected_reason,
-            "slew_toward_candidate",
-            False,
-        )
 
     if challenger_hz is None:
         _reset_reacquire_state(state, reset_low_lock=False)
@@ -1009,33 +1584,61 @@ def _apply_motion_reacquire(
 
     if state.mode == "challenge" and state.candidate_hz is not None:
         if abs(challenger_hz - state.candidate_hz) <= _REACQUIRE_STABLE_HZ:
+            if state.challenge_candidate_start_hz is None:
+                state.challenge_candidate_start_hz = state.candidate_hz
+            if state.challenge_low_track_start_hz is None:
+                state.challenge_low_track_start_hz = float(previous_hz)
             state.count += 1
             state.candidate_hz = challenger_hz
         else:
             state.candidate_hz = challenger_hz
-            state.challenge_start_hz = float(previous_hz)
+            state.challenge_candidate_start_hz = challenger_hz
+            state.challenge_low_track_start_hz = float(previous_hz)
             state.count = 1
     else:
         state.mode = "challenge"
         state.candidate_hz = challenger_hz
-        state.challenge_start_hz = float(previous_hz)
+        state.challenge_candidate_start_hz = challenger_hz
+        state.challenge_low_track_start_hz = float(previous_hz)
         state.count = 1
 
+    candidate_start_hz = state.challenge_candidate_start_hz
+    low_track_start_hz = state.challenge_low_track_start_hz
+    candidate_drift_hz = (
+        None
+        if candidate_start_hz is None or state.candidate_hz is None
+        else state.candidate_hz - candidate_start_hz
+    )
+    low_track_drift_hz = (
+        None if low_track_start_hz is None else float(previous_hz) - low_track_start_hz
+    )
+    target_gap_hz = (
+        0.0
+        if low_track_start_hz is None or state.candidate_hz is None
+        else max(0.0, state.candidate_hz - low_track_start_hz)
+    )
+    required_low_track_drift_hz = max(
+        float(min_low_track_drift_hz),
+        target_gap_hz * _REACQUIRE_MIN_LOW_TRACK_DRIFT_TO_TARGET_RATIO,
+    )
+    candidate_drift_supported = (
+        candidate_drift_hz is not None and candidate_drift_hz >= _REACQUIRE_MIN_CANDIDATE_DRIFT_HZ
+    )
+    low_track_drift_supported = (
+        low_track_drift_hz is not None and low_track_drift_hz >= required_low_track_drift_hz
+    )
+    evidence_route = (
+        "candidate_and_low_track_drift"
+        if candidate_drift_supported and low_track_drift_supported
+        else "candidate_drift"
+        if candidate_drift_supported
+        else "low_track_drift"
+        if low_track_drift_supported
+        else ""
+    )
+
     if state.count >= _REACQUIRE_CONFIRM_WINDOWS:
-        start_hz = state.challenge_start_hz
-        target_gap_hz = (
-            0.0
-            if start_hz is None or state.candidate_hz is None
-            else max(0.0, float(state.candidate_hz) - float(start_hz))
-        )
-        required_drift_hz = max(
-            float(min_confirm_drift_hz),
-            target_gap_hz * _REACQUIRE_MIN_DRIFT_TO_TARGET_RATIO,
-        )
-        if (
-            start_hz is None
-            or float(previous_hz) - float(start_hz) < required_drift_hz
-        ):
+        if not candidate_drift_supported and not low_track_drift_supported:
             rejected_candidate = state.candidate_hz
             count = state.count
             low_lock_count = state.low_lock_count
@@ -1046,12 +1649,20 @@ def _apply_motion_reacquire(
                 rejected_candidate,
                 count,
                 low_lock_count,
-                "insufficient_low_track_upward_drift",
+                "insufficient_reacquire_evidence",
                 candidate_decision.rejected_reason,
                 "reset_candidate",
                 False,
+                evidence_route=evidence_route,
+                candidate_drift_hz=candidate_drift_hz,
+                low_track_drift_hz=low_track_drift_hz,
+                required_low_track_drift_hz=required_low_track_drift_hz,
             )
         state.mode = "reacquiring"
+        state.accepted_evidence_route = evidence_route
+        state.accepted_candidate_drift_hz = candidate_drift_hz
+        state.accepted_low_track_drift_hz = low_track_drift_hz
+        state.accepted_required_low_track_drift_hz = required_low_track_drift_hz
         next_hz = _move_toward_hz(float(previous_hz), state.candidate_hz, _REACQUIRE_STEP_HZ)
         if abs(next_hz - state.candidate_hz) <= np.finfo(float).eps:
             completed_candidate = state.candidate_hz
@@ -1068,6 +1679,10 @@ def _apply_motion_reacquire(
                 candidate_decision.rejected_reason,
                 "complete",
                 True,
+                evidence_route=evidence_route,
+                candidate_drift_hz=candidate_drift_hz,
+                low_track_drift_hz=low_track_drift_hz,
+                required_low_track_drift_hz=required_low_track_drift_hz,
             )
         return SpectrumReacquireDecision(
             next_hz,
@@ -1079,6 +1694,10 @@ def _apply_motion_reacquire(
             candidate_decision.rejected_reason,
             "slew_toward_candidate",
             True,
+            evidence_route=evidence_route,
+            candidate_drift_hz=candidate_drift_hz,
+            low_track_drift_hz=low_track_drift_hz,
+            required_low_track_drift_hz=required_low_track_drift_hz,
         )
 
     return SpectrumReacquireDecision(
@@ -1091,6 +1710,191 @@ def _apply_motion_reacquire(
         candidate_decision.rejected_reason,
         "wait",
         False,
+        evidence_route=evidence_route,
+        candidate_drift_hz=candidate_drift_hz,
+        low_track_drift_hz=low_track_drift_hz,
+        required_low_track_drift_hz=required_low_track_drift_hz,
+    )
+
+
+def _apply_motion_reacquire(
+    *,
+    freqs: np.ndarray,
+    raw_amps: np.ndarray,
+    raw_order: np.ndarray,
+    previous_hz: float | None,
+    legacy_hz: float,
+    state: SpectrumReacquireState | None,
+    enabled: bool,
+    window_kind: WindowKind,
+    penalty_centers_hz: tuple[float, ...] = (),
+    window_id: int = 0,
+    min_jump_hz: float = _REACQUIRE_MIN_JUMP_HZ,
+    max_jump_hz: float | None = None,
+    min_low_track_drift_hz: float = 0.0,
+) -> SpectrumReacquireDecision:
+    """Run the frozen low-lock state machine and attach branch-local identity facts."""
+
+    if state is None:
+        decision = _apply_motion_reacquire_core(
+            freqs=freqs,
+            raw_amps=raw_amps,
+            raw_order=raw_order,
+            previous_hz=previous_hz,
+            legacy_hz=legacy_hz,
+            state=state,
+            enabled=enabled,
+            window_kind=window_kind,
+            penalty_centers_hz=penalty_centers_hz,
+            min_jump_hz=min_jump_hz,
+            max_jump_hz=max_jump_hz,
+            min_low_track_drift_hz=min_low_track_drift_hz,
+        )
+        return replace(
+            decision,
+            ownership_trace=_ownership_trace_payload(
+                mechanism="low",
+                window_id=window_id,
+            ),
+        )
+
+    mode_before = str(state.mode)
+    before_hz = state.candidate_hz
+    owner_before = (
+        state.trace_target_origin_window,
+        state.trace_target_revision_window,
+        before_hz,
+        state.trace_target_candidate_bin,
+        state.trace_target_source,
+    )
+    state.trace_last_observed_hz = None
+    state.trace_last_observed_bin = None
+    state.trace_last_observed_source = ""
+    state.trace_last_observed_role = "none"
+
+    decision = _apply_motion_reacquire_core(
+        freqs=freqs,
+        raw_amps=raw_amps,
+        raw_order=raw_order,
+        previous_hz=previous_hz,
+        legacy_hz=legacy_hz,
+        state=state,
+        enabled=enabled,
+        window_kind=window_kind,
+        penalty_centers_hz=penalty_centers_hz,
+        min_jump_hz=min_jump_hz,
+        max_jump_hz=max_jump_hz,
+        min_low_track_drift_hz=min_low_track_drift_hz,
+    )
+
+    observed_hz = state.trace_last_observed_hz
+    observed_bin = state.trace_last_observed_bin
+    observed_source = state.trace_last_observed_source
+    observed_role = state.trace_last_observed_role
+    carrier_after = decision.mode in {"challenge", "reacquiring"}
+    before_exists = before_hz is not None
+    after_exists = carrier_after and decision.candidate_hz is not None
+    event = "none"
+    action = "none"
+    owner_after = (
+        None,
+        None,
+        None,
+        None,
+        "",
+    )
+
+    if after_exists:
+        preserve_owner = (
+            mode_before == "reacquiring"
+            and before_exists
+            and observed_role in {"support", "none"}
+        )
+        if preserve_owner:
+            owner_after = owner_before
+            event = "carry" if observed_role == "none" else "support"
+            action = "continue"
+        elif observed_hz is not None and observed_bin is not None:
+            if not before_exists:
+                event = "acquire"
+                action = "start"
+                owner_after = (window_id, window_id, observed_hz, observed_bin, observed_source)
+            elif mode_before == "challenge":
+                stable_challenger = (
+                    before_hz is not None
+                    and abs(float(observed_hz) - float(before_hz)) <= _REACQUIRE_STABLE_HZ
+                )
+                if stable_challenger:
+                    event = "refresh"
+                    action = "continue"
+                    owner_after = (
+                        owner_before[0] if before_exists else window_id,
+                        window_id,
+                        decision.candidate_hz
+                        if decision.candidate_hz is not None
+                        else observed_hz,
+                        observed_bin,
+                        observed_source,
+                    )
+                else:
+                    event = "replace"
+                    action = "end_and_start"
+                    owner_after = (
+                        window_id,
+                        window_id,
+                        observed_hz,
+                        observed_bin,
+                        observed_source,
+                    )
+            else:
+                event = "replace"
+                action = "end_and_start"
+                owner_after = (window_id, window_id, observed_hz, observed_bin, observed_source)
+        else:
+            event = "carry"
+            action = "continue"
+            owner_after = owner_before
+    elif before_exists:
+        event = (
+            "terminal"
+            if decision.reason in {
+                "reacquire_lost_candidate",
+                "reacquire_reached_candidate",
+            }
+            or decision.action == "complete"
+            else "release"
+        )
+        action = "end"
+
+    if after_exists:
+        state.trace_target_origin_window = owner_after[0]
+        state.trace_target_revision_window = owner_after[1]
+        state.trace_target_candidate_bin = owner_after[3]
+        state.trace_target_source = str(owner_after[4])
+    else:
+        state.trace_target_origin_window = None
+        state.trace_target_revision_window = None
+        state.trace_target_candidate_bin = None
+        state.trace_target_source = ""
+
+    payload = _ownership_trace_payload(
+        mechanism="low",
+        window_id=window_id,
+        observed_candidate_hz=observed_hz,
+        observed_candidate_bin=observed_bin,
+        observed_candidate_source=observed_source,
+        observed_candidate_role=observed_role,
+        owner_before=owner_before,
+        owner_after=owner_after,
+        ownership_event=event,
+        lineage_action=action,
+    )
+    return replace(
+        decision,
+        candidate_bin=observed_bin,
+        candidate_source=observed_source,
+        observed_candidate_role=observed_role,
+        ownership_trace=payload,
     )
 
 
@@ -1102,6 +1906,7 @@ def _strongest_reacquire_candidate_hz(
     previous_hz: float,
     penalty_centers_hz: tuple[float, ...] = (),
     min_jump_hz: float = _REACQUIRE_MIN_JUMP_HZ,
+    max_jump_hz: float | None = None,
 ) -> SpectrumReacquireCandidateDecision:
     if raw_order.size == 0 or not np.isfinite(previous_hz):
         return SpectrumReacquireCandidateDecision(None, "no_candidate_peaks")
@@ -1124,19 +1929,36 @@ def _strongest_reacquire_candidate_hz(
         if candidate_hz < _REACQUIRE_TARGET_MIN_HZ:
             rejected_reasons.append("candidate_below_upward_target")
             continue
-        if _is_near_penalty_core(candidate_hz, penalty_centers_hz[:1]):
+        if _is_near_penalty_core(
+            candidate_hz,
+            penalty_centers_hz[:1],
+            half_width_hz=_REACQUIRE_PENALTY_EXCLUSION_HZ,
+        ):
             rejected_reasons.append("near_primary_penalty_core")
+            continue
+        if _is_near_penalty_core(
+            candidate_hz,
+            penalty_centers_hz[1:],
+            half_width_hz=_REACQUIRE_PENALTY_EXCLUSION_HZ,
+        ):
+            rejected_reasons.append(
+                "near_penalty_suspicious_high"
+                if candidate_hz >= _REACQUIRE_SUSPICIOUS_HIGH_HZ
+                else "near_penalty_harmonic"
+            )
             continue
         if candidate_hz - previous_hz < max(float(min_jump_hz), _REACQUIRE_MIN_JUMP_HZ):
             rejected_reasons.append("candidate_jump_too_small")
             continue
-        if (
-            candidate_hz >= _REACQUIRE_SUSPICIOUS_HIGH_HZ
-            and _is_near_penalty_core(candidate_hz, penalty_centers_hz)
-        ):
-            rejected_reasons.append("near_penalty_suspicious_high")
+        if max_jump_hz is not None and candidate_hz - previous_hz > float(max_jump_hz):
+            rejected_reasons.append("candidate_jump_too_large")
             continue
-        return SpectrumReacquireCandidateDecision(candidate_hz, "")
+        return SpectrumReacquireCandidateDecision(
+            candidate_hz,
+            "",
+            candidate_bin=idx,
+            candidate_source="raw_local_peaks",
+        )
     return SpectrumReacquireCandidateDecision(
         None,
         _primary_reacquire_rejection_reason(rejected_reasons),
@@ -1148,8 +1970,10 @@ def _primary_reacquire_rejection_reason(reasons: Sequence[str]) -> str:
         return "no_qualified_upward_candidate"
     priority = (
         "near_penalty_suspicious_high",
+        "near_penalty_harmonic",
         "near_primary_penalty_core",
         "weak_candidate",
+        "candidate_jump_too_large",
         "candidate_jump_too_small",
         "candidate_below_upward_target",
         "non_finite_candidate",
@@ -1160,7 +1984,7 @@ def _primary_reacquire_rejection_reason(reasons: Sequence[str]) -> str:
     return str(reasons[-1])
 
 
-def _apply_motion_high_lock_escape(
+def _apply_motion_high_lock_escape_core(
     *,
     freqs: np.ndarray,
     raw_amps: np.ndarray,
@@ -1185,7 +2009,16 @@ def _apply_motion_high_lock_escape(
     if window_kind != "motion" or previous_hz is None:
         _reset_high_lock_state(state)
         return SpectrumHighLockEscapeDecision(
-            legacy_hz, state.mode, state.candidate_hz, state.count, state.cooldown, "none", (), "", None, False
+            legacy_hz,
+            state.mode,
+            state.candidate_hz,
+            state.count,
+            state.cooldown,
+            "none",
+            (),
+            "",
+            None,
+            False,
         )
 
     current_hz = float(legacy_hz)
@@ -1199,7 +2032,7 @@ def _apply_motion_high_lock_escape(
     )
     reason = labels[0] if labels else "none"
     if state.mode == "reacquiring" and state.candidate_hz is not None:
-        challenger_hz = _strongest_reacquire_support_hz(
+        challenger_decision = _strongest_reacquire_support_hz(
             freqs=freqs,
             raw_amps=raw_amps,
             raw_order=raw_order,
@@ -1207,7 +2040,7 @@ def _apply_motion_high_lock_escape(
             settings=settings,
         )
     else:
-        challenger_hz = _strongest_high_lock_challenger_hz(
+        challenger_decision = _strongest_high_lock_challenger_hz(
             freqs=freqs,
             raw_amps=raw_amps,
             raw_order=raw_order,
@@ -1215,6 +2048,17 @@ def _apply_motion_high_lock_escape(
             penalty_centers_hz=penalty_centers_hz,
             settings=settings,
         )
+    challenger_hz = challenger_decision.candidate_hz
+    state.trace_last_observed_hz = challenger_decision.candidate_hz
+    state.trace_last_observed_bin = challenger_decision.candidate_bin
+    state.trace_last_observed_source = challenger_decision.candidate_source
+    state.trace_last_observed_role = (
+        "support"
+        if state.mode == "reacquiring" and challenger_decision.candidate_hz is not None
+        else "challenger"
+        if challenger_decision.candidate_hz is not None
+        else "none"
+    )
     gap_hz = None if challenger_hz is None else current_hz - challenger_hz
     candidate_id = str(settings["candidate_id"])
     candidate = (
@@ -1227,19 +2071,16 @@ def _apply_motion_high_lock_escape(
     max_amp = float(np.max(finite_amps)) if finite_amps.size else 0.0
     challenger_amp_ratio = 0.0
     if challenger_hz is not None and max_amp > 0.0:
+        # Preserve the pre-S0-T risk-input path.  The exact candidate bin is
+        # diagnostic evidence only; it must not become a recovery-controller
+        # input through challenger_amp_ratio.
         matches = np.flatnonzero(np.isclose(freqs, challenger_hz))
         if matches.size:
-            challenger_amp_ratio = (
-                float(raw_amps[int(matches[0])]) / max_amp
-            )
+            challenger_amp_ratio = float(raw_amps[int(matches[0])]) / max_amp
     machine = RecoveryStateMachine(
         candidate,
         mode=state.mode,
-        candidate_bpm=(
-            None
-            if state.candidate_hz is None
-            else float(state.candidate_hz) * 60.0
-        ),
+        candidate_bpm=(None if state.candidate_hz is None else float(state.candidate_hz) * 60.0),
         confirmation_count=state.count,
         age=state.age,
         cooldown_remaining=state.cooldown,
@@ -1248,15 +2089,8 @@ def _apply_motion_high_lock_escape(
         RecoveryObservation(
             window_kind=window_kind,
             current_track_bpm=current_hz * 60.0,
-            current_track_delta_bpm=(
-                current_hz - float(previous_hz)
-            )
-            * 60.0,
-            challenger_bpm=(
-                None
-                if challenger_hz is None
-                else challenger_hz * 60.0
-            ),
+            current_track_delta_bpm=(current_hz - float(previous_hz)) * 60.0,
+            challenger_bpm=(None if challenger_hz is None else challenger_hz * 60.0),
             challenger_amp_ratio=challenger_amp_ratio,
             challenger_stability_bpm=(
                 0.0
@@ -1267,8 +2101,7 @@ def _apply_motion_high_lock_escape(
             challenger_near_penalty=bool(
                 challenger_hz is not None
                 and any(
-                    abs(challenger_hz - center)
-                    <= float(settings["penalty_exclusion_hz"])
+                    abs(challenger_hz - center) <= float(settings["penalty_exclusion_hz"])
                     for center in penalty_centers_hz
                 )
             ),
@@ -1276,9 +2109,7 @@ def _apply_motion_high_lock_escape(
     )
     state.mode = decision.mode
     state.candidate_hz = (
-        None
-        if decision.challenger_bpm is None
-        else float(decision.challenger_bpm) / 60.0
+        None if decision.challenger_bpm is None else float(decision.challenger_bpm) / 60.0
     )
     state.count = decision.confirmation_count
     state.age = decision.age
@@ -1300,6 +2131,175 @@ def _apply_motion_high_lock_escape(
     )
 
 
+def _apply_motion_high_lock_escape(
+    *,
+    freqs: np.ndarray,
+    raw_amps: np.ndarray,
+    raw_order: np.ndarray,
+    previous_hz: float | None,
+    legacy_hz: float,
+    state: SpectrumHighLockEscapeState | None,
+    enabled: bool,
+    params: dict[str, float | int | str] | None,
+    window_kind: WindowKind,
+    selected_peak_rank: int,
+    candidate_source: str,
+    penalty_centers_hz: tuple[float, ...],
+    protection_applied: bool,
+    protected_penalty_overlap: bool,
+    window_id: int = 0,
+) -> SpectrumHighLockEscapeDecision:
+    """Run high-lock recovery and serialize its exact owner transition."""
+
+    if state is None:
+        decision = _apply_motion_high_lock_escape_core(
+            freqs=freqs,
+            raw_amps=raw_amps,
+            raw_order=raw_order,
+            previous_hz=previous_hz,
+            legacy_hz=legacy_hz,
+            state=state,
+            enabled=enabled,
+            params=params,
+            window_kind=window_kind,
+            selected_peak_rank=selected_peak_rank,
+            candidate_source=candidate_source,
+            penalty_centers_hz=penalty_centers_hz,
+            protection_applied=protection_applied,
+            protected_penalty_overlap=protected_penalty_overlap,
+        )
+        return replace(
+            decision,
+            ownership_trace=_ownership_trace_payload(
+                mechanism="high",
+                window_id=window_id,
+            ),
+        )
+
+    mode_before = str(state.mode)
+    before_hz = state.candidate_hz
+    owner_before = (
+        state.trace_target_origin_window,
+        state.trace_target_revision_window,
+        before_hz,
+        state.trace_target_candidate_bin,
+        state.trace_target_source,
+    )
+    state.trace_last_observed_hz = None
+    state.trace_last_observed_bin = None
+    state.trace_last_observed_source = ""
+    state.trace_last_observed_role = "none"
+
+    decision = _apply_motion_high_lock_escape_core(
+        freqs=freqs,
+        raw_amps=raw_amps,
+        raw_order=raw_order,
+        previous_hz=previous_hz,
+        legacy_hz=legacy_hz,
+        state=state,
+        enabled=enabled,
+        params=params,
+        window_kind=window_kind,
+        selected_peak_rank=selected_peak_rank,
+        candidate_source=candidate_source,
+        penalty_centers_hz=penalty_centers_hz,
+        protection_applied=protection_applied,
+        protected_penalty_overlap=protected_penalty_overlap,
+    )
+
+    observed_hz = state.trace_last_observed_hz
+    observed_bin = state.trace_last_observed_bin
+    observed_source = state.trace_last_observed_source
+    observed_role = state.trace_last_observed_role
+    settings = _normalise_high_lock_params(params)
+    carrier_after = decision.mode in {"challenge", "reacquiring"}
+    before_exists = before_hz is not None
+    after_exists = carrier_after and decision.candidate_hz is not None
+    owner_after = (None, None, None, None, "")
+    event = "none"
+    action = "none"
+
+    if after_exists:
+        # This mirrors the existing high-lock confirmation branch.  It decides
+        # the state-machine event by its stored stability rule; exact bin/source
+        # identity remains in the separate observed receipt and is never merged.
+        same_candidate = (
+            before_exists
+            and observed_hz is not None
+            and abs(float(observed_hz) - float(before_hz))
+            <= float(settings["candidate_stable_hz"])
+        )
+        if mode_before == "reacquiring" and before_exists and observed_role == "support":
+            owner_after = owner_before
+            event = "support"
+            action = "continue"
+        elif mode_before == "reacquiring" and before_exists and observed_role == "none":
+            owner_after = owner_before
+            event = "carry"
+            action = "continue"
+        elif not before_exists and observed_hz is not None and observed_bin is not None:
+            owner_after = (window_id, window_id, observed_hz, observed_bin, observed_source)
+            event = "acquire"
+            action = "start"
+        elif mode_before == "challenge" and same_candidate:
+            owner_after = owner_before
+            event = "support"
+            action = "continue"
+        elif observed_hz is not None and observed_bin is not None:
+            owner_after = (window_id, window_id, observed_hz, observed_bin, observed_source)
+            event = "replace" if before_exists else "acquire"
+            action = "end_and_start" if before_exists else "start"
+        else:
+            owner_after = owner_before
+            event = "carry" if before_exists else "none"
+            action = "continue" if before_exists else "none"
+    elif before_exists:
+        event = (
+            "terminal"
+            if decision.exit_from_mode in {"challenge", "reacquiring"}
+            or decision.suppressed_reason in {
+                "candidate_lost",
+                "challenge_timeout",
+                "reacquire_timeout",
+                "target_reached",
+                "physiological_rise_guard",
+            }
+            else "release"
+        )
+        action = "end"
+
+    if after_exists:
+        state.trace_target_origin_window = owner_after[0]
+        state.trace_target_revision_window = owner_after[1]
+        state.trace_target_candidate_bin = owner_after[3]
+        state.trace_target_source = str(owner_after[4])
+    else:
+        state.trace_target_origin_window = None
+        state.trace_target_revision_window = None
+        state.trace_target_candidate_bin = None
+        state.trace_target_source = ""
+
+    payload = _ownership_trace_payload(
+        mechanism="high",
+        window_id=window_id,
+        observed_candidate_hz=observed_hz,
+        observed_candidate_bin=observed_bin,
+        observed_candidate_source=observed_source,
+        observed_candidate_role=observed_role,
+        owner_before=owner_before,
+        owner_after=owner_after,
+        ownership_event=event,
+        lineage_action=action,
+    )
+    return replace(
+        decision,
+        candidate_bin=observed_bin,
+        candidate_source=observed_source,
+        observed_candidate_role=observed_role,
+        ownership_trace=payload,
+    )
+
+
 def _strongest_high_lock_challenger_hz(
     *,
     freqs: np.ndarray,
@@ -1308,13 +2308,13 @@ def _strongest_high_lock_challenger_hz(
     current_hz: float,
     penalty_centers_hz: tuple[float, ...],
     settings: dict[str, float | int | str],
-) -> float | None:
+) -> SpectrumReacquireCandidateDecision:
     if raw_order.size == 0 or not np.isfinite(current_hz):
-        return None
+        return SpectrumReacquireCandidateDecision(None, "no_candidate_peaks")
     ordered_amps = np.asarray(raw_amps, dtype=float)[raw_order]
     finite = ordered_amps[np.isfinite(ordered_amps)]
     if finite.size == 0:
-        return None
+        return SpectrumReacquireCandidateDecision(None, "no_finite_candidate_amplitude")
     amp_floor = float(np.nanmax(finite)) * float(settings["min_amp_ratio"])
     viable: list[tuple[int, float, bool]] = []
     for peak_idx in raw_order:
@@ -1339,12 +2339,18 @@ def _strongest_high_lock_challenger_hz(
         )
         viable.append((idx, candidate_amp, near_penalty))
     if not viable:
-        return None
+        return SpectrumReacquireCandidateDecision(None, "no_stable_challenger")
     outside_penalty = [item for item in viable if not item[2]]
     if outside_penalty:
         viable = outside_penalty
     viable.sort(key=lambda item: (-item[1], float(freqs[item[0]])))
-    return float(freqs[viable[0][0]])
+    selected_idx = int(viable[0][0])
+    return SpectrumReacquireCandidateDecision(
+        float(freqs[selected_idx]),
+        "",
+        candidate_bin=selected_idx,
+        candidate_source="raw_local_peaks",
+    )
 
 
 def _strongest_reacquire_support_hz(
@@ -1354,15 +2360,17 @@ def _strongest_reacquire_support_hz(
     raw_order: np.ndarray,
     target_hz: float,
     settings: dict[str, float | int | str],
-) -> float | None:
+    penalty_centers_hz: tuple[float, ...] = (),
+    penalty_exclusion_hz: float = 0.0,
+) -> SpectrumReacquireCandidateDecision:
     """Find support around the frozen target without reapplying the entry gap."""
 
     if raw_order.size == 0 or not np.isfinite(target_hz):
-        return None
+        return SpectrumReacquireCandidateDecision(None, "no_candidate_peaks")
     ordered_amps = np.asarray(raw_amps, dtype=float)[raw_order]
     finite = ordered_amps[np.isfinite(ordered_amps)]
     if finite.size == 0:
-        return None
+        return SpectrumReacquireCandidateDecision(None, "no_finite_candidate_amplitude")
     amp_floor = float(np.nanmax(finite)) * float(settings["min_amp_ratio"])
     viable: list[tuple[int, float]] = []
     for peak_idx in raw_order:
@@ -1371,18 +2379,27 @@ def _strongest_reacquire_support_hz(
         candidate_amp = float(raw_amps[idx])
         if not np.isfinite(candidate_hz) or not np.isfinite(candidate_amp):
             continue
-        if (
-            abs(candidate_hz - target_hz)
-            > float(settings["candidate_stable_hz"])
-        ):
+        if abs(candidate_hz - target_hz) > float(settings["candidate_stable_hz"]):
             continue
         if candidate_amp < amp_floor:
             continue
+        if _is_near_penalty_core(
+            candidate_hz,
+            penalty_centers_hz,
+            half_width_hz=float(penalty_exclusion_hz),
+        ):
+            continue
         viable.append((idx, candidate_amp))
     if not viable:
-        return None
+        return SpectrumReacquireCandidateDecision(None, "no_stable_support")
     viable.sort(key=lambda item: (-item[1], float(freqs[item[0]])))
-    return float(freqs[viable[0][0]])
+    selected_idx = int(viable[0][0])
+    return SpectrumReacquireCandidateDecision(
+        float(freqs[selected_idx]),
+        "",
+        candidate_bin=selected_idx,
+        candidate_source="raw_local_peaks_support",
+    )
 
 
 def _high_lock_risk_labels(
@@ -1415,12 +2432,8 @@ def _normalise_high_lock_params(
         "gate_mode": str(values.get("gate_mode", "fixed_floor")),
         "confirm_windows": int(values.get("confirm_windows", _HIGH_LOCK_CONFIRM_WINDOWS)),
         "cooldown_windows": int(values.get("cooldown_windows", _HIGH_LOCK_COOLDOWN_WINDOWS)),
-        "challenge_timeout_windows": int(
-            values.get("challenge_timeout_windows", 0)
-        ),
-        "reacquire_timeout_windows": int(
-            values.get("reacquire_timeout_windows", 7)
-        ),
+        "challenge_timeout_windows": int(values.get("challenge_timeout_windows", 0)),
+        "reacquire_timeout_windows": int(values.get("reacquire_timeout_windows", 7)),
         "min_gap_hz": float(values.get("min_gap_hz", _HIGH_LOCK_MIN_GAP_HZ)),
         "relative_gap_ratio": float(values.get("relative_gap_ratio", 0.0)),
         "min_amp_ratio": float(values.get("min_amp_ratio", _HIGH_LOCK_MIN_AMP_RATIO)),
@@ -1433,12 +2446,8 @@ def _normalise_high_lock_params(
         ),
         "down_step_hz": float(values.get("down_step_hz", _HIGH_LOCK_DOWN_STEP_HZ)),
         "up_step_hz": float(values.get("up_step_hz", _HIGH_LOCK_UP_STEP_HZ)),
-        "rise_guard_hz_per_window": float(
-            values.get("rise_guard_hz_per_window", -1.0)
-        ),
-        "retain_target_on_evidence_loss": bool(
-            values.get("retain_target_on_evidence_loss", True)
-        ),
+        "rise_guard_hz_per_window": float(values.get("rise_guard_hz_per_window", -1.0)),
+        "retain_target_on_evidence_loss": bool(values.get("retain_target_on_evidence_loss", True)),
     }
 
 
@@ -1448,6 +2457,10 @@ def _reset_high_lock_state(state: SpectrumHighLockEscapeState, *, cooldown: int 
     state.count = 0
     state.age = 0
     state.cooldown = max(0, int(cooldown))
+    state.trace_target_origin_window = None
+    state.trace_target_revision_window = None
+    state.trace_target_candidate_bin = None
+    state.trace_target_source = ""
 
 
 def _is_low_lock_hz(value_hz: float) -> bool:
@@ -1456,7 +2469,9 @@ def _is_low_lock_hz(value_hz: float) -> bool:
     return _REACQUIRE_LOW_LOCK_MIN_HZ <= float(value_hz) <= _REACQUIRE_LOW_LOCK_MAX_HZ
 
 
-def _normalise_motion_gate_filter_allowlist(allowlist: tuple[str, ...] | list[str]) -> tuple[str, ...]:
+def _normalise_motion_gate_filter_allowlist(
+    allowlist: tuple[str, ...] | list[str],
+) -> tuple[str, ...]:
     return tuple(str(value).strip().lower() for value in allowlist if str(value).strip())
 
 
@@ -1480,10 +2495,19 @@ def _move_toward_hz(current_hz: float, target_hz: float, max_step_hz: float) -> 
 def _reset_reacquire_state(state: SpectrumReacquireState, *, reset_low_lock: bool = True) -> None:
     state.mode = "locked"
     state.candidate_hz = None
-    state.challenge_start_hz = None
+    state.challenge_candidate_start_hz = None
+    state.challenge_low_track_start_hz = None
+    state.accepted_evidence_route = ""
+    state.accepted_candidate_drift_hz = None
+    state.accepted_low_track_drift_hz = None
+    state.accepted_required_low_track_drift_hz = None
     state.count = 0
     if reset_low_lock:
         state.low_lock_count = 0
+    state.trace_target_origin_window = None
+    state.trace_target_revision_window = None
+    state.trace_target_candidate_bin = None
+    state.trace_target_source = ""
 
 
 def _spectrum_penalty_state(
@@ -1559,9 +2583,7 @@ def _raw_fft_candidate_frame(signal: np.ndarray, fs: float) -> RawFftCandidateFr
     frequencies_hz = np.asarray(freqs, dtype=float)
     amplitudes = np.asarray(amps, dtype=float).copy()
     peak_indices = find_candidate_peak_indices(frequencies_hz, amplitudes)
-    ordered_peak_indices = peak_indices[
-        np.argsort(-amplitudes[peak_indices], kind="stable")
-    ]
+    ordered_peak_indices = peak_indices[np.argsort(-amplitudes[peak_indices], kind="stable")]
     return RawFftCandidateFrame(
         frequencies_hz=frequencies_hz,
         amplitudes=amplitudes,
@@ -1625,12 +2647,13 @@ def _is_inside_penalty_band(
 def _is_near_penalty_core(
     value_hz: float,
     penalty_centers_hz: tuple[float, ...],
+    *,
+    half_width_hz: float = _MOTION_PENALTY_EDGE_GUARD_HZ,
 ) -> bool:
     if not np.isfinite(value_hz):
         return False
     return any(
-        np.isfinite(center)
-        and abs(float(value_hz) - float(center)) <= _MOTION_PENALTY_EDGE_GUARD_HZ
+        np.isfinite(center) and abs(float(value_hz) - float(center)) <= float(half_width_hz)
         for center in penalty_centers_hz
     )
 
@@ -1799,14 +2822,10 @@ def _trace_rescue_candidate_diagnostics(
             median_gap_p90 = _trace_rescue_finite_quantile(gap, 0.90)
         trace_risk = _trace_rescue_run_risk(result.window_table)
         jump_p90 = (
-            _trace_rescue_finite_quantile(np.abs(np.diff(final)), 0.90)
-            if final.size > 1
-            else 0.0
+            _trace_rescue_finite_quantile(np.abs(np.diff(final)), 0.90) if final.size > 1 else 0.0
         )
         jump_risk = max(0.0, float(jump_p90) - 8.0) / 18.0
-        range_risk = (
-            float(np.mean((final < 45.0) | (final > 210.0))) if final.size else 0.0
-        )
+        range_risk = float(np.mean((final < 45.0) | (final > 210.0))) if final.size else 0.0
         no_ref_score = (
             0.26 * _trace_rescue_clipped_scale(median_gap, 3.0, 22.0)
             + 0.18 * _trace_rescue_clipped_scale(median_gap_p90, 8.0, 45.0)
@@ -2015,7 +3034,9 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
     fft_tracking_rows: list[SpectrumTrackingTrace] = []
     adaptive_tracking_rows: list[SpectrumTrackingTrace | None] = []
     adaptive_reacquire_state = SpectrumReacquireState()
+    adaptive_rise_lineage_state = RiseCandidateLineageState()
     adaptive_high_lock_state = SpectrumHighLockEscapeState()
+    adaptive_suppressed_shadow_state = SuppressedProtectedShadowState()
     motion_gate_filter_allowlist = _normalise_motion_gate_filter_allowlist(
         cfg.motion_gate_filter_allowlist
     )
@@ -2126,9 +3147,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 else "recovery"
             )
             adaptive_tracking = (
-                tracking_policy.motion
-                if provisional_kind == "motion"
-                else tracking_policy.recovery
+                tracking_policy.motion if provisional_kind == "motion" else tracking_policy.recovery
             )
             row[2], adaptive_trace = _process_spectrum_with_trace(
                 filtered,
@@ -2149,6 +3168,12 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                     and motion_gate_filter_supported
                     and provisional_kind == "motion"
                 ),
+                rise_lineage_state=adaptive_rise_lineage_state,
+                rise_lineage_enable=bool(
+                    cfg.rise_candidate_lineage_enable
+                    and motion_gate_filter_supported
+                ),
+                rise_confirmation_policy_id=cfg.rise_confirmation_policy_id,
                 high_lock_state=(
                     adaptive_high_lock_state if provisional_kind == "motion" else None
                 ),
@@ -2158,6 +3183,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                     and provisional_kind == "motion"
                 ),
                 high_lock_params=runtime_policy.high_lock_escape.as_solver_params(),
+                suppressed_shadow_state=adaptive_suppressed_shadow_state,
                 penalty_policy_id=runtime_policy.motion_penalty.penalty_id,
                 penalty_confidence_enable=bool(
                     cfg.penalty_confidence_enable and provisional_kind == "motion"
@@ -2175,6 +3201,34 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
         time_1 += float(cfg.window_step_seconds)
         times_idx += 1
         if time_1 > time_end:
+            break
+
+    shadow_scope_finalization = finalize_suppressed_protected_shadow(
+        adaptive_suppressed_shadow_state,
+        window_id=times_idx,
+        reason="eof",
+    )
+    if shadow_scope_finalization.owner_before_exists:
+        for final_trace in reversed(adaptive_tracking_rows):
+            if final_trace is not None:
+                final_trace.shadow_scope_finalization = asdict(
+                    shadow_scope_finalization
+                )
+                break
+
+    rise_scope_finalization = finalize_rise_candidate_lineage(
+        adaptive_rise_lineage_state,
+        window_id=times_idx,
+        reason="eof",
+        confirmation_policy_id=cfg.rise_confirmation_policy_id,
+    )
+    for final_trace in reversed(adaptive_tracking_rows):
+        if final_trace is not None:
+            final_trace.rise_scope_finalization = _decorate_ownership_trace(
+                rise_scope_finalization,
+                path="adaptive",
+                window_kind="recovery",
+            )
             break
 
     postprocess_applied_count = 0
@@ -2286,6 +3340,31 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
             trace.final_hr_bpm = float(hr_row[3])
             trace.ref_hr_bpm = float(hr_row[1])
             trace.source = "report"
+        hidden_shadow_finalization = (
+            adaptive_tracking_rows[idx].shadow_scope_finalization
+            if idx < len(adaptive_tracking_rows)
+            and adaptive_tracking_rows[idx] is not None
+            else {}
+        )
+        hidden_shadow_transition: dict[str, Any] = {}
+        adaptive_trace = (
+            adaptive_tracking_rows[idx]
+            if idx < len(adaptive_tracking_rows)
+            else None
+        )
+        if adaptive_trace is not None and trace is not adaptive_trace:
+            adaptive_trace.window_kind = window_kind
+            adaptive_trace.smoothed_path_hr_bpm = float(source[idx, 2] * 60.0)
+            adaptive_trace.final_hr_bpm = float(hr_row[3])
+            adaptive_trace.ref_hr_bpm = float(hr_row[1])
+            adaptive_trace.source = "report_hidden_adaptive"
+        if (
+            adaptive_trace is not None
+            and trace is not adaptive_trace
+            and adaptive_trace.shadow_owner_event != "inactive"
+        ):
+            adaptive_payload = adaptive_trace.to_dict()
+            hidden_shadow_transition = dict(adaptive_payload)
         window_table.append(
             {
                 "window_idx": idx,
@@ -2301,6 +3380,24 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 "window_stage": window_stage,
                 "switch_reason": switch_reason_by_idx.get(idx, ""),
                 "spectrum_tracking": trace.to_dict() if trace is not None else {},
+                **(
+                    {
+                        "suppressed_shadow_scope_finalization": dict(
+                            hidden_shadow_finalization
+                        )
+                    }
+                    if hidden_shadow_finalization
+                    else {}
+                ),
+                **(
+                    {
+                        "suppressed_shadow_hidden_transition": dict(
+                            hidden_shadow_transition
+                        )
+                    }
+                    if hidden_shadow_transition
+                    else {}
+                ),
                 "missing_count": int(
                     quality_rows[idx].get("missing_count", 0) if idx < len(quality_rows) else 0
                 ),
@@ -2347,13 +3444,10 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
             idx_e = idx_s + int(round(float(cfg.window_seconds) * fs))
             if idx_s < 0 or idx_e > prepared.ppg.size:
                 raise ValueError(
-                    "dual-reset raw PPG window out of range "
-                    f"at index={idx}, center={center_s}"
+                    f"dual-reset raw PPG window out of range at index={idx}, center={center_s}"
                 )
             history = tuple(
-                float(value)
-                for value in baseline_final[:idx]
-                if math.isfinite(float(value))
+                float(value) for value in baseline_final[:idx] if math.isfinite(float(value))
             )
             raw_ppg_window = prepared.ppg[idx_s:idx_e]
             raw_candidates = extract_raw_fft_candidates(
@@ -2385,9 +3479,7 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
             config=_dual_reset_runtime_config(cfg),
         )
         HR[:, 3] = dual_result.final_bpm
-        trace_by_idx = {
-            int(row["window_idx"]): row for row in dual_result.window_rows
-        }
+        trace_by_idx = {int(row["window_idx"]): row for row in dual_result.window_rows}
         for idx, row in enumerate(window_table):
             trace_row = trace_by_idx.get(idx)
             if trace_row is None:
@@ -2402,12 +3494,8 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
                 row["used_adaptive"] = True
         dual_reset_metadata = {
             **dual_result.metadata,
-            "handoff_only_switch": bool(
-                cfg.post_motion_dual_reset_handoff_only_switch
-            ),
-            "suppressed_legacy_switch_events": (
-                post_motion_dynamic_guard_suppressed_events
-            ),
+            "handoff_only_switch": bool(cfg.post_motion_dual_reset_handoff_only_switch),
+            "suppressed_legacy_switch_events": (post_motion_dynamic_guard_suppressed_events),
         }
 
     HR = _apply_v2_analysis_scope(HR, cfg, motion_segment)
@@ -2466,6 +3554,26 @@ def _unified_solve(cfg: V2RunConfig) -> V2SolverResult:
             runtime_policy.high_lock_escape.enabled and motion_gate_filter_supported
         ),
         "reacquire_enable": bool(cfg.reacquire_enable),
+        "rise_candidate_lineage_enable": bool(
+            cfg.rise_candidate_lineage_enable
+        ),
+        "rise_confirmation_policy_id": str(cfg.rise_confirmation_policy_id),
+        "rise_candidate_lineage_scope_finalization": _decorate_ownership_trace(
+            rise_scope_finalization,
+            path="adaptive",
+            window_kind="recovery",
+        ),
+        "rise_candidate_lineage_reanchor_count": int(
+            sum(
+                1
+                for row in window_table
+                if bool(
+                    (row.get("spectrum_tracking") or {}).get(
+                        "rise_lineage_reanchored"
+                    )
+                )
+            )
+        ),
         "high_lock_escape": runtime_policy.high_lock_escape.metadata(
             trigger_count=int(
                 sum(
@@ -2530,14 +3638,8 @@ def _run_v1_style_reference_cascade(
     best_idx = int(order[0])
     stage_limit = cfg.adaptive_reference_stage_limit
     if stage_limit is not None:
-        if (
-            isinstance(stage_limit, bool)
-            or not isinstance(stage_limit, int)
-            or stage_limit <= 0
-        ):
-            raise ValueError(
-                "adaptive_reference_stage_limit_must_be_positive"
-            )
+        if isinstance(stage_limit, bool) or not isinstance(stage_limit, int) or stage_limit <= 0:
+            raise ValueError("adaptive_reference_stage_limit_must_be_positive")
         order = order[:stage_limit]
     M = int(np.floor(abs(delay))) if delay < 0 else 1
     M = int(np.clip(M, 1, cfg.max_order))
@@ -2696,9 +3798,7 @@ def _dual_reset_runtime_config(cfg: V2RunConfig) -> FrozenDualResetConfig:
         and cfg.post_motion_minimal_relocation_mode == "controlled_reanchor"
         and float(cfg.post_motion_dual_reset_gap_rescue_gap_bpm) == 18.0
         and float(cfg.post_motion_dual_reset_observability_periodicity_min) == 0.5
-        and float(
-            cfg.post_motion_dual_reset_observability_peak_competition_min
-        ) == 1.3
+        and float(cfg.post_motion_dual_reset_observability_peak_competition_min) == 1.3
         and int(cfg.post_motion_dual_reset_observability_recovery_hits) == 2
     )
     return FrozenDualResetConfig(
@@ -2709,36 +3809,26 @@ def _dual_reset_runtime_config(cfg: V2RunConfig) -> FrozenDualResetConfig:
         ),
         experiment_mode=str(cfg.post_motion_dual_reset_experiment_mode),
         minimal_handoff_enabled=bool(cfg.post_motion_minimal_handoff_enable),
-        minimal_provisional_enabled=bool(
-            cfg.post_motion_minimal_provisional_enable
-        ),
+        minimal_provisional_enabled=bool(cfg.post_motion_minimal_provisional_enable),
         minimal_relocation_mode=str(cfg.post_motion_minimal_relocation_mode),
         post_switch_hold_actual_final=bool(
             cfg.post_motion_dual_reset_post_switch_hold_actual_final
             and not cfg.post_motion_minimal_handoff_enable
         ),
-        gap_rescue_gap_bpm=float(
-            cfg.post_motion_dual_reset_gap_rescue_gap_bpm
-        ),
+        gap_rescue_gap_bpm=float(cfg.post_motion_dual_reset_gap_rescue_gap_bpm),
         observability_periodicity_min=float(
             cfg.post_motion_dual_reset_observability_periodicity_min
         ),
         observability_peak_competition_min=float(
             cfg.post_motion_dual_reset_observability_peak_competition_min
         ),
-        observability_recovery_hits=int(
-            cfg.post_motion_dual_reset_observability_recovery_hits
-        ),
+        observability_recovery_hits=int(cfg.post_motion_dual_reset_observability_recovery_hits),
         prior_invalidation_enabled=bool(
             cfg.post_motion_dual_reset_prior_invalidation_enable
             and not cfg.post_motion_minimal_handoff_enable
         ),
-        prior_invalidation_hits_required=int(
-            cfg.post_motion_dual_reset_prior_invalidation_hits
-        ),
-        prior_invalidation_min_gap_bpm=float(
-            cfg.post_motion_dual_reset_prior_invalidation_gap_bpm
-        ),
+        prior_invalidation_hits_required=int(cfg.post_motion_dual_reset_prior_invalidation_hits),
+        prior_invalidation_min_gap_bpm=float(cfg.post_motion_dual_reset_prior_invalidation_gap_bpm),
         prior_invalidation_min_raw_decline_bpm=float(
             cfg.post_motion_dual_reset_prior_invalidation_raw_decline_bpm
         ),
@@ -2820,13 +3910,17 @@ def _post_motion_adaptive_mask(
 
     reacquire = policy.post_motion_reacquire
     if not bool(reacquire.enabled) or cfg.analysis_scope != "full":
-        return _legacy_recovery_adaptive_mask(
-            src,
-            adaptive_start_idx,
-            motion_end_idx,
-            legacy_end_idx,
-            cfg,
-        ), None, []
+        return (
+            _legacy_recovery_adaptive_mask(
+                src,
+                adaptive_start_idx,
+                motion_end_idx,
+                legacy_end_idx,
+                cfg,
+            ),
+            None,
+            [],
+        )
 
     guard_end_time = float(motion_segment["end_s"]) + max(
         0.0,

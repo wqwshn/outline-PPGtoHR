@@ -37,6 +37,53 @@ def _tracking(range_hz: float, limit_bpm: float, step_bpm: float):
     )
 
 
+def _run_reacquire_evidence_sequence(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    candidate_bpms: list[float],
+    previous_bpms: list[float],
+):
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+    from ppg_hr.v2.spectrum_tracking import (
+        SpectrumReacquireState,
+        track_spectrum_window,
+    )
+
+    candidates = iter(candidate_bpms)
+
+    def candidate_spectrum(_sig, _fs):
+        candidate_bpm = next(candidates)
+        return (
+            np.asarray([1.0, candidate_bpm / 60.0, 3.0]),
+            np.asarray([0.8, 1.0, 0.0]),
+        )
+
+    monkeypatch.setattr(solver, "_candidate_peak_spectrum", candidate_spectrum)
+    state = SpectrumReacquireState(low_lock_count=8)
+    outputs = []
+    traces = []
+    for previous_bpm in previous_bpms:
+        value, trace = track_spectrum_window(
+            np.ones(128),
+            np.ones(128),
+            50,
+            SolverParams(spec_penalty_enable=False),
+            1,
+            np.asarray([previous_bpm / 60.0, 0.0]),
+            False,
+            _tracking(35.0 / 60.0, 10.0, 7.0),
+            path="adaptive",
+            window_kind="motion",
+            reacquire_state=state,
+            reacquire_enable=True,
+            implementation=solver._process_spectrum_with_trace_impl,
+        )
+        outputs.append(value)
+        traces.append(trace)
+    return outputs, traces
+
+
 def test_process_spectrum_with_trace_records_tracking_decisions(monkeypatch) -> None:
     from ppg_hr.params import SolverParams
     from ppg_hr.v2 import solver
@@ -73,6 +120,68 @@ def test_process_spectrum_with_trace_records_tracking_decisions(monkeypatch) -> 
     assert trace.selected_peak_rank == 3
     assert trace.tracked_hr_bpm == pytest.approx(120.0)
     assert trace.slew_limited_hr_bpm == pytest.approx(111.0)
+
+
+def test_spectrum_tracking_serializes_typed_rise_confirmation_and_owner(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+    from ppg_hr.v2.rise_candidate_lineage import (
+        RISE_LINEAGE_NET_RISE_POLICY_ID,
+        RiseCandidateLineageState,
+    )
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.4, 1.5, 1.6, 1.7, 1.8],
+        [0.0, 1.0, 0.0, 0.8, 0.0],
+    )
+    state = RiseCandidateLineageState(
+        candidate_hz=101.0 / 60.0,
+        seed_candidate_hz=100.0 / 60.0,
+        count=2,
+        age=2,
+        owner_origin_window=7,
+        owner_revision_window=8,
+        owner_candidate_bin=3,
+        owner_candidate_source="post_penalty_local_peak",
+    )
+
+    value, trace = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        SolverParams(spec_penalty_enable=False),
+        9,
+        np.asarray([0.0] * 8 + [88.0 / 60.0, 0.0]),
+        False,
+        _tracking(25.0 / 60.0, 10.0, 3.5),
+        path="adaptive",
+        window_kind="motion",
+        rise_lineage_state=state,
+        rise_lineage_enable=True,
+        rise_confirmation_policy_id=RISE_LINEAGE_NET_RISE_POLICY_ID,
+    )
+
+    assert value == pytest.approx(90.0 / 60.0)
+    assert trace.rise_confirmation_policy_id == RISE_LINEAGE_NET_RISE_POLICY_ID
+    assert trace.rise_confirmation_action == "reject"
+    assert trace.rise_lineage_reason == "confirmation_net_rise_below_step_up"
+    assert trace.rise_confirmation_observation["frames"][-1]["raw_support_ratio"] == pytest.approx(0.8)
+    owner = trace.mechanism_target_ownership["rise"]
+    assert owner["ownership_event"] == "release"
+    assert owner["owner_before_exists"] is True
+    assert owner["owner_after_exists"] is False
+    assert owner["writes_final"] is False
+    assert owner["downstream_final_writer"] == "solver_final_chain"
+
+
+def test_rise_confirmation_configuration_is_default_off_legacy() -> None:
+    cfg = V2RunConfig(data_path=Path("sample.csv"), ref_path=Path("sample_ref.csv"))
+
+    assert cfg.rise_candidate_lineage_enable is False
+    assert cfg.rise_confirmation_policy_id == "legacy_v1"
 
 
 def test_process_spectrum_with_trace_uses_asymmetric_tracking_range(monkeypatch) -> None:
@@ -240,9 +349,7 @@ def test_process_spectrum_extracts_candidates_after_motion_penalty(
     assert trace.raw_candidate_hr_bpm == pytest.approx(120.0)
     assert trace.candidate_peaks_bpm[0] == pytest.approx(120.0)
     assert trace.selected_peak_rank == 1
-    assert trace.penalty_removed_candidate_peaks_bpm == pytest.approx(
-        (54.0,)
-    )
+    assert trace.penalty_removed_candidate_peaks_bpm == pytest.approx((54.0,))
     assert trace.tracking_nonadoption_reason == "selected"
 
 
@@ -288,9 +395,7 @@ def test_invalid_penalty_width_disables_candidate_exclusion(
     assert trace.selected_peak_rank == 1
     assert trace.penalty_weight_min == pytest.approx(1.0)
     assert trace.penalty_effective_half_width_bpm == pytest.approx(0.0)
-    assert trace.penalty_candidate_exclusion_half_width_bpm == pytest.approx(
-        0.0
-    )
+    assert trace.penalty_candidate_exclusion_half_width_bpm == pytest.approx(0.0)
     assert trace.penalty_removed_candidate_peaks_bpm == ()
 
 
@@ -516,10 +621,7 @@ def test_motion_protection_is_suppressed_by_strong_non_penalty_challenger(
     assert trace.protection_challenger_bpm == pytest.approx(123.0)
     assert trace.candidate_source == "protection_suppressed"
     assert trace.history_protection_status == "blocked_by_challenger"
-    assert (
-        trace.tracking_nonadoption_reason
-        == "protection_blocked_by_challenger"
-    )
+    assert trace.tracking_nonadoption_reason == "protection_blocked_by_challenger"
 
 
 def test_motion_tracking_holds_previous_when_only_penalty_band_peak_exists(
@@ -608,7 +710,7 @@ def test_motion_penalty_does_not_require_reference_hr(monkeypatch) -> None:
     assert trace.protection_applied is False
 
 
-def test_motion_reacquire_unlocks_from_stable_far_challenger(monkeypatch) -> None:
+def test_motion_reacquire_unlocks_from_stable_reachable_challenger(monkeypatch) -> None:
     from ppg_hr.params import SolverParams
     from ppg_hr.v2 import solver
 
@@ -618,9 +720,9 @@ def test_motion_reacquire_unlocks_from_stable_far_challenger(monkeypatch) -> Non
             1.00,
             1.10,
             1.20,
-            2.10,
-            2.20,
-            2.30,
+            1.50,
+            1.60,
+            1.70,
         ],
         [
             0.0,
@@ -646,8 +748,7 @@ def test_motion_reacquire_unlocks_from_stable_far_challenger(monkeypatch) -> Non
     )
     state = solver.SpectrumReacquireState(
         mode="challenge",
-        candidate_hz=2.20,
-        challenge_start_hz=0.95,
+        candidate_hz=1.60,
         count=2,
         low_lock_count=8,
     )
@@ -676,13 +777,369 @@ def test_motion_reacquire_unlocks_from_stable_far_challenger(monkeypatch) -> Non
         history.append(value)
 
     assert outputs[0] == pytest.approx(1.60)
-    assert outputs[-1] == pytest.approx(2.20)
+    assert outputs[-1] == pytest.approx(1.60)
     assert traces[0].reacquire_triggered is True
     assert traces[-1].reacquire_mode == "locked"
     assert any(
-        candidate == pytest.approx(132.0)
-        for candidate in traces[-1].unpenalized_candidate_peaks_bpm
+        candidate == pytest.approx(96.0) for candidate in traces[-1].unpenalized_candidate_peaks_bpm
     )
+
+
+def test_track_spectrum_window_naturally_reacquires_flat_low_lock(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+    from ppg_hr.v2.spectrum_tracking import (
+        SpectrumReacquireState,
+        track_spectrum_window,
+    )
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.10, 1.20, 1.30, 1.51, 1.61, 1.71],
+        [0.0, 1.00, 0.0, 0.0, 0.55, 0.0],
+    )
+    params = SolverParams(spec_penalty_enable=False)
+    state = SpectrumReacquireState()
+    history = [1.20]
+    traces = []
+
+    for _ in range(6):
+        value, trace = track_spectrum_window(
+            np.ones(128),
+            np.ones(128),
+            50,
+            params,
+            len(history),
+            np.asarray(history + [0.0]),
+            False,
+            _tracking(35.0 / 60.0, 10.0, 7.0),
+            path="adaptive",
+            window_kind="motion",
+            reacquire_state=state,
+            reacquire_enable=True,
+            implementation=solver._process_spectrum_with_trace_impl,
+        )
+        history.append(value)
+        traces.append(trace)
+
+    assert traces[-1].reacquire_triggered is True
+    assert traces[-1].reacquire_reason == "confirmed_upward_candidate"
+    assert history[-1] == pytest.approx(96.6 / 60.0)
+
+
+def test_motion_reacquire_accepts_rising_candidate_without_low_track_drift(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    outputs, traces = _run_reacquire_evidence_sequence(
+        monkeypatch,
+        candidate_bpms=[91.74, 94.67, 96.50],
+        previous_bpms=[70.0, 69.0, 68.0],
+    )
+
+    assert outputs[-1] == pytest.approx(96.50 / 60.0)
+    assert traces[-1].reacquire_triggered is True
+    assert traces[-1].reacquire_reason == "confirmed_upward_candidate"
+    assert traces[-1].reacquire_evidence_route == "candidate_drift"
+    assert traces[-1].reacquire_candidate_drift_bpm == pytest.approx(4.76)
+
+
+def test_motion_reacquire_rejects_falling_candidate_without_low_track_drift(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _outputs, traces = _run_reacquire_evidence_sequence(
+        monkeypatch,
+        candidate_bpms=[101.81, 98.88, 99.61],
+        previous_bpms=[63.28, 61.52, 62.26],
+    )
+
+    assert traces[-1].reacquire_triggered is False
+    assert traces[-1].reacquire_reason == "insufficient_reacquire_evidence"
+    assert traces[-1].reacquire_action == "reset_candidate"
+    assert traces[-1].reacquire_evidence_route == ""
+    assert traces[-1].reacquire_candidate_drift_bpm == pytest.approx(-2.20)
+
+
+def test_motion_reacquire_accepts_low_track_drift_when_candidate_falls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    outputs, traces = _run_reacquire_evidence_sequence(
+        monkeypatch,
+        candidate_bpms=[100.34, 100.16, 97.60],
+        previous_bpms=[68.96, 72.46, 75.96],
+    )
+
+    assert outputs[-1] == pytest.approx(97.60 / 60.0)
+    assert traces[-1].reacquire_triggered is True
+    assert traces[-1].reacquire_reason == "confirmed_upward_candidate"
+    assert traces[-1].reacquire_evidence_route == "low_track_drift"
+    assert traces[-1].reacquire_low_track_drift_bpm == pytest.approx(7.0)
+
+
+def test_motion_reacquire_keeps_evidence_auditable_until_target_is_reached(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    outputs, traces = _run_reacquire_evidence_sequence(
+        monkeypatch,
+        candidate_bpms=[104.0, 104.0, 104.0, 104.0],
+        previous_bpms=[65.0, 65.0, 65.0, 95.0],
+    )
+
+    assert traces[-2].reacquire_mode == "reacquiring"
+    assert traces[-2].reacquire_evidence_route == "candidate_drift"
+    assert traces[-1].reacquire_reason == "reacquire_reached_candidate"
+    assert traces[-1].reacquire_evidence_route == "candidate_drift"
+    assert outputs[-1] == pytest.approx(104.0 / 60.0)
+
+
+def test_reacquire_state_preserves_legacy_positional_field_order() -> None:
+    from ppg_hr.v2.spectrum_tracking import SpectrumReacquireState
+
+    state = SpectrumReacquireState("challenge", 1.5, 3, 8)
+
+    assert state.count == 3
+    assert state.low_lock_count == 8
+    assert state.challenge_candidate_start_hz is None
+
+
+def test_track_spectrum_window_rejects_candidate_beyond_repair_corridor(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+    from ppg_hr.v2.spectrum_tracking import (
+        SpectrumReacquireState,
+        track_spectrum_window,
+    )
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.00, 1.10, 1.20, 2.10, 2.20, 2.30],
+        [0.0, 1.00, 0.0, 0.0, 0.55, 0.0],
+    )
+    params = SolverParams(spec_penalty_enable=False)
+    state = SpectrumReacquireState()
+    history = [1.10]
+    traces = []
+
+    for _ in range(6):
+        value, trace = track_spectrum_window(
+            np.ones(128),
+            np.ones(128),
+            50,
+            params,
+            len(history),
+            np.asarray(history + [0.0]),
+            False,
+            _tracking(35.0 / 60.0, 10.0, 7.0),
+            path="adaptive",
+            window_kind="motion",
+            reacquire_state=state,
+            reacquire_enable=True,
+            implementation=solver._process_spectrum_with_trace_impl,
+        )
+        history.append(value)
+        traces.append(trace)
+
+    assert not any(trace.reacquire_triggered for trace in traces)
+    assert traces[-1].reacquire_reason == "no_qualified_upward_candidate"
+    assert traces[-1].reacquire_candidate_rejected_reason == "candidate_jump_too_large"
+    assert history[-1] == pytest.approx(1.10)
+
+
+def test_track_spectrum_window_exits_reacquire_when_confirmed_candidate_disappears(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+    from ppg_hr.v2.spectrum_tracking import (
+        SpectrumReacquireState,
+        track_spectrum_window,
+    )
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.00, 1.10, 1.20],
+        [0.0, 1.00, 0.0],
+    )
+    state = SpectrumReacquireState(
+        mode="reacquiring",
+        candidate_hz=1.60,
+        count=3,
+        low_lock_count=8,
+    )
+
+    value, trace = track_spectrum_window(
+        np.ones(128),
+        np.ones(128),
+        50,
+        SolverParams(spec_penalty_enable=False),
+        1,
+        np.asarray([1.10, 0.0]),
+        False,
+        _tracking(35.0 / 60.0, 10.0, 7.0),
+        path="adaptive",
+        window_kind="motion",
+        reacquire_state=state,
+        reacquire_enable=True,
+        implementation=solver._process_spectrum_with_trace_impl,
+    )
+
+    assert value == pytest.approx(1.10)
+    assert trace.reacquire_mode == "locked"
+    assert trace.reacquire_reason == "reacquire_lost_candidate"
+    assert trace.reacquire_action == "reset"
+
+
+def test_track_spectrum_window_completes_reacquire_when_track_reaches_supported_target(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+    from ppg_hr.v2.spectrum_tracking import (
+        SpectrumReacquireState,
+        track_spectrum_window,
+    )
+
+    target_hz = 98.0 / 60.0
+    previous_hz = 96.6 / 60.0
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.00, 1.10, 1.20, target_hz - 0.10, target_hz, target_hz + 0.10],
+        [0.0, 1.00, 0.0, 0.0, 0.55, 0.0],
+    )
+    state = SpectrumReacquireState(
+        mode="reacquiring",
+        candidate_hz=target_hz,
+        count=3,
+        low_lock_count=8,
+    )
+
+    value, trace = track_spectrum_window(
+        np.ones(128),
+        np.ones(128),
+        50,
+        SolverParams(spec_penalty_enable=False),
+        1,
+        np.asarray([previous_hz, 0.0]),
+        False,
+        _tracking(35.0 / 60.0, 10.0, 7.0),
+        path="adaptive",
+        window_kind="motion",
+        reacquire_state=state,
+        reacquire_enable=True,
+        implementation=solver._process_spectrum_with_trace_impl,
+    )
+
+    assert value == pytest.approx(target_hz)
+    assert trace.reacquire_mode == "locked"
+    assert trace.reacquire_reason == "reacquire_reached_candidate"
+    assert trace.reacquire_action == "complete"
+
+
+def test_track_spectrum_window_keeps_confirmed_reacquire_target_frozen(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+    from ppg_hr.v2.spectrum_tracking import (
+        SpectrumReacquireState,
+        track_spectrum_window,
+    )
+
+    target_hz = 96.0 / 60.0
+    support_hz = 102.0 / 60.0
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.00, 1.10, 1.20, support_hz - 0.10, support_hz, support_hz + 0.10],
+        [0.0, 1.00, 0.0, 0.0, 0.55, 0.0],
+    )
+    state = SpectrumReacquireState(
+        mode="reacquiring",
+        candidate_hz=target_hz,
+        count=3,
+        low_lock_count=8,
+    )
+
+    value, trace = track_spectrum_window(
+        np.ones(128),
+        np.ones(128),
+        50,
+        SolverParams(spec_penalty_enable=False),
+        1,
+        np.asarray([66.0 / 60.0, 0.0]),
+        False,
+        _tracking(35.0 / 60.0, 10.0, 7.0),
+        path="adaptive",
+        window_kind="motion",
+        reacquire_state=state,
+        reacquire_enable=True,
+        implementation=solver._process_spectrum_with_trace_impl,
+    )
+
+    assert value == pytest.approx(target_hz)
+    assert trace.reacquire_candidate_bpm == pytest.approx(96.0)
+    assert trace.reacquire_reason == "reacquire_reached_candidate"
+    assert trace.reacquire_action == "complete"
+
+
+def test_track_spectrum_window_exits_reacquire_when_target_enters_penalty_core(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+    from ppg_hr.v2.spectrum_tracking import (
+        SpectrumReacquireState,
+        track_spectrum_window,
+    )
+
+    target_hz = 96.0 / 60.0
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.00, 1.10, 1.20, target_hz - 0.10, target_hz, target_hz + 0.10],
+        [0.0, 1.00, 0.0, 0.0, 0.55, 0.0],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([target_hz]),
+            np.asarray([1.0]),
+        ),
+    )
+    state = SpectrumReacquireState(
+        mode="reacquiring",
+        candidate_hz=target_hz,
+        count=3,
+        low_lock_count=8,
+    )
+
+    _value, trace = track_spectrum_window(
+        np.ones(128),
+        np.ones(128),
+        50,
+        SolverParams(
+            spec_penalty_enable=True,
+            spec_penalty_weight=0.2,
+            spec_penalty_width=0.12,
+        ),
+        1,
+        np.asarray([66.0 / 60.0, 0.0]),
+        True,
+        _tracking(35.0 / 60.0, 10.0, 7.0),
+        path="adaptive",
+        window_kind="motion",
+        reacquire_state=state,
+        reacquire_enable=True,
+        penalty_confidence_enable=True,
+        implementation=solver._process_spectrum_with_trace_impl,
+    )
+
+    assert trace.reacquire_mode == "locked"
+    assert trace.reacquire_reason == "reacquire_lost_candidate"
+    assert trace.reacquire_candidate_rejected_reason == "near_primary_penalty_core"
+    assert trace.reacquire_action == "reset"
 
 
 def test_motion_high_lock_escape_descends_to_stable_lower_challenger(monkeypatch) -> None:
@@ -866,8 +1323,7 @@ def test_relative_recovery_uses_target_neighborhood_after_entry_gap_closes(
     assert traces[-1].high_lock_exit_from_mode == "reacquiring"
 
 
-def test_relative_recovery_challenge_timeout_is_reachable_in_solver(
-) -> None:
+def test_relative_recovery_challenge_timeout_is_reachable_in_solver() -> None:
     from ppg_hr.v2 import solver
     from ppg_hr.v2.runtime_policy import runtime_policy_from_config
 
@@ -975,9 +1431,7 @@ def test_frozen_control_matches_current_high_lock_trajectory(monkeypatch) -> Non
         monkeypatch.setattr(
             solver,
             "_candidate_peak_spectrum",
-            lambda _sig, _fs: tuple(
-                np.asarray(value, dtype=float) for value in next(source)
-            ),
+            lambda _sig, _fs: tuple(np.asarray(value, dtype=float) for value in next(source)),
         )
         policy = runtime_policy_from_config(
             V2RunConfig(
@@ -1048,9 +1502,7 @@ def test_relative_recovery_candidate_exits_when_challenger_is_lost(
     monkeypatch.setattr(
         solver,
         "_candidate_peak_spectrum",
-        lambda _sig, _fs: tuple(
-            np.asarray(value, dtype=float) for value in next(source)
-        ),
+        lambda _sig, _fs: tuple(np.asarray(value, dtype=float) for value in next(source)),
     )
     policy = runtime_policy_from_config(
         V2RunConfig(
@@ -1380,9 +1832,7 @@ def test_resolution_adaptive_penalty_reports_effective_runtime_width(
     assert trace.penalty_width_source == "causal_window_resolution"
     assert trace.penalty_resolution_hz == pytest.approx(0.125)
     assert trace.penalty_effective_half_width_bpm == pytest.approx(11.25)
-    assert trace.penalty_candidate_exclusion_half_width_bpm == pytest.approx(
-        12.25
-    )
+    assert trace.penalty_candidate_exclusion_half_width_bpm == pytest.approx(12.25)
     assert trace.penalty_half_width_bpm == pytest.approx(11.25)
 
 
@@ -1440,18 +1890,586 @@ def test_frozen_penalty_control_matches_legacy_runtime_behavior(
     )
 
     assert control_value == pytest.approx(legacy_value)
-    assert control.penalty_half_width_bpm == pytest.approx(
-        legacy.penalty_half_width_bpm
-    )
-    assert control.penalty_weight_min == pytest.approx(
-        legacy.penalty_weight_min
-    )
-    assert control.candidate_peaks_bpm == pytest.approx(
-        legacy.candidate_peaks_bpm
-    )
+    assert control.penalty_half_width_bpm == pytest.approx(legacy.penalty_half_width_bpm)
+    assert control.penalty_weight_min == pytest.approx(legacy.penalty_weight_min)
+    assert control.candidate_peaks_bpm == pytest.approx(legacy.candidate_peaks_bpm)
     assert control.protection_applied == legacy.protection_applied
     assert legacy.penalty_policy_id == "legacy_config"
     assert control.penalty_policy_id == "current_soft_penalty_control_v1"
+
+
+def test_nondestructive_penalty_keeps_soft_weighted_candidate_visible(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [0.9, 1.0, 1.1, 1.4, 1.5, 1.6],
+        [0.0, 1.0, 0.0, 0.0, 0.30, 0.0],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([1.0]),
+            np.asarray([1.0]),
+        ),
+    )
+    params = SolverParams(
+        spec_penalty_enable=True,
+        spec_penalty_weight=0.4,
+        spec_penalty_width=0.05,
+    )
+
+    control_value, control = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        0,
+        np.asarray([0.0]),
+        True,
+        _tracking(1.2, 120.0, 120.0),
+        path="adaptive",
+        window_kind="motion",
+        penalty_policy_id="current_soft_penalty_control_v1",
+        penalty_confidence_enable=True,
+    )
+    candidate_value, candidate = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        0,
+        np.asarray([0.0]),
+        True,
+        _tracking(1.2, 120.0, 120.0),
+        path="adaptive",
+        window_kind="motion",
+        penalty_policy_id="nondestructive_weighted_visible_v1",
+        penalty_confidence_enable=True,
+    )
+
+    assert control_value == pytest.approx(1.5)
+    assert candidate_value == pytest.approx(1.0)
+    assert candidate.candidate_peaks_bpm[0] == pytest.approx(60.0)
+    assert candidate.penalty_candidate_exclusion_half_width_bpm == pytest.approx(
+        control.penalty_candidate_exclusion_half_width_bpm
+    )
+    assert candidate.penalty_weight_min == pytest.approx(control.penalty_weight_min)
+    assert candidate.penalty_removed_candidate_peaks_bpm == ()
+    assert candidate.penalty_would_remove_candidate_peaks_bpm == pytest.approx(
+        control.penalty_removed_candidate_peaks_bpm
+    )
+    assert candidate.penalty_would_remove_candidate_peak_bins
+    assert candidate.candidate_visibility_mode == "weighted_visible"
+    assert candidate.penalty_hard_removal_applied is False
+    assert "candidate_visibility_mode" not in control.to_dict()
+    assert "penalty_would_remove_candidate_peak_bins" not in control.to_dict()
+    assert "penalty_would_remove_candidate_peaks_bpm" not in control.to_dict()
+    assert "penalty_hard_removal_applied" not in control.to_dict()
+
+
+@pytest.mark.parametrize(
+    ("window_kind", "enable_penalty"),
+    [("rest", True), ("recovery", True), ("motion", False)],
+)
+def test_nondestructive_visibility_is_inert_without_active_motion_penalty(
+    monkeypatch,
+    window_kind: str,
+    enable_penalty: bool,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [0.9, 1.0, 1.1],
+        [0.0, 1.0, 0.0],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([], dtype=float),
+            np.asarray([], dtype=float),
+        ),
+    )
+
+    value, trace = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        SolverParams(spec_penalty_enable=True),
+        0,
+        np.asarray([0.0]),
+        enable_penalty,
+        _tracking(1.2, 120.0, 120.0),
+        path="adaptive",
+        window_kind=window_kind,
+        penalty_policy_id="nondestructive_weighted_visible_v1",
+    )
+
+    assert value == pytest.approx(1.0)
+    assert trace.penalty_removed_candidate_peaks_bpm == ()
+    assert trace.penalty_would_remove_candidate_peaks_bpm == ()
+    assert trace.penalty_hard_removal_applied is False
+
+
+def test_nondestructive_visibility_covers_protection_suppression_repartition(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.95, 2.05, 2.15, 2.20, 2.30, 2.40],
+        [0.00, 0.55, 0.00, 0.00, 1.00, 0.00],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([2.30]),
+            np.asarray([1.0]),
+        ),
+    )
+    params = SolverParams(
+        spec_penalty_enable=True,
+        spec_penalty_weight=0.2,
+        spec_penalty_width=0.2,
+    )
+
+    control_value, control = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        1,
+        np.asarray([2.28, 0.0]),
+        True,
+        _tracking(25.0 / 60.0, 20.0, 5.0),
+        path="adaptive",
+        window_kind="motion",
+        penalty_confidence_enable=True,
+    )
+    candidate_value, candidate = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        1,
+        np.asarray([2.28, 0.0]),
+        True,
+        _tracking(25.0 / 60.0, 20.0, 5.0),
+        path="adaptive",
+        window_kind="motion",
+        penalty_policy_id="nondestructive_weighted_visible_v1",
+        penalty_confidence_enable=True,
+    )
+
+    assert candidate_value == pytest.approx(control_value)
+    assert candidate.protection_suppressed is control.protection_suppressed is True
+    assert candidate.protection_challenger_bpm == pytest.approx(
+        control.protection_challenger_bpm
+    )
+    assert candidate.penalty_candidate_exclusion_half_width_bpm == pytest.approx(
+        control.penalty_candidate_exclusion_half_width_bpm
+    )
+    assert candidate.penalty_would_remove_candidate_peaks_bpm
+    assert candidate.penalty_removed_candidate_peaks_bpm == ()
+
+
+def test_shadow_candidate_acquire_window_keeps_challenger_and_production_value_exact(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+    from ppg_hr.v2.penalty_candidates import SuppressedProtectedShadowState
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.95, 2.05, 2.15, 2.20, 2.30, 2.40],
+        [0.00, 0.55, 0.00, 0.00, 1.00, 0.00],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([2.30]),
+            np.asarray([1.0]),
+        ),
+    )
+    params = SolverParams(
+        spec_penalty_enable=True,
+        spec_penalty_weight=0.2,
+        spec_penalty_width=0.2,
+    )
+    history = np.asarray([2.28, 0.0])
+
+    control_value, control = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        1,
+        history,
+        True,
+        _tracking(25.0 / 60.0, 20.0, 5.0),
+        path="adaptive",
+        window_kind="motion",
+        penalty_confidence_enable=True,
+    )
+    state = SuppressedProtectedShadowState()
+    candidate_value, candidate = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        1,
+        history,
+        True,
+        _tracking(25.0 / 60.0, 20.0, 5.0),
+        path="adaptive",
+        window_kind="motion",
+        penalty_policy_id="suppressed_protected_shadow_v1",
+        penalty_confidence_enable=True,
+        suppressed_shadow_state=state,
+    )
+
+    assert control.protection_suppressed is True
+    assert candidate_value == pytest.approx(control_value)
+    assert candidate.tracked_hr_bpm == pytest.approx(control.tracked_hr_bpm)
+    assert candidate.slew_limited_hr_bpm == pytest.approx(control.slew_limited_hr_bpm)
+    assert candidate.protection_challenger_bpm == pytest.approx(
+        control.protection_challenger_bpm
+    )
+    assert candidate.candidate_visibility_mode == "shadow_release"
+    assert candidate.shadow_owner_event == "acquire"
+    assert candidate.shadow_owner_origin_window == 1
+    assert candidate.shadow_owner_origin_bin is not None
+    assert candidate.shadow_owner_origin_bpm == pytest.approx(138.0)
+    assert candidate.shadow_released_candidate_bin is None
+    assert candidate.shadow_acquire_inert_projection_sha256
+    assert candidate.shadow_acquire_inert_projection_sha256 == (
+        solver.canonical_sha256(
+            solver._shadow_acquire_inert_projection(candidate.to_dict())
+        )
+    )
+    assert state.active is True
+
+
+def test_shadow_candidate_next_window_releases_only_owner_target_to_existing_order(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+    from ppg_hr.v2.penalty_candidates import SuppressedProtectedShadowState
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.95, 2.05, 2.15, 2.20, 2.25, 2.30, 2.40],
+        [0.00, 0.55, 0.00, 0.40, 0.00, 1.00, 0.00],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([2.30]),
+            np.asarray([1.0]),
+        ),
+    )
+    params = SolverParams(
+        spec_penalty_enable=True,
+        spec_penalty_weight=0.2,
+        spec_penalty_width=0.2,
+    )
+    state = SuppressedProtectedShadowState()
+    _, acquired = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        1,
+        np.asarray([2.28, 0.0]),
+        True,
+        _tracking(25.0 / 60.0, 20.0, 5.0),
+        path="adaptive",
+        window_kind="motion",
+        penalty_policy_id="suppressed_protected_shadow_v1",
+        penalty_confidence_enable=True,
+        suppressed_shadow_state=state,
+    )
+    assert acquired.shadow_owner_event == "acquire"
+
+    _, released = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        2,
+        np.asarray([2.28, 2.05, 0.0]),
+        True,
+        _tracking(25.0 / 60.0, 20.0, 5.0),
+        path="adaptive",
+        window_kind="motion",
+        penalty_policy_id="suppressed_protected_shadow_v1",
+        penalty_confidence_enable=True,
+        suppressed_shadow_state=state,
+    )
+
+    assert released.shadow_owner_event == "release"
+    assert released.shadow_owner_age == 1
+    assert released.shadow_released_candidate_bin == acquired.shadow_owner_origin_bin
+    assert released.shadow_released_candidate_bpm == pytest.approx(138.0)
+    assert any(value == pytest.approx(138.0) for value in released.candidate_peaks_bpm)
+    assert any(
+        value == pytest.approx(132.0)
+        for value in released.penalty_removed_candidate_peaks_bpm
+    )
+    assert not any(
+        value == pytest.approx(138.0)
+        for value in released.penalty_removed_candidate_peaks_bpm
+    )
+    assert released.penalty_hard_removal_applied is True
+    assert state.active is False
+
+
+def test_continuous_candidate_next_window_keeps_owner_target_in_existing_order(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+    from ppg_hr.v2.penalty_candidates import SuppressedProtectedShadowState
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.95, 2.05, 2.15, 2.20, 2.25, 2.30, 2.40],
+        [0.00, 0.55, 0.00, 0.40, 0.00, 1.00, 0.00],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([2.30]),
+            np.asarray([1.0]),
+        ),
+    )
+    params = SolverParams(
+        spec_penalty_enable=True,
+        spec_penalty_weight=0.2,
+        spec_penalty_width=0.2,
+    )
+    state = SuppressedProtectedShadowState()
+    acquired_value, acquired = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        1,
+        np.asarray([2.28, 0.0]),
+        True,
+        _tracking(25.0 / 60.0, 20.0, 5.0),
+        path="adaptive",
+        window_kind="motion",
+        penalty_policy_id="suppressed_protected_continuous_visibility_v1",
+        penalty_confidence_enable=True,
+        suppressed_shadow_state=state,
+    )
+    visible_value, visible = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        2,
+        np.asarray([2.28, acquired_value, 0.0]),
+        True,
+        _tracking(25.0 / 60.0, 20.0, 5.0),
+        path="adaptive",
+        window_kind="motion",
+        penalty_policy_id="suppressed_protected_continuous_visibility_v1",
+        penalty_confidence_enable=True,
+        suppressed_shadow_state=state,
+    )
+
+    assert acquired.shadow_owner_event == "acquire"
+    assert acquired.protection_suppressed is True
+    assert acquired.shadow_released_candidate_bin is None
+    assert acquired.shadow_acquire_inert_projection_sha256
+    assert visible.shadow_owner_event == "visible"
+    assert visible.shadow_owner_age == 1
+    assert visible.shadow_released_candidate_bin == acquired.shadow_owner_origin_bin
+    assert visible.shadow_released_candidate_bpm == pytest.approx(138.0)
+    assert any(value == pytest.approx(138.0) for value in visible.candidate_peaks_bpm)
+    assert any(
+        value == pytest.approx(132.0)
+        for value in visible.penalty_removed_candidate_peaks_bpm
+    )
+    assert not any(
+        value == pytest.approx(138.0)
+        for value in visible.penalty_removed_candidate_peaks_bpm
+    )
+    assert visible.penalty_hard_removal_applied is True
+    assert visible.downstream_final_writer == "solver_final_chain"
+    assert visible.candidate_visibility_mode == "shadow_release"
+    assert visible.penalty_effective_half_width_bpm == pytest.approx(
+        acquired.penalty_effective_half_width_bpm
+    )
+    assert visible.penalty_confidence == pytest.approx(acquired.penalty_confidence)
+    assert visible.harmonic_penalty_applied == acquired.harmonic_penalty_applied
+    assert visible_value > 0.0
+    assert state.active is True
+
+
+def test_same_window_candidate_keeps_challenger_selected_and_exposes_only_target(
+    monkeypatch,
+) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    _patch_candidate_spectrum(
+        monkeypatch,
+        [1.95, 2.05, 2.15, 2.20, 2.25, 2.30, 2.40],
+        [0.00, 0.55, 0.00, 0.40, 0.00, 1.00, 0.00],
+    )
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([2.30]),
+            np.asarray([1.0]),
+        ),
+    )
+    params = SolverParams(
+        spec_penalty_enable=True,
+        spec_penalty_weight=0.2,
+        spec_penalty_width=0.2,
+    )
+
+    control_value, control = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        1,
+        np.asarray([2.28, 0.0]),
+        True,
+        _tracking(25.0 / 60.0, 20.0, 5.0),
+        path="adaptive",
+        window_kind="motion",
+        penalty_confidence_enable=True,
+    )
+    candidate_value, candidate = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        1,
+        np.asarray([2.28, 0.0]),
+        True,
+        _tracking(25.0 / 60.0, 20.0, 5.0),
+        path="adaptive",
+        window_kind="motion",
+        penalty_policy_id="suppressed_protected_same_window_visibility_v1",
+        penalty_confidence_enable=True,
+    )
+    _, next_window = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        params,
+        2,
+        np.asarray([1.20, 0.0]),
+        True,
+        _tracking(25.0 / 60.0, 20.0, 5.0),
+        path="adaptive",
+        window_kind="motion",
+        penalty_policy_id="suppressed_protected_same_window_visibility_v1",
+        penalty_confidence_enable=True,
+    )
+
+    assert control.protection_suppressed is True
+    assert candidate.same_window_visibility_active is True
+    assert candidate.same_window_protected_target_bpm == pytest.approx(138.0)
+    assert candidate.same_window_challenger_selected_bpm == pytest.approx(
+        control.protection_challenger_bpm
+    )
+    assert candidate.same_window_protected_target_bin in (
+        candidate.same_window_candidate_order_bins
+    )
+    assert candidate.same_window_challenger_selected_bin in (
+        candidate.same_window_candidate_order_bins
+    )
+    order_identity = dict(
+        zip(
+            candidate.same_window_candidate_order_bins,
+            candidate.same_window_candidate_order_bpms,
+            strict=True,
+        )
+    )
+    assert order_identity[candidate.same_window_challenger_selected_bin] == (
+        pytest.approx(candidate.same_window_challenger_selected_bpm)
+    )
+    assert order_identity[candidate.same_window_protected_target_bin] == pytest.approx(
+        candidate.same_window_protected_target_bpm
+    )
+    assert (
+        candidate.same_window_challenger_selected_bin
+        != candidate.same_window_protected_target_bin
+    )
+    assert candidate_value == pytest.approx(control_value)
+    assert candidate.tracked_hr_bpm == pytest.approx(control.tracked_hr_bpm)
+    assert any(value == pytest.approx(138.0) for value in candidate.candidate_peaks_bpm)
+    assert any(
+        value == pytest.approx(132.0)
+        for value in candidate.penalty_removed_candidate_peaks_bpm
+    )
+    assert not any(
+        value == pytest.approx(138.0)
+        for value in candidate.penalty_removed_candidate_peaks_bpm
+    )
+    assert "suppressed_protected_shadow" not in candidate.mechanism_target_ownership
+    assert candidate.downstream_final_writer == control.downstream_final_writer
+    assert not any(key.startswith("shadow_") for key in candidate.to_dict())
+    assert next_window.same_window_visibility_active is False
+    assert next_window.same_window_protected_target_bin is None
+
+
+def test_nondestructive_visibility_handles_no_local_candidates(monkeypatch) -> None:
+    from ppg_hr.params import SolverParams
+    from ppg_hr.v2 import solver
+
+    _patch_candidate_spectrum(monkeypatch, [], [])
+    monkeypatch.setattr(
+        solver,
+        "fft_peaks",
+        lambda _sig, _fs, _percent: (
+            np.asarray([], dtype=float),
+            np.asarray([], dtype=float),
+        ),
+    )
+
+    value, trace = solver._process_spectrum_with_trace(
+        np.ones(128),
+        np.ones(128),
+        50,
+        SolverParams(spec_penalty_enable=True),
+        0,
+        np.asarray([0.0]),
+        True,
+        _tracking(1.2, 120.0, 120.0),
+        path="adaptive",
+        window_kind="motion",
+        penalty_policy_id="nondestructive_weighted_visible_v1",
+    )
+
+    assert value == pytest.approx(0.0)
+    assert trace.candidate_peaks_bpm == ()
+    assert trace.penalty_would_remove_candidate_peaks_bpm == ()
+    assert trace.penalty_removed_candidate_peaks_bpm == ()
 
 
 def test_trusted_history_corridor_trace_distinguishes_supported_true_rise(
@@ -1498,8 +2516,7 @@ def test_trusted_history_corridor_trace_distinguishes_supported_true_rise(
     assert trace.protection_applied is True
     assert trace.protected_penalty_overlap is True
     assert not any(
-        value == pytest.approx(127.98)
-        for value in trace.penalty_removed_candidate_peaks_bpm
+        value == pytest.approx(127.98) for value in trace.penalty_removed_candidate_peaks_bpm
     )
 
 
@@ -2060,8 +3077,7 @@ def test_solve_v2_trace_rescue_runs_fixed_candidates_and_preserves_runtime_choic
     assert result.metadata["trace_rescue"]["selected_candidate"] == "low_rate_stable"
     assert len(result.metadata["trace_rescue"]["candidate_diagnostics"]) == 5
     assert all(
-        row["trace_rescue_selected_candidate"] == "low_rate_stable"
-        for row in result.window_table
+        row["trace_rescue_selected_candidate"] == "low_rate_stable" for row in result.window_table
     )
 
 
@@ -2408,13 +3424,8 @@ def test_post_motion_dynamic_guard_switches_on_configured_gap_rescue() -> None:
 
     source = np.zeros((9, 9), dtype=float)
     source[:, 0] = np.asarray([98, 99, 100, 101, 102, 103, 104, 105, 106], dtype=float)
-    source[:, 2] = (
-        np.asarray([130, 128, 126, 124, 121, 118, 115, 112, 109], dtype=float)
-        / 60.0
-    )
-    source[:, 4] = (
-        np.asarray([118, 112, 108, 108, 88, 86, 84, 82, 80], dtype=float) / 60.0
-    )
+    source[:, 2] = np.asarray([130, 128, 126, 124, 121, 118, 115, 112, 109], dtype=float) / 60.0
+    source[:, 4] = np.asarray([118, 112, 108, 108, 88, 86, 84, 82, 80], dtype=float) / 60.0
     cfg = V2RunConfig(
         data_path=Path("sample.csv"),
         ref_path=Path("sample_HR_ref.csv"),
@@ -2517,9 +3528,7 @@ def test_post_motion_dynamic_guard_resets_fft_history_after_guard(
         for path, times_idx, history_len in fft_calls
     )
     assert result.metadata["post_motion_dynamic_guard"]["reset_fft_enabled"] is True
-    assert (
-        result.metadata["post_motion_dynamic_guard"]["reset_fft_applied_windows"] > 0
-    )
+    assert result.metadata["post_motion_dynamic_guard"]["reset_fft_applied_windows"] > 0
 
 
 def test_final_hr_blend_keeps_fft_on_nonadaptive_windows() -> None:
@@ -2749,9 +3758,7 @@ def test_minimal_handoff_also_reduces_legacy_guard_to_audit_only() -> None:
     assert mask.tolist() == [False, True, True, True]
     assert switch_idx is None
     assert actual == []
-    assert suppressed == [
-        {**event, "suppressed_by": "minimal_single_writer_handoff"}
-    ]
+    assert suppressed == [{**event, "suppressed_by": "minimal_single_writer_handoff"}]
 
 
 def test_dual_reset_runtime_config_uses_a2_loose_observability_platform() -> None:

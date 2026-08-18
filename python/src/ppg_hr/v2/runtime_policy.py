@@ -100,14 +100,18 @@ class V2MotionPenaltyPolicy:
     penalty_id: str
     width_mode: str
     corridor_mode: str
+    candidate_visibility_mode: str = "hard_exclusion"
 
     def metadata(self) -> dict[str, Any]:
-        return {
+        payload = {
             "enabled": bool(self.enabled),
             "penalty_id": self.penalty_id,
             "width_mode": self.width_mode,
             "corridor_mode": self.corridor_mode,
         }
+        if self.candidate_visibility_mode != "hard_exclusion":
+            payload["candidate_visibility_mode"] = self.candidate_visibility_mode
+        return payload
 
 
 @dataclass(frozen=True)
@@ -251,6 +255,11 @@ def runtime_policy_from_config(cfg: V2RunConfig) -> V2RuntimePolicy:
                 "single_previous_track"
                 if penalty_candidate is None
                 else str(penalty_candidate.constants["corridor_mode"])
+            ),
+            candidate_visibility_mode=(
+                "hard_exclusion"
+                if penalty_candidate is None
+                else penalty_candidate.candidate_visibility_mode.value
             ),
         ),
         high_lock_escape=V2HighLockEscapePolicy(

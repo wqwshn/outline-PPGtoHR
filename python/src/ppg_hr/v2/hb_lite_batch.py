@@ -31,14 +31,30 @@ HB_LITE_BAYES_CONFIG = V2BayesConfig(
     random_state=42,
 )
 HB24_SAMPLE_STEMS = (
-    "bobi1", "bobi2", "bobi3",
-    "jianpan1", "jianpan2", "jianpan3",
-    "kaihe1", "kaihe2", "kaihe3",
-    "quanji1", "quanji2", "quanji3",
-    "run1", "run2", "run3",
-    "tiaosheng1", "tiaosheng2", "tiaosheng3",
-    "woli1", "woli2", "woli3",
-    "xiezi1", "xiezi2", "xiezi3",
+    "bobi1",
+    "bobi2",
+    "bobi3",
+    "jianpan1",
+    "jianpan2",
+    "jianpan3",
+    "kaihe1",
+    "kaihe2",
+    "kaihe3",
+    "quanji1",
+    "quanji2",
+    "quanji3",
+    "run1",
+    "run2",
+    "run3",
+    "tiaosheng1",
+    "tiaosheng2",
+    "tiaosheng3",
+    "woli1",
+    "woli2",
+    "woli3",
+    "xiezi1",
+    "xiezi2",
+    "xiezi3",
 )
 
 
@@ -57,9 +73,7 @@ def run_audited_hb_lite_batch(
     if len(set(normalised)) != len(normalised):
         raise ValueError("sample_stems contains duplicate samples")
     if bayes_cfg != HB_LITE_BAYES_CONFIG:
-        raise ValueError(
-            "HB Lite N5 requires exactly 1x40, 10 seed points, random_state=42"
-        )
+        raise ValueError("HB Lite N5 requires exactly 1x40, 10 seed points, random_state=42")
     if set(normalised) != set(HB24_SAMPLE_STEMS):
         missing = sorted(set(HB24_SAMPLE_STEMS) - set(normalised))
         extra = sorted(set(normalised) - set(HB24_SAMPLE_STEMS))
@@ -280,9 +294,7 @@ def _audit_acc_comparison(
             if timeline_count == 0:
                 failures.append(f"{prefix}:empty_acc_timeline")
     if record.error_csv is not None and Path(record.error_csv).is_file():
-        with Path(record.error_csv).open(
-            "r", encoding="utf-8-sig", newline=""
-        ) as handle:
+        with Path(record.error_csv).open("r", encoding="utf-8-sig", newline="") as handle:
             rows = list(csv.DictReader(handle))
         acc_rows = [row for row in rows if row.get("method") == label]
         for row in acc_rows:
@@ -363,6 +375,7 @@ def _code_provenance() -> dict[str, Any]:
             check=True,
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
         return completed.stdout.strip()
 

@@ -1,0 +1,4 @@
+docs/contracts/acceptance/*.json text eol=lf
+data/experiments/lyx_physical4d_corrected_development_gates_v2_20260811/evaluator.py text eol=lf
+data/experiments/lyx_physical4d_corrected_development_gates_v2_20260811/output_schema.json text eol=lf
+data/experiments/lyx_physical4d_corrected_development_gates_v2_20260811/v2_threshold_registry.json text eol=lf

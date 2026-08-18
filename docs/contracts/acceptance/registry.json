@@ -1,0 +1,19 @@
+{
+  "registry_index_schema_version": "acceptance_contract_registry_index_v1",
+  "binding_schema": {
+    "path": "docs/contracts/acceptance/experiment_acceptance_contract_binding_v1.schema.json",
+    "sha256": "648dde590fc2163c96039cc463d494c230611672431e1191723fbbcaae627a38"
+  },
+  "contracts": [
+    {
+      "contract_id": "physical4d_corrected_development_gates_v2",
+      "path": "docs/contracts/acceptance/physical4d_corrected_development_gates_v2.json",
+      "sha256": "f4956e851dafda21bfaa33151045837514c34b7b3ef2f3fc00325a360a3575be",
+      "status": "frozen",
+      "evidence_level": "development_acceptance",
+      "evaluator_path": "data/experiments/lyx_physical4d_corrected_development_gates_v2_20260811/evaluator.py",
+      "evaluator_sha256": "baf4d2145abd109b275dd6443b66e4147244a5ed5d96e76ca19f0ab4e8e3e3de",
+      "metric_schema_version": "lyx_physical4d_corrected_development_output_schema_v2"
+    }
+  ]
+}

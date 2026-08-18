@@ -84,13 +84,35 @@ def test_direct_audit_rejects_non_frozen_bo_budget(tmp_path: Path) -> None:
     assert "non_frozen_bayes_config" in audit["failures"]
 
 
+def test_code_provenance_reads_non_ascii_git_diff_as_utf8(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    outputs = iter(["abc123\n", " M 报告.md\n", "中文差异\n"])
+    encodings: list[str | None] = []
+
+    def fake_run(*_args: Any, **kwargs: Any):
+        encodings.append(kwargs.get("encoding"))
+        return hb_lite_batch.subprocess.CompletedProcess(
+            args=["git"],
+            returncode=0,
+            stdout=next(outputs),
+            stderr="",
+        )
+
+    monkeypatch.setattr(hb_lite_batch.subprocess, "run", fake_run)
+
+    provenance = hb_lite_batch._code_provenance()
+
+    assert provenance["commit"] == "abc123"
+    assert provenance["dirty"] is True
+    assert provenance["diff_sha256"] is not None
+    assert encodings == ["utf-8", "utf-8", "utf-8"]
+
+
 def test_summary_audit_rejects_duplicate_or_extra_rows(tmp_path: Path) -> None:
     summary = tmp_path / "v2_batch_summary.csv"
     summary.write_text(
-        "sample,status\n"
-        "bobi1_HB_0711.csv,ok\n"
-        "bobi1_HB_0711.csv,ok\n"
-        "extra_HB_0711.csv,ok\n",
+        "sample,status\nbobi1_HB_0711.csv,ok\nbobi1_HB_0711.csv,ok\nextra_HB_0711.csv,ok\n",
         encoding="utf-8-sig",
     )
     failures: list[str] = []
@@ -102,8 +124,7 @@ def test_summary_audit_rejects_duplicate_or_extra_rows(tmp_path: Path) -> None:
     )
 
     assert failures == [
-        "summary_sample_multiset_mismatch: "
-        "expected=['bobi1'], actual=['bobi1', 'bobi1', 'extra']"
+        "summary_sample_multiset_mismatch: expected=['bobi1'], actual=['bobi1', 'bobi1', 'extra']"
     ]
 
 
@@ -150,8 +171,7 @@ def test_exploratory_runner_preserves_upstream_no_go_in_audit(
 ) -> None:
     decision = tmp_path / "decision.json"
     decision.write_text(
-        '{"verdict":"NO_GO","selected_candidate":null,'
-        '"reason":"bobi2_not_below_3_bpm"}',
+        '{"verdict":"NO_GO","selected_candidate":null,"reason":"bobi2_not_below_3_bpm"}',
         encoding="utf-8",
     )
     output = tmp_path / "out"
@@ -177,9 +197,7 @@ def test_exploratory_runner_preserves_upstream_no_go_in_audit(
         exploratory_candidate="minimal_provisional_reanchor",
     )
 
-    assert captured["run_config_overrides"][
-        "post_motion_minimal_provisional_enable"
-    ] is True
+    assert captured["run_config_overrides"]["post_motion_minimal_provisional_enable"] is True
     assert captured["run_authorization"]["upstream_verdict"] == "NO_GO"
     assert captured["run_authorization"]["merge_eligibility_unchanged"] is True
 

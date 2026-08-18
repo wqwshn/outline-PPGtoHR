@@ -7,10 +7,11 @@ import csv
 import json
 import math
 from collections import defaultdict
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import mean
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 from .lms_klms_spectral_analysis import window_metrics_from_row
 from .output_paths import prepare_output_dir, safe_output_path
@@ -40,11 +41,9 @@ LOW_LOCK_MAX_BPM = 80.0
 LEGACY_UPWARD_TARGET_MIN_BPM = 90.0
 LEGACY_UPWARD_MIN_JUMP_BPM = 20.0
 LEGACY_UPWARD_MIN_AMP_RATIO = 0.45
-RELATIVE_UPWARD_MIN_RANGE_UP_BPM = 25.0
-RELATIVE_UPWARD_MIN_RANGE_MULTIPLIER = 1.5
-CONFIRM_DRIFT_STEP_BPM = 7.0
-CONFIRM_DRIFT_STEP_FRACTION = 0.75
-CONFIRM_DRIFT_TO_TARGET_RATIO = 0.12
+QUALIFIED_UPWARD_MIN_AMP_RATIO = 0.50
+TRACKING_REPAIR_RANGE_MARGIN_BPM = 5.0
+DEFAULT_UPWARD_MAX_JUMP_BPM = 40.0
 UPWARD_CANDIDATE_STABLE_BPM = 10.0
 UPWARD_CONFIRM_WINDOWS = 3
 LOW_LOCK_MIN_WINDOWS = 4
@@ -82,7 +81,6 @@ class LowLockAnalysisResult:
 class OfflineUpwardGateState:
     mode: str = "locked"
     candidate_bpm: float | None = None
-    challenge_start_bpm: float | None = None
     count: int = 0
     low_lock_count: int = 0
 
@@ -186,9 +184,27 @@ def qualified_upward_candidate_from_row(row: dict[str, Any]) -> dict[str, Any]:
     penalty_centers = _float_list(trace.get("penalty_centers_bpm"))
     if previous_bpm is None or not (LOW_LOCK_MIN_BPM <= previous_bpm <= LOW_LOCK_MAX_BPM):
         return _candidate_decision(None, "not_low_lock")
-    eligible = _legacy_upward_candidates(candidates, amplitudes, previous_bpm)
+    legacy_eligible = _legacy_upward_candidates(candidates, amplitudes, previous_bpm)
+    eligible = _legacy_upward_candidates(
+        candidates,
+        amplitudes,
+        previous_bpm,
+        min_amp_ratio=QUALIFIED_UPWARD_MIN_AMP_RATIO,
+    )
     if not eligible:
-        return _candidate_decision(None, "no_upward_candidate")
+        return _candidate_decision(
+            None,
+            "weak_candidate" if legacy_eligible else "no_upward_candidate",
+        )
+    search_max_bpm = _first_float(trace.get("search_max_bpm"))
+    max_jump_bpm = (
+        DEFAULT_UPWARD_MAX_JUMP_BPM
+        if search_max_bpm is None
+        else max(
+            LEGACY_UPWARD_MIN_JUMP_BPM,
+            search_max_bpm - previous_bpm + TRACKING_REPAIR_RANGE_MARGIN_BPM,
+        )
+    )
 
     rejected_reasons: list[str] = []
     for candidate_bpm, amp in sorted(eligible, key=lambda item: (-item[1], item[0])):
@@ -200,10 +216,18 @@ def qualified_upward_candidate_from_row(row: dict[str, Any]) -> dict[str, Any]:
         ):
             rejected_reasons.append("near_primary_penalty_core")
             continue
-        if candidate_bpm - previous_bpm < max(
-            LEGACY_UPWARD_MIN_JUMP_BPM,
-            RELATIVE_UPWARD_MIN_RANGE_UP_BPM * RELATIVE_UPWARD_MIN_RANGE_MULTIPLIER,
+        nearest_harmonic = _nearest_distance(penalty_centers[1:], candidate_bpm)
+        if (
+            nearest_harmonic is not None
+            and nearest_harmonic <= NEAR_PENALTY_TOLERANCE_BPM
         ):
+            rejected_reasons.append(
+                "near_penalty_suspicious_high"
+                if candidate_bpm >= SUSPICIOUS_HIGH_BPM
+                else "near_penalty_harmonic"
+            )
+            continue
+        if candidate_bpm - previous_bpm < LEGACY_UPWARD_MIN_JUMP_BPM:
             rejected_reasons.append("candidate_jump_too_small")
             continue
         if (
@@ -213,13 +237,16 @@ def qualified_upward_candidate_from_row(row: dict[str, Any]) -> dict[str, Any]:
         ):
             rejected_reasons.append("near_penalty_suspicious_high")
             continue
+        if candidate_bpm - previous_bpm > max_jump_bpm:
+            rejected_reasons.append("candidate_jump_too_large")
+            continue
         return {
             "candidate_bpm": float(candidate_bpm),
             "candidate_amp": float(amp),
             "rejected_reason": "",
             "nearest_penalty_bpm": nearest_penalty,
         }
-    return _candidate_decision(None, rejected_reasons[0] if rejected_reasons else "all_rejected")
+    return _candidate_decision(None, _primary_upward_rejection_reason(rejected_reasons))
 
 
 def offline_upward_gate_from_row(
@@ -244,7 +271,6 @@ def offline_upward_gate_from_row(
     if state.mode != "reacquiring" and state.low_lock_count < LOW_LOCK_MIN_WINDOWS:
         state.mode = "locked"
         state.candidate_bpm = None
-        state.challenge_start_bpm = None
         state.count = 0
         return _offline_gate_decision("low_lock_not_sustained", None, rejected_reason, False, state)
 
@@ -260,38 +286,15 @@ def offline_upward_gate_from_row(
             state.candidate_bpm = candidate_bpm
         else:
             state.candidate_bpm = candidate_bpm
-            state.challenge_start_bpm = previous_bpm
             state.count = 1
     else:
         state.mode = "challenge"
         state.candidate_bpm = candidate_bpm
-        state.challenge_start_bpm = previous_bpm
         state.count = 1
 
     if state.count < UPWARD_CONFIRM_WINDOWS:
         return _offline_gate_decision(
             "candidate_challenge_pending", state.candidate_bpm, rejected_reason, False, state
-        )
-
-    start_bpm = state.challenge_start_bpm
-    target_gap = (
-        0.0
-        if start_bpm is None or state.candidate_bpm is None
-        else max(0.0, float(state.candidate_bpm) - float(start_bpm))
-    )
-    required_drift = max(
-        CONFIRM_DRIFT_STEP_BPM * CONFIRM_DRIFT_STEP_FRACTION,
-        target_gap * CONFIRM_DRIFT_TO_TARGET_RATIO,
-    )
-    if start_bpm is None or previous_bpm - start_bpm < required_drift:
-        rejected_candidate = state.candidate_bpm
-        _reset_offline_gate(state, reset_low_lock=False)
-        return _offline_gate_decision(
-            "insufficient_low_track_upward_drift",
-            rejected_candidate,
-            rejected_reason,
-            False,
-            state,
         )
 
     confirmed_candidate = state.candidate_bpm
@@ -579,7 +582,6 @@ def _reset_offline_gate(
 ) -> None:
     state.mode = "locked"
     state.candidate_bpm = None
-    state.challenge_start_bpm = None
     state.count = 0
     if reset_low_lock:
         state.low_lock_count = 0
@@ -589,6 +591,8 @@ def _legacy_upward_candidates(
     candidates: list[float],
     amplitudes: list[float],
     previous_bpm: float | None,
+    *,
+    min_amp_ratio: float = LEGACY_UPWARD_MIN_AMP_RATIO,
 ) -> list[tuple[float, float]]:
     if previous_bpm is None or not candidates:
         return []
@@ -600,7 +604,7 @@ def _legacy_upward_candidates(
         amp = amplitudes[idx] if idx < len(amplitudes) else math.nan
         if not math.isfinite(amp):
             continue
-        if amp < max_amp * LEGACY_UPWARD_MIN_AMP_RATIO:
+        if amp < max_amp * float(min_amp_ratio):
             continue
         if bpm < LEGACY_UPWARD_TARGET_MIN_BPM:
             continue
@@ -608,6 +612,23 @@ def _legacy_upward_candidates(
             continue
         eligible.append((float(bpm), float(amp)))
     return eligible
+
+
+def _primary_upward_rejection_reason(reasons: Sequence[str]) -> str:
+    if not reasons:
+        return "all_rejected"
+    priority = (
+        "near_penalty_suspicious_high",
+        "near_penalty_harmonic",
+        "near_primary_penalty_core",
+        "weak_candidate",
+        "candidate_jump_too_large",
+        "candidate_jump_too_small",
+    )
+    for reason in priority:
+        if reason in reasons:
+            return reason
+    return str(reasons[-1])
 
 
 def _near_ref_candidate(candidates: list[float], ref_bpm: float | None) -> float | None:

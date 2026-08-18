@@ -1,0 +1,157 @@
+{
+  "registry_schema_version": "acceptance_contract_registry_v1",
+  "contract_id": "physical4d_corrected_development_gates_v2",
+  "contract_status": "frozen",
+  "evidence_level": "development_acceptance",
+  "claim_boundaries": {
+    "development_acceptance_only": true,
+    "final_production_standard": false,
+    "generalization_confirmation": false,
+    "final_coordinate_selection_authorized": false,
+    "intersection_size_used_as_threshold_objective": false
+  },
+  "applicability": {
+    "algorithm_family": "dual_cascade_two_hf_v1_lms_lite",
+    "candidate_space": "physical4d_native_rectangle_v1",
+    "candidate_smooth_win_len": 5,
+    "scenes": [
+      "jianpan",
+      "kaihe",
+      "quanji",
+      "run"
+    ],
+    "data_role": "development_reuse",
+    "report_schema_version": "v2",
+    "analysis_scope": "full"
+  },
+  "metric_contract": {
+    "metric_schema_version": "lyx_physical4d_corrected_development_output_schema_v2",
+    "metric_schema_path": "data/experiments/lyx_physical4d_corrected_development_gates_v2_20260811/output_schema.json",
+    "metric_schema_sha256": "6b865ed939fbcb3a6ed498fac6a59fb2ea92d853b31a830f040336601cb90ebe",
+    "evaluator_path": "data/experiments/lyx_physical4d_corrected_development_gates_v2_20260811/evaluator.py",
+    "evaluator_sha256": "baf4d2145abd109b275dd6443b66e4147244a5ed5d96e76ca19f0ab4e8e3e3de",
+    "evaluation_time_bias_s": 5.0,
+    "window_step_s": 1.0,
+    "time_continuity": {
+      "expected_window_idx": "0..N-1",
+      "required_center_step_s": 1.0,
+      "duration_formula": "last_center_s - first_center_s + window_step_s",
+      "fail_closed_on_gap_or_nonfinite_value": true
+    },
+    "error_boundaries_inclusive": true
+  },
+  "baseline": {
+    "baseline_id": "historical_independent_bo_final_common_bias5",
+    "role": "hard_gate_and_mae_anchor",
+    "original_algorithm_parameters_preserved": true,
+    "final_trajectory_preserved": true,
+    "evaluation_time_bias_s": 5.0,
+    "candidate_and_baseline_use_same_reference": true,
+    "missing_identity_or_trajectory_policy": "fail_closed"
+  },
+  "hard_gates": {
+    "G1-I": {
+      "role": "hard_structural_identity",
+      "formula": "all required identity, full-timeline, finite-value, index, center-time, dual-HF-cascade and stability checks pass",
+      "unit": "boolean",
+      "applies_to": "all records"
+    },
+    "G2": {
+      "role": "hard_continuous_e10_duration",
+      "formula": "candidate_L10_s <= max(10 s, independent_L10_s + 2 s)",
+      "unit": "s",
+      "applies_to": "all records"
+    },
+    "G3": {
+      "role": "hard_continuous_e20_duration",
+      "formula": "candidate_L20_s <= max(2 s, independent_L20_s)",
+      "unit": "s",
+      "applies_to": "all records"
+    },
+    "G4": {
+      "role": "hard_engineering_mae",
+      "formula": "candidate_full_timeline_MAE - independent_full_timeline_MAE <= 2 BPM",
+      "unit": "BPM",
+      "applies_to": "all records"
+    },
+    "G5": {
+      "role": "hard_absolute_right_censor_safety",
+      "formula": "right_censored_E10_episode_count == 0",
+      "unit": "episode",
+      "applies_to": "all records",
+      "episode_definition": "first error >=10 BPM opens an episode; first three consecutive error <10 BPM windows recover it; an episode still open at the record tail is right-censored"
+    },
+    "G6": {
+      "role": "hard_true_rise_safety",
+      "formula": "max_underestimate <= 10 BPM and max_underestimate - independent_max_underestimate <= 2 BPM",
+      "unit": "BPM",
+      "applies_to": [
+        "run",
+        "kaihe"
+      ],
+      "not_applicable_to": [
+        "jianpan",
+        "quanji"
+      ],
+      "episode_definition": "reference-only, non-overlapping, 3 s trend, 3 s peak hold, duration >=10 s, rise >=15 BPM, continuous motion"
+    },
+    "G7": {
+      "role": "hard_absolute_catastrophic_l10",
+      "formula": "candidate_L10_s <= 20 s",
+      "unit": "s",
+      "applies_to": "all records"
+    }
+  },
+  "acceptance_layers": {
+    "engineering": {
+      "formula": "every applicable record passes G1-I and G2 through G7",
+      "scene_mean_cannot_compensate_record_failure": true
+    },
+    "strong": {
+      "requires_engineering": true,
+      "per_record_delta_mae_bpm_max": 0.5,
+      "per_record_relative_regression_percent_max": 20.0,
+      "scene_mean_delta_mae_bpm_max": 0.25,
+      "units": {
+        "absolute": "BPM",
+        "relative": "%"
+      }
+    }
+  },
+  "diagnostics": {
+    "hard_gate": false,
+    "metrics": [
+      "G1-S five-part spectral evidence",
+      "raw E10 count and fraction",
+      "raw E20 count and fraction",
+      "post-motion 60 s E10/E20/MAE",
+      "frequency-domain metrics",
+      "shared_vs_per_record_native4d_oracle",
+      "per_record_native4d_oracle_vs_historical_independent_bo_common_bias5"
+    ],
+    "promotion_rule": "requires a new preregistered contract version; diagnostics cannot become hard gates by ad hoc reuse"
+  },
+  "historical_lineage": {
+    "semantic_basis": "P0/E0 corrected gate semantics",
+    "numeric_basis": "lyx_p0_e0_threshold_registry_approved_v1, approved for E0 execution and not a final threshold claim",
+    "strict_v1_relationship": "parallel re-evaluation only; strict-v1 outcomes remain unchanged",
+    "source_experiment_registry_path": "data/experiments/lyx_physical4d_corrected_development_gates_v2_20260811/v2_threshold_registry.json",
+    "source_experiment_registry_sha256": "78c4b72be6b0a7432230502f1186cccbf97c0a96dbc0a6e5bf6415f5a53a3c4e"
+  },
+  "versioning_policy": {
+    "immutable_after_first_experiment_binding": true,
+    "changes_require_new_contract_id": [
+      "formula",
+      "numeric threshold",
+      "unit",
+      "applicability",
+      "hard_or_diagnostic_role",
+      "metric schema",
+      "evaluator",
+      "baseline identity",
+      "evaluation time bias",
+      "evidence level"
+    ],
+    "retroactive_relabeling_of_historical_results_prohibited": true
+  }
+}
