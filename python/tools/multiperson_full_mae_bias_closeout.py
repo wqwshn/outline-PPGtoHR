@@ -110,22 +110,23 @@ def _git(worktree: Path, *args: str) -> str:
 
 def evaluator_identity(worktree: Path) -> dict[str, Any]:
     root = Path(worktree).resolve()
+    evaluator_files = (
+        "python/tools/multiperson_screening_contracts.py",
+        "python/tools/multiperson_joint_screening.py",
+        "python/tools/multiperson_full_mae_bias_closeout.py",
+    )
     tracked_diff = _git(
         root,
         "diff",
         "--name-only",
         "--",
-        "python/tools/multiperson_screening_contracts.py",
-        "python/tools/multiperson_full_mae_bias_closeout.py",
+        *evaluator_files,
     )
     if tracked_diff:
         raise FullMaeBiasCloseoutError(
             "evaluator_source_not_committed:" + tracked_diff.replace("\n", ",")
         )
-    paths = (
-        root / "python" / "tools" / "multiperson_screening_contracts.py",
-        root / "python" / "tools" / "multiperson_full_mae_bias_closeout.py",
-    )
+    paths = tuple(root / relative for relative in evaluator_files)
     return {
         "schema_id": "full_mae_bias_evaluator_identity_v1",
         "git_head": _git(root, "rev-parse", "HEAD"),
@@ -538,13 +539,18 @@ def _build_result_summary(
     if worsened:
         raise FullMaeBiasCloseoutError("official_common_mae_has_regression")
     material_passport = dict(previous.get("material_passport") or {})
+    previous_source_identity = material_passport.get("source_identity")
+    if isinstance(previous_source_identity, Mapping):
+        frozen_solver_identity = previous_source_identity.get(
+            "frozen_solver_identity", previous_source_identity
+        )
+    else:
+        frozen_solver_identity = previous_source_identity
     material_passport.update(
         {
             "verification_status": "VERIFIED",
             "source_identity": {
-                "frozen_solver_identity": (
-                    (previous.get("material_passport") or {}).get("source_identity")
-                ),
+                "frozen_solver_identity": frozen_solver_identity,
                 "post_solver_evaluator_identity": evaluator,
             },
         }
@@ -639,7 +645,10 @@ def _completion_payload(
         "completed_at": now_iso(),
         "experiment_id": EXPERIMENT_ID,
         "time_bias_contract": CLOSEOUT_CONTRACT,
-        "frozen_solver_source_identity": original_completion.get("source_identity"),
+        "frozen_solver_source_identity": original_completion.get(
+            "frozen_solver_source_identity",
+            original_completion.get("source_identity"),
+        ),
         "post_solver_evaluator_identity": evaluator,
         "frozen_inputs_snapshot_sha256": frozen_snapshot["snapshot_sha256"],
         "dataset_card_sha256": file_sha256(root / "dataset_card.json"),
@@ -793,6 +802,17 @@ def validate_closeout(
         raise FullMaeBiasCloseoutError("final_dataset_identity_changed")
     if len(card_records) != 48 or card.get("time_bias_contract") != CLOSEOUT_CONTRACT:
         raise FullMaeBiasCloseoutError("final_dataset_contract_mismatch")
+    for row in card_records:
+        record_id = str(row["record_id"])
+        for path_key, hash_key in (
+            ("data_path", "data_sha256"),
+            ("ref_path", "ref_sha256"),
+        ):
+            path = Path(str(row[path_key]))
+            if not path.is_file() or file_sha256(path) != str(row[hash_key]):
+                raise FullMaeBiasCloseoutError(
+                    f"final_input_hash_mismatch:{record_id}:{path_key}"
+                )
     scene_groups: dict[str, list[Mapping[str, Any]]] = {}
     for row in card_records:
         scene_groups.setdefault(str(row["scene"]), []).append(row)
@@ -812,6 +832,22 @@ def validate_closeout(
     rows_by_id = {str(row["record_id"]): row for row in rows}
     if len(rows_by_id) != 48:
         raise FullMaeBiasCloseoutError("bias_manifest_duplicate_record")
+    non_lyx_manifest = read_json(root / "bias_manifest_non_lyx.json")
+    non_lyx_without_hash = {
+        key: value
+        for key, value in non_lyx_manifest.items()
+        if key != "manifest_sha256"
+    }
+    if (
+        non_lyx_manifest.get("manifest_sha256")
+        != canonical_sha256(non_lyx_without_hash)
+        or int(non_lyx_manifest.get("record_count", -1)) != 40
+        or any(
+            str(row.get("subject")) == "LYX"
+            for row in list(non_lyx_manifest.get("records") or [])
+        )
+    ):
+        raise FullMaeBiasCloseoutError("non_lyx_bias_manifest_mismatch")
     report_hashes: list[str] = []
     for card_row in card_records:
         record_id = str(card_row["record_id"])
