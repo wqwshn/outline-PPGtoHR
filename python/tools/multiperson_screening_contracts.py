@@ -74,6 +74,63 @@ def joined_reliable_mask(result: V2SolverResult) -> np.ndarray:
     return reliable
 
 
+def select_full_mae_time_bias(
+    result: V2SolverResult,
+    *,
+    ref_data: np.ndarray,
+    biases_s: Sequence[float] = BIAS_CANDIDATES_S,
+) -> dict[str, Any]:
+    """Select one post-solver bias on a shared reliable full-record window set."""
+
+    candidates = tuple(float(value) for value in biases_s)
+    if BIAS_DEFAULT_S not in candidates:
+        raise MultipersonScreeningContractError("default_bias_missing")
+    hr = np.asarray(result.HR, dtype=float)
+    reliable = joined_reliable_mask(result)
+    centers = hr[:, 0]
+    final = hr[:, 3]
+    references = {
+        bias_s: interpolate_reference(ref_data, centers + bias_s) for bias_s in candidates
+    }
+    common = reliable & np.isfinite(centers) & np.isfinite(final)
+    for reference in references.values():
+        common &= np.isfinite(reference)
+    if not np.any(common):
+        raise MultipersonScreeningContractError("no_common_reliable_reference_overlap")
+
+    curve = [
+        {
+            "bias_s": bias_s,
+            "common_mae_bpm": float(np.mean(np.abs(final[common] - references[bias_s][common]))),
+            "window_count": int(np.count_nonzero(common)),
+        }
+        for bias_s in candidates
+    ]
+    ranked = sorted(
+        curve,
+        key=lambda row: (
+            float(row["common_mae_bpm"]),
+            abs(float(row["bias_s"]) - BIAS_DEFAULT_S),
+            float(row["bias_s"]),
+        ),
+    )
+    selected = ranked[0]
+    fixed_five = next(row for row in curve if math.isclose(float(row["bias_s"]), BIAS_DEFAULT_S))
+    return {
+        "schema_id": "full_mae_evaluation_time_bias_v1",
+        "bias_candidates_s": list(candidates),
+        "selection_rule": "minimum_common_reliable_full_mae_nearest_5s_then_smaller",
+        "common_window_indices": np.flatnonzero(common).astype(int).tolist(),
+        "common_window_count": int(np.count_nonzero(common)),
+        "curve": curve,
+        "selected_bias_s": float(selected["bias_s"]),
+        "selected_common_mae_bpm": float(selected["common_mae_bpm"]),
+        "fixed_5s_common_mae_bpm": float(fixed_five["common_mae_bpm"]),
+        "improvement_vs_5s_bpm": float(fixed_five["common_mae_bpm"])
+        - float(selected["common_mae_bpm"]),
+    }
+
+
 def calibrate_rest_time_bias(
     result: V2SolverResult,
     *,

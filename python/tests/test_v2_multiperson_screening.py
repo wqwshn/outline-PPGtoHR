@@ -20,6 +20,7 @@ calibrate_rest_time_bias = CONTRACTS.calibrate_rest_time_bias
 evaluate_aligned_metrics = CONTRACTS.evaluate_aligned_metrics
 evaluate_screening_gate = CONTRACTS.evaluate_screening_gate
 select_scene_panel = CONTRACTS.select_scene_panel
+select_full_mae_time_bias = CONTRACTS.select_full_mae_time_bias
 
 ORCHESTRATOR_PATH = (
     Path(__file__).parents[1] / "tools" / "multiperson_joint_screening.py"
@@ -67,6 +68,49 @@ def _result(
         },
         window_table=rows,
     )
+
+
+def test_full_mae_time_bias_uses_one_common_reliable_window_set() -> None:
+    centers = np.arange(0.0, 9.0)
+    reliable = np.ones(centers.size, dtype=bool)
+    reliable[2] = False
+    ref_t = np.arange(0.0, 13.0)
+    ref = np.column_stack([ref_t, 60.0 + ref_t])
+    result = _result(centers, 66.0 + centers, reliable=reliable)
+    result.HR[:, 1] = -999.0
+    result.err_stats = {"final_aae_bpm": -999.0}
+
+    selected = select_full_mae_time_bias(result, ref_data=ref)
+
+    assert selected["schema_id"] == "full_mae_evaluation_time_bias_v1"
+    assert selected["common_window_indices"] == [0, 1, 3, 4, 5, 6]
+    assert selected["common_window_count"] == 6
+    assert {row["window_count"] for row in selected["curve"]} == {6}
+    assert selected["selected_bias_s"] == pytest.approx(6.0)
+    assert selected["selected_common_mae_bpm"] == pytest.approx(0.0)
+    assert selected["fixed_5s_common_mae_bpm"] == pytest.approx(1.0)
+    assert selected["improvement_vs_5s_bpm"] == pytest.approx(1.0)
+
+
+def test_full_mae_time_bias_tie_prefers_nearest_5s_then_smaller() -> None:
+    ref = np.asarray(
+        [
+            [4.0, 90.0],
+            [4.5, 70.0],
+            [5.0, 80.0],
+            [5.5, 70.0],
+            [6.0, 90.0],
+        ]
+    )
+
+    selected = select_full_mae_time_bias(
+        _result(np.asarray([0.0]), np.asarray([70.0])),
+        ref_data=ref,
+        biases_s=(4.5, 5.0, 5.5),
+    )
+
+    assert selected["selected_bias_s"] == pytest.approx(4.5)
+    assert selected["selected_common_mae_bpm"] == pytest.approx(0.0)
 
 
 def test_rest_calibration_uses_dynamic_post_rest_but_not_motion_error() -> None:
