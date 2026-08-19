@@ -21,6 +21,7 @@ evaluate_aligned_metrics = CONTRACTS.evaluate_aligned_metrics
 evaluate_screening_gate = CONTRACTS.evaluate_screening_gate
 select_scene_panel = CONTRACTS.select_scene_panel
 select_full_mae_time_bias = CONTRACTS.select_full_mae_time_bias
+select_gate_aware_time_bias = CONTRACTS.select_gate_aware_time_bias
 
 ORCHESTRATOR_PATH = (
     Path(__file__).parents[1] / "tools" / "multiperson_joint_screening.py"
@@ -111,6 +112,82 @@ def test_full_mae_time_bias_tie_prefers_nearest_5s_then_smaller() -> None:
 
     assert selected["selected_bias_s"] == pytest.approx(4.5)
     assert selected["selected_common_mae_bpm"] == pytest.approx(0.0)
+
+
+def test_gate_aware_time_bias_selects_lowest_mae_that_passes_gate() -> None:
+    raw_selection = {
+        "bias_candidates_s": [4.0, 4.5, 5.0, 5.5, 6.0],
+        "curve": [
+            {"bias_s": 4.0, "common_mae_bpm": 2.99, "window_count": 100},
+            {"bias_s": 4.5, "common_mae_bpm": 2.94, "window_count": 100},
+            {"bias_s": 5.0, "common_mae_bpm": 2.90, "window_count": 100},
+            {"bias_s": 5.5, "common_mae_bpm": 3.02, "window_count": 100},
+            {"bias_s": 6.0, "common_mae_bpm": 3.10, "window_count": 100},
+        ],
+        "selected_bias_s": 5.0,
+        "selected_common_mae_bpm": 2.90,
+        "fixed_5s_common_mae_bpm": 2.90,
+    }
+    gate_by_bias = {
+        bias: {
+            "gate_contract_version": CONTRACTS.SCREENING_GATE_CONTRACT,
+            "qualified": bias in {4.0, 4.5},
+            "failed_gates": [] if bias in {4.0, 4.5} else ["right_censored_e10"],
+        }
+        for bias in CONTRACTS.BIAS_CANDIDATES_S
+    }
+
+    selected = select_gate_aware_time_bias(
+        raw_selection=raw_selection,
+        gate_by_bias=gate_by_bias,
+    )
+
+    assert selected["raw_full_mae_selected_bias_s"] == 5.0
+    assert selected["selected_bias_s"] == 4.5
+    assert selected["selected_common_mae_bpm"] == 2.94
+    assert selected["gate_passing_bias_candidates_s"] == [4.0, 4.5]
+    assert selected["selected_from_gate_passing_candidates"] is True
+    assert selected["no_gate_passing_candidate_risk"] is False
+    assert selected["risk_flags"] == []
+
+
+def test_gate_aware_time_bias_uses_global_minimum_with_risk_when_all_fail() -> None:
+    raw_selection = {
+        "bias_candidates_s": [4.0, 4.5, 5.0, 5.5, 6.0],
+        "curve": [
+            {
+                "bias_s": bias,
+                "common_mae_bpm": abs(bias - 5.5),
+                "window_count": 100,
+            }
+            for bias in CONTRACTS.BIAS_CANDIDATES_S
+        ],
+        "selected_bias_s": 5.5,
+        "selected_common_mae_bpm": 0.0,
+        "fixed_5s_common_mae_bpm": 0.5,
+    }
+    gate_by_bias = {
+        bias: {
+            "gate_contract_version": CONTRACTS.SCREENING_GATE_CONTRACT,
+            "qualified": False,
+            "failed_gates": ["absolute_l10"],
+        }
+        for bias in CONTRACTS.BIAS_CANDIDATES_S
+    }
+
+    selected = select_gate_aware_time_bias(
+        raw_selection=raw_selection,
+        gate_by_bias=gate_by_bias,
+    )
+
+    assert selected["selected_bias_s"] == 5.5
+    assert selected["selected_common_mae_bpm"] == 0.0
+    assert selected["gate_passing_bias_candidates_s"] == []
+    assert selected["selected_from_gate_passing_candidates"] is False
+    assert selected["no_gate_passing_candidate_risk"] is True
+    assert selected["risk_flags"] == [
+        "no_gate_passing_time_bias_candidate"
+    ]
 
 
 def test_rest_calibration_uses_dynamic_post_rest_but_not_motion_error() -> None:

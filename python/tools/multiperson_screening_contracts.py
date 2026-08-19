@@ -23,6 +23,7 @@ BIAS_MIN_RUNNER_MARGIN_BPM = 0.01
 POST_MOTION_GUARD_SECONDS = 20.0
 
 SCREENING_GATE_CONTRACT = "multiperson_joint_screening_gate_v1"
+TIME_BIAS_SELECTION_CONTRACT = "gate_aware_full_mae_time_bias_v3"
 
 
 class MultipersonScreeningContractError(RuntimeError):
@@ -101,7 +102,9 @@ def select_full_mae_time_bias(
     curve = [
         {
             "bias_s": bias_s,
-            "common_mae_bpm": float(np.mean(np.abs(final[common] - references[bias_s][common]))),
+            "common_mae_bpm": float(
+                np.mean(np.abs(final[common] - references[bias_s][common]))
+            ),
             "window_count": int(np.count_nonzero(common)),
         }
         for bias_s in candidates
@@ -115,7 +118,11 @@ def select_full_mae_time_bias(
         ),
     )
     selected = ranked[0]
-    fixed_five = next(row for row in curve if math.isclose(float(row["bias_s"]), BIAS_DEFAULT_S))
+    fixed_five = next(
+        row
+        for row in curve
+        if math.isclose(float(row["bias_s"]), BIAS_DEFAULT_S)
+    )
     return {
         "schema_id": "full_mae_evaluation_time_bias_v1",
         "bias_candidates_s": list(candidates),
@@ -131,6 +138,97 @@ def select_full_mae_time_bias(
     }
 
 
+def select_gate_aware_time_bias(
+    *,
+    raw_selection: Mapping[str, Any],
+    gate_by_bias: Mapping[float, Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Select the lowest full-record MAE among gate-passing biases.
+
+    If no candidate passes the frozen screening gate, the global full-record
+    MAE minimum remains usable and receives an explicit risk flag.  The rule
+    is post-solver and never reads a historical bias choice.
+    """
+
+    candidates = tuple(float(value) for value in raw_selection["bias_candidates_s"])
+    if candidates != BIAS_CANDIDATES_S:
+        raise MultipersonScreeningContractError("time_bias_candidate_set_mismatch")
+    curve = [dict(row) for row in list(raw_selection.get("curve") or [])]
+    curve_by_bias = {float(row["bias_s"]): row for row in curve}
+    if set(curve_by_bias) != set(candidates):
+        raise MultipersonScreeningContractError("time_bias_curve_mismatch")
+    normalized_gates = {
+        float(bias_s): dict(gate) for bias_s, gate in gate_by_bias.items()
+    }
+    if not set(candidates).issubset(normalized_gates):
+        raise MultipersonScreeningContractError("time_bias_gate_missing")
+    for bias_s in candidates:
+        if (
+            normalized_gates[bias_s].get("gate_contract_version")
+            != SCREENING_GATE_CONTRACT
+        ):
+            raise MultipersonScreeningContractError(
+                "time_bias_gate_contract_mismatch"
+            )
+
+    def rank_key(bias_s: float) -> tuple[float, float, float]:
+        return (
+            float(curve_by_bias[bias_s]["common_mae_bpm"]),
+            abs(bias_s - BIAS_DEFAULT_S),
+            bias_s,
+        )
+
+    global_minimum_bias = min(candidates, key=rank_key)
+    gate_passing = sorted(
+        (
+            bias_s
+            for bias_s in candidates
+            if normalized_gates[bias_s].get("qualified") is True
+        ),
+        key=rank_key,
+    )
+    no_gate_passing = not gate_passing
+    selected_bias = global_minimum_bias if no_gate_passing else gate_passing[0]
+    selected_mae = float(curve_by_bias[selected_bias]["common_mae_bpm"])
+    fixed_five_mae = float(curve_by_bias[BIAS_DEFAULT_S]["common_mae_bpm"])
+    return {
+        "schema_id": TIME_BIAS_SELECTION_CONTRACT,
+        "selection_rule": (
+            "minimum_common_reliable_full_mae_among_gate_passing_"
+            "else_global_minimum_with_risk"
+        ),
+        "gate_contract_version": SCREENING_GATE_CONTRACT,
+        "raw_full_mae_selected_bias_s": global_minimum_bias,
+        "raw_full_mae_selected_common_mae_bpm": float(
+            curve_by_bias[global_minimum_bias]["common_mae_bpm"]
+        ),
+        "raw_full_mae_gate_diagnostic": normalized_gates[global_minimum_bias],
+        "gate_passing_bias_candidates_s": sorted(gate_passing),
+        "gate_passing_candidate_count": len(gate_passing),
+        "selected_from_gate_passing_candidates": not no_gate_passing,
+        "no_gate_passing_candidate_risk": no_gate_passing,
+        "risk_flags": (
+            ["no_gate_passing_time_bias_candidate"] if no_gate_passing else []
+        ),
+        "selection_reason": (
+            "global_full_mae_minimum_with_no_gate_passing_candidate_risk"
+            if no_gate_passing
+            else "minimum_full_mae_among_gate_passing_candidates"
+        ),
+        "selected_bias_s": selected_bias,
+        "selected_common_mae_bpm": selected_mae,
+        "fixed_5s_common_mae_bpm": fixed_five_mae,
+        "improvement_vs_5s_bpm": fixed_five_mae - selected_mae,
+        "gate_diagnostic": normalized_gates[selected_bias],
+        "candidate_gate_diagnostics": [
+            {
+                "bias_s": bias_s,
+                "common_mae_bpm": float(curve_by_bias[bias_s]["common_mae_bpm"]),
+                "gate": normalized_gates[bias_s],
+            }
+            for bias_s in candidates
+        ],
+    }
 def calibrate_rest_time_bias(
     result: V2SolverResult,
     *,

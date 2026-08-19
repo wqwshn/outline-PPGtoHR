@@ -37,13 +37,16 @@ from multiperson_joint_screening import (  # noqa: E402
     write_json,
 )
 from multiperson_screening_contracts import (  # noqa: E402
+    BIAS_CANDIDATES_S,
     BIAS_DEFAULT_S,
+    SCREENING_GATE_CONTRACT,
     select_full_mae_time_bias,
+    select_gate_aware_time_bias,
 )
 
 from ppg_hr.v2.preprocess import load_v2_reference  # noqa: E402
 
-CLOSEOUT_CONTRACT = "full_mae_evaluation_time_bias_gate_preserving_v2"
+CLOSEOUT_CONTRACT = "gate_aware_full_mae_time_bias_v3"
 CLOSEOUT_DIR = Path("execution") / "full_mae_bias_closeout"
 
 
@@ -74,6 +77,7 @@ def build_updated_dataset_card(
         updated.update(
             {
                 "previous_r_all_bias_s": float(evaluation["previous_r_all_bias_s"]),
+                "previous_r_all_selection_role": "historical_only_not_used",
                 "raw_full_mae_selected_bias_s": float(
                     evaluation["raw_full_mae_selected_bias_s"]
                 ),
@@ -86,12 +90,20 @@ def build_updated_dataset_card(
                 "fixed_5s_common_mae_bpm": float(evaluation["fixed_5s_common_mae_bpm"]),
                 "final_common_mae_bpm": float(evaluation["selected_common_mae_bpm"]),
                 "improvement_vs_5s_bpm": float(evaluation["improvement_vs_5s_bpm"]),
-                "gate_preserving_fallback_applied": bool(
-                    evaluation["gate_preserving_fallback_applied"]
+                "gate_passing_bias_candidates_s": list(
+                    evaluation["gate_passing_bias_candidates_s"]
                 ),
-                "gate_preserving_fallback_reason": evaluation[
-                    "gate_preserving_fallback_reason"
-                ],
+                "gate_passing_candidate_count": int(
+                    evaluation["gate_passing_candidate_count"]
+                ),
+                "selected_from_gate_passing_candidates": bool(
+                    evaluation["selected_from_gate_passing_candidates"]
+                ),
+                "no_gate_passing_candidate_risk": bool(
+                    evaluation["no_gate_passing_candidate_risk"]
+                ),
+                "time_bias_risk_flags": list(evaluation["risk_flags"]),
+                "time_bias_selection_reason": evaluation["selection_reason"],
                 "compatibility_metrics": dict(evaluation["compatibility_metrics"]),
                 "gate_diagnostic": dict(evaluation["gate_diagnostic"]),
                 "raw_full_mae_gate_diagnostic": dict(
@@ -99,6 +111,9 @@ def build_updated_dataset_card(
                 ),
                 "previous_r_all_gate_diagnostic": dict(
                     evaluation["previous_r_all_gate_diagnostic"]
+                ),
+                "candidate_gate_diagnostics": list(
+                    evaluation["candidate_gate_diagnostics"]
                 ),
             }
         )
@@ -116,53 +131,6 @@ def build_updated_dataset_card(
 
 def now_iso() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
-
-
-def choose_gate_preserving_time_bias(
-    *,
-    raw_selection: Mapping[str, Any],
-    previous_bias_s: float,
-    gate_by_bias: Mapping[float, Mapping[str, Any]],
-) -> dict[str, Any]:
-    raw_bias = float(raw_selection["selected_bias_s"])
-    previous_bias = float(previous_bias_s)
-    curve_by_bias = {
-        float(row["bias_s"]): float(row["common_mae_bpm"])
-        for row in list(raw_selection.get("curve") or [])
-    }
-    if raw_bias not in curve_by_bias or previous_bias not in curve_by_bias:
-        raise FullMaeBiasCloseoutError("gate_preserving_bias_missing_from_curve")
-    if raw_bias not in gate_by_bias or previous_bias not in gate_by_bias:
-        raise FullMaeBiasCloseoutError("gate_preserving_gate_missing")
-    raw_gate = dict(gate_by_bias[raw_bias])
-    previous_gate = dict(gate_by_bias[previous_bias])
-    fallback = bool(
-        raw_bias != previous_bias
-        and raw_gate.get("qualified") is not True
-        and previous_gate.get("qualified") is True
-    )
-    selected_bias = previous_bias if fallback else raw_bias
-    selected_mae = curve_by_bias[selected_bias]
-    fixed_five_mae = float(raw_selection["fixed_5s_common_mae_bpm"])
-    return {
-        "raw_full_mae_selected_bias_s": raw_bias,
-        "raw_full_mae_selected_common_mae_bpm": float(
-            raw_selection["selected_common_mae_bpm"]
-        ),
-        "raw_full_mae_gate_diagnostic": raw_gate,
-        "previous_r_all_gate_diagnostic": previous_gate,
-        "selected_bias_s": selected_bias,
-        "selected_common_mae_bpm": selected_mae,
-        "fixed_5s_common_mae_bpm": fixed_five_mae,
-        "improvement_vs_5s_bpm": fixed_five_mae - selected_mae,
-        "gate_diagnostic": previous_gate if fallback else raw_gate,
-        "gate_preserving_fallback_applied": fallback,
-        "gate_preserving_fallback_reason": (
-            "raw_full_mae_bias_failed_gate_previous_r_all_passed"
-            if fallback
-            else None
-        ),
-    }
 
 
 def _git(worktree: Path, *args: str) -> str:
@@ -450,13 +418,7 @@ def _evaluate_frozen_record(
     baseline_payload = _read_payload_with_hash(baseline_path, baseline_sha)
     baseline_result = solver_result_from_payload(baseline_payload)
     previous_bias = float(frozen_record["previous_r_all_bias_s"])
-    evaluated_biases = sorted(
-        {
-            float(selection["selected_bias_s"]),
-            previous_bias,
-            BIAS_DEFAULT_S,
-        }
-    )
+    evaluated_biases = list(BIAS_CANDIDATES_S)
     compatibility_by_bias = {
         bias_s: evaluate_aligned_metrics(
             result,
@@ -480,9 +442,8 @@ def _evaluate_frozen_record(
         )
         for bias_s in evaluated_biases
     }
-    effective = choose_gate_preserving_time_bias(
+    effective = select_gate_aware_time_bias(
         raw_selection=selection,
-        previous_bias_s=previous_bias,
         gate_by_bias=gate_by_bias,
     )
     selected_bias = float(effective["selected_bias_s"])
@@ -492,7 +453,7 @@ def _evaluate_frozen_record(
         float(row["bias_s"]): float(row["common_mae_bpm"]) for row in selection["curve"]
     }
     return {
-        "schema_id": "full_mae_bias_record_result_v2",
+        "schema_id": "full_mae_bias_record_result_v3",
         "record_id": record_id,
         "scene": str(record["scene"]),
         "subject": str(record["subject"]),
@@ -500,13 +461,12 @@ def _evaluate_frozen_record(
         "data_sha256": str(record["data_sha256"]),
         "ref_sha256": str(record["ref_sha256"]),
         "previous_r_all_bias_s": previous_bias,
+        "previous_r_all_selection_role": "historical_only_not_used",
         "previous_r_all_common_mae_bpm": curve_by_bias[previous_bias],
         "screening_best_gate_mae_bpm": float(frozen_record["screening_best_gate_mae_bpm"]),
         "bias_candidates_s": list(selection["bias_candidates_s"]),
-        "selection_rule": (
-            "minimum_common_reliable_full_mae_with_previous_r_all_"
-            "gate_preserving_fallback"
-        ),
+        "selection_rule": effective["selection_rule"],
+        "gate_contract_version": effective["gate_contract_version"],
         "raw_full_mae_selection_rule": selection["selection_rule"],
         "common_window_indices": list(selection["common_window_indices"]),
         "common_window_count": int(selection["common_window_count"]),
@@ -522,12 +482,20 @@ def _evaluate_frozen_record(
         "selected_common_mae_bpm": float(effective["selected_common_mae_bpm"]),
         "fixed_5s_common_mae_bpm": float(effective["fixed_5s_common_mae_bpm"]),
         "improvement_vs_5s_bpm": float(effective["improvement_vs_5s_bpm"]),
-        "gate_preserving_fallback_applied": bool(
-            effective["gate_preserving_fallback_applied"]
+        "gate_passing_bias_candidates_s": list(
+            effective["gate_passing_bias_candidates_s"]
         ),
-        "gate_preserving_fallback_reason": effective[
-            "gate_preserving_fallback_reason"
-        ],
+        "gate_passing_candidate_count": int(
+            effective["gate_passing_candidate_count"]
+        ),
+        "selected_from_gate_passing_candidates": bool(
+            effective["selected_from_gate_passing_candidates"]
+        ),
+        "no_gate_passing_candidate_risk": bool(
+            effective["no_gate_passing_candidate_risk"]
+        ),
+        "risk_flags": list(effective["risk_flags"]),
+        "selection_reason": effective["selection_reason"],
         "compatibility_metrics": compatibility,
         "fixed_5s_compatibility_metrics": compatibility_by_bias[BIAS_DEFAULT_S],
         "baseline_compatibility_metrics": baseline_metrics,
@@ -536,7 +504,10 @@ def _evaluate_frozen_record(
             effective["raw_full_mae_gate_diagnostic"]
         ),
         "previous_r_all_gate_diagnostic": dict(
-            effective["previous_r_all_gate_diagnostic"]
+            gate_by_bias[previous_bias]
+        ),
+        "candidate_gate_diagnostics": list(
+            effective["candidate_gate_diagnostics"]
         ),
         "previous_gate_qualified": bool(
             (summary.get("best_gate_passing") or {}).get("gate", {}).get("qualified")
@@ -603,6 +574,7 @@ def _build_updated_panel_selection(
                         evaluation["screening_best_gate_mae_bpm"]
                     ),
                     "previous_r_all_bias_s": float(evaluation["previous_r_all_bias_s"]),
+                    "previous_r_all_selection_role": "historical_only_not_used",
                     "raw_full_mae_selected_bias_s": float(
                         evaluation["raw_full_mae_selected_bias_s"]
                     ),
@@ -613,18 +585,29 @@ def _build_updated_panel_selection(
                     "final_common_mae_bpm": float(evaluation["selected_common_mae_bpm"]),
                     "fixed_5s_common_mae_bpm": float(evaluation["fixed_5s_common_mae_bpm"]),
                     "improvement_vs_5s_bpm": float(evaluation["improvement_vs_5s_bpm"]),
-                    "gate_preserving_fallback_applied": bool(
-                        evaluation["gate_preserving_fallback_applied"]
+                    "gate_passing_bias_candidates_s": list(
+                        evaluation["gate_passing_bias_candidates_s"]
                     ),
-                    "gate_preserving_fallback_reason": evaluation[
-                        "gate_preserving_fallback_reason"
-                    ],
+                    "gate_passing_candidate_count": int(
+                        evaluation["gate_passing_candidate_count"]
+                    ),
+                    "selected_from_gate_passing_candidates": bool(
+                        evaluation["selected_from_gate_passing_candidates"]
+                    ),
+                    "no_gate_passing_candidate_risk": bool(
+                        evaluation["no_gate_passing_candidate_risk"]
+                    ),
+                    "time_bias_risk_flags": list(evaluation["risk_flags"]),
+                    "time_bias_selection_reason": evaluation["selection_reason"],
                     "gate_diagnostic": dict(evaluation["gate_diagnostic"]),
                     "raw_full_mae_gate_diagnostic": dict(
                         evaluation["raw_full_mae_gate_diagnostic"]
                     ),
                     "previous_r_all_gate_diagnostic": dict(
                         evaluation["previous_r_all_gate_diagnostic"]
+                    ),
+                    "candidate_gate_diagnostics": list(
+                        evaluation["candidate_gate_diagnostics"]
                     ),
                     "time_bias_contract": CLOSEOUT_CONTRACT,
                 }
@@ -685,8 +668,14 @@ def _build_result_summary(
     common_counts = [int(row["common_window_count"]) for row in evaluations]
     current_gate = [bool(row["gate_diagnostic"].get("qualified")) for row in evaluations]
     previous_gate = [bool(row["previous_gate_qualified"]) for row in evaluations]
-    fallback_rows = [
-        row for row in evaluations if row["gate_preserving_fallback_applied"] is True
+    risk_rows = [
+        row for row in evaluations if row["no_gate_passing_candidate_risk"] is True
+    ]
+    gate_constrained_rows = [
+        row
+        for row in evaluations
+        if float(row["selected_bias_s"])
+        != float(row["raw_full_mae_selected_bias_s"])
     ]
     counts = Counter(selected_biases)
     raw_counts = Counter(raw_selected_biases)
@@ -696,12 +685,6 @@ def _build_result_summary(
     raw_worsened = sum(int(value < -1e-12) for value in raw_improvements)
     if raw_worsened:
         raise FullMaeBiasCloseoutError("raw_full_mae_argmin_has_regression")
-    if any(
-        float(row["improvement_vs_5s_bpm"]) < -1e-12
-        and row["gate_preserving_fallback_applied"] is not True
-        for row in evaluations
-    ):
-        raise FullMaeBiasCloseoutError("unexplained_effective_mae_regression")
     material_passport = dict(previous.get("material_passport") or {})
     previous_source_identity = material_passport.get("source_identity")
     if isinstance(previous_source_identity, Mapping):
@@ -767,11 +750,23 @@ def _build_result_summary(
                 "unchanged_count": unchanged,
                 "worsened_count": worsened,
             },
-            "gate_preserving_fallback": {
-                "count": len(fallback_rows),
-                "record_ids": [str(row["record_id"]) for row in fallback_rows],
+            "gate_aware_selection": {
+                "gate_contract_version": SCREENING_GATE_CONTRACT,
+                "selected_from_gate_passing_candidate_count": sum(
+                    int(row["selected_from_gate_passing_candidates"] is True)
+                    for row in evaluations
+                ),
+                "gate_constrained_selection_count": len(gate_constrained_rows),
+                "gate_constrained_record_ids": [
+                    str(row["record_id"]) for row in gate_constrained_rows
+                ],
+                "no_gate_passing_candidate_risk_count": len(risk_rows),
+                "no_gate_passing_candidate_risk_record_ids": [
+                    str(row["record_id"]) for row in risk_rows
+                ],
                 "rule": (
-                    "raw_full_mae_bias_failed_gate_and_previous_r_all_bias_passed"
+                    "minimum_full_mae_among_gate_passing_candidates_else_"
+                    "global_minimum_with_risk"
                 ),
             },
             "maximum_overlap_compatibility_mae_bpm": _numeric_summary(compatibility_maes),
@@ -791,7 +786,7 @@ def _build_result_summary(
                     int(not before and after)
                     for before, after in zip(previous_gate, current_gate, strict=True)
                 ),
-                "selection_effect": "fallback_to_previous_r_all_bias_when_required",
+                "selection_effect": "gate_aware_five_bias_selection",
             },
         },
         "bo120": dict(previous.get("bo120") or {}),
@@ -955,8 +950,13 @@ def assert_recomputed_selection_matches(
         "selected_common_mae_bpm",
         "fixed_5s_common_mae_bpm",
         "improvement_vs_5s_bpm",
-        "gate_preserving_fallback_applied",
-        "gate_preserving_fallback_reason",
+        "gate_passing_bias_candidates_s",
+        "gate_passing_candidate_count",
+        "selected_from_gate_passing_candidates",
+        "no_gate_passing_candidate_risk",
+        "risk_flags",
+        "selection_reason",
+        "candidate_gate_diagnostics",
     )
     stored_selection = {key: stored.get(key) for key in keys}
     recomputed_selection = {key: recomputed.get(key) for key in keys}
@@ -1130,38 +1130,50 @@ def validate_closeout(
             raise FullMaeBiasCloseoutError(f"bias_common_window_mismatch:{record_id}")
         raw_bias = float(row["raw_full_mae_selected_bias_s"])
         selected_bias = float(row["selected_bias_s"])
-        previous_bias = float(row["previous_r_all_bias_s"])
         raw_mae = float(row["raw_full_mae_selected_common_mae_bpm"])
         fixed_five_mae = float(row["fixed_5s_common_mae_bpm"])
         selected_mae = float(row["selected_common_mae_bpm"])
-        fallback = row["gate_preserving_fallback_applied"] is True
         if raw_mae > fixed_five_mae + 1e-12:
             raise FullMaeBiasCloseoutError(
                 f"raw_full_mae_selected_worse_than_5s:{record_id}"
             )
-        if fallback:
-            if (
-                selected_bias != previous_bias
-                or selected_bias == raw_bias
-                or row["raw_full_mae_gate_diagnostic"].get("qualified") is not False
-                or row["previous_r_all_gate_diagnostic"].get("qualified") is not True
-                or row["gate_diagnostic"].get("qualified") is not True
-                or row.get("gate_preserving_fallback_reason")
-                != "raw_full_mae_bias_failed_gate_previous_r_all_passed"
-            ):
-                raise FullMaeBiasCloseoutError(
-                    f"invalid_gate_preserving_fallback:{record_id}"
-                )
-        elif (
-            selected_bias != raw_bias
-            or row.get("gate_preserving_fallback_reason") is not None
+        gate_rows = list(row.get("candidate_gate_diagnostics") or [])
+        if [float(item["bias_s"]) for item in gate_rows] != list(
+            BIAS_CANDIDATES_S
         ):
             raise FullMaeBiasCloseoutError(
-                f"unexpected_gate_preserving_fallback_state:{record_id}"
+                f"candidate_gate_diagnostics_mismatch:{record_id}"
             )
-        if selected_mae > fixed_five_mae + 1e-12 and not fallback:
+        passing_biases = [
+            float(item["bias_s"])
+            for item in gate_rows
+            if item["gate"].get("qualified") is True
+        ]
+        if list(row["gate_passing_bias_candidates_s"]) != passing_biases:
             raise FullMaeBiasCloseoutError(
-                f"unexplained_selected_mae_regression:{record_id}"
+                f"gate_passing_bias_list_mismatch:{record_id}"
+            )
+        no_gate_passing = not passing_biases
+        if no_gate_passing:
+            if (
+                selected_bias != raw_bias
+                or row["selected_from_gate_passing_candidates"] is not False
+                or row["no_gate_passing_candidate_risk"] is not True
+                or list(row["risk_flags"])
+                != ["no_gate_passing_time_bias_candidate"]
+            ):
+                raise FullMaeBiasCloseoutError(
+                    f"invalid_no_gate_passing_risk_selection:{record_id}"
+                )
+        elif (
+            selected_bias not in passing_biases
+            or row["selected_from_gate_passing_candidates"] is not True
+            or row["no_gate_passing_candidate_risk"] is not False
+            or list(row["risk_flags"])
+            or row["gate_diagnostic"].get("qualified") is not True
+        ):
+            raise FullMaeBiasCloseoutError(
+                f"invalid_gate_aware_time_bias_selection:{record_id}"
             )
         if not math.isclose(
             float(card_row["final_common_mae_bpm"]),
@@ -1221,20 +1233,31 @@ def validate_closeout(
         (result.get("time_bias") or {}).get("raw_full_mae_improvement_vs_5s_bpm")
         or {}
     )
-    fallback_summary = (
-        (result.get("time_bias") or {}).get("gate_preserving_fallback") or {}
+    gate_aware_summary = (
+        (result.get("time_bias") or {}).get("gate_aware_selection") or {}
     )
-    fallback_count = sum(
-        int(row["gate_preserving_fallback_applied"] is True) for row in rows
+    risk_count = sum(
+        int(row["no_gate_passing_candidate_risk"] is True) for row in rows
+    )
+    selected_from_gate_count = sum(
+        int(row["selected_from_gate_passing_candidates"] is True) for row in rows
     )
     if (
         int(official.get("count", -1)) != 48
         or int(improvement.get("count", -1)) != 48
         or int(raw_improvement.get("count", -1)) != 48
         or int(raw_improvement.get("worsened_count", -1)) != 0
-        or int(fallback_summary.get("count", -1)) != fallback_count
-        or sum(int(row["gate_diagnostic"].get("qualified") is True) for row in rows)
-        != 48
+        or int(
+            gate_aware_summary.get("no_gate_passing_candidate_risk_count", -1)
+        )
+        != risk_count
+        or int(
+            gate_aware_summary.get(
+                "selected_from_gate_passing_candidate_count", -1
+            )
+        )
+        != selected_from_gate_count
+        or risk_count + selected_from_gate_count != 48
     ):
         raise FullMaeBiasCloseoutError("result_summary_contract_mismatch")
     forbidden_names = [
@@ -1270,8 +1293,8 @@ def validate_closeout(
             "frozen_records_and_coordinates_48": True,
             "five_biases_on_one_common_window": True,
             "raw_full_mae_argmin_not_worse_than_fixed_5s": True,
-            "gate_preserving_fallbacks_verified": True,
-            "all_effective_selected_biases_gate_qualified": True,
+            "gate_aware_minimum_full_mae_selection_verified": True,
+            "no_gate_passing_candidate_risks_recorded": True,
             "zero_new_solver_reports": True,
             "zero_new_bo_logical_trials": True,
             "eight_six_subject_scenes": True,

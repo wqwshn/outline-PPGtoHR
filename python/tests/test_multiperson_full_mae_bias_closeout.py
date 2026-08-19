@@ -67,8 +67,13 @@ def test_updated_dataset_card_keeps_records_and_coordinates_frozen() -> None:
                 "qualified": True,
                 "failed_gates": [],
             },
-            "gate_preserving_fallback_applied": False,
-            "gate_preserving_fallback_reason": None,
+            "gate_passing_bias_candidates_s": [4.0, 5.5],
+            "gate_passing_candidate_count": 2,
+            "selected_from_gate_passing_candidates": True,
+            "no_gate_passing_candidate_risk": False,
+            "risk_flags": [],
+            "selection_reason": "minimum_full_mae_among_gate_passing_candidates",
+            "candidate_gate_diagnostics": [],
         },
         "run1_TS": {
             "record_id": "run1_TS",
@@ -94,8 +99,15 @@ def test_updated_dataset_card_keeps_records_and_coordinates_frozen() -> None:
                 "qualified": False,
                 "failed_gates": ["absolute_l10"],
             },
-            "gate_preserving_fallback_applied": False,
-            "gate_preserving_fallback_reason": None,
+            "gate_passing_bias_candidates_s": [],
+            "gate_passing_candidate_count": 0,
+            "selected_from_gate_passing_candidates": False,
+            "no_gate_passing_candidate_risk": True,
+            "risk_flags": ["no_gate_passing_time_bias_candidate"],
+            "selection_reason": (
+                "global_full_mae_minimum_with_no_gate_passing_candidate_risk"
+            ),
+            "candidate_gate_diagnostics": [],
         },
     }
 
@@ -117,6 +129,7 @@ def test_updated_dataset_card_keeps_records_and_coordinates_frozen() -> None:
     assert updated["records"][0]["selected_bias_s"] == 5.5
     assert updated["records"][0]["final_common_mae_bpm"] == 1.8
     assert updated["records"][1]["gate_diagnostic"]["qualified"] is False
+    assert updated["records"][1]["no_gate_passing_candidate_risk"] is True
     assert updated["scene_composition"] == original["scene_composition"]
 
 
@@ -174,62 +187,3 @@ def test_recomputed_selection_rejects_a_tampered_selected_bias() -> None:
             stored=stored,
             recomputed=recomputed,
         )
-
-
-def test_gate_preserving_bias_falls_back_to_previous_passing_bias() -> None:
-    raw_selection = {
-        "curve": [
-            {"bias_s": 4.0, "common_mae_bpm": 2.99, "window_count": 100},
-            {"bias_s": 5.0, "common_mae_bpm": 2.90, "window_count": 100},
-        ],
-        "selected_bias_s": 5.0,
-        "selected_common_mae_bpm": 2.90,
-        "fixed_5s_common_mae_bpm": 2.90,
-    }
-    gate_by_bias = {
-        4.0: {"qualified": True, "failed_gates": []},
-        5.0: {
-            "qualified": False,
-            "failed_gates": ["right_censored_e10"],
-        },
-    }
-
-    selected = CLOSEOUT.choose_gate_preserving_time_bias(
-        raw_selection=raw_selection,
-        previous_bias_s=4.0,
-        gate_by_bias=gate_by_bias,
-    )
-
-    assert selected["raw_full_mae_selected_bias_s"] == 5.0
-    assert selected["selected_bias_s"] == 4.0
-    assert selected["selected_common_mae_bpm"] == 2.99
-    assert selected["improvement_vs_5s_bpm"] == pytest.approx(-0.09)
-    assert selected["gate_preserving_fallback_applied"] is True
-    assert selected["gate_diagnostic"]["qualified"] is True
-
-
-def test_gate_preserving_bias_keeps_passing_full_mae_winner() -> None:
-    raw_selection = {
-        "curve": [
-            {"bias_s": 4.0, "common_mae_bpm": 2.99, "window_count": 100},
-            {"bias_s": 5.0, "common_mae_bpm": 2.90, "window_count": 100},
-        ],
-        "selected_bias_s": 5.0,
-        "selected_common_mae_bpm": 2.90,
-        "fixed_5s_common_mae_bpm": 2.90,
-    }
-    gate_by_bias = {
-        4.0: {"qualified": True, "failed_gates": []},
-        5.0: {"qualified": True, "failed_gates": []},
-    }
-
-    selected = CLOSEOUT.choose_gate_preserving_time_bias(
-        raw_selection=raw_selection,
-        previous_bias_s=4.0,
-        gate_by_bias=gate_by_bias,
-    )
-
-    assert selected["selected_bias_s"] == 5.0
-    assert selected["selected_common_mae_bpm"] == 2.90
-    assert selected["gate_preserving_fallback_applied"] is False
-    assert selected["gate_preserving_fallback_reason"] is None
