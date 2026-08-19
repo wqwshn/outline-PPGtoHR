@@ -121,3 +121,32 @@ def test_updated_dataset_card_fails_if_coordinate_would_change() -> None:
             evaluations=evaluation,
             updated_at="2026-08-19T12:00:00+08:00",
         )
+
+
+def test_recomputed_selection_rejects_a_tampered_selected_bias() -> None:
+    recomputed = {
+        "bias_candidates_s": [4.0, 4.5, 5.0, 5.5, 6.0],
+        "selection_rule": "minimum_common_reliable_full_mae_nearest_5s_then_smaller",
+        "common_window_indices": [0, 1],
+        "common_window_count": 2,
+        "curve": [
+            {"bias_s": bias, "common_mae_bpm": abs(bias - 4.5), "window_count": 2}
+            for bias in (4.0, 4.5, 5.0, 5.5, 6.0)
+        ],
+        "selected_bias_s": 4.5,
+        "selected_common_mae_bpm": 0.0,
+        "fixed_5s_common_mae_bpm": 0.5,
+        "improvement_vs_5s_bpm": 0.5,
+    }
+    stored = dict(recomputed)
+    stored["selected_bias_s"] = 5.0
+
+    with pytest.raises(
+        CLOSEOUT.FullMaeBiasCloseoutError,
+        match="recomputed_selection_mismatch:run1_LYX",
+    ):
+        CLOSEOUT.assert_recomputed_selection_matches(
+            record_id="run1_LYX",
+            stored=stored,
+            recomputed=recomputed,
+        )

@@ -122,9 +122,22 @@ def evaluator_identity(worktree: Path) -> dict[str, Any]:
         "--",
         *evaluator_files,
     )
-    if tracked_diff:
+    staged_diff = _git(
+        root,
+        "diff",
+        "--cached",
+        "--name-only",
+        "--",
+        *evaluator_files,
+    )
+    if tracked_diff or staged_diff:
         raise FullMaeBiasCloseoutError(
-            "evaluator_source_not_committed:" + tracked_diff.replace("\n", ",")
+            "evaluator_source_not_committed:"
+            + ",".join(
+                value.replace("\n", ",")
+                for value in (tracked_diff, staged_diff)
+                if value
+            )
         )
     paths = tuple(root / relative for relative in evaluator_files)
     return {
@@ -146,12 +159,17 @@ def _local_solver_inventory(output_root: Path) -> dict[str, Any]:
         report_path = complete_path.parent / "report-v2.json"
         if complete.get("status") != "complete" or not report_path.is_file():
             raise FullMaeBiasCloseoutError(f"local_solver_entry_incomplete:{complete_path}")
+        actual_report_sha256 = file_sha256(report_path)
+        if actual_report_sha256 != str(complete.get("report_sha256")):
+            raise FullMaeBiasCloseoutError(
+                f"local_solver_report_hash_mismatch:{report_path}"
+            )
         rows.append(
             {
                 "cache_key": str(complete["cache_key"]),
                 "record_id": str(complete["record_id"]),
                 "coordinate_id": str(complete["coordinate_id"]),
-                "report_sha256": str(complete["report_sha256"]),
+                "report_sha256": actual_report_sha256,
                 "report_size": int(report_path.stat().st_size),
             }
         )
@@ -755,6 +773,33 @@ def _validate_file_hash(
         raise FullMaeBiasCloseoutError(f"completion_hash_mismatch:{field}")
 
 
+def assert_recomputed_selection_matches(
+    *,
+    record_id: str,
+    stored: Mapping[str, Any],
+    recomputed: Mapping[str, Any],
+) -> None:
+    keys = (
+        "bias_candidates_s",
+        "selection_rule",
+        "common_window_indices",
+        "common_window_count",
+        "curve",
+        "selected_bias_s",
+        "selected_common_mae_bpm",
+        "fixed_5s_common_mae_bpm",
+        "improvement_vs_5s_bpm",
+    )
+    stored_selection = {key: stored.get(key) for key in keys}
+    recomputed_selection = {key: recomputed.get(key) for key in keys}
+    if canonical_sha256(stored_selection) != canonical_sha256(
+        recomputed_selection
+    ):
+        raise FullMaeBiasCloseoutError(
+            f"recomputed_selection_mismatch:{record_id}"
+        )
+
+
 def validate_closeout(
     *,
     worktree: Path,
@@ -848,6 +893,38 @@ def validate_closeout(
         )
     ):
         raise FullMaeBiasCloseoutError("non_lyx_bias_manifest_mismatch")
+    frozen_by_id = {
+        str(row["record_id"]): row
+        for row in list(snapshot.get("frozen_records") or [])
+    }
+    external_calls = _external_calls_by_key(external)
+    recomputed_rows = [
+        _evaluate_frozen_record(
+            output_root=root,
+            record=card_row,
+            frozen_record=frozen_by_id[str(card_row["record_id"])],
+            external_calls=external_calls,
+        )
+        for card_row in card_records
+    ]
+    recomputed_by_id = {
+        str(row["record_id"]): row for row in recomputed_rows
+    }
+    for record_id, recomputed in recomputed_by_id.items():
+        stored = rows_by_id.get(record_id)
+        if stored is None:
+            raise FullMaeBiasCloseoutError(
+                f"recomputed_record_missing:{record_id}"
+            )
+        assert_recomputed_selection_matches(
+            record_id=record_id,
+            stored=stored,
+            recomputed=recomputed,
+        )
+        if canonical_sha256(stored) != canonical_sha256(recomputed):
+            raise FullMaeBiasCloseoutError(
+                f"recomputed_record_result_mismatch:{record_id}"
+            )
     report_hashes: list[str] = []
     for card_row in card_records:
         record_id = str(card_row["record_id"])
@@ -897,6 +974,28 @@ def validate_closeout(
     ]:
         raise FullMaeBiasCloseoutError("panel_dataset_record_order_changed")
     result = read_json(root / "result_summary.json")
+    expected_card = build_updated_dataset_card(
+        card,
+        evaluations=recomputed_by_id,
+        updated_at=str(card["updated_at"]),
+    )
+    if canonical_sha256(card) != canonical_sha256(expected_card):
+        raise FullMaeBiasCloseoutError("recomputed_dataset_card_mismatch")
+    expected_panel = _build_updated_panel_selection(
+        panel,
+        evaluations=recomputed_by_id,
+    )
+    if canonical_sha256(panel) != canonical_sha256(expected_panel):
+        raise FullMaeBiasCloseoutError("recomputed_panel_selection_mismatch")
+    expected_result = _build_result_summary(
+        previous=result,
+        dataset_card=card,
+        evaluations=recomputed_rows,
+        frozen_snapshot=snapshot,
+        evaluator=evaluator,
+    )
+    if canonical_sha256(result) != canonical_sha256(expected_result):
+        raise FullMaeBiasCloseoutError("recomputed_result_summary_mismatch")
     official = (result.get("time_bias") or {}).get("official_common_window_mae_bpm") or {}
     improvement = (result.get("time_bias") or {}).get("improvement_vs_5s_bpm") or {}
     if (
