@@ -910,6 +910,24 @@ def validate_closeout(
     recomputed_by_id = {
         str(row["record_id"]): row for row in recomputed_rows
     }
+    expected_manifest = _manifest(
+        recomputed_rows,
+        schema_id="multiperson_full_mae_bias_manifest_v1",
+    )
+    if canonical_sha256(manifest) != canonical_sha256(expected_manifest):
+        raise FullMaeBiasCloseoutError(
+            "recomputed_bias_manifest_mismatch"
+        )
+    expected_non_lyx_manifest = _manifest(
+        [row for row in recomputed_rows if str(row["subject"]) != "LYX"],
+        schema_id="multiperson_non_lyx_full_mae_bias_manifest_v1",
+    )
+    if canonical_sha256(non_lyx_manifest) != canonical_sha256(
+        expected_non_lyx_manifest
+    ):
+        raise FullMaeBiasCloseoutError(
+            "recomputed_non_lyx_bias_manifest_mismatch"
+        )
     for record_id, recomputed in recomputed_by_id.items():
         stored = rows_by_id.get(record_id)
         if stored is None:
