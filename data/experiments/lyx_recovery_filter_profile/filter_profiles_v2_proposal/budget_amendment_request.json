@@ -1,0 +1,18 @@
+{
+  "added_unique_identities": 8,
+  "approved": false,
+  "decision_state": "awaiting_human_budget_decision",
+  "independent_bo_authorized": false,
+  "max_attempts": 1448,
+  "max_unique_identities": 724,
+  "normal_unique_identity_limit": 712,
+  "profile_design_rule_hash": "6de9b647f2fe9f948604c1a906c8cbf6679e71833299ce540805af903141840c",
+  "reclassifies_cached_identity_count": 24,
+  "record_manifest_hash": "c5e7291cf2da3a6ef25a03a96d763373b9cacdaee521c0378413cee6dc9666f1",
+  "replacement_profile_count": 2,
+  "replacement_record_count": 4,
+  "request_sha256": "40dcfd55d1d11a298eb0cc489de0a3b1d3af3e485e15c24951c9bbd6e515d32f",
+  "request_version": "lyx_filter_audit_budget_amendment_request_v2",
+  "stage": "filter_profile_stability_audit",
+  "status": "awaiting_human_budget_decision"
+}

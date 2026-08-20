@@ -1,0 +1,43 @@
+{
+  "actual_hr_tracking_trajectory_count": 0,
+  "attempt_registry_summary": {
+    "actual_unique_run_count": 64,
+    "cache_hit_count": 64,
+    "failed_attempt_count": 1,
+    "logical_task_count": 129,
+    "planned_unique_identity_count": 64,
+    "retry_count": 1
+  },
+  "candidate_eligible_profile_ids": [
+    "p50-short-low-40",
+    "p50-short-midlow-40"
+  ],
+  "candidate_profile_count": 6,
+  "candidate_profile_receipt_sha256": {
+    "p100-medium-low-80": "d2a8875813d401abc539779248bbd08cef5f2e974f6d459a74edf99be8b6d5d6",
+    "p100-medium-midlow-80": "468d6697f22908e39c2ee9533a0da03053c0fd7201b74ba3a3f53855d359b634",
+    "p100-short-low-40": "f3f7d7aa17c8b7a27f75e06d766fe8f28f7d69ec01df882becb0670dca09de72",
+    "p100-short-midlow-40": "46af80874de5c734c800bebf68966b79f8f95398acafe189e9cbdc84ef632e72",
+    "p50-short-low-40": "a80f10d5c1037b47819018a7fff5864ea9851cf010184eb2a34efe68bfb67033",
+    "p50-short-midlow-40": "cc94a059bf572a403c0fc102a3a9535b14f580f738351120d0c1e2b82809d210"
+  },
+  "completion_sha256": "9ccd10f5c6a0cbc590c7907f755624e01c997e8762f567f8c6848941f38a34f3",
+  "exploration_run_count": 0,
+  "final_library_sha256": null,
+  "final_profile_count": 0,
+  "final_profile_ids": [],
+  "final_profile_receipt_sha256": {},
+  "independent_bo_run_count": 0,
+  "new_spec_gate_supplement_run_count": 24,
+  "receipt_version": "lyx_filter_spec_gate_supplement_completion_v1",
+  "selection": {
+    "selected_p100_profile_ids": [],
+    "selected_p50_profile_ids": [
+      "p50-short-low-40",
+      "p50-short-midlow-40"
+    ],
+    "selected_profile_ids": [],
+    "status": "blocked_insufficient_rate_coverage"
+  },
+  "status": "blocked_insufficient_eligible_profiles"
+}

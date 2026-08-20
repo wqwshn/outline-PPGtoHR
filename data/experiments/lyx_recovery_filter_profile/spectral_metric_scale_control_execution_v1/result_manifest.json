@@ -1,0 +1,92 @@
+{
+  "manifest_sha256": "0299a2cc5d77ddd985332db7f7271eba0201cf4c4335211aaa693775ed4ffc9e",
+  "manifest_version": "lyx_spectral_metric_scale_control_manifest_v1",
+  "proposal_sha256": "429233ecadf92cc2d669b59c8f2cc4516b3d767547d98919655a18918e1a60bd",
+  "result_count": 12,
+  "results": [
+    {
+      "file_sha256": "c855c20a663111c59388d041ccf8292191a934baa771eb15888ce2433735e7c7",
+      "identity_sha256": "1c6b7b475025cc98e9718d836419954df9bd59ee91364618ef604be854b7c7d2",
+      "path": "record_controls/jianpan1_LYX_0708.json",
+      "record_id": "jianpan1_LYX_0708",
+      "result_sha256": "560b61f202be1fd428fe3349ec3feefeabc9332a1abe313c2efe7d4ac76ab023"
+    },
+    {
+      "file_sha256": "f5bd5bb9a45f40e482789dc21783e25e84100bbf4d6a41dad2c0d7bb3e223982",
+      "identity_sha256": "b45d31300f6d4d788e0b5032c508801ffd7c0f31817575761dc6043f76d70fa5",
+      "path": "record_controls/jianpan2_LYX_0708.json",
+      "record_id": "jianpan2_LYX_0708",
+      "result_sha256": "b5291a853d9311b75ae5b98428dc965484a1a01af780786e426fecf13fbb8fdf"
+    },
+    {
+      "file_sha256": "1be5d3a530cc94be81d594c92737891f106ce9c522b3454ba6637f2c63c21c40",
+      "identity_sha256": "25fa109fc2814557945ba8ea8f05264d4c2dfe3dfa1bc72ececf2f4e95a8d9ab",
+      "path": "record_controls/jianpan3_LYX_0708.json",
+      "record_id": "jianpan3_LYX_0708",
+      "result_sha256": "78d661a9626addbfc632236c292b2610ee7b28edfed85d5a2bc284f7cde2a1ba"
+    },
+    {
+      "file_sha256": "7c44dd5aa4d79ec132edb95fc361fa0dbf2e745638c117b4b09d50e41628ab9a",
+      "identity_sha256": "7024aff43eefa10d6bcf549a692634a37b77451cdd4055ef37c7e66df2a6e940",
+      "path": "record_controls/kaihe1_LYX_0613.json",
+      "record_id": "kaihe1_LYX_0613",
+      "result_sha256": "1b6c0f94daf7e32c4577d140cc19b598ba887699e3c02ceae1b7d9497c45366d"
+    },
+    {
+      "file_sha256": "152c6005e8cc3bdaa32b8be14572a5dafb4f9152078032687b6decced1940e21",
+      "identity_sha256": "ffa41b33294e96f5cce63dc18c2e4cf4fe62ecbe65560449eb6c101554be1048",
+      "path": "record_controls/kaihe1_LYX_0617.json",
+      "record_id": "kaihe1_LYX_0617",
+      "result_sha256": "3862bd57ef9c0aa51c83ee92aeb744dc1164380c5216dff3f3c85f870c0338b2"
+    },
+    {
+      "file_sha256": "be74ef147b26d13694063a07a7c284bd97858b3dc1336c8237d37ccecdc7b618",
+      "identity_sha256": "4dc21b0dcb2848e6de02aa75f949f83261c231af720f1801efb483c56e6c2d44",
+      "path": "record_controls/kaihe3_LYX_0613.json",
+      "record_id": "kaihe3_LYX_0613",
+      "result_sha256": "e68c3d3dcecef0dfd2f1e9a72086a7ac02dc3edbe0c9fe3df7dd41c3d9628d79"
+    },
+    {
+      "file_sha256": "6d8ce4c015d8209d34ac13980d245a072979d42cc252aa796024fed60920117c",
+      "identity_sha256": "86bfc0b161d8c8b4e777c65bc31bacb84554c0f27b748640ef2c202ec18c9d93",
+      "path": "record_controls/run1_LYX_0708.json",
+      "record_id": "run1_LYX_0708",
+      "result_sha256": "f531721f73ca0d6afbbcbd28f8ff1f7ffd966db8e61c1e7e6fc8d4c7eb1e1627"
+    },
+    {
+      "file_sha256": "3071e679dc4846a3b4dcd022dceb74fadfffbdae3a6b8c036255fe8a6b0caaf9",
+      "identity_sha256": "b7eb1b7ebeca5a853accd5b1ae453dfcec0da1e23e41b49d12dd7056ab3d2d09",
+      "path": "record_controls/run2_LYX_0708.json",
+      "record_id": "run2_LYX_0708",
+      "result_sha256": "0694fcb0cff12acc346a9734bad7597d72e5037902ea5548e31198ea32bbd353"
+    },
+    {
+      "file_sha256": "faa4255595a553f2139300c181a07493a82eed3f2e31f1f75277998428874c40",
+      "identity_sha256": "119242e9ac7fe940580e8cac5a985b81a4890a6cb80cd3d3de1daa58ab2f8271",
+      "path": "record_controls/run3_LYX_0708.json",
+      "record_id": "run3_LYX_0708",
+      "result_sha256": "fd60ba9407da49b9226ba2c05ab9ac92363ca67b6a69fdca320fd81dbd4c7579"
+    },
+    {
+      "file_sha256": "e01805f67e3c6a901a73831bb02c8ecb8423993782c733737c7a9957234424ef",
+      "identity_sha256": "32f0c693a7da10e4c6b86acb56acf973dc2b55f1f286e2f32f4a856b88ee6b4a",
+      "path": "record_controls/xiezi2_LYX_0708.json",
+      "record_id": "xiezi2_LYX_0708",
+      "result_sha256": "2e0da8b4dd618e61348c10bc572209591493a699bb2fb598094d7224fed445a1"
+    },
+    {
+      "file_sha256": "f7b4685075764fc9335940f202835ecc73e103970e91983717e76dd7cf4856ef",
+      "identity_sha256": "fbd3452bdd9f20ddfeebc15e87c7d05b07d12f0be9a5431867b4f6e89e5c9067",
+      "path": "record_controls/xiezi3_LYX_0708.json",
+      "record_id": "xiezi3_LYX_0708",
+      "result_sha256": "3f691140b69ea0b3e15ddae544888d0f2778550ef7557cb96728c4237eae677a"
+    },
+    {
+      "file_sha256": "fbc419e2240e87ce9cd10ce294048a64a8d1fc0aa026f2457e6ea7af815c6af8",
+      "identity_sha256": "f819dfb85ca85193c0bf7ec639ab62bf6e80d5fe98a9648b349aafab75f7e54e",
+      "path": "record_controls/xiezi4_LYX_0708.json",
+      "record_id": "xiezi4_LYX_0708",
+      "result_sha256": "e10794141bd8d68806b12ef952643968791b9666c62bac9aeaaaffe0d5850b13"
+    }
+  ]
+}

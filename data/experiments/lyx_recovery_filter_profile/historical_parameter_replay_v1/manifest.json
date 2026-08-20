@@ -1,0 +1,240 @@
+{
+  "archive_git_commit": "7c76fcd644eb66f8443a5eded622d81ac53a54c0",
+  "baseline_manifest_file_sha256": "0b695ccb31d0a945d5e1d2281bfc0c70deaa7db7bbda751c857df152ec43ed5c",
+  "formal_solver_run_count": 0,
+  "independent_bo_run_count": 0,
+  "manifest_sha256": "8bba8866f17e22e795ca1e757f9b97be5510522aa5ef1b9d50b14f7ae546c09f",
+  "manifest_version": "lyx_historical_parameter_replay_manifest_v1",
+  "record_count": 12,
+  "records": [
+    {
+      "archive_candidate_id": "physical_v1:079b98a3d43131364fbdf38ce954fee23dcb76e2ffea08a8e6a3679ec0cad650",
+      "data_sha256": "7c23fa243cf4c7f0a0f92d2f8a84ca3c12ee5af18df38dd4437e92ad0bb83265",
+      "parameter_source_relative_path": "s21/r/04/physical_new/selected_candidate.json",
+      "parameter_source_sha256": "95ff37848946e3a4900df76a132ef9d3c7003ad2ebf5629be2183b3c9d5e2d88",
+      "parameters": {
+        "analysis_scope": "full",
+        "fs_target": 50,
+        "lms_mu_base": 0.006,
+        "lms_mu_min": 1e-06,
+        "max_order": 4,
+        "smooth_win_len": 5,
+        "spec_penalty_width": 0.05,
+        "time_bias": 5.0
+      },
+      "record_id": "jianpan1_LYX_0708",
+      "reference_sha256": "076fec4a8767fdf6edfee35dfac72e898659b95e5cd6d9924724145976622b2c",
+      "scene": "jianpan"
+    },
+    {
+      "archive_candidate_id": "physical_v1:300f07aefd5f09e7cae71c7b658bab3cc768edddaefb92f55683b6119dfab633",
+      "data_sha256": "b4aaafa531d731c81d7e8da0e5dac4f8c6e360bda6c7520c34ae78e023dd8bb7",
+      "parameter_source_relative_path": "s21/r/05/physical_new/selected_candidate.json",
+      "parameter_source_sha256": "7025100605ad879402bf005cf28b97e9611580579942b386e554ac6a1167aee5",
+      "parameters": {
+        "analysis_scope": "full",
+        "fs_target": 50,
+        "lms_mu_base": 0.012,
+        "lms_mu_min": 1e-06,
+        "max_order": 10,
+        "smooth_win_len": 5,
+        "spec_penalty_width": 0.2,
+        "time_bias": 5.0
+      },
+      "record_id": "jianpan2_LYX_0708",
+      "reference_sha256": "c7a98e54da83d6310430276b33b88bf2306ade91ac81d5b9dd3f5d18ecf5a270",
+      "scene": "jianpan"
+    },
+    {
+      "archive_candidate_id": "physical_v1:f6af645d96c618b2e7d95d7182d9caf2f1b184cf9140e5474d13d1ef91b5a565",
+      "data_sha256": "19b5d1c42c326cd2f868c1498bd282e7dba94141b8b51f70332fd82409c2e4b7",
+      "parameter_source_relative_path": "s21/r/06/physical_new/selected_candidate.json",
+      "parameter_source_sha256": "3671c3c7ad76962eeef68cd0c079b15c6586096709565dd0711784775ccf7779",
+      "parameters": {
+        "analysis_scope": "full",
+        "fs_target": 50,
+        "lms_mu_base": 0.016,
+        "lms_mu_min": 1e-06,
+        "max_order": 2,
+        "smooth_win_len": 5,
+        "spec_penalty_width": 0.2,
+        "time_bias": 5.0
+      },
+      "record_id": "jianpan3_LYX_0708",
+      "reference_sha256": "ecf02c256cde6af1557910ee9ff769de523ffb54e8124c2f0528fad82df968e6",
+      "scene": "jianpan"
+    },
+    {
+      "archive_candidate_id": "physical_v1:edc06b2c271663a17f64259366be4e68544777a19b6d90e4b388b75a1f3c5c07",
+      "data_sha256": "1dd489af27c30e2f52b911ec1e11312a7498463cdb1e737ca66ffba26bbf4bcb",
+      "parameter_source_relative_path": "s21/r/07/physical_new/selected_candidate.json",
+      "parameter_source_sha256": "c7de2fcecaea6836e9768f74ffde9075328e11d06c9191e93deb505cb35e384b",
+      "parameters": {
+        "analysis_scope": "full",
+        "fs_target": 25,
+        "lms_mu_base": 0.01,
+        "lms_mu_min": 1e-06,
+        "max_order": 5,
+        "smooth_win_len": 5,
+        "spec_penalty_width": 0.05,
+        "time_bias": 5.0
+      },
+      "record_id": "kaihe1_LYX_0613",
+      "reference_sha256": "38a5b714ee897bbeaaafa0be7017b3bf9d941826a0e534334131b1301c53e0e0",
+      "scene": "kaihe"
+    },
+    {
+      "archive_candidate_id": "physical_v1:1a3ac56b1ba42f52de2bea6b14d056dfe317e84b54deae4a2f4477e125faabcb",
+      "data_sha256": "73f626f972afccccb5a0ef261e3bfe1afd60b02b24a18e5b8a2ddfb5964e7528",
+      "parameter_source_relative_path": "s21/r/08/physical_new/selected_candidate.json",
+      "parameter_source_sha256": "fe093ba7fdeb929054a225d502344f1a61c92d46351da04ed77b86c0e5655fd8",
+      "parameters": {
+        "analysis_scope": "full",
+        "fs_target": 100,
+        "lms_mu_base": 0.016,
+        "lms_mu_min": 1e-06,
+        "max_order": 4,
+        "smooth_win_len": 5,
+        "spec_penalty_width": 0.1,
+        "time_bias": 5.0
+      },
+      "record_id": "kaihe1_LYX_0617",
+      "reference_sha256": "a3b779e55561da76a3d69293e73175c624e947d57de38a3f5184d324731c0739",
+      "scene": "kaihe"
+    },
+    {
+      "archive_candidate_id": "physical_v1:300f07aefd5f09e7cae71c7b658bab3cc768edddaefb92f55683b6119dfab633",
+      "data_sha256": "778f75d02d47a134a5999a5641de201dfc613da915b43876398792c6833c6e84",
+      "parameter_source_relative_path": "s21/r/09/physical_new/selected_candidate.json",
+      "parameter_source_sha256": "bc7fea3e8b5fdfd79624a7caf31d0a56570807a12ced08ccb7c6971a0d87d8c5",
+      "parameters": {
+        "analysis_scope": "full",
+        "fs_target": 50,
+        "lms_mu_base": 0.012,
+        "lms_mu_min": 1e-06,
+        "max_order": 10,
+        "smooth_win_len": 5,
+        "spec_penalty_width": 0.2,
+        "time_bias": 5.0
+      },
+      "record_id": "kaihe3_LYX_0613",
+      "reference_sha256": "5cb40473d1793f8ff91eeed993f4a1b9a59c44b7fefcfd57a0314ad34c626050",
+      "scene": "kaihe"
+    },
+    {
+      "archive_candidate_id": "physical_v1:a2ab40da13992cf6f3b68f1220a604756b6f1ca77a368996008b86759c90f8aa",
+      "data_sha256": "4e53e93fb94a8ecd17d319af41d6d010c1424baf9c0151099cb417fb0a2d6af0",
+      "parameter_source_relative_path": "s21/r/13/physical_new/selected_candidate.json",
+      "parameter_source_sha256": "ffd13b8a4c27345d26620058d4657c416dc97829f51d727a20e154757c5e17da",
+      "parameters": {
+        "analysis_scope": "full",
+        "fs_target": 50,
+        "lms_mu_base": 0.016,
+        "lms_mu_min": 1e-06,
+        "max_order": 10,
+        "smooth_win_len": 5,
+        "spec_penalty_width": 0.1,
+        "time_bias": 5.0
+      },
+      "record_id": "run1_LYX_0708",
+      "reference_sha256": "c8677ec1f0e22b25100c20ab83b8faf22ddea730a973b41b1b43673acf1443a0",
+      "scene": "run"
+    },
+    {
+      "archive_candidate_id": "physical_v1:127018e71d2e76f83aedd8a04fd634045754262fe2d9300eb5cd653a7582310c",
+      "data_sha256": "6e06fcb2efffb234c1d7b2dc93bc8ea7b432f000fdfdc5f32639850d1e6e7d18",
+      "parameter_source_relative_path": "s21/r/14/physical_new/selected_candidate.json",
+      "parameter_source_sha256": "837da2d9b7d82ae4db618f4f2d37726bf471ca792fcfea932b40f23175d1c3f0",
+      "parameters": {
+        "analysis_scope": "full",
+        "fs_target": 25,
+        "lms_mu_base": 0.008,
+        "lms_mu_min": 1e-06,
+        "max_order": 1,
+        "smooth_win_len": 5,
+        "spec_penalty_width": 0.05,
+        "time_bias": 5.0
+      },
+      "record_id": "run2_LYX_0708",
+      "reference_sha256": "8d04fc22e8e98c5b4380a05ded28e8aa542ab5fa66d800cf602289ccf0062382",
+      "scene": "run"
+    },
+    {
+      "archive_candidate_id": "physical_v1:4bb9022384d4ba957a73cbaeaf24b723f78f9aceb7d5806414fb710fba8bc645",
+      "data_sha256": "72d487748fa84ca857a1b50b09998d485359b9af63bdf9240a6e6b3415b632a8",
+      "parameter_source_relative_path": "s21/r/15/physical_new/selected_candidate.json",
+      "parameter_source_sha256": "4e72c20228a5c12001329696d9e17a9f8cdfd80fa6c215ea9e1c56c1138b5bc0",
+      "parameters": {
+        "analysis_scope": "full",
+        "fs_target": 25,
+        "lms_mu_base": 0.012,
+        "lms_mu_min": 1e-06,
+        "max_order": 1,
+        "smooth_win_len": 5,
+        "spec_penalty_width": 0.2,
+        "time_bias": 5.0
+      },
+      "record_id": "run3_LYX_0708",
+      "reference_sha256": "323813b4b44f54e604bf751164616bdd3ed5859d5faee2f302b11301b612e1e3",
+      "scene": "run"
+    },
+    {
+      "archive_candidate_id": "physical_v1:bd5b52f789457f0c833b41adaa8d64539e4b4f08ee0380302769b183f8dc01f8",
+      "data_sha256": "eaba17c0d527c7a8b099dfa3f9587496bce5095ab91528c2b371d5d795e852b1",
+      "parameter_source_relative_path": "s21/r/22/physical_new/selected_candidate.json",
+      "parameter_source_sha256": "5c1c3477e326080ad981092a67ba0994f40df97ce49afb54fd76d9437604c921",
+      "parameters": {
+        "analysis_scope": "full",
+        "fs_target": 25,
+        "lms_mu_base": 0.008,
+        "lms_mu_min": 1e-06,
+        "max_order": 1,
+        "smooth_win_len": 5,
+        "spec_penalty_width": 0.2,
+        "time_bias": 5.0
+      },
+      "record_id": "xiezi2_LYX_0708",
+      "reference_sha256": "fc1a913849322295413e3ecf1ca48cefa477420ac4c34ea3cc2a5b74070d2877",
+      "scene": "xiezi"
+    },
+    {
+      "archive_candidate_id": "physical_v1:ac93a1c63a60128c6a7c1580afb627cde34830f67af4ca0c9c13bd31a67fb9be",
+      "data_sha256": "111b11e3120c793eae426f7361f73ac8c0b5b6418057b2531f9fd62cf1a1be79",
+      "parameter_source_relative_path": "s21/r/23/physical_new/selected_candidate.json",
+      "parameter_source_sha256": "42d4374a9f91bf85a0c5bc2d650faadc1c4dda099d24fcc9b03f3a2c64d09143",
+      "parameters": {
+        "analysis_scope": "full",
+        "fs_target": 25,
+        "lms_mu_base": 0.012,
+        "lms_mu_min": 1e-06,
+        "max_order": 4,
+        "smooth_win_len": 5,
+        "spec_penalty_width": 0.1,
+        "time_bias": 5.0
+      },
+      "record_id": "xiezi3_LYX_0708",
+      "reference_sha256": "34c0a25bf5953ba8968108170ddcf3b6664fb15c7cecd8f1dfc1728c5cca0916",
+      "scene": "xiezi"
+    },
+    {
+      "archive_candidate_id": "physical_v1:abe5916c0419ba0424d10072928a1b46869646ccf817273aebae783ea830ffef",
+      "data_sha256": "1d18872f230a8ed75fdf9653196193557da946dcdb6b6375afe220ad9c71bdf4",
+      "parameter_source_relative_path": "s21/r/24/physical_new/selected_candidate.json",
+      "parameter_source_sha256": "3e4448bacd1ddb3c2713a262c7fcf6eea5ef0f4e7146c2eb409103c046981329",
+      "parameters": {
+        "analysis_scope": "full",
+        "fs_target": 50,
+        "lms_mu_base": 0.01,
+        "lms_mu_min": 1e-06,
+        "max_order": 4,
+        "smooth_win_len": 5,
+        "spec_penalty_width": 0.3,
+        "time_bias": 5.0
+      },
+      "record_id": "xiezi4_LYX_0708",
+      "reference_sha256": "9db5f78f018e87128771f45cc3af8004e51ef7530ae1358dcf873b8f547cb0f7",
+      "scene": "xiezi"
+    }
+  ],
+  "status": "frozen_zero_solver_runs"
+}

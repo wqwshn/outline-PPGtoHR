@@ -1,0 +1,23 @@
+panel,group,item,metric,value,denominator,baseline,notes
+A,Final,a0,pass_count,1,4,3,Final MAE<=3 and E20=0
+A,Target,a0,pass_count,3,4,3,ready handoff MAE<=3 and E20=0
+A,Final,a1_loose,pass_count,1,4,3,Final MAE<=3 and E20=0
+A,Target,a1_loose,pass_count,1,4,3,ready handoff MAE<=3 and E20=0
+A,Final,a1_central,pass_count,1,4,3,Final MAE<=3 and E20=0
+A,Target,a1_central,pass_count,0,4,3,ready handoff MAE<=3 and E20=0
+A,Final,a1_strict,pass_count,1,4,3,Final MAE<=3 and E20=0
+A,Target,a1_strict,pass_count,0,4,3,ready handoff MAE<=3 and E20=0
+A,Final,a2_loose,pass_count,1,4,3,Final MAE<=3 and E20=0
+A,Target,a2_loose,pass_count,3,4,3,ready handoff MAE<=3 and E20=0
+A,Final,a2_central,pass_count,1,4,3,Final MAE<=3 and E20=0
+A,Target,a2_central,pass_count,1,4,3,ready handoff MAE<=3 and E20=0
+A,Final,a2_strict,pass_count,1,4,3,Final MAE<=3 and E20=0
+A,Target,a2_strict,pass_count,1,4,3,ready handoff MAE<=3 and E20=0
+B,A2-loose,bobi2,post60_mae_bpm,2.9993657769746855,60,3,E20=2
+B,A2-loose,kaihe2,post60_mae_bpm,5.034773248575941,60,3,E20=3
+B,A2-loose,kaihe3,post60_mae_bpm,21.89949186807095,60,3,E20=17; safe abstain
+B,A2-loose,tiaosheng3,post60_mae_bpm,0.992967632414463,60,3,E20=0
+C,minimum-AAE,run1,post60_e20_count,2,40,0,8 of 40 tail-safe trials
+C,tail-safe,run1,post60_e20_count,0,40,0,AAE penalty=0.16078162424449305
+C,minimum-AAE,xiezi3,post60_e20_count,6,40,1,0 of 40 tail-safe trials
+C,tail-safe,xiezi3,post60_e20_count,,40,1,no eligible trial

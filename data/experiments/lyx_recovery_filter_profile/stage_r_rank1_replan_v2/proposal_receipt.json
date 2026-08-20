@@ -1,0 +1,22 @@
+{
+  "artifact_sha256": {
+    "budget_amendment_request.json": "4ab22c142351c516375e85e3f324005bf8918a1edbefa6365568b5f047360f78",
+    "budget_contract_v12.json": "172376eb18c0577f7a142c648f47ef69e0b359989e82910147f8c5d244b8669b",
+    "metric_contract.json": "8cc5b2b7706dd49dbe4d151b4dfcf077be2e0c082ba4828718c78d2f1ae9a65f",
+    "recovery_selection_contract.json": "47772f9a76425da84e46681ee91410f435790e527d93b64d2f26d9591aac4421",
+    "source_identity.json": "6007f7c93f6c3fbdaaef36d5dcc57623ef2f133a82d874879f032c58009795e6",
+    "spectral_gate_contract.json": "bf2ee4deca720850b9030293b36c3db7b87bec621d9f4827388166da18460c19",
+    "stage_r_rank1_replan_proposal.json": "c1e950db473f14faacdb4276c951953c5dec21400f50f02fe9b5618d1c3da34e"
+  },
+  "budget_request_sha256": "615bd02fac2b8b9706814cc6dcbfddb10de6b7e0645e93e0826cc1fb4c4ec634",
+  "diagnostic_run_count": 0,
+  "formal_run_count": 0,
+  "identity_count": 36,
+  "independent_bo_run_count": 0,
+  "may_execute_without_new_authorization": false,
+  "parameter_search_run_count": 0,
+  "proposal_sha256": "15379d25798b2c8f6929dbe95d780959f265343b258ef81958b2a75aa4b48350",
+  "receipt_sha256": "b756c88dc334661b0bc8d8ab7436da0dc425f2a3492602302f8b07ab8543645c",
+  "receipt_version": "lyx_stage_r_rank1_replan_proposal_receipt_v2",
+  "status": "awaiting_human_execution_authorization"
+}

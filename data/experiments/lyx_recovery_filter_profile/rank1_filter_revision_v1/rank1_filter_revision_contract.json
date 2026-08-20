@@ -1,0 +1,17 @@
+{
+  "actual_taps": 1,
+  "adaptive_reference_stage_limit": 1,
+  "base_profile_id": "p25-short-low",
+  "contract_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+  "contract_version": "lyx_rank1_filter_revision_v1",
+  "fs_target": 25,
+  "lms_mu_min": 1e-06,
+  "memory_ms": 40,
+  "nominal_mu": 0.008,
+  "parameter_search": false,
+  "reference_groups_order": [
+    "HF"
+  ],
+  "revision_id": "p25-short-low-rank1-v1",
+  "selection_rule": "first_reference_after_existing_absolute_correlation_ranking"
+}

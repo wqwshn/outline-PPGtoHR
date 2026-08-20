@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "experiment_acceptance_contract_binding_v1.schema.json",
+  "title": "Experiment acceptance contract binding v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "binding_schema_version",
+    "contract_id",
+    "registry_path",
+    "registry_sha256",
+    "evaluator_path",
+    "evaluator_sha256",
+    "metric_schema_version",
+    "baseline_identity",
+    "evaluation_time_bias_s",
+    "evidence_level"
+  ],
+  "properties": {
+    "binding_schema_version": {
+      "const": "experiment_acceptance_contract_binding_v1"
+    },
+    "contract_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "registry_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "registry_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "evaluator_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evaluator_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "metric_schema_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "baseline_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "baseline_id",
+        "artifact_or_inventory_sha256",
+        "final_trajectory_preserved"
+      ],
+      "properties": {
+        "baseline_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifact_or_inventory_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "final_trajectory_preserved": {
+          "type": "boolean"
+        }
+      }
+    },
+    "evaluation_time_bias_s": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "evidence_level": {
+      "enum": [
+        "development_acceptance",
+        "production_acceptance",
+        "generalization_confirmation"
+      ]
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

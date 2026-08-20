@@ -1,0 +1,1422 @@
+{
+  "budget_contract_sha256": "7ce85ea070fdbdc61ef6f7456c5878cba313bf889b68ce33cf9719d8c7837d85",
+  "entries": {
+    "04901d800c9aaf87404329c83bbaba273245ab215d18b197bf798326df91459c": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376629194441200,
+          "status": "succeeded",
+          "token": "f338216f635a4bd089ebbbad52b93862"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "04901d800c9aaf87404329c83bbaba273245ab215d18b197bf798326df91459c",
+          "path": "04901d800c9aaf87404329c83bbaba273245ab215d18b197bf798326df91459c\\cache_receipt.json",
+          "receipt_sha256": "940854dcecf7d9c553313f60e4f81c9edfa21477a47121816ccefb0972512042",
+          "result_path": "04901d800c9aaf87404329c83bbaba273245ab215d18b197bf798326df91459c\\result.json",
+          "result_sha256": "9ca0abf0c13b41fbbf39e516b31a4de2f9c5734427325c99b7526335ecff65c7"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "04901d800c9aaf87404329c83bbaba273245ab215d18b197bf798326df91459c",
+        "config_hash": "b19091b4fd845e3f728279101bdeadae220b2a8bf7a4533c608d7a46d0b0c5f2",
+        "data_sha256": "cf5e2d02bd1f874b3b55883e351cb6cf5107b6f0eb4d7acf142d6f5e6d93e7ee",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "04901d800c9aaf87404329c83bbaba273245ab215d18b197bf798326df91459c",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "xiezi2_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "057dccb872711d01e498c6ceafc8b08ab49ece94b97a586c21bb0a746ab01ff6": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376744727368900,
+          "status": "succeeded",
+          "token": "10e6c5f90bc548c3bdc2b6f1c69977db"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "057dccb872711d01e498c6ceafc8b08ab49ece94b97a586c21bb0a746ab01ff6",
+          "path": "057dccb872711d01e498c6ceafc8b08ab49ece94b97a586c21bb0a746ab01ff6\\cache_receipt.json",
+          "receipt_sha256": "69d567485da03f3818e54681e60aaf0c25c81e10bfebf5ffbd0890efa090fae2",
+          "result_path": "057dccb872711d01e498c6ceafc8b08ab49ece94b97a586c21bb0a746ab01ff6\\result.json",
+          "result_sha256": "4a196c682bf1f5a092e45fc7f819e938733ab400ba79f0bb992d961d849668a4"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "057dccb872711d01e498c6ceafc8b08ab49ece94b97a586c21bb0a746ab01ff6",
+        "config_hash": "10a091b8db6a75b0cd86c1e7275b685077f14b1085c9f8ffbfd4b0703ac15d1a",
+        "data_sha256": "cf5e2d02bd1f874b3b55883e351cb6cf5107b6f0eb4d7acf142d6f5e6d93e7ee",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "057dccb872711d01e498c6ceafc8b08ab49ece94b97a586c21bb0a746ab01ff6",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "xiezi2_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "10c27b5cb74d620dd894c63b1e451a977260ed39927e2f5e4b050fce23d3d9f7": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376754203453600,
+          "status": "succeeded",
+          "token": "a38196dca317460c8e24fd80e24341b8"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "10c27b5cb74d620dd894c63b1e451a977260ed39927e2f5e4b050fce23d3d9f7",
+          "path": "10c27b5cb74d620dd894c63b1e451a977260ed39927e2f5e4b050fce23d3d9f7\\cache_receipt.json",
+          "receipt_sha256": "41b74bbce9b884635bd4ffc40ab862fd0fed6f0985b0f0ff01f8611fc90e7540",
+          "result_path": "10c27b5cb74d620dd894c63b1e451a977260ed39927e2f5e4b050fce23d3d9f7\\result.json",
+          "result_sha256": "8389593421d25411c2b371514da57672a0d8ed1729ee305f35c12cf1b5e3655b"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "10c27b5cb74d620dd894c63b1e451a977260ed39927e2f5e4b050fce23d3d9f7",
+        "config_hash": "5457e4b18dfa76746861280759bea93dc48ea7a95643f09a26ecf089534820c9",
+        "data_sha256": "7b32139c8969ebcd6a8c1bedf8bb9191c916187a7716f43db6ad03d60f165619",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "10c27b5cb74d620dd894c63b1e451a977260ed39927e2f5e4b050fce23d3d9f7",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "xiezi3_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "1a64e31f1c3273ad0b11201f1842c863323f6564a8ac954bbb7243320e37a7d6": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376609705989100,
+          "status": "succeeded",
+          "token": "b11e2ceb795846d2a5b4c3d2056da808"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "1a64e31f1c3273ad0b11201f1842c863323f6564a8ac954bbb7243320e37a7d6",
+          "path": "1a64e31f1c3273ad0b11201f1842c863323f6564a8ac954bbb7243320e37a7d6\\cache_receipt.json",
+          "receipt_sha256": "736a7dcd59e799c47bcfdf06feafb896f130969bb0429ce3a826756af7ab49ab",
+          "result_path": "1a64e31f1c3273ad0b11201f1842c863323f6564a8ac954bbb7243320e37a7d6\\result.json",
+          "result_sha256": "198a34b28aa7b44a522546413135483bfb60880c29d571e52082f1f45861511f"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "1a64e31f1c3273ad0b11201f1842c863323f6564a8ac954bbb7243320e37a7d6",
+        "config_hash": "125a747bb17dd4f7c29776268b5f133971ed578b9cfce1f77e969158da8c6657",
+        "data_sha256": "a32ab804060f866add72e093d6bdced3d756faf967c1ac1b233fec07c5733cb7",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "1a64e31f1c3273ad0b11201f1842c863323f6564a8ac954bbb7243320e37a7d6",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "run2_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "1c038172b95147fcd803befcee10b283b3a7441b07364e6779aed62e72084cbb": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376675184168500,
+          "status": "succeeded",
+          "token": "8ab85b1acb914f4fbcf1fa48459a9cec"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "1c038172b95147fcd803befcee10b283b3a7441b07364e6779aed62e72084cbb",
+          "path": "1c038172b95147fcd803befcee10b283b3a7441b07364e6779aed62e72084cbb\\cache_receipt.json",
+          "receipt_sha256": "b0d04ac334c55619720423ce19c3fcc4cec32160df0a754c31876c1216d433c3",
+          "result_path": "1c038172b95147fcd803befcee10b283b3a7441b07364e6779aed62e72084cbb\\result.json",
+          "result_sha256": "7b5d4acc0b9360258d2125d9f43a068e8d06c09435fa8bfdc45bedc5f8b0998e"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "1c038172b95147fcd803befcee10b283b3a7441b07364e6779aed62e72084cbb",
+        "config_hash": "8e10941ec44ce7608e67771104187f1e55501f7c2917259f0021d14259e682c3",
+        "data_sha256": "d6ea629174441276720cb28ba416f68fba6018952bfa66105ba734bdbfdb8da5",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "1c038172b95147fcd803befcee10b283b3a7441b07364e6779aed62e72084cbb",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "jianpan3_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "217d83db4398aeac41811ef439822e8ae351d0914060d3ef228d77755f811080": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376801343514200,
+          "status": "succeeded",
+          "token": "a05c775970734e1984a30fe20725cdfc"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "217d83db4398aeac41811ef439822e8ae351d0914060d3ef228d77755f811080",
+          "path": "217d83db4398aeac41811ef439822e8ae351d0914060d3ef228d77755f811080\\cache_receipt.json",
+          "receipt_sha256": "6f4a9fda93e1e4f45e3431cde3af0fc415e2487446b7af9c2ffe5be70883ed13",
+          "result_path": "217d83db4398aeac41811ef439822e8ae351d0914060d3ef228d77755f811080\\result.json",
+          "result_sha256": "a17abb0e36407ba9440ad36d365ca860770b2bcc18884f5ce4c5b887f5a7bf02"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "217d83db4398aeac41811ef439822e8ae351d0914060d3ef228d77755f811080",
+        "config_hash": "9b76a07757cc97ef5ef96e82b7ff7224678fdc4d6a1ac5bc58fdbc3c204e297e",
+        "data_sha256": "22927001aa2c6d6c378d5ab7897897e59f3c72dfad697fd77a165e599ca5443d",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "217d83db4398aeac41811ef439822e8ae351d0914060d3ef228d77755f811080",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "kaihe1_LYX_0613",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "22db5388d53bcd2b24b49d8564c71eb95ca61519439d3c65b8b6d708522a80ec": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376562277899500,
+          "status": "succeeded",
+          "token": "b39fa66f3d344efb91ddfd29a5bd4794"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "22db5388d53bcd2b24b49d8564c71eb95ca61519439d3c65b8b6d708522a80ec",
+          "path": "22db5388d53bcd2b24b49d8564c71eb95ca61519439d3c65b8b6d708522a80ec\\cache_receipt.json",
+          "receipt_sha256": "955de31e1f1d161a0b23d397a6719beb212136c6629e7cc5063f74d20a826ece",
+          "result_path": "22db5388d53bcd2b24b49d8564c71eb95ca61519439d3c65b8b6d708522a80ec\\result.json",
+          "result_sha256": "d8e4246686eb6a66bba393f9ec08cde3e10cf4d972e9a589603210a56ac2430e"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "22db5388d53bcd2b24b49d8564c71eb95ca61519439d3c65b8b6d708522a80ec",
+        "config_hash": "5c1503770ce65f14ebd30a7dec23f18075e869259204a8ed523f3f5ab6a97b8c",
+        "data_sha256": "d6ea629174441276720cb28ba416f68fba6018952bfa66105ba734bdbfdb8da5",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "22db5388d53bcd2b24b49d8564c71eb95ca61519439d3c65b8b6d708522a80ec",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "jianpan3_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "22eda10a98d8b8b501cb1ecd9f515b8d6c832e8d59d7f162aa3969567460d0f8": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376875511110300,
+          "status": "succeeded",
+          "token": "c28c2087833d4e1bad3fbcc69181cc20"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "22eda10a98d8b8b501cb1ecd9f515b8d6c832e8d59d7f162aa3969567460d0f8",
+          "path": "22eda10a98d8b8b501cb1ecd9f515b8d6c832e8d59d7f162aa3969567460d0f8\\cache_receipt.json",
+          "receipt_sha256": "b0a202c0867e29fe5b45e2d02b959c62eadb78a094cd2ea7b084b62944c94ff1",
+          "result_path": "22eda10a98d8b8b501cb1ecd9f515b8d6c832e8d59d7f162aa3969567460d0f8\\result.json",
+          "result_sha256": "38894492a08a46bf06c9ec28919e3a98bef0bd19424d6d5bcf006a4cd6890166"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "22eda10a98d8b8b501cb1ecd9f515b8d6c832e8d59d7f162aa3969567460d0f8",
+        "config_hash": "3df93a04392e74dfc00adf1bbaaecf319ae5615c5a54f2c336340dee0760964e",
+        "data_sha256": "7b32139c8969ebcd6a8c1bedf8bb9191c916187a7716f43db6ad03d60f165619",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "22eda10a98d8b8b501cb1ecd9f515b8d6c832e8d59d7f162aa3969567460d0f8",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "xiezi3_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "25fce5d35765c001d99025bf70925f6b022b22e3a329c29ba8b37d5c5a6602ab": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376580277410300,
+          "status": "succeeded",
+          "token": "9ed3cf3e830d4bb787d0fa6ffb1d6ec1"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "25fce5d35765c001d99025bf70925f6b022b22e3a329c29ba8b37d5c5a6602ab",
+          "path": "25fce5d35765c001d99025bf70925f6b022b22e3a329c29ba8b37d5c5a6602ab\\cache_receipt.json",
+          "receipt_sha256": "ecf657f9d586c3c72175e8a3d0c0f2783fd66aa9d8dfc1cffed38fc10a7ca899",
+          "result_path": "25fce5d35765c001d99025bf70925f6b022b22e3a329c29ba8b37d5c5a6602ab\\result.json",
+          "result_sha256": "44e3f709dffbf35144c9445844ac0fb46b16830d47148ae180bd57383c9d2efb"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "25fce5d35765c001d99025bf70925f6b022b22e3a329c29ba8b37d5c5a6602ab",
+        "config_hash": "76a249d323e8b68dd130860f2a1aac205feb270f1c4fe8688405b6ac5ea60c17",
+        "data_sha256": "ba3d9938e8d9e04d25ce32fa6e698b21ef512f68bc89d3adfb0a5e77fc900d6d",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "25fce5d35765c001d99025bf70925f6b022b22e3a329c29ba8b37d5c5a6602ab",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "kaihe1_LYX_0617",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "28e589cdf41325a303adc8b8574f873c23aaa97df34d78ed4b13603a0b8c90de": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376599342883400,
+          "status": "succeeded",
+          "token": "01a171e5cdde4a9e920c3711c3a65574"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "28e589cdf41325a303adc8b8574f873c23aaa97df34d78ed4b13603a0b8c90de",
+          "path": "28e589cdf41325a303adc8b8574f873c23aaa97df34d78ed4b13603a0b8c90de\\cache_receipt.json",
+          "receipt_sha256": "4fa7e69cdc4cc64e08f2586f6ec806fb018d6c52937dd9205948076941f6aada",
+          "result_path": "28e589cdf41325a303adc8b8574f873c23aaa97df34d78ed4b13603a0b8c90de\\result.json",
+          "result_sha256": "b6e5d1376fdb18f588781205b773f6b20bd5546a45f0b56641f229597b459b8a"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "28e589cdf41325a303adc8b8574f873c23aaa97df34d78ed4b13603a0b8c90de",
+        "config_hash": "8ac390908bf188bcce0ffb7c94c71fb569fe2257a47f5b093d5f549ce14a08f8",
+        "data_sha256": "971a87c06295b73d4cca7936437de8c832c7d2eed65f286a8742805543f5f87b",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "28e589cdf41325a303adc8b8574f873c23aaa97df34d78ed4b13603a0b8c90de",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "run1_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "42eff06c7fd5cf6c449a0a04b0f0f4058c9cbb2240686782313333584f3546aa": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376665380027800,
+          "status": "succeeded",
+          "token": "75e860673ac74351a7e790876f745a5b"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "42eff06c7fd5cf6c449a0a04b0f0f4058c9cbb2240686782313333584f3546aa",
+          "path": "42eff06c7fd5cf6c449a0a04b0f0f4058c9cbb2240686782313333584f3546aa\\cache_receipt.json",
+          "receipt_sha256": "b39f48af0c0409194d4735eb0920dccaf615a6e550c056964a8d4aa45754a877",
+          "result_path": "42eff06c7fd5cf6c449a0a04b0f0f4058c9cbb2240686782313333584f3546aa\\result.json",
+          "result_sha256": "d8831f8754f05c679a9eb08694af3ead56767c7ba71d29c89e0d8ebf8abe037e"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "42eff06c7fd5cf6c449a0a04b0f0f4058c9cbb2240686782313333584f3546aa",
+        "config_hash": "229bdc1c952af0976cd411688f52d23730c714f352a06a4d9a13a9a4182c8c16",
+        "data_sha256": "a7421b4146701f462dd4b033ad80a60e1fdc3f72fae3e97a9c5a7b89360ac1d2",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "42eff06c7fd5cf6c449a0a04b0f0f4058c9cbb2240686782313333584f3546aa",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "jianpan2_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "4fa3624aae1958a841d2ae847e4d15c83c899e8c552c993f4d9d50cde59cbff9": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376723233731100,
+          "status": "succeeded",
+          "token": "8859caa90d6745be882b1d76964ae154"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "4fa3624aae1958a841d2ae847e4d15c83c899e8c552c993f4d9d50cde59cbff9",
+          "path": "4fa3624aae1958a841d2ae847e4d15c83c899e8c552c993f4d9d50cde59cbff9\\cache_receipt.json",
+          "receipt_sha256": "fbe110adc0ac9d33164c70b7386ec9dc73430d5b9f232aa592bee5f32b401c4e",
+          "result_path": "4fa3624aae1958a841d2ae847e4d15c83c899e8c552c993f4d9d50cde59cbff9\\result.json",
+          "result_sha256": "6db65c69425a52bfa4334172f3dbda497393aa32aa7cc0e88f587de681f235d0"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "4fa3624aae1958a841d2ae847e4d15c83c899e8c552c993f4d9d50cde59cbff9",
+        "config_hash": "7d685cb2e316424e75e5bc3b98383b8497240973289c516804d6ec87613c15a2",
+        "data_sha256": "a32ab804060f866add72e093d6bdced3d756faf967c1ac1b233fec07c5733cb7",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "4fa3624aae1958a841d2ae847e4d15c83c899e8c552c993f4d9d50cde59cbff9",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "run2_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "539b4c817a93d2cb5bb8db00e9d62cb1fef945321a7fa65131e1928d8c001002": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376864787613200,
+          "status": "succeeded",
+          "token": "12b29fc077254adca0aa039d16c36aae"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "539b4c817a93d2cb5bb8db00e9d62cb1fef945321a7fa65131e1928d8c001002",
+          "path": "539b4c817a93d2cb5bb8db00e9d62cb1fef945321a7fa65131e1928d8c001002\\cache_receipt.json",
+          "receipt_sha256": "2762626041040c6717185748c4e2177c65328cee1bc5f2250acfd8846c79be65",
+          "result_path": "539b4c817a93d2cb5bb8db00e9d62cb1fef945321a7fa65131e1928d8c001002\\result.json",
+          "result_sha256": "4d6d1b35766c3259943f2b291b541196c40416f0908b8bf14ab2f1ad45e7c6bd"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "539b4c817a93d2cb5bb8db00e9d62cb1fef945321a7fa65131e1928d8c001002",
+        "config_hash": "000319cb1a08bf4287f2784ba0483a620884935071efbfe05bef03b0914fdd3d",
+        "data_sha256": "cf5e2d02bd1f874b3b55883e351cb6cf5107b6f0eb4d7acf142d6f5e6d93e7ee",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "539b4c817a93d2cb5bb8db00e9d62cb1fef945321a7fa65131e1928d8c001002",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "xiezi2_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "5bfd14237566a22f698c2e04bbed3a053d8e0acecc8bb792977aaadbcae503f4": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376782032179000,
+          "status": "succeeded",
+          "token": "baccf9c5462447c3aaa1cd8124032ab2"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "5bfd14237566a22f698c2e04bbed3a053d8e0acecc8bb792977aaadbcae503f4",
+          "path": "5bfd14237566a22f698c2e04bbed3a053d8e0acecc8bb792977aaadbcae503f4\\cache_receipt.json",
+          "receipt_sha256": "2f4a4436dd0e762c19136ce3cad39822978a6a12b2fe531e12f69cf0c1a02029",
+          "result_path": "5bfd14237566a22f698c2e04bbed3a053d8e0acecc8bb792977aaadbcae503f4\\result.json",
+          "result_sha256": "5fc88cf0de6341a023345c0d9cd01ca9ff78c95c51d5c214818bc6bf4a40e361"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "5bfd14237566a22f698c2e04bbed3a053d8e0acecc8bb792977aaadbcae503f4",
+        "config_hash": "a4b41e23923ff300f34fd272f5a3fc7ee60ca6fd7e5c8551746e86102cad371f",
+        "data_sha256": "a7421b4146701f462dd4b033ad80a60e1fdc3f72fae3e97a9c5a7b89360ac1d2",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "5bfd14237566a22f698c2e04bbed3a053d8e0acecc8bb792977aaadbcae503f4",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "jianpan2_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "5c353986b8455de0c09e30c5ce9c0cb994133d4a2521b396bb421377c6b80da0": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376885097843700,
+          "status": "succeeded",
+          "token": "0e27e3b0282e456abf8e3e40d6f13459"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "5c353986b8455de0c09e30c5ce9c0cb994133d4a2521b396bb421377c6b80da0",
+          "path": "5c353986b8455de0c09e30c5ce9c0cb994133d4a2521b396bb421377c6b80da0\\cache_receipt.json",
+          "receipt_sha256": "60c2383a51fbfc016a1adeba231e323a77d77c9cb146a3efab9da9678b5f1602",
+          "result_path": "5c353986b8455de0c09e30c5ce9c0cb994133d4a2521b396bb421377c6b80da0\\result.json",
+          "result_sha256": "1ba5ceecfe49562913215af968a17991503b43c2bd1f48612c448571b46cc645"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "5c353986b8455de0c09e30c5ce9c0cb994133d4a2521b396bb421377c6b80da0",
+        "config_hash": "c6babc3e3eb92a0e7f9b5014fc2085e215afd080065cb79ad188cf3bf219f28d",
+        "data_sha256": "8044c3d7fb32f520f6ba5940508814f69cef5e3ec0b8f3ca8b9fb750961f897f",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "5c353986b8455de0c09e30c5ce9c0cb994133d4a2521b396bb421377c6b80da0",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "xiezi4_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "6bec2d8c47e3ea7277f2fc97edc83dd84a5919e514ad03b1a2328d34d75bbadf": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376684202747000,
+          "status": "succeeded",
+          "token": "0ecc8a8cdb564c9f9f3c0e91428c98b5"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "6bec2d8c47e3ea7277f2fc97edc83dd84a5919e514ad03b1a2328d34d75bbadf",
+          "path": "6bec2d8c47e3ea7277f2fc97edc83dd84a5919e514ad03b1a2328d34d75bbadf\\cache_receipt.json",
+          "receipt_sha256": "34e707f378e7fb97170a1807bab700ae13fbf9982e569664602faaaaffaec68a",
+          "result_path": "6bec2d8c47e3ea7277f2fc97edc83dd84a5919e514ad03b1a2328d34d75bbadf\\result.json",
+          "result_sha256": "891331cb5c03a17e9440b0f3ae1054053482218f093aa5fbf68d9739a3c35b61"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "6bec2d8c47e3ea7277f2fc97edc83dd84a5919e514ad03b1a2328d34d75bbadf",
+        "config_hash": "b42bb1e56397bc741dfd3a950ac6c344f58afbf62b88f728109367971aa72db0",
+        "data_sha256": "22927001aa2c6d6c378d5ab7897897e59f3c72dfad697fd77a165e599ca5443d",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "6bec2d8c47e3ea7277f2fc97edc83dd84a5919e514ad03b1a2328d34d75bbadf",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "kaihe1_LYX_0613",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "6dbfcbeb23338dc4204a62487e2a58d6cc5e5d7c26f1fbed6c1f1187089e6f15": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376822282925400,
+          "status": "succeeded",
+          "token": "0601709e21ca42a88f9fb7ee602c6533"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "6dbfcbeb23338dc4204a62487e2a58d6cc5e5d7c26f1fbed6c1f1187089e6f15",
+          "path": "6dbfcbeb23338dc4204a62487e2a58d6cc5e5d7c26f1fbed6c1f1187089e6f15\\cache_receipt.json",
+          "receipt_sha256": "4819e8b4130648b47d91c96e023d4dd064eb5feb367cdeee8ae95de1804fbeac",
+          "result_path": "6dbfcbeb23338dc4204a62487e2a58d6cc5e5d7c26f1fbed6c1f1187089e6f15\\result.json",
+          "result_sha256": "149aad9ee3adafcea44502894b25bc30a7e0ac73986519e5cd63a4eb741d1442"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "6dbfcbeb23338dc4204a62487e2a58d6cc5e5d7c26f1fbed6c1f1187089e6f15",
+        "config_hash": "9ba0285e8ae36f88f092709366f1a38728c54523caaa735507cab80f21baad17",
+        "data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "6dbfcbeb23338dc4204a62487e2a58d6cc5e5d7c26f1fbed6c1f1187089e6f15",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "kaihe3_LYX_0613",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "787bf925e9e16fe8e930ef2f3d89a06b6712de8e2168dee3a4efd5afbd559b30": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376853753269000,
+          "status": "succeeded",
+          "token": "4e6282a0d990415b973cd483bfae3fd5"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "787bf925e9e16fe8e930ef2f3d89a06b6712de8e2168dee3a4efd5afbd559b30",
+          "path": "787bf925e9e16fe8e930ef2f3d89a06b6712de8e2168dee3a4efd5afbd559b30\\cache_receipt.json",
+          "receipt_sha256": "068877e1f8c1811428ce0e85e6c84594504a3d5ce797e385383b0f25c11ec4e3",
+          "result_path": "787bf925e9e16fe8e930ef2f3d89a06b6712de8e2168dee3a4efd5afbd559b30\\result.json",
+          "result_sha256": "35e43207d232acec353702135d75cf0b39d09198755947dc3a4c76f82c8ea77e"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "787bf925e9e16fe8e930ef2f3d89a06b6712de8e2168dee3a4efd5afbd559b30",
+        "config_hash": "0538e45728d6ef8b03a20c83b776e67b483030419c940b9cbb8e58c21e523da3",
+        "data_sha256": "1f1ea855fba32db79c1a5d654736170f1e08d1bbc72409191b227814db685742",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "787bf925e9e16fe8e930ef2f3d89a06b6712de8e2168dee3a4efd5afbd559b30",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "run3_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "7b607e37ccc7a348c0e6b371917b2922b57591d33101aaae2cf531d3571eb054": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376712344542700,
+          "status": "succeeded",
+          "token": "2358a68da7074ddca62cdc3fe9d72022"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "7b607e37ccc7a348c0e6b371917b2922b57591d33101aaae2cf531d3571eb054",
+          "path": "7b607e37ccc7a348c0e6b371917b2922b57591d33101aaae2cf531d3571eb054\\cache_receipt.json",
+          "receipt_sha256": "a6868a69507914a21399d3aa57ae0568b06e5fa95b1405a17cf21ccf4ab17646",
+          "result_path": "7b607e37ccc7a348c0e6b371917b2922b57591d33101aaae2cf531d3571eb054\\result.json",
+          "result_sha256": "cb1abcacec0889bc946962edffa1dc06d577ce45d6ae0a4bc7ff3e6ed669c4c9"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "7b607e37ccc7a348c0e6b371917b2922b57591d33101aaae2cf531d3571eb054",
+        "config_hash": "272e7c5854ea7feb33601402646ac8e37f24f8bb2894e756f2bfd1e25010d842",
+        "data_sha256": "971a87c06295b73d4cca7936437de8c832c7d2eed65f286a8742805543f5f87b",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "7b607e37ccc7a348c0e6b371917b2922b57591d33101aaae2cf531d3571eb054",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "run1_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "7e420f3d3c9b0ace702b8defa316a7420da6ee5e93d994a88810ddd7354f0fa5": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376832324912900,
+          "status": "succeeded",
+          "token": "918c0fdda56740b09aca072d5252e801"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "7e420f3d3c9b0ace702b8defa316a7420da6ee5e93d994a88810ddd7354f0fa5",
+          "path": "7e420f3d3c9b0ace702b8defa316a7420da6ee5e93d994a88810ddd7354f0fa5\\cache_receipt.json",
+          "receipt_sha256": "ad98639bddc3d4a4b574f4d78f1f4cca2723463c50e4d024427c0b51ce5d0529",
+          "result_path": "7e420f3d3c9b0ace702b8defa316a7420da6ee5e93d994a88810ddd7354f0fa5\\result.json",
+          "result_sha256": "365bbc02fa4cb581f9f11ab681ec32ee6ebb2da4f2f0e4fd5e152781190ffcd0"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "7e420f3d3c9b0ace702b8defa316a7420da6ee5e93d994a88810ddd7354f0fa5",
+        "config_hash": "73b1110cc1e4348080a5d0ebd1982aaa9930b96b807bd0ad3e6af1e7a5bb0ccb",
+        "data_sha256": "971a87c06295b73d4cca7936437de8c832c7d2eed65f286a8742805543f5f87b",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "7e420f3d3c9b0ace702b8defa316a7420da6ee5e93d994a88810ddd7354f0fa5",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "run1_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "8557fde4681a4405639e8604989be82f056fa8e79a73e7cbf1c3eacc7c174d39": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376763358102800,
+          "status": "succeeded",
+          "token": "99f89399fdf64416b08028aae64ff1fe"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "8557fde4681a4405639e8604989be82f056fa8e79a73e7cbf1c3eacc7c174d39",
+          "path": "8557fde4681a4405639e8604989be82f056fa8e79a73e7cbf1c3eacc7c174d39\\cache_receipt.json",
+          "receipt_sha256": "963171cdd2a44cd2b9020e9ee1f84ad5de40e598267f33e47b923c146820e0e1",
+          "result_path": "8557fde4681a4405639e8604989be82f056fa8e79a73e7cbf1c3eacc7c174d39\\result.json",
+          "result_sha256": "b1da9e3d916ee4cac424be2ed67d89779751e022c55034b7352f5e9227a5e0ed"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "8557fde4681a4405639e8604989be82f056fa8e79a73e7cbf1c3eacc7c174d39",
+        "config_hash": "192e1211a9172d8354673e7d369e0d87f68d45ce121c50c7178dbeeb948c6662",
+        "data_sha256": "8044c3d7fb32f520f6ba5940508814f69cef5e3ec0b8f3ca8b9fb750961f897f",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "8557fde4681a4405639e8604989be82f056fa8e79a73e7cbf1c3eacc7c174d39",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "xiezi4_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "8e80249bf7d218b4a350254128607c1c39331753f22dcbb8046bd721a694a97b": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376772442838700,
+          "status": "succeeded",
+          "token": "03193f3975fa484585a3f33d6eb95fc9"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "8e80249bf7d218b4a350254128607c1c39331753f22dcbb8046bd721a694a97b",
+          "path": "8e80249bf7d218b4a350254128607c1c39331753f22dcbb8046bd721a694a97b\\cache_receipt.json",
+          "receipt_sha256": "d5ce7b9ffcf2fc7d5f9c939f5309b574de8c2cb61599076a3b002f85efa44a03",
+          "result_path": "8e80249bf7d218b4a350254128607c1c39331753f22dcbb8046bd721a694a97b\\result.json",
+          "result_sha256": "f1091a79bab3a16578bb1d2a1a6a66ccc0986ffb08245a154eef2d9d0fa843f5"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "8e80249bf7d218b4a350254128607c1c39331753f22dcbb8046bd721a694a97b",
+        "config_hash": "18b2b7fc6bf48fedd964306d0fadc8ad1069d5d57fc6f69d1a36f964fdaf651b",
+        "data_sha256": "b5f81d40027419f8545a399a3a8b66f4737c75d78f60d20c7de7e378fd824d8a",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "8e80249bf7d218b4a350254128607c1c39331753f22dcbb8046bd721a694a97b",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "jianpan1_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "903053add57c377e04cb4a80e9bb8b933214bcc46c2969732abddd60fa2a3b51": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376732864113500,
+          "status": "succeeded",
+          "token": "ab568d404cd041fe8709a41d55381380"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "903053add57c377e04cb4a80e9bb8b933214bcc46c2969732abddd60fa2a3b51",
+          "path": "903053add57c377e04cb4a80e9bb8b933214bcc46c2969732abddd60fa2a3b51\\cache_receipt.json",
+          "receipt_sha256": "031bf6f8f5709401733919fbf38c461dde2d0fdee031a0ef2bddbd3dd3d80e0f",
+          "result_path": "903053add57c377e04cb4a80e9bb8b933214bcc46c2969732abddd60fa2a3b51\\result.json",
+          "result_sha256": "042f5d24c2086370d6d38e52e42dd8035cb2905bb35c2667c4fcd113f4f45b68"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "903053add57c377e04cb4a80e9bb8b933214bcc46c2969732abddd60fa2a3b51",
+        "config_hash": "91b3d0e35ab56f6a37083c5c6a8ea305f7417faadefe792f6123136b16283d7c",
+        "data_sha256": "1f1ea855fba32db79c1a5d654736170f1e08d1bbc72409191b227814db685742",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "903053add57c377e04cb4a80e9bb8b933214bcc46c2969732abddd60fa2a3b51",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "run3_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "99693c5196f6c9aeac1d7414a1ad6337bc8a59ca298e7da2f186a0e204b701b1": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376693394736100,
+          "status": "succeeded",
+          "token": "ed7f874e03b04b6685b5c5778a225244"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "99693c5196f6c9aeac1d7414a1ad6337bc8a59ca298e7da2f186a0e204b701b1",
+          "path": "99693c5196f6c9aeac1d7414a1ad6337bc8a59ca298e7da2f186a0e204b701b1\\cache_receipt.json",
+          "receipt_sha256": "594d0538761a1fd0b080ca2022ee2d21668b1b931a21bcb96d15d1396e69602c",
+          "result_path": "99693c5196f6c9aeac1d7414a1ad6337bc8a59ca298e7da2f186a0e204b701b1\\result.json",
+          "result_sha256": "e530e90c4bff06c00588e51ce8f35e41ee3756e2d793785edfaf00e7c91bfea7"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "99693c5196f6c9aeac1d7414a1ad6337bc8a59ca298e7da2f186a0e204b701b1",
+        "config_hash": "a1c55e2c4ec9607787ea338f5bf8f9116a192a17de7fa87532351fc6dcedede8",
+        "data_sha256": "ba3d9938e8d9e04d25ce32fa6e698b21ef512f68bc89d3adfb0a5e77fc900d6d",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "99693c5196f6c9aeac1d7414a1ad6337bc8a59ca298e7da2f186a0e204b701b1",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "kaihe1_LYX_0617",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "9cf02621931703d6ef65f63f269981c7aad16477178ba485c8592f4445bbc7af": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376571417499000,
+          "status": "succeeded",
+          "token": "a68122273551404b8e4f63eab2896ddd"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "9cf02621931703d6ef65f63f269981c7aad16477178ba485c8592f4445bbc7af",
+          "path": "9cf02621931703d6ef65f63f269981c7aad16477178ba485c8592f4445bbc7af\\cache_receipt.json",
+          "receipt_sha256": "a1ca7e37b855b3a60e0a4719603e6b6ab4cd879cf1917bd1aa6c7d6c9a4cb9dc",
+          "result_path": "9cf02621931703d6ef65f63f269981c7aad16477178ba485c8592f4445bbc7af\\result.json",
+          "result_sha256": "4f9af048f40006df205437e60cb3df65dbbb4ed4109af21129c3dc5406e2fcfa"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "9cf02621931703d6ef65f63f269981c7aad16477178ba485c8592f4445bbc7af",
+        "config_hash": "31f940356333db4a37ef027be4e8b77b5faa19402e952be658f26ff216a8aa46",
+        "data_sha256": "22927001aa2c6d6c378d5ab7897897e59f3c72dfad697fd77a165e599ca5443d",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "9cf02621931703d6ef65f63f269981c7aad16477178ba485c8592f4445bbc7af",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "kaihe1_LYX_0613",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "b181f01a5ab58e4b015492a1d0ac929e2993c55d029dc34872bc4f53e343da27": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376553594710200,
+          "status": "succeeded",
+          "token": "2762fb6d1352430081194dffe4c2c877"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "b181f01a5ab58e4b015492a1d0ac929e2993c55d029dc34872bc4f53e343da27",
+          "path": "b181f01a5ab58e4b015492a1d0ac929e2993c55d029dc34872bc4f53e343da27\\cache_receipt.json",
+          "receipt_sha256": "b6bee161c6621a93ad51241999a6489670f80a289c8875d2a81cd79c7567fca6",
+          "result_path": "b181f01a5ab58e4b015492a1d0ac929e2993c55d029dc34872bc4f53e343da27\\result.json",
+          "result_sha256": "78e6657f86c9b862cc86fb4633a1f3930ee8e43dd102277ea7285d3ba6b92843"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "b181f01a5ab58e4b015492a1d0ac929e2993c55d029dc34872bc4f53e343da27",
+        "config_hash": "074f814ac8b31fb897c4ae2d80cb1a317bc9426199f73846bf63eb7686584b81",
+        "data_sha256": "a7421b4146701f462dd4b033ad80a60e1fdc3f72fae3e97a9c5a7b89360ac1d2",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "b181f01a5ab58e4b015492a1d0ac929e2993c55d029dc34872bc4f53e343da27",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "jianpan2_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "bde9c68c3f6db2e28928ead2c8018719992628af29893fd70f977b73c4bf972f": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376702775340900,
+          "status": "succeeded",
+          "token": "526e693bc32f4b7e98a2c2287a1cd65b"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "bde9c68c3f6db2e28928ead2c8018719992628af29893fd70f977b73c4bf972f",
+          "path": "bde9c68c3f6db2e28928ead2c8018719992628af29893fd70f977b73c4bf972f\\cache_receipt.json",
+          "receipt_sha256": "8bdc9a403bb93bd09ba2be41f305c38a9b26e3fd1dd1a4f004b1dc67c2715759",
+          "result_path": "bde9c68c3f6db2e28928ead2c8018719992628af29893fd70f977b73c4bf972f\\result.json",
+          "result_sha256": "e19fbf49464e3072bf902d9efd42b358929ea1197cb9713a8ee71f6a97d7e6ec"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "bde9c68c3f6db2e28928ead2c8018719992628af29893fd70f977b73c4bf972f",
+        "config_hash": "cf5aca82f096bc4b03241573083112cf877d815836309168d5ec07811bce8c14",
+        "data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "bde9c68c3f6db2e28928ead2c8018719992628af29893fd70f977b73c4bf972f",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "kaihe3_LYX_0613",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "c082cf66c669a4f5678880abc2ff9a017f33a144311c8fbfeb53ef26cba83301": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376590278673200,
+          "status": "succeeded",
+          "token": "4877d9c48fc44cf48b3e6352f9f734ab"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "c082cf66c669a4f5678880abc2ff9a017f33a144311c8fbfeb53ef26cba83301",
+          "path": "c082cf66c669a4f5678880abc2ff9a017f33a144311c8fbfeb53ef26cba83301\\cache_receipt.json",
+          "receipt_sha256": "b32843310e9453ac1f4efa9417442f5f746c30ae3abacbe44efcb87ccf768fd9",
+          "result_path": "c082cf66c669a4f5678880abc2ff9a017f33a144311c8fbfeb53ef26cba83301\\result.json",
+          "result_sha256": "1fb998cc4bcc947fce574e38a092a96a96ce0dffcb424557e0f46e1141a5ab9f"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "c082cf66c669a4f5678880abc2ff9a017f33a144311c8fbfeb53ef26cba83301",
+        "config_hash": "f971100412d693427c49bc377e0dba526b1e9b548040254363a12f2063ce0efd",
+        "data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "c082cf66c669a4f5678880abc2ff9a017f33a144311c8fbfeb53ef26cba83301",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "kaihe3_LYX_0613",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "d12146f6a2faddbea9332265e582495cc65e3d8de6ced3a7b5e886e0cbb450ec": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376619029783200,
+          "status": "succeeded",
+          "token": "e6efe90aa85e43e4abaa44885385da7f"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "d12146f6a2faddbea9332265e582495cc65e3d8de6ced3a7b5e886e0cbb450ec",
+          "path": "d12146f6a2faddbea9332265e582495cc65e3d8de6ced3a7b5e886e0cbb450ec\\cache_receipt.json",
+          "receipt_sha256": "6e864039b54bcecf6237413b5b18e766ee485ad5e26f3a3834c4ca2d2bc49c6e",
+          "result_path": "d12146f6a2faddbea9332265e582495cc65e3d8de6ced3a7b5e886e0cbb450ec\\result.json",
+          "result_sha256": "4b431f865ac3461a97af417cfc65bb9ae323f5b8f47ad478b09ff1d80f2f03c2"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "d12146f6a2faddbea9332265e582495cc65e3d8de6ced3a7b5e886e0cbb450ec",
+        "config_hash": "04e47fa2a607b76245d0ce73aeba65048b9135fa207b88982c23aafaf7d986cd",
+        "data_sha256": "1f1ea855fba32db79c1a5d654736170f1e08d1bbc72409191b227814db685742",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "d12146f6a2faddbea9332265e582495cc65e3d8de6ced3a7b5e886e0cbb450ec",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "run3_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "d2691ceeb9551e75ef5bed44c806704f3323bdfb57f9e5837e426e8120c1c1a3": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376544078953000,
+          "status": "succeeded",
+          "token": "dd899ac278504248bd5dd63982773cda"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "d2691ceeb9551e75ef5bed44c806704f3323bdfb57f9e5837e426e8120c1c1a3",
+          "path": "d2691ceeb9551e75ef5bed44c806704f3323bdfb57f9e5837e426e8120c1c1a3\\cache_receipt.json",
+          "receipt_sha256": "3462e02763c67ce24bce96c50150c140b4ed5d67c9d6c18a0812fe1efd170f6e",
+          "result_path": "d2691ceeb9551e75ef5bed44c806704f3323bdfb57f9e5837e426e8120c1c1a3\\result.json",
+          "result_sha256": "aa443d275d826d42dccb01b82482c6ea6b472146bce48a2ac46c1761a707fa03"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "d2691ceeb9551e75ef5bed44c806704f3323bdfb57f9e5837e426e8120c1c1a3",
+        "config_hash": "b98cec95bc2da5e41b68ab670515f5303488b327db52bc2eaaa477572cd637c0",
+        "data_sha256": "b5f81d40027419f8545a399a3a8b66f4737c75d78f60d20c7de7e378fd824d8a",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "d2691ceeb9551e75ef5bed44c806704f3323bdfb57f9e5837e426e8120c1c1a3",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "jianpan1_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "d6293ab6c83d43a788db820297230ca0c7614dcd71635dbd32a0b26ded770e6d": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376646534812600,
+          "status": "succeeded",
+          "token": "f54cc64ebd81416c9e8a5f7d346e905e"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "d6293ab6c83d43a788db820297230ca0c7614dcd71635dbd32a0b26ded770e6d",
+          "path": "d6293ab6c83d43a788db820297230ca0c7614dcd71635dbd32a0b26ded770e6d\\cache_receipt.json",
+          "receipt_sha256": "da7d08563feda561b865130b621bd0583c630b1a0b65fa82c6a443353dc294ae",
+          "result_path": "d6293ab6c83d43a788db820297230ca0c7614dcd71635dbd32a0b26ded770e6d\\result.json",
+          "result_sha256": "698e68b9c0fb75282ab4725fec83f661408b2f3a553dbcb6795a7b38faefb9c1"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "d6293ab6c83d43a788db820297230ca0c7614dcd71635dbd32a0b26ded770e6d",
+        "config_hash": "ee7ed3391633e40a9b7bdf2d77fecfa12959f05b5bb4f6e0db76f8b1e80e58f9",
+        "data_sha256": "8044c3d7fb32f520f6ba5940508814f69cef5e3ec0b8f3ca8b9fb750961f897f",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "d6293ab6c83d43a788db820297230ca0c7614dcd71635dbd32a0b26ded770e6d",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "xiezi4_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "dad1ee88eb62e362f4eb697972d07eb22b732393a5c18fce4250ed40b106be38": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376637829934000,
+          "status": "succeeded",
+          "token": "2a95f2ec77e148078cd4644a2ffcfff1"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "dad1ee88eb62e362f4eb697972d07eb22b732393a5c18fce4250ed40b106be38",
+          "path": "dad1ee88eb62e362f4eb697972d07eb22b732393a5c18fce4250ed40b106be38\\cache_receipt.json",
+          "receipt_sha256": "3b29b25fe06cfd74b340abf54b9572888854f766c145510268c87d190ff83042",
+          "result_path": "dad1ee88eb62e362f4eb697972d07eb22b732393a5c18fce4250ed40b106be38\\result.json",
+          "result_sha256": "180c632e709e87bf5576a8a9bf5b2c179c0a61c6691f6df3916ae5b683edc3b0"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "dad1ee88eb62e362f4eb697972d07eb22b732393a5c18fce4250ed40b106be38",
+        "config_hash": "d594042c096507d1189a9e115ad6466a92beb63b00507344bd6f27ef6119fa3b",
+        "data_sha256": "7b32139c8969ebcd6a8c1bedf8bb9191c916187a7716f43db6ad03d60f165619",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "dad1ee88eb62e362f4eb697972d07eb22b732393a5c18fce4250ed40b106be38",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "xiezi3_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "db9212ffc56e70e77ea3641e78179ce1876335106213dd0859d8273fb5a92c75": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376842725801800,
+          "status": "succeeded",
+          "token": "2579b39ce4bf4f099cbecc51bf4cc89c"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "db9212ffc56e70e77ea3641e78179ce1876335106213dd0859d8273fb5a92c75",
+          "path": "db9212ffc56e70e77ea3641e78179ce1876335106213dd0859d8273fb5a92c75\\cache_receipt.json",
+          "receipt_sha256": "b42a3ba7b4a74bbad08a96c8e4a5948746e7542cc64cbd45b0d300ab946d576d",
+          "result_path": "db9212ffc56e70e77ea3641e78179ce1876335106213dd0859d8273fb5a92c75\\result.json",
+          "result_sha256": "d1dbe1b6b13102c8f90f30ca696be20b432ae7045c05fd1de195c88f4a7cc9b8"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "db9212ffc56e70e77ea3641e78179ce1876335106213dd0859d8273fb5a92c75",
+        "config_hash": "08cd3bb8e7d24224a74139fc9db0324e05fdb7982ffcd2aae793b0f580bc3313",
+        "data_sha256": "a32ab804060f866add72e093d6bdced3d756faf967c1ac1b233fec07c5733cb7",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "db9212ffc56e70e77ea3641e78179ce1876335106213dd0859d8273fb5a92c75",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "run2_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "e1f713a33cffe177274bfa591182253d8f62523dec069667b643b38db473e48c": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376791891628100,
+          "status": "succeeded",
+          "token": "06d6bd7977714ccf81fb44c0c60103ed"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "e1f713a33cffe177274bfa591182253d8f62523dec069667b643b38db473e48c",
+          "path": "e1f713a33cffe177274bfa591182253d8f62523dec069667b643b38db473e48c\\cache_receipt.json",
+          "receipt_sha256": "3d7cf9f2256ed8017e12054d875a47c2a9cdb48b01cb91d935c046b58c739dd8",
+          "result_path": "e1f713a33cffe177274bfa591182253d8f62523dec069667b643b38db473e48c\\result.json",
+          "result_sha256": "d9e810c37265a92cb91daa4d25047f03a53d9ffe33d9ed74717682d4236a610b"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "e1f713a33cffe177274bfa591182253d8f62523dec069667b643b38db473e48c",
+        "config_hash": "186db1ae6710084f149b3c425ab3fdff8be36f26366aabe8e697b92a92a3fe47",
+        "data_sha256": "d6ea629174441276720cb28ba416f68fba6018952bfa66105ba734bdbfdb8da5",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "e1f713a33cffe177274bfa591182253d8f62523dec069667b643b38db473e48c",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "jianpan3_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "e6945d70e698294c3eb91d63c0a3ecce5af7deefe23b455739872f26dfa77564": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376656517015200,
+          "status": "succeeded",
+          "token": "d693f5c3ac14401da9d00dec7b4f39a4"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "e6945d70e698294c3eb91d63c0a3ecce5af7deefe23b455739872f26dfa77564",
+          "path": "e6945d70e698294c3eb91d63c0a3ecce5af7deefe23b455739872f26dfa77564\\cache_receipt.json",
+          "receipt_sha256": "200292a80163ab2c1deb567662524db197f97df43fef4748de3a0f932d86be31",
+          "result_path": "e6945d70e698294c3eb91d63c0a3ecce5af7deefe23b455739872f26dfa77564\\result.json",
+          "result_sha256": "529fc77c47199c84ddc0d8aea57f75b5404e1bd80a41e1b3b4bd3217d80f3621"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "e6945d70e698294c3eb91d63c0a3ecce5af7deefe23b455739872f26dfa77564",
+        "config_hash": "aa2413f894f3c82ec57e064cf3e44a274bdd4bbc9651da9765c8ee622bac2f52",
+        "data_sha256": "b5f81d40027419f8545a399a3a8b66f4737c75d78f60d20c7de7e378fd824d8a",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "e6945d70e698294c3eb91d63c0a3ecce5af7deefe23b455739872f26dfa77564",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "jianpan1_LYX_0708",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    },
+    "f131b5e6e9e8573346be4e531806cf4d7026ef8d0b431e55ce9e4d479a94c302": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "owner_host": "MSI",
+          "owner_pid": 24672,
+          "owner_process_start_token": "windows-filetime:134298501342179802",
+          "started_at_unix_ns": 1785376811632851700,
+          "status": "succeeded",
+          "token": "26706444df554954a809b3e399cf84ef"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "f131b5e6e9e8573346be4e531806cf4d7026ef8d0b431e55ce9e4d479a94c302",
+          "path": "f131b5e6e9e8573346be4e531806cf4d7026ef8d0b431e55ce9e4d479a94c302\\cache_receipt.json",
+          "receipt_sha256": "015339b07da09e43c5bda832f502e9a696d7ed8b8afeb70fb4bac71dfac6b89b",
+          "result_path": "f131b5e6e9e8573346be4e531806cf4d7026ef8d0b431e55ce9e4d479a94c302\\result.json",
+          "result_sha256": "999d691b3343d593f4ef2c8bcf9e97fc054273a066311ca6be9e7506f2266045"
+        }
+      ],
+      "cache_hit_count": 0,
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "f131b5e6e9e8573346be4e531806cf4d7026ef8d0b431e55ce9e4d479a94c302",
+        "config_hash": "98c00653028e503ea949527b79f40754b5899cee0a5c1635d474467dc5813186",
+        "data_sha256": "ba3d9938e8d9e04d25ce32fa6e698b21ef512f68bc89d3adfb0a5e77fc900d6d",
+        "evaluation_hash": "bab2d2e160edf7c19e660a15b81b96a6dc913a1bb6681f946091886423ddd999",
+        "identity_sha256": "f131b5e6e9e8573346be4e531806cf4d7026ef8d0b431e55ce9e4d479a94c302",
+        "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "kaihe1_LYX_0617",
+        "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+        "stage": "filter_profile_p25_spectral_diagnostic"
+      },
+      "status": "succeeded"
+    }
+  },
+  "identity_count": 36,
+  "identity_sha256": [
+    "d2691ceeb9551e75ef5bed44c806704f3323bdfb57f9e5837e426e8120c1c1a3",
+    "b181f01a5ab58e4b015492a1d0ac929e2993c55d029dc34872bc4f53e343da27",
+    "22db5388d53bcd2b24b49d8564c71eb95ca61519439d3c65b8b6d708522a80ec",
+    "9cf02621931703d6ef65f63f269981c7aad16477178ba485c8592f4445bbc7af",
+    "25fce5d35765c001d99025bf70925f6b022b22e3a329c29ba8b37d5c5a6602ab",
+    "c082cf66c669a4f5678880abc2ff9a017f33a144311c8fbfeb53ef26cba83301",
+    "28e589cdf41325a303adc8b8574f873c23aaa97df34d78ed4b13603a0b8c90de",
+    "1a64e31f1c3273ad0b11201f1842c863323f6564a8ac954bbb7243320e37a7d6",
+    "d12146f6a2faddbea9332265e582495cc65e3d8de6ced3a7b5e886e0cbb450ec",
+    "04901d800c9aaf87404329c83bbaba273245ab215d18b197bf798326df91459c",
+    "dad1ee88eb62e362f4eb697972d07eb22b732393a5c18fce4250ed40b106be38",
+    "d6293ab6c83d43a788db820297230ca0c7614dcd71635dbd32a0b26ded770e6d",
+    "e6945d70e698294c3eb91d63c0a3ecce5af7deefe23b455739872f26dfa77564",
+    "42eff06c7fd5cf6c449a0a04b0f0f4058c9cbb2240686782313333584f3546aa",
+    "1c038172b95147fcd803befcee10b283b3a7441b07364e6779aed62e72084cbb",
+    "6bec2d8c47e3ea7277f2fc97edc83dd84a5919e514ad03b1a2328d34d75bbadf",
+    "99693c5196f6c9aeac1d7414a1ad6337bc8a59ca298e7da2f186a0e204b701b1",
+    "bde9c68c3f6db2e28928ead2c8018719992628af29893fd70f977b73c4bf972f",
+    "7b607e37ccc7a348c0e6b371917b2922b57591d33101aaae2cf531d3571eb054",
+    "4fa3624aae1958a841d2ae847e4d15c83c899e8c552c993f4d9d50cde59cbff9",
+    "903053add57c377e04cb4a80e9bb8b933214bcc46c2969732abddd60fa2a3b51",
+    "057dccb872711d01e498c6ceafc8b08ab49ece94b97a586c21bb0a746ab01ff6",
+    "10c27b5cb74d620dd894c63b1e451a977260ed39927e2f5e4b050fce23d3d9f7",
+    "8557fde4681a4405639e8604989be82f056fa8e79a73e7cbf1c3eacc7c174d39",
+    "8e80249bf7d218b4a350254128607c1c39331753f22dcbb8046bd721a694a97b",
+    "5bfd14237566a22f698c2e04bbed3a053d8e0acecc8bb792977aaadbcae503f4",
+    "e1f713a33cffe177274bfa591182253d8f62523dec069667b643b38db473e48c",
+    "217d83db4398aeac41811ef439822e8ae351d0914060d3ef228d77755f811080",
+    "f131b5e6e9e8573346be4e531806cf4d7026ef8d0b431e55ce9e4d479a94c302",
+    "6dbfcbeb23338dc4204a62487e2a58d6cc5e5d7c26f1fbed6c1f1187089e6f15",
+    "7e420f3d3c9b0ace702b8defa316a7420da6ee5e93d994a88810ddd7354f0fa5",
+    "db9212ffc56e70e77ea3641e78179ce1876335106213dd0859d8273fb5a92c75",
+    "787bf925e9e16fe8e930ef2f3d89a06b6712de8e2168dee3a4efd5afbd559b30",
+    "539b4c817a93d2cb5bb8db00e9d62cb1fef945321a7fa65131e1928d8c001002",
+    "22eda10a98d8b8b501cb1ecd9f515b8d6c832e8d59d7f162aa3969567460d0f8",
+    "5c353986b8455de0c09e30c5ce9c0cb994133d4a2521b396bb421377c6b80da0"
+  ],
+  "matrix_execution_summary": {
+    "cache_only_identity_count": 0,
+    "failed_attempt_count": 0,
+    "identity_with_solver_attempt_count": 36,
+    "planned_identity_count": 36,
+    "retry_count": 0,
+    "total_attempt_count": 36
+  },
+  "snapshot_sha256": "a2cd6495962956868f0f00e7f9bb7af3194081898eb0afd370fb0a99cbdce429",
+  "snapshot_version": "lyx_attempt_registry_matrix_snapshot_v1"
+}

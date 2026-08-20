@@ -1,0 +1,20 @@
+{
+  "artifact_sha256": {
+    "budget_amendment_request.json": "afe86d3b0a8135694c4030c1768ac256d3d92c14910a5f0891cbb8948fe70857",
+    "decision_contract.json": "26360d13dbd6b8821a6edd7f5ff86d27cdf9a6162a04caca819b17003de538ad",
+    "evaluation_source_identity.json": "909ed74b06d5a0b30bf2445307dc73442e9679d16049fb1d8ff9c4b1c8e9c8ce",
+    "metric_contract.json": "8cc5b2b7706dd49dbe4d151b4dfcf077be2e0c082ba4828718c78d2f1ae9a65f",
+    "p25_spectral_diagnostic_proposal.json": "63255082d8126f24d7c1f4659a670fbb45f18373967c244c7801d1d8dd1847df",
+    "solver_source_identity.json": "b0774733275cedbafb8c7b9b7a6b07a32f4db77fe4893655679a258aded44b89",
+    "spectral_gate_contract.json": "1362d8e0ddb0323c6a8e5c121645bbae168479ef6dd0a62e1f68269462114dc2"
+  },
+  "budget_request_sha256": "f0fa7668015cf8fe4c757d6055be151af31e1f1b3ba2c340988998cd1ee1472f",
+  "diagnostic_solver_run_count": 0,
+  "identity_count": 36,
+  "independent_bo_run_count": 0,
+  "may_execute": false,
+  "proposal_sha256": "db1f5d2278458592c08d7e6217d52090a8ab1f94b96262de99e84a466e2c6128",
+  "receipt_sha256": "59ba00406b90280fe2155c1754e008b49d423ad34f9bd049f79cf0619918b51d",
+  "receipt_version": "lyx_p25_spectral_diagnostic_proposal_receipt_v1",
+  "status": "awaiting_human_execution_authorization"
+}

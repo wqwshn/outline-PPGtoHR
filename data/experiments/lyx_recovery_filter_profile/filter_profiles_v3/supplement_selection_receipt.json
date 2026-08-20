@@ -1,0 +1,9 @@
+{
+  "selected_p100_profile_ids": [],
+  "selected_p50_profile_ids": [
+    "p50-short-low-40",
+    "p50-short-midlow-40"
+  ],
+  "selected_profile_ids": [],
+  "status": "blocked_insufficient_rate_coverage"
+}

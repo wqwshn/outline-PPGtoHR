@@ -1,0 +1,19 @@
+{
+  "added_unique_identities": 36,
+  "approved": false,
+  "attempt_kind": "diagnostic",
+  "budget_contract_hash": "7ce85ea070fdbdc61ef6f7456c5878cba313bf889b68ce33cf9719d8c7837d85",
+  "decision_state": "awaiting_human_p25_spectral_diagnostic_decision",
+  "independent_bo_authorized": false,
+  "max_attempts": 1584,
+  "max_unique_identities": 792,
+  "normal_unique_identity_limit": 780,
+  "profile_panel_sha256": "7f6f1615afab9aff3c82c2fd93e00e5c7ed896c73ab066edc1e2367e06737cfc",
+  "proposal_sha256": "db1f5d2278458592c08d7e6217d52090a8ab1f94b96262de99e84a466e2c6128",
+  "record_panel_sha256": "dc636a649a978f22f0f0c2dc6c71fd326a9af8ed5d71ba721511b0463ee9a257",
+  "request_sha256": "f0fa7668015cf8fe4c757d6055be151af31e1f1b3ba2c340988998cd1ee1472f",
+  "request_version": "lyx_p25_spectral_budget_amendment_request_v1",
+  "retry_limit": 1,
+  "stage": "filter_profile_p25_spectral_diagnostic",
+  "status": "awaiting_human_budget_and_execution_decision"
+}

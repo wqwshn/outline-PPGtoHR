@@ -1,0 +1,18 @@
+{
+  "actual_exploration_run_count": 0,
+  "actual_hr_tracking_trajectory_count": 0,
+  "budget_request_sha256": "07e3c288ea5068aab95ae2824d2c97acc21527224b24fb493dc5522d7562e4b4",
+  "candidate_profile_count": 2,
+  "candidate_record_count": 4,
+  "design_rule_sha256": "711942f542bda86fefdebcbc82564a1eaa3b3ce5ab6289b7cf1e59496e251f26",
+  "independent_bo_authorized": false,
+  "may_execute": false,
+  "mechanistic_evidence_sha256": "4640422f2ebe68ee728f82c2b3f5d811c269442ec35adc7e01769db6f9127199",
+  "new_unique_identity_count": 8,
+  "planned_exploration_run_count": 8,
+  "proposal_sha256": "3600155f2967bfa9a5c12bddad1cb7cab4d8be0fe1bfcb23f41657c2e23ea168",
+  "proposal_version": "lyx_filter_rate_normalized_supplement_proposal_v1",
+  "reused_numeric_result_count": 8,
+  "source_completion_sha256": "9ccd10f5c6a0cbc590c7907f755624e01c997e8762f567f8c6848941f38a34f3",
+  "status": "awaiting_human_budget_decision"
+}

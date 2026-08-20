@@ -1,0 +1,18 @@
+{
+  "artifact_sha256": {
+    "budget_amendment_request.json": "4e6d3716c4ac323569e3ded79445597f16a6ad1863bf094deec1579cc5ebac7f",
+    "budget_contract_v7.json": "350fa88f75c19d06e18e8179dd6a236ceff6b1b74f787996ac9fb6894817300e",
+    "control_contract.json": "4d49cfd1d6ccea3887e733d610d3bc5148698bd377c890881ed5dbc3244906bb",
+    "source_identity.json": "999711b7e46f77a9b8df61a2611d7df36ba58975f95af99f9d33221cd8444199",
+    "spectral_metric_control_proposal.json": "a81a79573fd7315096f6820936c95246a7b816a66d9fe68f7b8cc14fe467b57f"
+  },
+  "budget_request_sha256": "974a3188182e39f94dd144e995f8b5761499c1aa21a4bef24bda1256e4a91bdb",
+  "diagnostic_run_count": 0,
+  "identity_count": 12,
+  "independent_bo_run_count": 0,
+  "may_execute": false,
+  "proposal_sha256": "429233ecadf92cc2d669b59c8f2cc4516b3d767547d98919655a18918e1a60bd",
+  "receipt_sha256": "50c1e3670d1af820d36ed76bae127960347984f537c4e7b88aac406ab796e170",
+  "receipt_version": "lyx_spectral_metric_scale_control_proposal_receipt_v1",
+  "status": "awaiting_human_execution_authorization"
+}

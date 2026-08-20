@@ -1,0 +1,20 @@
+{
+  "artifacts": {
+    "attempt_registry.json": "0dc8fa2751a3f34c355c8c30b7a9e44da7a7e9f4e72bbb7523f096992fc7a8e3",
+    "budget_contract.json": "cee7dbe40b349417808568aec79a93d19bdab2c35c8802cbd614e1b7a10cf7e2",
+    "exploration_registry.json": "bfd0292bae4c0bd5f1cc6eb69b83d3340932d668aba68a75a4e9e68d1001c6d9"
+  },
+  "exploration_unique_budget": 0,
+  "human_gate_states": [
+    "awaiting_human_budget_decision",
+    "awaiting_human_independent_bo_decision",
+    "awaiting_human_interaction_decision"
+  ],
+  "independent_bo_authorized": false,
+  "normal_unique_identity_limit": 672,
+  "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+  "planned_unique_identity_limit": 684,
+  "receipt_version": "lyx_recovery_governance_receipt_v1",
+  "status": "complete",
+  "worst_case_attempt_limit": 1368
+}

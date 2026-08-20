@@ -5,45 +5,45 @@
 - 始终使用中文与用户交互，包括说明、计划、状态更新和最终答复。
 - Git 提交信息、分支名、PR/Issue 描述等项目保存记录优先使用中文，除非外部工具或约定明确要求英文。
 
+## 任务范围与适度验证
+
+- 以用户目标和项目支持路径为边界，选择能解决真实问题的最小充分实现与验证。项目正常使用中真实可达的问题均应报告；可达即可，不要求先构造复现。理论上可构造但支持路径不可达的情形不扩展实现。
+- 默认按本地、合作式使用场景处理。安全、迁移、兼容或专项审查只有在用户、项目规范或更高优先级规则要求时才进入任务范围；这些明确要求属于任务本身。
+- 实现直接针对当前需求和项目中已经出现的问题。未出现的情形不引入 feature flag、migration framework、compat layer、wrapper 或层层 guard 等防御性脚手架。
+- hash、checksum 或 fingerprint 仅在能够替代明显更昂贵的操作，且结果会改变后续行为时使用。
+- 需要工程判断时直接判断。评分表、checklist 或重复复核只有在任务本身要求时使用；已经解决的问题不再无目的复核。
+- 验证与受影响路径和风险相称，优先运行能直接验证改动的最小测试集合。全量检查仅在变更范围、项目规范或用户要求使其具有决策价值时运行。
+- 运行额外检查前先回答：**它要发现什么具体失败？若失败发生，我会采取什么不同动作？** 两者没有明确答案时不运行该检查。
+- Review 只报告真实问题；实现正确时明确说明正确，不为完成 review 制造发现。
+
 ## Python 环境与测试
 
-- 运行 Python 相关命令、测试、脚本时，优先使用 conda 环境 `ppg-hr`。
-- 推荐测试命令：
-  - `conda run -n ppg-hr python -m pytest -q python/tests`
-  - 若当前终端已激活 `ppg-hr`，可直接运行 `python -m pytest -q python/tests`。
+- 运行 Python 命令、测试和脚本时，优先使用 conda 环境 `ppg-hr`。
+- 从仓库根目录运行相关测试：`conda run -n ppg-hr python -m pytest -q <相关测试路径> --basetemp .codex-tmp/<任务标识>/pytest`。
+- 需要全量测试时，将相关测试路径替换为 `python/tests`。
+
+## 临时目录与实验产物
+
+- 一次性任务产物统一放在 `.codex-tmp/<任务标识>/`；pytest 使用其下独立的 `basetemp` 子目录。项目根目录和磁盘根目录不直接存放任务临时目录、渲染中间文件或一次性缓存。
+- Windows 长路径或权限问题确实要求短路径时，使用 `D:\codex-tmp\outline-PPGtoHR\<任务标识>\`，不创建 `D:\p*` 等散落目录。
+- 任务结束时，仅清理本任务创建且可再生的沙箱、缓存和生成物；删除前核对解析后的绝对路径仍位于约定目录内。
+- 需要跨任务或跨实验复用的正式产物从开始就写入 `data/experiments/<实验名>/`，并记录实验身份、来源和完成回执；pytest 临时目录不作为实验证据缓存。
+- `data/experiments/` 中的 raw report、缓存、曲线和大体量 JSON/CSV 默认只作本地证据归档，不强制加入 Git，也不推送远端。远端只提交能独立说明结论、风险和复现入口的小型代码与文档；只有用户明确要求发布原始证据时才单独规划存储方式。
 
 ## Git 版本管理
 
-- 进行较大代码改动时，自动使用 Git 做版本管理：先查看当前工作树状态，再按任务边界分批提交。
-- 不要回退或覆盖用户已有改动；遇到无关的未提交改动时保持原样。
-- 提交前必须运行相关测试或说明无法运行的原因。
+- 实现型代码任务在编辑前先查看工作树状态，确认本任务文件范围；讨论、诊断和其他只读任务不提交改动。
+- 保留用户已有改动和无关的未提交文件，只暂存本任务范围内的文件。
+- 较大代码改动按可独立审阅和验证的任务边界分批提交。提交前运行相关测试；无法运行时说明原因。
 
-## 沙箱与审批模式
+## 科研绘图
 
-- “替我审批”模式下，先判断命令是否会访问网络、写工作区外、改 Git 索引/提交、操作缓存/进程/环境；会的话一开始就申请 `require_escalated`，不要先让沙箱试错。
-- 避免把多个操作塞进一条 shell 命令，尤其是 `|`、`&&`、`;`、重定向、子表达式和跨 shell 调用；把可并行的只读检查拆成独立命令执行。
-- Windows 文件操作优先使用单一 PowerShell 原生命令；递归删除或移动前必须解析绝对路径，并确认目标仍在工作区或用户明确指定目录内。
-- 代码编辑优先使用 `apply_patch`；不要用 PowerShell/Python 写文件，除非 `apply_patch` 因沙箱问题失败且变更是机械、可复核的。
-- 长时间测试或脚本遇到沙箱、网络、权限、编码或挂起迹象时，先停止并换成更小的验证命令；需要外部权限时再带理由升级。
-- 清理测试临时目录、缓存或生成物时，只删除本任务创建且已核对路径的文件；不要顺手清理无关未提交改动。
-
-## Scientific plotting rules
-
-- 论文级科研绘图优先使用全局 `nature-figure` Skill；不再依赖项目内 `skills/publication-plotting`。
+- 创建或修改论文级科研图时，使用全局 `nature-figure` Skill；项目内 `skills/publication-plotting` 不再作为规则来源。
 - 迭代审阅默认导出 600 dpi PNG；正式交付按 figure contract 决定是否补 PDF/SVG/TIFF。
 - 心率算法图优先使用固定层级：参考深灰、主算法暖橙、次算法冷蓝、baseline 灰色虚线、事件背景低饱和灰蓝。
 - 保持统一字体、明确单位、稠密时序少量 marker、多面板比较统一 y 轴，避免默认 Matplotlib 配色。
 
-## Agent skills
+## 按任务加载的项目文档
 
-### Issue tracker
-
-本项目的 issue 与外部 PR 通过 GitHub 进行跟踪和 triage；外部贡献者提交的 PR 也视为请求入口。详见 `docs/agents/issue-tracker.md`。
-
-### Triage labels
-
-使用 Matt Pocock skills 的默认 triage 标签体系：`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`。详见 `docs/agents/triage-labels.md`。
-
-### Domain docs
-
-本项目采用 single-context 领域文档布局：根目录 `CONTEXT.md` 记录项目领域语言，`docs/adr/` 记录架构决策。详见 `docs/agents/domain.md`。
+- 处理 GitHub issue、PR、标签或 triage 时，先读取 `docs/agents/issue-tracker.md`；执行 triage 时再读取 `docs/agents/triage-labels.md`。
+- 涉及算法术语、实验口径、机制设计或算法变更时，先按任务关键词定位 `CONTEXT.md` 中的相关条目，再读取与当前决策相关的 `docs/adr/` 文档；只加载当前任务需要的内容。具体约定见 `docs/agents/domain.md`。

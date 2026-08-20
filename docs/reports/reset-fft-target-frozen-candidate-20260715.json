@@ -1,0 +1,97 @@
+{
+  "decision": "GO_N4_AMENDED_SPEC",
+  "frozen_at": "2026-07-15",
+  "primary": {
+    "name": "controlled_reanchor_remote25",
+    "mechanism": "trend_persistence",
+    "prior_half_life_s": 10.0,
+    "hits_required": 3,
+    "qualification_windows": 4,
+    "trajectory_tolerance_bpm": 6.0,
+    "min_amp_ratio": 0.25,
+    "max_held_previous": 0,
+    "readiness_tolerance_bpm": 6.0,
+    "readiness_hits_required": 2,
+    "controlled_reanchor": true,
+    "reanchor_prior_guard_bpm": 45.0,
+    "reanchor_min_gap_bpm": 25.0,
+    "startup_prior_expires_after_ready": true,
+    "candidate_qualification_uses_final_prior": false,
+    "switch_adapter": "causal_bootstrap"
+  },
+  "safety_backup": {
+    "name": "safe_abstain_no_switch",
+    "mechanism": "trend_persistence",
+    "controlled_reanchor": false,
+    "switch_adapter": "disabled",
+    "behavior": "keep_archived_final"
+  },
+  "switch_layer": {
+    "decision": "GO_DEVELOPMENT_FEEDBACK_REGRESSION",
+    "original_spec_gate_passed": false,
+    "validation_role": "seen_HB24_development_feedback_regression",
+    "adapter": "causal_bootstrap",
+    "initial_prior_gap_bpm": 25.0,
+    "selected_rank_max": 5,
+    "compensation_trigger_bpm": 18.0,
+    "compensation_windows": 3,
+    "compensation_limit_bpm": 25.0,
+    "confirmation_deadline_s": 20.0,
+    "raw_final_non_worsening_guard": {
+      "enabled_before_bootstrap_confirmation": true,
+      "raw_top1_to_archived_final_max_gap_bpm": 30.0,
+      "policy": "keep_archived_final_when_handoff_moves_farther_from_raw_top1",
+      "conflicting_ready_policy": "defer_confirmation"
+    },
+    "bootstrap_state_exported": true,
+    "ready_revocation_policy": "permanent_fallback_to_archived_final",
+    "production_defaults_changed": false
+  },
+  "development_gate": {
+    "d1_target_pass_count": 3,
+    "d1_target_expected_count": 4,
+    "d1_target_pass_samples": ["bobi2", "kaihe2", "tiaosheng3"],
+    "d1_safe_abstention_samples": ["kaihe3"],
+    "d2_all_post60_regression_le_1bpm": true,
+    "d2_new_e20_count": 0,
+    "d2_reanchor_count": 0
+  },
+  "n4_confirmation": {
+    "decision": "GO_DEVELOPMENT_FEEDBACK_REGRESSION",
+    "observed_sample_count": 24,
+    "expected_sample_count": 24,
+    "d1_rescued_samples": ["bobi2", "kaihe2", "tiaosheng3"],
+    "d1_safe_abstention_samples": ["kaihe3"],
+    "g1_failure_samples": [],
+    "s1_failure_samples": [],
+    "c1_normal_failure_samples": [],
+    "worst_normal_regression_bpm": 0.7570276515907197,
+    "worst_normal_regression_sample": "jianpan3",
+    "new_e20_count": 0,
+    "independent_reset_d1d2_window_count": 804,
+    "independent_reset_max_abs_diff_bpm": 0.0,
+    "rule_revision_count": 1,
+    "s1_rule_was_predeclared": false,
+    "spec_deviation_reasons": [
+      "causal_bootstrap_consumes_handoff_before_normal_switch_target_ready",
+      "raw_final_non_worsening_guard_was_designed_after_viewing_G1_S1_C1_failures"
+    ],
+    "amended_spec": "docs/superpowers/specs/2026-07-15-reset-fft-target-readiness-experiment-design.md",
+    "amending_adr": "docs/adr/0025-add-causal-bootstrap-before-normal-reset-readiness.md",
+    "bootstrap_state_window_counts": {
+      "bootstrap_provisional": 133,
+      "bootstrap_guarded_final": 29,
+      "bootstrap_confirmation_deferred": 2,
+      "ready_confirmed": 861,
+      "fallback_archived_final": 343,
+      "archived_final": 163
+    }
+  },
+  "inputs": {
+    "manifest_sha256": "d42239a7ca5dd63cf32ae54b19620800679fb055859d79aa7267224344ef22a9",
+    "frozen_authoritative_window_metrics_sha256": "657829feb57d67fc9ef6211e8c8a74454cfc6575e625c41453511993f16de2c7",
+    "dataset_scope": "HB24 D1/D2/G1/S1/C1",
+    "n2_n4_window_metrics_sha256": "0c5d13ae84e32a8213db29d9461d39f61d9ce5a64c2270efac33c5968b22b1e8",
+    "n2_n4_switch_metrics_sha256": "a6ed5ec29a76d0053f6771ac1cd7c2ec2af55f98ba7082fad183b4faf5651ee4"
+  }
+}

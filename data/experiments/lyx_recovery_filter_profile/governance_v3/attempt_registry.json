@@ -1,0 +1,1342 @@
+{
+  "budget_contract_sha256": "8623e1288399b85c83846cf91c11e10195ab3ecc65252adcc33afb3def412175",
+  "entries": {
+    "09599b63118050081f2abdaf9914e4ac6b99e4a8341b9953ba259b3f07123aa9": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "e848913ebe1348af9696ec10cef04807"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "09599b63118050081f2abdaf9914e4ac6b99e4a8341b9953ba259b3f07123aa9",
+          "path": "09599b63118050081f2abdaf9914e4ac6b99e4a8341b9953ba259b3f07123aa9\\cache_receipt.json",
+          "receipt_sha256": "b99b4593bf06f788f66c4859905b1815f3415ce79eae81b7c5b77847593aba8e",
+          "result_path": "09599b63118050081f2abdaf9914e4ac6b99e4a8341b9953ba259b3f07123aa9\\result.json",
+          "result_sha256": "e24d2ebf9cf547289ad9515b150a4f6dc17d24bd1f803c6dc1a80e46635c6a48"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "09599b63118050081f2abdaf9914e4ac6b99e4a8341b9953ba259b3f07123aa9",
+        "config_hash": "2916eace630fb5de7c2dc2ab608bbe171eb6c9b484d5fff9db81835d46931034",
+        "data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "09599b63118050081f2abdaf9914e4ac6b99e4a8341b9953ba259b3f07123aa9",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "kaihe3_LYX_0613",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "13c546e5077f87d88340148ce195c33639755cc4297b1daa49ed801a99711b0e": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "14a1ad57d37249289424c82e9ff12fc3"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "13c546e5077f87d88340148ce195c33639755cc4297b1daa49ed801a99711b0e",
+          "path": "replacement-13c546e5077f87d8\\cache_receipt.json",
+          "receipt_sha256": "e22fbfed5582438d611547f44ebe6ddfc0c8a04cc8d74141433942d42668da29",
+          "result_path": "replacement-13c546e5077f87d8\\result.json",
+          "result_sha256": "7fd3f0a09142f354befc65e942ec8af7a3eedeb7b1306a793b54de0a3fb5d989"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "13c546e5077f87d88340148ce195c33639755cc4297b1daa49ed801a99711b0e",
+        "config_hash": "622928d677a2bdb7668758bb8e8ff9af1d5847259aef8ce4d648677efdab69ff",
+        "data_sha256": "971a87c06295b73d4cca7936437de8c832c7d2eed65f286a8742805543f5f87b",
+        "evaluation_hash": "7b7f5a4bc12f465f2cd4f30b9d865c0acfe1a1feb2cc64046f17ba0afd626638",
+        "identity_sha256": "13c546e5077f87d88340148ce195c33639755cc4297b1daa49ed801a99711b0e",
+        "metric_contract_hash": "383f346c088ded7fa94fa14148997678c53adc4c5659b1969f66350ac8e235f2",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "run1_LYX_0708",
+        "solver_hash": "9d8b217456b912ea4de5baa30d76a2db04d003f20467c9c2b669688a0f4a269f",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "1bf3f90fcc3f7d36267f3162ce76ad3deacba575cfd0206038620a02ea0a195c": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "7e7d3f2ba7f145b9aeff567a1a829570"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "1bf3f90fcc3f7d36267f3162ce76ad3deacba575cfd0206038620a02ea0a195c",
+          "path": "1bf3f90fcc3f7d36267f3162ce76ad3deacba575cfd0206038620a02ea0a195c\\cache_receipt.json",
+          "receipt_sha256": "66c8e356b5473cd41cd0705102a5cc621ae29a5c2efeef8faa7adb47e698ef7c",
+          "result_path": "1bf3f90fcc3f7d36267f3162ce76ad3deacba575cfd0206038620a02ea0a195c\\result.json",
+          "result_sha256": "e851f43c5534d36eacfa460f4a38b37eb89fdf6dd663d99189f2c1f348c2c737"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "1bf3f90fcc3f7d36267f3162ce76ad3deacba575cfd0206038620a02ea0a195c",
+        "config_hash": "7a7435684aed1146be4bba08faf983a10c753734638cedbda3464eab23d8c26a",
+        "data_sha256": "8044c3d7fb32f520f6ba5940508814f69cef5e3ec0b8f3ca8b9fb750961f897f",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "1bf3f90fcc3f7d36267f3162ce76ad3deacba575cfd0206038620a02ea0a195c",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "xiezi4_LYX_0708",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "318c3460ddae67893dc996a3df75fe35c0b24f8ba0a0ecfd61f362e6a3b2d7af": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "f0a249afbb9e43e39fdfce26476e1af4"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "318c3460ddae67893dc996a3df75fe35c0b24f8ba0a0ecfd61f362e6a3b2d7af",
+          "path": "318c3460ddae67893dc996a3df75fe35c0b24f8ba0a0ecfd61f362e6a3b2d7af\\cache_receipt.json",
+          "receipt_sha256": "56ac8fb113bd3844cc12ea0263a6c179a02112a545e032fd7b6f80163ab8d9fe",
+          "result_path": "318c3460ddae67893dc996a3df75fe35c0b24f8ba0a0ecfd61f362e6a3b2d7af\\result.json",
+          "result_sha256": "17f4a0720e31d3e4389af21b8571e8fdb462fa3acccdeb71dc210762183336cc"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "318c3460ddae67893dc996a3df75fe35c0b24f8ba0a0ecfd61f362e6a3b2d7af",
+        "config_hash": "322ea5015534d961fbb903c9367067b0423be30f64af288c833ba4e5cb55faa7",
+        "data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "318c3460ddae67893dc996a3df75fe35c0b24f8ba0a0ecfd61f362e6a3b2d7af",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "kaihe3_LYX_0613",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "31f95115f1878f7b105211e9023cf1b2e4c4d0252a1d2f10063acf2067e5efc0": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "564b7ff035f842398ad97b7c645ebd72"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "31f95115f1878f7b105211e9023cf1b2e4c4d0252a1d2f10063acf2067e5efc0",
+          "path": "31f95115f1878f7b105211e9023cf1b2e4c4d0252a1d2f10063acf2067e5efc0\\cache_receipt.json",
+          "receipt_sha256": "0b62ac10c1de7c3a7418bfdac9aa4fce04437ad426517006d0ecc822a0111ec7",
+          "result_path": "31f95115f1878f7b105211e9023cf1b2e4c4d0252a1d2f10063acf2067e5efc0\\result.json",
+          "result_sha256": "17f03aa66e573e85340662ab679d3d9cbff31d538addec4d18627d73f4e6a445"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "31f95115f1878f7b105211e9023cf1b2e4c4d0252a1d2f10063acf2067e5efc0",
+        "config_hash": "d55523d52d1e8cd3d03d25a07b7bcbb15d13a6260844911b582cb1f5e3f1d71a",
+        "data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "31f95115f1878f7b105211e9023cf1b2e4c4d0252a1d2f10063acf2067e5efc0",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "kaihe3_LYX_0613",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "3b3291de0b880cf6991b4dffa2030ae302705c4d01e70fda9fab785ec249068c": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "81162438e3cc4923a14574c6a377baf5"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "3b3291de0b880cf6991b4dffa2030ae302705c4d01e70fda9fab785ec249068c",
+          "path": "3b3291de0b880cf6991b4dffa2030ae302705c4d01e70fda9fab785ec249068c\\cache_receipt.json",
+          "receipt_sha256": "78c9b0716d18c19458c1e43f93d5cc89e1048206946280b62b9c9e81bf823d74",
+          "result_path": "3b3291de0b880cf6991b4dffa2030ae302705c4d01e70fda9fab785ec249068c\\result.json",
+          "result_sha256": "187abccbd8503d169600b7f9574d87b513ff147bf53fe5b6159927f984635fc2"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "3b3291de0b880cf6991b4dffa2030ae302705c4d01e70fda9fab785ec249068c",
+        "config_hash": "784882a22864e838dbac14ae97dc6f049820bf1c698b0a42504b63148de49e7e",
+        "data_sha256": "8044c3d7fb32f520f6ba5940508814f69cef5e3ec0b8f3ca8b9fb750961f897f",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "3b3291de0b880cf6991b4dffa2030ae302705c4d01e70fda9fab785ec249068c",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "xiezi4_LYX_0708",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "44724b7ef8d379fd6e17f76c6354a0036297d553855130dd511888bfb067bc25": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "8defc4a67b5d40348cffc6bde60c6178"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "44724b7ef8d379fd6e17f76c6354a0036297d553855130dd511888bfb067bc25",
+          "path": "44724b7ef8d379fd6e17f76c6354a0036297d553855130dd511888bfb067bc25\\cache_receipt.json",
+          "receipt_sha256": "ea67e80270c22e88f3409dd739781795029c1ea7745aec7df7422f14d1db6b91",
+          "result_path": "44724b7ef8d379fd6e17f76c6354a0036297d553855130dd511888bfb067bc25\\result.json",
+          "result_sha256": "b6f64e0ab2e2dc051bee8d2ff1132197e04222969811914c2e6263a63af58726"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "44724b7ef8d379fd6e17f76c6354a0036297d553855130dd511888bfb067bc25",
+        "config_hash": "322ea5015534d961fbb903c9367067b0423be30f64af288c833ba4e5cb55faa7",
+        "data_sha256": "971a87c06295b73d4cca7936437de8c832c7d2eed65f286a8742805543f5f87b",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "44724b7ef8d379fd6e17f76c6354a0036297d553855130dd511888bfb067bc25",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "run1_LYX_0708",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "44c45386b7ff16a2c3c5fbc530ae79c905b9ebff4a21e3049bb953edb4a3ce04": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "bc274392e0874a0eaef4ba8b3370fecb"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "44c45386b7ff16a2c3c5fbc530ae79c905b9ebff4a21e3049bb953edb4a3ce04",
+          "path": "44c45386b7ff16a2c3c5fbc530ae79c905b9ebff4a21e3049bb953edb4a3ce04\\cache_receipt.json",
+          "receipt_sha256": "3d1e35547c82b7b4201373068eecdebcf7f278b380c0d38834a30ae7615168fc",
+          "result_path": "44c45386b7ff16a2c3c5fbc530ae79c905b9ebff4a21e3049bb953edb4a3ce04\\result.json",
+          "result_sha256": "a55b26e715da3c0e6bf775adb0d4875d5902a87c03db6e384a6f4fddb6a4e052"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "44c45386b7ff16a2c3c5fbc530ae79c905b9ebff4a21e3049bb953edb4a3ce04",
+        "config_hash": "0e2e98f6b72c8a63886ce48f6bf610ad812219c2b36e87f18f7192a795353543",
+        "data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "44c45386b7ff16a2c3c5fbc530ae79c905b9ebff4a21e3049bb953edb4a3ce04",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "kaihe3_LYX_0613",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "472c4296588019fc38b94ca7ccc8b8ac3eedd2cc27618c05b40c4410f788829e": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "d1545a07df8441568b482e0b790bb9a3"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "472c4296588019fc38b94ca7ccc8b8ac3eedd2cc27618c05b40c4410f788829e",
+          "path": "472c4296588019fc38b94ca7ccc8b8ac3eedd2cc27618c05b40c4410f788829e\\cache_receipt.json",
+          "receipt_sha256": "a8d9ff0af6c3b50acd148eeefaeaa95cf083e7a2f393904165a2397d3702daab",
+          "result_path": "472c4296588019fc38b94ca7ccc8b8ac3eedd2cc27618c05b40c4410f788829e\\result.json",
+          "result_sha256": "292bca35c7d8cf59358d18a38d958ed1f7b6777dd9c49c287010f36d6b2b47fa"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "472c4296588019fc38b94ca7ccc8b8ac3eedd2cc27618c05b40c4410f788829e",
+        "config_hash": "0e2e98f6b72c8a63886ce48f6bf610ad812219c2b36e87f18f7192a795353543",
+        "data_sha256": "a7421b4146701f462dd4b033ad80a60e1fdc3f72fae3e97a9c5a7b89360ac1d2",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "472c4296588019fc38b94ca7ccc8b8ac3eedd2cc27618c05b40c4410f788829e",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "jianpan2_LYX_0708",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "615687adea3cad0cd5708f2a34a4f16538ba3bb2a9fe27cb23d9ba5f2420db19": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "f7bc94e81b88456f951a374e7b897622"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "615687adea3cad0cd5708f2a34a4f16538ba3bb2a9fe27cb23d9ba5f2420db19",
+          "path": "replacement-615687adea3cad0c\\cache_receipt.json",
+          "receipt_sha256": "9097143d65c60f3a40bc4e32e87e9a11584e18d145e438d9b13e5f6d067c8a96",
+          "result_path": "replacement-615687adea3cad0c\\result.json",
+          "result_sha256": "41b209226e3e8d6979c74e25326d8f9e6618c8ca6abe4d80de70ba490266ddaf"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "615687adea3cad0cd5708f2a34a4f16538ba3bb2a9fe27cb23d9ba5f2420db19",
+        "config_hash": "622928d677a2bdb7668758bb8e8ff9af1d5847259aef8ce4d648677efdab69ff",
+        "data_sha256": "a7421b4146701f462dd4b033ad80a60e1fdc3f72fae3e97a9c5a7b89360ac1d2",
+        "evaluation_hash": "7b7f5a4bc12f465f2cd4f30b9d865c0acfe1a1feb2cc64046f17ba0afd626638",
+        "identity_sha256": "615687adea3cad0cd5708f2a34a4f16538ba3bb2a9fe27cb23d9ba5f2420db19",
+        "metric_contract_hash": "383f346c088ded7fa94fa14148997678c53adc4c5659b1969f66350ac8e235f2",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "jianpan2_LYX_0708",
+        "solver_hash": "9d8b217456b912ea4de5baa30d76a2db04d003f20467c9c2b669688a0f4a269f",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "629a7498c9b139e77a8ffd4973fc6ea3cba57d2f240dbe630bba048285539a16": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "ec59923f4238404990998f453db1150e"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "629a7498c9b139e77a8ffd4973fc6ea3cba57d2f240dbe630bba048285539a16",
+          "path": "629a7498c9b139e77a8ffd4973fc6ea3cba57d2f240dbe630bba048285539a16\\cache_receipt.json",
+          "receipt_sha256": "8837fea91eb998eaea3affdb23d2a48a8ebe44f54d67213456f4a3b272188dd4",
+          "result_path": "629a7498c9b139e77a8ffd4973fc6ea3cba57d2f240dbe630bba048285539a16\\result.json",
+          "result_sha256": "8436739d782f1727e56ca72f84118a696fe4f719f298214828a2ed2548af5607"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "629a7498c9b139e77a8ffd4973fc6ea3cba57d2f240dbe630bba048285539a16",
+        "config_hash": "7a7435684aed1146be4bba08faf983a10c753734638cedbda3464eab23d8c26a",
+        "data_sha256": "a7421b4146701f462dd4b033ad80a60e1fdc3f72fae3e97a9c5a7b89360ac1d2",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "629a7498c9b139e77a8ffd4973fc6ea3cba57d2f240dbe630bba048285539a16",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "jianpan2_LYX_0708",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "710da4275144bd3552d7ce0b9e91024dbca5a063caa29b28d25902a1a9497f88": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "9f501166a48344a984e68c8e777a0007"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "710da4275144bd3552d7ce0b9e91024dbca5a063caa29b28d25902a1a9497f88",
+          "path": "710da4275144bd3552d7ce0b9e91024dbca5a063caa29b28d25902a1a9497f88\\cache_receipt.json",
+          "receipt_sha256": "f4d00ed8967903255455a56d7ae1724128e04f5f48d754a18f51d9b445ac7a0e",
+          "result_path": "710da4275144bd3552d7ce0b9e91024dbca5a063caa29b28d25902a1a9497f88\\result.json",
+          "result_sha256": "d49ae9a33e7912e12e6fad33bca4b9109b02b0f3f146934b577ee496dfe45ca2"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "710da4275144bd3552d7ce0b9e91024dbca5a063caa29b28d25902a1a9497f88",
+        "config_hash": "322ea5015534d961fbb903c9367067b0423be30f64af288c833ba4e5cb55faa7",
+        "data_sha256": "8044c3d7fb32f520f6ba5940508814f69cef5e3ec0b8f3ca8b9fb750961f897f",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "710da4275144bd3552d7ce0b9e91024dbca5a063caa29b28d25902a1a9497f88",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "xiezi4_LYX_0708",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "715716099d05651cab45349623d41d235777468e90a4e5f267564f4f5560fa3b": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "f6da9ce5411f4db881cbcc65ab2ab17a"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "715716099d05651cab45349623d41d235777468e90a4e5f267564f4f5560fa3b",
+          "path": "715716099d05651cab45349623d41d235777468e90a4e5f267564f4f5560fa3b\\cache_receipt.json",
+          "receipt_sha256": "de7f21857fdf2532a98fb2c959edc9036d3b8c176b55e456c19bf26d53ff7115",
+          "result_path": "715716099d05651cab45349623d41d235777468e90a4e5f267564f4f5560fa3b\\result.json",
+          "result_sha256": "1767d357dfbfac12b49dbe1ab866ac63577f057cc83956a8cc2f0fd79374fd4e"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "715716099d05651cab45349623d41d235777468e90a4e5f267564f4f5560fa3b",
+        "config_hash": "784882a22864e838dbac14ae97dc6f049820bf1c698b0a42504b63148de49e7e",
+        "data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "715716099d05651cab45349623d41d235777468e90a4e5f267564f4f5560fa3b",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "kaihe3_LYX_0613",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "79767495b976db379028dea25a660920c14770e23b8e18bb7fe70f1aad008599": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "8061f7bffa794377bf130ff73aaf803b"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "79767495b976db379028dea25a660920c14770e23b8e18bb7fe70f1aad008599",
+          "path": "79767495b976db379028dea25a660920c14770e23b8e18bb7fe70f1aad008599\\cache_receipt.json",
+          "receipt_sha256": "797b0aabfdf6c5cd439db6c86c65efc48e03982f39d14a24a1f463d0f9a0bfdb",
+          "result_path": "79767495b976db379028dea25a660920c14770e23b8e18bb7fe70f1aad008599\\result.json",
+          "result_sha256": "cf577f14c9098cf643f030ef356e2311df4ea0e860cd43d0ad2416ccce2af7cb"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "79767495b976db379028dea25a660920c14770e23b8e18bb7fe70f1aad008599",
+        "config_hash": "fbb64eb99a2c38578f59af4bbfe4060426bb0347dd3c7ae0c7820d656c5f65db",
+        "data_sha256": "8044c3d7fb32f520f6ba5940508814f69cef5e3ec0b8f3ca8b9fb750961f897f",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "79767495b976db379028dea25a660920c14770e23b8e18bb7fe70f1aad008599",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "xiezi4_LYX_0708",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "7f4b4270ce05d129f4fb2aa1b4eb4153c97f6b6538d6ef1f2d1740ea4eb1fd52": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "e71d81244daa4e23b79a9e65ab0a907a"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "7f4b4270ce05d129f4fb2aa1b4eb4153c97f6b6538d6ef1f2d1740ea4eb1fd52",
+          "path": "7f4b4270ce05d129f4fb2aa1b4eb4153c97f6b6538d6ef1f2d1740ea4eb1fd52\\cache_receipt.json",
+          "receipt_sha256": "52036525154d6e95fdc863d0f673ed6c79124b491b58bc550ea45689782d7bef",
+          "result_path": "7f4b4270ce05d129f4fb2aa1b4eb4153c97f6b6538d6ef1f2d1740ea4eb1fd52\\result.json",
+          "result_sha256": "df929d5349c614801b0d8d38eefaf0bf4d8218f2b5682519af0fcb6787baf6a3"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "7f4b4270ce05d129f4fb2aa1b4eb4153c97f6b6538d6ef1f2d1740ea4eb1fd52",
+        "config_hash": "322ea5015534d961fbb903c9367067b0423be30f64af288c833ba4e5cb55faa7",
+        "data_sha256": "a7421b4146701f462dd4b033ad80a60e1fdc3f72fae3e97a9c5a7b89360ac1d2",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "7f4b4270ce05d129f4fb2aa1b4eb4153c97f6b6538d6ef1f2d1740ea4eb1fd52",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "jianpan2_LYX_0708",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "823fd5c094572b4519890070c596a72091a07285f12a9d0c7f63eafd940e0a52": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "708889f5670a4bf6bd32f079270ef76c"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "823fd5c094572b4519890070c596a72091a07285f12a9d0c7f63eafd940e0a52",
+          "path": "823fd5c094572b4519890070c596a72091a07285f12a9d0c7f63eafd940e0a52\\cache_receipt.json",
+          "receipt_sha256": "16ae33c9f18387090b0bc8ec1b9c7fe163f8945579d148bb8ab948bc5036c327",
+          "result_path": "823fd5c094572b4519890070c596a72091a07285f12a9d0c7f63eafd940e0a52\\result.json",
+          "result_sha256": "ca54f5c3f0611a3c57f1641f9991e6d1f4494d1c2d8c9271186a2ccadabeb845"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "823fd5c094572b4519890070c596a72091a07285f12a9d0c7f63eafd940e0a52",
+        "config_hash": "2916eace630fb5de7c2dc2ab608bbe171eb6c9b484d5fff9db81835d46931034",
+        "data_sha256": "a7421b4146701f462dd4b033ad80a60e1fdc3f72fae3e97a9c5a7b89360ac1d2",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "823fd5c094572b4519890070c596a72091a07285f12a9d0c7f63eafd940e0a52",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "jianpan2_LYX_0708",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "845778f385ce40001ad02029d60cf5b5df27c67544cbda8958a8a78f9710999d": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "e6ed07daa41743bf979a622107ae4e72"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "845778f385ce40001ad02029d60cf5b5df27c67544cbda8958a8a78f9710999d",
+          "path": "845778f385ce40001ad02029d60cf5b5df27c67544cbda8958a8a78f9710999d\\cache_receipt.json",
+          "receipt_sha256": "5fcc592a0572efbacc0e7a0715c73bc398595f209dab68485d757c8f2737c79c",
+          "result_path": "845778f385ce40001ad02029d60cf5b5df27c67544cbda8958a8a78f9710999d\\result.json",
+          "result_sha256": "705e92063b127dc4eb2477bf6384a6b32fe67cad8bffd588c9f9ddb3b0c2d889"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "845778f385ce40001ad02029d60cf5b5df27c67544cbda8958a8a78f9710999d",
+        "config_hash": "2916eace630fb5de7c2dc2ab608bbe171eb6c9b484d5fff9db81835d46931034",
+        "data_sha256": "971a87c06295b73d4cca7936437de8c832c7d2eed65f286a8742805543f5f87b",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "845778f385ce40001ad02029d60cf5b5df27c67544cbda8958a8a78f9710999d",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "run1_LYX_0708",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "87c48d3e808acf177e315cfc527524773a632f6aafe698195ab687769135a5b9": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "cc9d43c1cfa14099becc8ce64faa4dd8"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "87c48d3e808acf177e315cfc527524773a632f6aafe698195ab687769135a5b9",
+          "path": "87c48d3e808acf177e315cfc527524773a632f6aafe698195ab687769135a5b9\\cache_receipt.json",
+          "receipt_sha256": "de85588ced896a02120f3cd3c3248796ffeecb8991968ee4ee04fb93b64fc87d",
+          "result_path": "87c48d3e808acf177e315cfc527524773a632f6aafe698195ab687769135a5b9\\result.json",
+          "result_sha256": "9925d2033730e36f2f6e1c52ad7d0fbfa6e0a97bd70d300216f3b70c1babe851"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "87c48d3e808acf177e315cfc527524773a632f6aafe698195ab687769135a5b9",
+        "config_hash": "7a7435684aed1146be4bba08faf983a10c753734638cedbda3464eab23d8c26a",
+        "data_sha256": "971a87c06295b73d4cca7936437de8c832c7d2eed65f286a8742805543f5f87b",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "87c48d3e808acf177e315cfc527524773a632f6aafe698195ab687769135a5b9",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "run1_LYX_0708",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "888bb38b8558893905da7ef484e126e66d8640972898ff8ab9d59510a2cb27e1": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "15f4396236f24d84a913d65ff281510e"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "888bb38b8558893905da7ef484e126e66d8640972898ff8ab9d59510a2cb27e1",
+          "path": "replacement-888bb38b85588939\\cache_receipt.json",
+          "receipt_sha256": "9dd9fdde23218295ef091bc89720f8fc0bee002f3ffe85c57ba53e0482bf525d",
+          "result_path": "replacement-888bb38b85588939\\result.json",
+          "result_sha256": "0b3ae2ef4d61e2630f059f05facc0db2a5591fbca56db13dd70e8701c5062dec"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "888bb38b8558893905da7ef484e126e66d8640972898ff8ab9d59510a2cb27e1",
+        "config_hash": "391f43008c67d83a50697f527fa258a7e610d838ebfdef0e6cf420cb395495c5",
+        "data_sha256": "8044c3d7fb32f520f6ba5940508814f69cef5e3ec0b8f3ca8b9fb750961f897f",
+        "evaluation_hash": "7b7f5a4bc12f465f2cd4f30b9d865c0acfe1a1feb2cc64046f17ba0afd626638",
+        "identity_sha256": "888bb38b8558893905da7ef484e126e66d8640972898ff8ab9d59510a2cb27e1",
+        "metric_contract_hash": "383f346c088ded7fa94fa14148997678c53adc4c5659b1969f66350ac8e235f2",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "xiezi4_LYX_0708",
+        "solver_hash": "9d8b217456b912ea4de5baa30d76a2db04d003f20467c9c2b669688a0f4a269f",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "89c44d389525e8e175889394ce59b10faf7d79424e15dcdc3154adad35dc9f56": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "409c5607b6654facb30e30afbb2c2ad9"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "89c44d389525e8e175889394ce59b10faf7d79424e15dcdc3154adad35dc9f56",
+          "path": "89c44d389525e8e175889394ce59b10faf7d79424e15dcdc3154adad35dc9f56\\cache_receipt.json",
+          "receipt_sha256": "f9661c83b8bb96c1fabf4e7cee054097dde7d74d75c0c992aa590d3eacab314c",
+          "result_path": "89c44d389525e8e175889394ce59b10faf7d79424e15dcdc3154adad35dc9f56\\result.json",
+          "result_sha256": "9640fead44ba7c1708b5e989ed591909de2c3fed4ce424beea8f7a2036043d4c"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "89c44d389525e8e175889394ce59b10faf7d79424e15dcdc3154adad35dc9f56",
+        "config_hash": "784882a22864e838dbac14ae97dc6f049820bf1c698b0a42504b63148de49e7e",
+        "data_sha256": "971a87c06295b73d4cca7936437de8c832c7d2eed65f286a8742805543f5f87b",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "89c44d389525e8e175889394ce59b10faf7d79424e15dcdc3154adad35dc9f56",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "run1_LYX_0708",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "a1daac88002812e0bbe04478b1e5f4962f04879c281d890864106edb920ad0dd": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "e36c78da452043c5ac2365dcc88439fd"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "a1daac88002812e0bbe04478b1e5f4962f04879c281d890864106edb920ad0dd",
+          "path": "replacement-a1daac88002812e0\\cache_receipt.json",
+          "receipt_sha256": "f9adba4661d1f4b565ce3d7523a52e2a7f94f2acecf2e5fd58af32a2eccc65e5",
+          "result_path": "replacement-a1daac88002812e0\\result.json",
+          "result_sha256": "c4f823f81398ab186f4b16f85c9beae83b2e669c3f2180d780f503a9a246d98a"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "a1daac88002812e0bbe04478b1e5f4962f04879c281d890864106edb920ad0dd",
+        "config_hash": "622928d677a2bdb7668758bb8e8ff9af1d5847259aef8ce4d648677efdab69ff",
+        "data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+        "evaluation_hash": "7b7f5a4bc12f465f2cd4f30b9d865c0acfe1a1feb2cc64046f17ba0afd626638",
+        "identity_sha256": "a1daac88002812e0bbe04478b1e5f4962f04879c281d890864106edb920ad0dd",
+        "metric_contract_hash": "383f346c088ded7fa94fa14148997678c53adc4c5659b1969f66350ac8e235f2",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "kaihe3_LYX_0613",
+        "solver_hash": "9d8b217456b912ea4de5baa30d76a2db04d003f20467c9c2b669688a0f4a269f",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "a29f6f634c5b6cf4989d66278212de364e6ce1ea2099e95c48a8a96b6c5fc4f1": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "f9829061b59047109a73ed1fce0e0759"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "a29f6f634c5b6cf4989d66278212de364e6ce1ea2099e95c48a8a96b6c5fc4f1",
+          "path": "a29f6f634c5b6cf4989d66278212de364e6ce1ea2099e95c48a8a96b6c5fc4f1\\cache_receipt.json",
+          "receipt_sha256": "7877fc1d5a45b81f402e5ef1a884fb2a84883649e62e2a8405898fc64f98fb13",
+          "result_path": "a29f6f634c5b6cf4989d66278212de364e6ce1ea2099e95c48a8a96b6c5fc4f1\\result.json",
+          "result_sha256": "fdc0bbecbfe8497bac7ffafc67b13d14c024a4e65ec0d4ce1573045525bfb7f3"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "a29f6f634c5b6cf4989d66278212de364e6ce1ea2099e95c48a8a96b6c5fc4f1",
+        "config_hash": "2916eace630fb5de7c2dc2ab608bbe171eb6c9b484d5fff9db81835d46931034",
+        "data_sha256": "8044c3d7fb32f520f6ba5940508814f69cef5e3ec0b8f3ca8b9fb750961f897f",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "a29f6f634c5b6cf4989d66278212de364e6ce1ea2099e95c48a8a96b6c5fc4f1",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "xiezi4_LYX_0708",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "a5d3d94ab7ae334f458020c14bcb8c6f0bc4385e76e22b0348249adb1b3e2020": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": "FileNotFoundError:[Errno 2] No such file or directory: 'D:\\\\data\\\\PPG_HeartRate\\\\Algorithm\\\\Algorithm\\\\outline-PPGtoHR\\\\.worktrees\\\\lyx-bo-space-generalization\\\\data\\\\experiments\\\\lyx_recovery_filter_profile\\\\governance_v2\\\\solver_cache\\\\a5d3d94ab7ae334f458020c14bcb8c6f0bc4385e76e22b0348249adb1b3e2020\\\\.18f35b48061f4e7298b344e17882910b.tmp'",
+          "status": "failed",
+          "token": "40c889cd571a438aaf7fbd03e132cb9d"
+        },
+        {
+          "attempt_number": 2,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "5f12487878da4b01b944f029ace679c5"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "a5d3d94ab7ae334f458020c14bcb8c6f0bc4385e76e22b0348249adb1b3e2020",
+          "path": "a5d3d94ab7ae334f458020c14bcb8c6f0bc4385e76e22b0348249adb1b3e2020\\cache_receipt.json",
+          "receipt_sha256": "c6247513fe521d9c71091b87a0940a6d0b9a82c6f0877d102b1f5657dfe625af",
+          "result_path": "a5d3d94ab7ae334f458020c14bcb8c6f0bc4385e76e22b0348249adb1b3e2020\\result.json",
+          "result_sha256": "e3e0dd7e2eba761b6eb136f58ce64cfc89018bcd2192b53814eb394508b842ca"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "a5d3d94ab7ae334f458020c14bcb8c6f0bc4385e76e22b0348249adb1b3e2020",
+        "config_hash": "fbb64eb99a2c38578f59af4bbfe4060426bb0347dd3c7ae0c7820d656c5f65db",
+        "data_sha256": "a7421b4146701f462dd4b033ad80a60e1fdc3f72fae3e97a9c5a7b89360ac1d2",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "a5d3d94ab7ae334f458020c14bcb8c6f0bc4385e76e22b0348249adb1b3e2020",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "jianpan2_LYX_0708",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "a6f541dcd931914e5c6b39eae052a898873736deae63b747eb2351ef39543f82": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "0790badd2e794abcb84352bcc4d5faae"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "a6f541dcd931914e5c6b39eae052a898873736deae63b747eb2351ef39543f82",
+          "path": "replacement-a6f541dcd931914e\\cache_receipt.json",
+          "receipt_sha256": "bf808bba6c93207737ef96043806eb4854b048387d72fd4a8f01434573a4f902",
+          "result_path": "replacement-a6f541dcd931914e\\result.json",
+          "result_sha256": "e2c239e254e488ea9ba265e67bbcd6e74c3d8098e1c9a00cf9f70d4aa4964920"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "a6f541dcd931914e5c6b39eae052a898873736deae63b747eb2351ef39543f82",
+        "config_hash": "622928d677a2bdb7668758bb8e8ff9af1d5847259aef8ce4d648677efdab69ff",
+        "data_sha256": "8044c3d7fb32f520f6ba5940508814f69cef5e3ec0b8f3ca8b9fb750961f897f",
+        "evaluation_hash": "7b7f5a4bc12f465f2cd4f30b9d865c0acfe1a1feb2cc64046f17ba0afd626638",
+        "identity_sha256": "a6f541dcd931914e5c6b39eae052a898873736deae63b747eb2351ef39543f82",
+        "metric_contract_hash": "383f346c088ded7fa94fa14148997678c53adc4c5659b1969f66350ac8e235f2",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "xiezi4_LYX_0708",
+        "solver_hash": "9d8b217456b912ea4de5baa30d76a2db04d003f20467c9c2b669688a0f4a269f",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "b31c3742b47b91584d044988abb7698739f1b28ec545264c983db185e8f68e4f": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "ae5196243e524c34a2c22544a03932cd"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "b31c3742b47b91584d044988abb7698739f1b28ec545264c983db185e8f68e4f",
+          "path": "b31c3742b47b91584d044988abb7698739f1b28ec545264c983db185e8f68e4f\\cache_receipt.json",
+          "receipt_sha256": "eea2d0b0476771257b9312e6c2c4101fd0da276492242814bc123ecad14de7f7",
+          "result_path": "b31c3742b47b91584d044988abb7698739f1b28ec545264c983db185e8f68e4f\\result.json",
+          "result_sha256": "5b07e5b1219ecd51592356a52788b9492173eae614216430edcbe4c1a550f0f6"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "b31c3742b47b91584d044988abb7698739f1b28ec545264c983db185e8f68e4f",
+        "config_hash": "0e2e98f6b72c8a63886ce48f6bf610ad812219c2b36e87f18f7192a795353543",
+        "data_sha256": "971a87c06295b73d4cca7936437de8c832c7d2eed65f286a8742805543f5f87b",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "b31c3742b47b91584d044988abb7698739f1b28ec545264c983db185e8f68e4f",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "run1_LYX_0708",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "b7e991e988da147af4854a4ce5ef4f7d2b923eeb8b37b66638bc201b74c200a1": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "22012aa2af544d70b82dcc26b53a3c3b"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "b7e991e988da147af4854a4ce5ef4f7d2b923eeb8b37b66638bc201b74c200a1",
+          "path": "b7e991e988da147af4854a4ce5ef4f7d2b923eeb8b37b66638bc201b74c200a1\\cache_receipt.json",
+          "receipt_sha256": "6cc703b4ca57e17377ca977cde9e48efb48988adfe6d272d1e30a652f6a7e06b",
+          "result_path": "b7e991e988da147af4854a4ce5ef4f7d2b923eeb8b37b66638bc201b74c200a1\\result.json",
+          "result_sha256": "b6d47a26b288964505edf1adca06476ca10947d721299784a6a099c1ff1a1f86"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "b7e991e988da147af4854a4ce5ef4f7d2b923eeb8b37b66638bc201b74c200a1",
+        "config_hash": "10abd886fc5f5d3be322bac98f04924a42ed8ee17f35b4fd95dbdf01941c9ecf",
+        "data_sha256": "a7421b4146701f462dd4b033ad80a60e1fdc3f72fae3e97a9c5a7b89360ac1d2",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "b7e991e988da147af4854a4ce5ef4f7d2b923eeb8b37b66638bc201b74c200a1",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "jianpan2_LYX_0708",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "bc04c48a4b71df4fb2d371264389b5bed8300387491a67df727ffe4699439144": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "fe9f5e7b91dd4f8bacd71a23a598cbee"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "bc04c48a4b71df4fb2d371264389b5bed8300387491a67df727ffe4699439144",
+          "path": "bc04c48a4b71df4fb2d371264389b5bed8300387491a67df727ffe4699439144\\cache_receipt.json",
+          "receipt_sha256": "0fd0592b34beea84bc95665f9ed7ef8ee1ceb0594e187e0f33a67d7a5deff9e7",
+          "result_path": "bc04c48a4b71df4fb2d371264389b5bed8300387491a67df727ffe4699439144\\result.json",
+          "result_sha256": "ba44af85b6fcbc595459958b1ef615f2ce0ba23327160afb93c91a73c9ec2644"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "bc04c48a4b71df4fb2d371264389b5bed8300387491a67df727ffe4699439144",
+        "config_hash": "fbb64eb99a2c38578f59af4bbfe4060426bb0347dd3c7ae0c7820d656c5f65db",
+        "data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "bc04c48a4b71df4fb2d371264389b5bed8300387491a67df727ffe4699439144",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "kaihe3_LYX_0613",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "bc64a9c5362ac28c248ac51b07d942b9ecfca57889df913a3d64eeb2ccb7a2fe": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "cd7f53a1579648358a9eecae9f72eae5"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "bc64a9c5362ac28c248ac51b07d942b9ecfca57889df913a3d64eeb2ccb7a2fe",
+          "path": "replacement-bc64a9c5362ac28c\\cache_receipt.json",
+          "receipt_sha256": "2f81fea6ad7824829db19ef7eec412615ca9951c517d54c0b33c4ed1aedfd33f",
+          "result_path": "replacement-bc64a9c5362ac28c\\result.json",
+          "result_sha256": "fa30fb360d186aeeb03269f4d5d8fec4f454fa6f00fe4b11fb53b8e71b1cc1d5"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "bc64a9c5362ac28c248ac51b07d942b9ecfca57889df913a3d64eeb2ccb7a2fe",
+        "config_hash": "391f43008c67d83a50697f527fa258a7e610d838ebfdef0e6cf420cb395495c5",
+        "data_sha256": "971a87c06295b73d4cca7936437de8c832c7d2eed65f286a8742805543f5f87b",
+        "evaluation_hash": "7b7f5a4bc12f465f2cd4f30b9d865c0acfe1a1feb2cc64046f17ba0afd626638",
+        "identity_sha256": "bc64a9c5362ac28c248ac51b07d942b9ecfca57889df913a3d64eeb2ccb7a2fe",
+        "metric_contract_hash": "383f346c088ded7fa94fa14148997678c53adc4c5659b1969f66350ac8e235f2",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "run1_LYX_0708",
+        "solver_hash": "9d8b217456b912ea4de5baa30d76a2db04d003f20467c9c2b669688a0f4a269f",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "c1299ac60aa303d9f393c7ef76b7569c4ebb2e41d3c84bda17154d94eaac2a73": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "885a07b42ec64961aa1a58d4b150b37e"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "c1299ac60aa303d9f393c7ef76b7569c4ebb2e41d3c84bda17154d94eaac2a73",
+          "path": "c1299ac60aa303d9f393c7ef76b7569c4ebb2e41d3c84bda17154d94eaac2a73\\cache_receipt.json",
+          "receipt_sha256": "f0a2114f1d48cb0dd2213390592512d54c584c607da1d7a9c99512d4c074d574",
+          "result_path": "c1299ac60aa303d9f393c7ef76b7569c4ebb2e41d3c84bda17154d94eaac2a73\\result.json",
+          "result_sha256": "08d087ef925ce90c5e94c3dd259fd3c1643f39b314606f78b259d51a648f0e5f"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "c1299ac60aa303d9f393c7ef76b7569c4ebb2e41d3c84bda17154d94eaac2a73",
+        "config_hash": "7a7435684aed1146be4bba08faf983a10c753734638cedbda3464eab23d8c26a",
+        "data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "c1299ac60aa303d9f393c7ef76b7569c4ebb2e41d3c84bda17154d94eaac2a73",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "kaihe3_LYX_0613",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "c5e6128473e0df28c61bed8b19bb5f3cc97be6e0ac00f159d4a5f13a0f486f73": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "544881366ced46ba9474573aa8df0cef"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "c5e6128473e0df28c61bed8b19bb5f3cc97be6e0ac00f159d4a5f13a0f486f73",
+          "path": "c5e6128473e0df28c61bed8b19bb5f3cc97be6e0ac00f159d4a5f13a0f486f73\\cache_receipt.json",
+          "receipt_sha256": "cced261e7bc9042779b418e1f39b79de68564ac3c928045cf00777acc5da4a6f",
+          "result_path": "c5e6128473e0df28c61bed8b19bb5f3cc97be6e0ac00f159d4a5f13a0f486f73\\result.json",
+          "result_sha256": "09f329a02a3fe48da0064fdd6147e1aacfff3b56209542fedec4dbd8b233614e"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "c5e6128473e0df28c61bed8b19bb5f3cc97be6e0ac00f159d4a5f13a0f486f73",
+        "config_hash": "10abd886fc5f5d3be322bac98f04924a42ed8ee17f35b4fd95dbdf01941c9ecf",
+        "data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "c5e6128473e0df28c61bed8b19bb5f3cc97be6e0ac00f159d4a5f13a0f486f73",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "kaihe3_LYX_0613",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "ca2b67f71b8b2550bdd67ffa023e6592244e77a3da883871693222bb269c1a3c": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "820ff351a39f4129bc198c96f551a1ee"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "ca2b67f71b8b2550bdd67ffa023e6592244e77a3da883871693222bb269c1a3c",
+          "path": "ca2b67f71b8b2550bdd67ffa023e6592244e77a3da883871693222bb269c1a3c\\cache_receipt.json",
+          "receipt_sha256": "2d1c319c830519c88b228fc86d9f1fac9f35dd0577057799d1d190046c3c0b76",
+          "result_path": "ca2b67f71b8b2550bdd67ffa023e6592244e77a3da883871693222bb269c1a3c\\result.json",
+          "result_sha256": "b95fb0aff4a3eeff1fe99a363880031ed0b07396d6a85e8a20fe5da01ad31fca"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "ca2b67f71b8b2550bdd67ffa023e6592244e77a3da883871693222bb269c1a3c",
+        "config_hash": "10abd886fc5f5d3be322bac98f04924a42ed8ee17f35b4fd95dbdf01941c9ecf",
+        "data_sha256": "8044c3d7fb32f520f6ba5940508814f69cef5e3ec0b8f3ca8b9fb750961f897f",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "ca2b67f71b8b2550bdd67ffa023e6592244e77a3da883871693222bb269c1a3c",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "xiezi4_LYX_0708",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "d4214ac568935c18e0fd5b8e42ed98487bb316566f0bab8e78869cb4af6a1848": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "4db20f8c61f44ee79271f41db694c5e9"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "d4214ac568935c18e0fd5b8e42ed98487bb316566f0bab8e78869cb4af6a1848",
+          "path": "d4214ac568935c18e0fd5b8e42ed98487bb316566f0bab8e78869cb4af6a1848\\cache_receipt.json",
+          "receipt_sha256": "0d45e8c7251dd769cc5c1f28bde2280f274db6465017307007f67a097f95121b",
+          "result_path": "d4214ac568935c18e0fd5b8e42ed98487bb316566f0bab8e78869cb4af6a1848\\result.json",
+          "result_sha256": "255bb52e3ede6c49d9ea38a5d4252f23687b3da58c65da83589c145cbfe7f627"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "d4214ac568935c18e0fd5b8e42ed98487bb316566f0bab8e78869cb4af6a1848",
+        "config_hash": "d55523d52d1e8cd3d03d25a07b7bcbb15d13a6260844911b582cb1f5e3f1d71a",
+        "data_sha256": "8044c3d7fb32f520f6ba5940508814f69cef5e3ec0b8f3ca8b9fb750961f897f",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "d4214ac568935c18e0fd5b8e42ed98487bb316566f0bab8e78869cb4af6a1848",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "xiezi4_LYX_0708",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "d6d94b649b1d1b75f024f023b25eccf6c118eba1bd0cbb65e7317ecc2dffb18a": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "00d5a8ca4d724530ac8ea43d4635faff"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "d6d94b649b1d1b75f024f023b25eccf6c118eba1bd0cbb65e7317ecc2dffb18a",
+          "path": "d6d94b649b1d1b75f024f023b25eccf6c118eba1bd0cbb65e7317ecc2dffb18a\\cache_receipt.json",
+          "receipt_sha256": "5cd1cb46bef7967823a9b52fd4be26be5e622d93d705cb224503e4b5f23a67b8",
+          "result_path": "d6d94b649b1d1b75f024f023b25eccf6c118eba1bd0cbb65e7317ecc2dffb18a\\result.json",
+          "result_sha256": "8da7acf8cc82ff584838f52ed3aa41a64a8576957fc2a3f5f2a1645101675a10"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "d6d94b649b1d1b75f024f023b25eccf6c118eba1bd0cbb65e7317ecc2dffb18a",
+        "config_hash": "fbb64eb99a2c38578f59af4bbfe4060426bb0347dd3c7ae0c7820d656c5f65db",
+        "data_sha256": "971a87c06295b73d4cca7936437de8c832c7d2eed65f286a8742805543f5f87b",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "d6d94b649b1d1b75f024f023b25eccf6c118eba1bd0cbb65e7317ecc2dffb18a",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "run1_LYX_0708",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "e2f445e27a00ff75d47a8bf4ffa25f702170f9efc1db8aa6fa5cb705e72a8485": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "605fa51d8d5d4c7ab93a0bc88117afe4"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "e2f445e27a00ff75d47a8bf4ffa25f702170f9efc1db8aa6fa5cb705e72a8485",
+          "path": "e2f445e27a00ff75d47a8bf4ffa25f702170f9efc1db8aa6fa5cb705e72a8485\\cache_receipt.json",
+          "receipt_sha256": "f0872fc91bd7c8746e1956bf7cb0509c8ecc95ee28cdb382fe2f321bb8e866dd",
+          "result_path": "e2f445e27a00ff75d47a8bf4ffa25f702170f9efc1db8aa6fa5cb705e72a8485\\result.json",
+          "result_sha256": "0aba944568e11523393b46d5e20c739d85f0bddcae1ae59ca75ea87bfe26d222"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "e2f445e27a00ff75d47a8bf4ffa25f702170f9efc1db8aa6fa5cb705e72a8485",
+        "config_hash": "784882a22864e838dbac14ae97dc6f049820bf1c698b0a42504b63148de49e7e",
+        "data_sha256": "a7421b4146701f462dd4b033ad80a60e1fdc3f72fae3e97a9c5a7b89360ac1d2",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "e2f445e27a00ff75d47a8bf4ffa25f702170f9efc1db8aa6fa5cb705e72a8485",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "jianpan2_LYX_0708",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "e7372dbfd242af3218e099de0e89ef13f932a97d28c9a8fdb51e2d8e94944743": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "d6a9decaa35c45db93cb74737e67a67b"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "e7372dbfd242af3218e099de0e89ef13f932a97d28c9a8fdb51e2d8e94944743",
+          "path": "e7372dbfd242af3218e099de0e89ef13f932a97d28c9a8fdb51e2d8e94944743\\cache_receipt.json",
+          "receipt_sha256": "5c12a6037f3bb4c34731711d4940e78f9ffacc1b7b506d4caa9d34c6984b4bcb",
+          "result_path": "e7372dbfd242af3218e099de0e89ef13f932a97d28c9a8fdb51e2d8e94944743\\result.json",
+          "result_sha256": "cc34916fd50b4908036caa7419df31ff6d488c2f98cba61e9d6209b4252f5ea0"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "e7372dbfd242af3218e099de0e89ef13f932a97d28c9a8fdb51e2d8e94944743",
+        "config_hash": "10abd886fc5f5d3be322bac98f04924a42ed8ee17f35b4fd95dbdf01941c9ecf",
+        "data_sha256": "971a87c06295b73d4cca7936437de8c832c7d2eed65f286a8742805543f5f87b",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "e7372dbfd242af3218e099de0e89ef13f932a97d28c9a8fdb51e2d8e94944743",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "run1_LYX_0708",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "e95f202436fc84f6efe500fecca8f1a034121a8340b8234901ee5010d875d19e": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "cb41acd375814a62a988c882e0be9e5c"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "e95f202436fc84f6efe500fecca8f1a034121a8340b8234901ee5010d875d19e",
+          "path": "replacement-e95f202436fc84f6\\cache_receipt.json",
+          "receipt_sha256": "e9f7871c8b06816acfaec837041b510632cb6bb8c838ee8b1e00e99e330e814f",
+          "result_path": "replacement-e95f202436fc84f6\\result.json",
+          "result_sha256": "ea0e0d5ce3033470aa1359e852a234c50854665675d84fb4e84c80092bddf8b0"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "e95f202436fc84f6efe500fecca8f1a034121a8340b8234901ee5010d875d19e",
+        "config_hash": "391f43008c67d83a50697f527fa258a7e610d838ebfdef0e6cf420cb395495c5",
+        "data_sha256": "a7421b4146701f462dd4b033ad80a60e1fdc3f72fae3e97a9c5a7b89360ac1d2",
+        "evaluation_hash": "7b7f5a4bc12f465f2cd4f30b9d865c0acfe1a1feb2cc64046f17ba0afd626638",
+        "identity_sha256": "e95f202436fc84f6efe500fecca8f1a034121a8340b8234901ee5010d875d19e",
+        "metric_contract_hash": "383f346c088ded7fa94fa14148997678c53adc4c5659b1969f66350ac8e235f2",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "jianpan2_LYX_0708",
+        "solver_hash": "9d8b217456b912ea4de5baa30d76a2db04d003f20467c9c2b669688a0f4a269f",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "f41e7f3a1ecb6c2bb4f188c7a7bd5d7d09264ce18ece16c9abb73db99c2a57ec": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "0433c8cdce3f4c228249e9884a963e03"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "f41e7f3a1ecb6c2bb4f188c7a7bd5d7d09264ce18ece16c9abb73db99c2a57ec",
+          "path": "f41e7f3a1ecb6c2bb4f188c7a7bd5d7d09264ce18ece16c9abb73db99c2a57ec\\cache_receipt.json",
+          "receipt_sha256": "03271916d2ff21f26b33ba70f1993fe0487c2e56e8315b84e33645d65287bc83",
+          "result_path": "f41e7f3a1ecb6c2bb4f188c7a7bd5d7d09264ce18ece16c9abb73db99c2a57ec\\result.json",
+          "result_sha256": "516b1b20f1ff0f13edc8541a1321351bc6fd9afb1c6959ba7ceba9d96b90a582"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "f41e7f3a1ecb6c2bb4f188c7a7bd5d7d09264ce18ece16c9abb73db99c2a57ec",
+        "config_hash": "d55523d52d1e8cd3d03d25a07b7bcbb15d13a6260844911b582cb1f5e3f1d71a",
+        "data_sha256": "a7421b4146701f462dd4b033ad80a60e1fdc3f72fae3e97a9c5a7b89360ac1d2",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "f41e7f3a1ecb6c2bb4f188c7a7bd5d7d09264ce18ece16c9abb73db99c2a57ec",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "jianpan2_LYX_0708",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "f7e878c0dd29aee8208813643476db67913387439b64b3c63078318afddff425": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "b6cfdcca12e142cca2e0869bbdeb7865"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "f7e878c0dd29aee8208813643476db67913387439b64b3c63078318afddff425",
+          "path": "f7e878c0dd29aee8208813643476db67913387439b64b3c63078318afddff425\\cache_receipt.json",
+          "receipt_sha256": "0bb4cb632156222b53002de5efe8e68a87483b7eb31c67a52e8d01f7337cd451",
+          "result_path": "f7e878c0dd29aee8208813643476db67913387439b64b3c63078318afddff425\\result.json",
+          "result_sha256": "01f98481b56e4efbad023fcb78f7c8ab3fb2afa3620164a92883f88dd0e16c28"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "f7e878c0dd29aee8208813643476db67913387439b64b3c63078318afddff425",
+        "config_hash": "d55523d52d1e8cd3d03d25a07b7bcbb15d13a6260844911b582cb1f5e3f1d71a",
+        "data_sha256": "971a87c06295b73d4cca7936437de8c832c7d2eed65f286a8742805543f5f87b",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "f7e878c0dd29aee8208813643476db67913387439b64b3c63078318afddff425",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "run1_LYX_0708",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "fca977b6a36d41f623a21c8ee24769b43766d800516f5fe257d3225e0752aada": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "15f63608f4c4494db52ae155d2d63115"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "fca977b6a36d41f623a21c8ee24769b43766d800516f5fe257d3225e0752aada",
+          "path": "fca977b6a36d41f623a21c8ee24769b43766d800516f5fe257d3225e0752aada\\cache_receipt.json",
+          "receipt_sha256": "6bc56f576d03258c0bbaf8c52a6919ba0f8770ceffea88fd472d27eb313a5231",
+          "result_path": "fca977b6a36d41f623a21c8ee24769b43766d800516f5fe257d3225e0752aada\\result.json",
+          "result_sha256": "49f0298a747e9b1883b8d3f953324fa660a58d6ef0b5982fe9408ac525213365"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "fca977b6a36d41f623a21c8ee24769b43766d800516f5fe257d3225e0752aada",
+        "config_hash": "0e2e98f6b72c8a63886ce48f6bf610ad812219c2b36e87f18f7192a795353543",
+        "data_sha256": "8044c3d7fb32f520f6ba5940508814f69cef5e3ec0b8f3ca8b9fb750961f897f",
+        "evaluation_hash": "62d50808f0c0910d9c9e67691f2fda72d145170720c2472d2c25d6cca36e5ab3",
+        "identity_sha256": "fca977b6a36d41f623a21c8ee24769b43766d800516f5fe257d3225e0752aada",
+        "metric_contract_hash": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "xiezi4_LYX_0708",
+        "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    },
+    "fd406b75255d20f152b6fccd14bbb83a0c2d7da116d923e96a2c5a481a6ae54e": {
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "failure_reason": null,
+          "status": "succeeded",
+          "token": "09ac7f500e4144b4a6c60f7ceef355e3"
+        }
+      ],
+      "cache_evidence": [
+        {
+          "identity_sha256": "fd406b75255d20f152b6fccd14bbb83a0c2d7da116d923e96a2c5a481a6ae54e",
+          "path": "replacement-fd406b75255d20f1\\cache_receipt.json",
+          "receipt_sha256": "bda3470b6a3e320f4b799d78818212197e20b721b060dc4f9df7facc65206ae4",
+          "result_path": "replacement-fd406b75255d20f1\\result.json",
+          "result_sha256": "123b9e4a4578d4373c901f02ccd7eb057a54e210437b33eadbdc2b7856421ab2"
+        }
+      ],
+      "identity": {
+        "attempt_kind": "diagnostic",
+        "cache_identity_sha256": "fd406b75255d20f152b6fccd14bbb83a0c2d7da116d923e96a2c5a481a6ae54e",
+        "config_hash": "391f43008c67d83a50697f527fa258a7e610d838ebfdef0e6cf420cb395495c5",
+        "data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+        "evaluation_hash": "7b7f5a4bc12f465f2cd4f30b9d865c0acfe1a1feb2cc64046f17ba0afd626638",
+        "identity_sha256": "fd406b75255d20f152b6fccd14bbb83a0c2d7da116d923e96a2c5a481a6ae54e",
+        "metric_contract_hash": "383f346c088ded7fa94fa14148997678c53adc4c5659b1969f66350ac8e235f2",
+        "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+        "record_id": "kaihe3_LYX_0613",
+        "solver_hash": "9d8b217456b912ea4de5baa30d76a2db04d003f20467c9c2b669688a0f4a269f",
+        "stage": "filter_profile_stability_audit"
+      },
+      "status": "succeeded"
+    }
+  },
+  "exploration_registry_sha256": "7d39692736fe8b98a23b5c6baaa7a07e4cd9b8733539e601d5f9b8f1818863d1",
+  "registry_version": "lyx_recovery_attempt_registry_v2",
+  "summary": {
+    "actual_unique_run_count": 40,
+    "cache_hit_count": 40,
+    "failed_attempt_count": 1,
+    "logical_task_count": 81,
+    "planned_unique_identity_count": 40,
+    "retry_count": 1
+  },
+  "trusted_cache_root_relative": "solver_cache"
+}

@@ -18,7 +18,7 @@ v2 是 PPG 心率求解算法的一次架构升级。相比 v1 的多路径独�
 - **参数泛化评估**：按运动类型组织多个样本，支持 `all_train` 与 `leave_one_group_out`，用于评估同一组参数在同场景不同实验数据上的稳定性。
 - **源速率 IMU 运动分割**：运动段由原始 100 Hz ACC + Gyro 联合判别，不依赖 `fs_target`、LMS/KLMS 类型或贝叶斯优化出的心率参数；最长连续运动段用于自适应调度、窗口分类和绘图阴影。
 - **运动段谱峰保护**：运动窗口使用方向性追踪、连续性保护软惩罚、低锁上跳重捕获和高频锁定逃逸，减少运动伪峰或错误历史轨迹对最终 HR 的长期吸附。
-- **运动后动态回切**：运动结束后 adaptive 链路和 reset FFT 链路并行运行；Final 通过稳定交汇或持续高差救援切回 reset FFT，而不是按固定秒数硬切。
+- **运动后因果交接恢复（PM-CHR）**：运动结束后同时维护独立 reset 对照和交接 reset 目标；一次性 PPG 启动门与目标可消费证据成立后，由单写入器完成不可逆交接。
 - **窗口级诊断追踪**：每个窗口记录 `window_kind` 与结构化 `spectrum_tracking`，GUI 可按静息段、运动段、运动恢复段显示真实算法路径和谱峰追踪过程。
 - **连续性保护软频谱惩罚**：运动窗口对运动主频及二倍频使用渐变惩罚，并在上一窗口预测 HR 附近保留窄保护走廊，避免真实心率峰与运动谐波重叠时被误杀；该机制不依赖参考 HR，可用于在线化研究。
 
@@ -31,7 +31,7 @@ v2 是 PPG 心率求解算法的一次架构升级。相比 v1 的多路径独�
 | CF 信号 | 不支持 | 支持（电容/电阻比值） |
 | 自适应策略 | LMS + NLMS | LMS / NC-LMS / KLMS / RFF-LMS / Volterra |
 | 运动段处理 | 全窗独立判定 | 源速率 ACC+Gyro 最长连续运动段 + 谱峰保护 |
-| 运动后阶段 | 无 | adaptive 与 reset FFT 并行，动态保护窗回切 |
+| 运动后阶段 | 无 | PM-CHR 因果证据驱动、单写入、不可逆交接 |
 | 参数调优 | 手动 | 按算法预设收缩的贝叶斯优化或无 BO 候选选择 |
 
 ---
@@ -66,7 +66,11 @@ python/src/ppg_hr/
     ├── batch_pipeline.py          # 批量一体化流水线
     ├── report.py                  # JSON 报告读写
     ├── plotting.py                # 出版级心率曲线绘图
-    ├── post_motion_dynamic_guard_policy.py # 动态保护窗与 gap rescue
+    ├── raw_fft_candidates.py       # raw PPG top-k 频谱候选
+    ├── post_motion_dual_reset.py   # 独立/交接 reset tracker 与证据
+    ├── post_motion_dual_reset_runtime.py # PM-CHR 运行时编排
+    ├── post_motion_minimal_handoff.py # PM-CHR 单写入切换器
+    ├── post_motion_dynamic_guard_policy.py # legacy 回切兼容审计
     ├── post_motion_reset_fft_reacquire.py  # reset FFT 重捕获实验工具
     ├── motion_low_lock_upward_reacquire.py # 低锁上跳重捕获评估
     ├── window_diagnostics.py      # 单窗口波形/频谱/谱峰追踪诊断
@@ -259,35 +263,37 @@ ppg_window (8s 片段)
 | `rff_lms` | 随机傅里叶特征 LMS | 用随机傅里叶特征近似核映射, 降低计算量 |
 | `volterra` | 二阶 Volterra LMS | 包含输入信号的二阶交互项, 捕获非线性关系 |
 
-#### 3.2.3 恢复检测机制
+#### 3.2.3 PM-CHR 因果交接
 
-```
-运动段结束后:
-    │
-    ├── 从 motion_end + post_motion_adaptive_seconds 处开始检查
-    │
-    ├── 条件: |adaptive_hr - fft_hr| > recovery_trigger_bpm
-    │
-    ├── 触发后:
-    │   ├── 搜索范围: motion_end → motion_end + max_recovery_seconds
-    │   ├── 寻找 fft_hr >= adaptive_hr 的首个交叉点 (自适应高于FFT且回落)
-    │   │   或 fft_hr <= adaptive_hr 的首个交叉点 (自适应低于FFT且回升)
-    │   ├── 找到 → adaptive 掩码在交叉点截断
-    │   └── 未找到 → adaptive 掩码保持到 motion_end + buffer, 之后切回 FFT
-    │
-    └── 未触发 → adaptive 掩码到 motion_end + post_motion_adaptive_seconds
+```text
+运动结束后:
+    adaptive 继续承接 Final
+    ├── 独立 reset：raw PPG-only，对照曲线，不参与 Final
+    └── 交接 reset：raw PPG + 切换前 Final 因果弱先验
+            │
+            ├── PPG 启动门：完整运动后窗 + 周期性/峰竞争/连续性
+            ├── 候选稳定：4 窗中至少 3 个稳定命中
+            ├── tracker 收敛：目标差 ≤ 6 BPM，连续 2 窗
+            └── 三者成立 → 交接目标可消费
 ```
 
-#### 3.2.4 融合策略
+交接 tracker 允许在持续 raw 候选已可信、但旧低锁状态相差超过 25 BPM 时受控重锚；重锚不直接写 Final。正式 ready 前可用有限因果暂接承接 tracker 实际输出，但不允许差值外推。
 
-```
-final_hr = np.where(adaptive_mask, adaptive_hr, fft_hr)
+#### 3.2.4 单写入融合策略
 
-其中 adaptive_mask 的逻辑:
-  - window_idx < adaptive_start_idx        → False (运动前, 用 FFT)
-  - adaptive_start ≤ idx < adaptive_end    → True  (运动/延伸段, 用 adaptive)
-  - idx ≥ adaptive_end                     → False (恢复后, 用 FFT)
+```text
+正式交接前：Final = adaptive 或已获准的因果暂接
+
+目标可消费后：
+  |target - Final| >= 18 BPM  → 当窗高差快速交接
+  |target - Final| < 18 BPM   → 连续 2 窗确认后交接
+
+正式交接后：
+  target 与上一 Final 相差 < 18 BPM → 接受更新
+  否则                            → 同一 adapter 保持上一值
 ```
+
+正式交接在本次运动后阶段内不可逆。legacy dynamic guard 的切换建议只进入审计字段，不再改写 Final；纯 FFT、无自适应参考或 `analysis_scope="motion"` 时不启动 PM-CHR。详细参数和已知风险见 [运动后因果交接恢复](v2-post-motion-resting-hr-policy.md)。
 
 ### 3.3 窗口分类与诊断记录
 
@@ -404,14 +410,21 @@ final_hr = np.where(adaptive_mask, adaptive_hr, fft_hr)
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | `motion_th_scale` | 2.5 | 运动阈值缩放系数 |
-| `post_motion_adaptive_seconds` | 8.0 | 运动结束后自适应延伸时长 |
-| `pre_motion_context_seconds` | 2.0 | 运动开始前自适应提前量 |
+| `post_motion_adaptive_seconds` | 10.0 | legacy 回切兼容参数；PM-CHR 不按固定时长交接 |
+| `pre_motion_context_seconds` | 30.0 | 运动开始前自适应上下文 |
 
-**恢复检测**:
+**PM-CHR 运动后交接**:
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `recovery_trigger_bpm` | 15.0 | 触发恢复检测的 BPM 偏差阈值 |
-| `max_recovery_seconds` | 30.0 | 最大恢复搜索时长 |
+| `post_motion_dual_reset_enable` | True | 启用独立/交接 reset 运行时 |
+| `post_motion_minimal_handoff_enable` | True | 启用单写入切换器 |
+| `post_motion_minimal_provisional_enable` | True | 启用有限因果暂接 |
+| `post_motion_minimal_relocation_mode` | `controlled_reanchor` | 使用交接 tracker 受控重锚 |
+| `post_motion_dual_reset_gap_rescue_gap_bpm` | 18.0 | 高差快速交接边界；低于该值需两窗确认 |
+| `post_motion_dual_reset_observability_periodicity_min` | 0.5 | PPG 启动门周期性下限 |
+| `post_motion_dual_reset_observability_peak_competition_min` | 1.3 | PPG 启动门峰竞争度下限 |
+| `post_motion_dual_reset_observability_recovery_hits` | 2 | PPG 启动门连续命中窗数 |
+| `post_motion_dual_reset_prior_invalidation_enable` | False | 禁止仅凭 raw 冲突自动失效旧先验 |
 
 **频谱追踪**:
 | 参数 | 静息段默认 | 运动段默认 | 说明 |
@@ -769,7 +782,7 @@ v2 同时包含独立的 SpO2 解算模块, 基于红/红外双波长 PPG:
 - [x] 同运动类型参数泛化评估（all-train / leave-one-group-out）
 - [x] 运动段自适应调度、方向性谱峰追踪和连续性保护软惩罚
 - [x] 运动段低锁上跳重捕获与高频锁定逃逸
-- [x] 运动后动态保护窗、reset FFT 重捕获和持续高差回切
+- [x] 运动后因果交接恢复（PM-CHR）：双 reset 分工、一次性启动门、受控重锚、有限暂接与单写入不可逆交接
 - [x] 批量一体化流水线
 - [x] 窗口级 trace 诊断和 600 dpi 论文级 PNG 可视化
 

@@ -1,0 +1,27 @@
+{
+  "artifacts": {
+    "attempt_registry.json": "9db31a3c7cf6e84fd7bad91658a0dd139f53c6ee2da9acf643ffc80101efec88",
+    "budget_amendment_authorization.json": "bf5594ca729ce8d7b92888735f3194d4698844cb6e667af4305a5d54eeeb939e",
+    "budget_contract.json": "bd2faaede40251a1097b75fe4ad2b198d23830c3e02a0f2da9b21b6180df54e3",
+    "exploration_registry.json": "bfd0292bae4c0bd5f1cc6eb69b83d3340932d668aba68a75a4e9e68d1001c6d9"
+  },
+  "attempt_registry_summary": {
+    "actual_unique_run_count": 32,
+    "cache_hit_count": 32,
+    "failed_attempt_count": 1,
+    "logical_task_count": 65,
+    "planned_unique_identity_count": 32,
+    "retry_count": 1
+  },
+  "budget_authorization_sha256": "bf5594ca729ce8d7b92888735f3194d4698844cb6e667af4305a5d54eeeb939e",
+  "exploration_unique_budget": 0,
+  "filter_profile_audit_completion_sha256": "aa7c938689bbf5788db7481a15f39bde4738142905aba909bd38828f02041746",
+  "filter_profile_stability_audit_unique_identities": 32,
+  "independent_bo_authorized": false,
+  "normal_unique_identity_limit": 704,
+  "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+  "planned_unique_identity_limit": 716,
+  "receipt_version": "lyx_recovery_governance_receipt_v2",
+  "status": "complete",
+  "worst_case_attempt_limit": 1432
+}

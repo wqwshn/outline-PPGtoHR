@@ -1,0 +1,77 @@
+{
+  "actual_exploration_run_count": 0,
+  "candidate_scope": "one_dimensional_rate_normalization_without_blind_search",
+  "derivations": [
+    {
+      "formula": "target_mu = source_mu * source_fs_target / fs_target",
+      "physical_memory_ms_preserved": true,
+      "source_archive_occurrence_count": 24,
+      "source_archive_scenes": [
+        "jianpan",
+        "kaihe",
+        "run",
+        "xiezi"
+      ],
+      "source_coordinate": {
+        "fs_target": 50,
+        "memory_ms": 40,
+        "nominal_mu": 0.006
+      },
+      "source_minimum_record_true_peak_retention": 0.9001730584692198,
+      "source_nominal_mu_updates_per_second": 0.3,
+      "source_profile_id": "p50-short-low-40",
+      "source_profile_receipt_sha256": "a80f10d5c1037b47819018a7fff5864ea9851cf010184eb2a34efe68bfb67033",
+      "target_exact_archive_occurrence_count": 0,
+      "target_nominal_mu_updates_per_second": 0.3,
+      "target_profile": {
+        "design_role": "coverage_boundary",
+        "fs_target": 100,
+        "memory_ms": 40,
+        "nominal_mu": 0.003,
+        "profile_id": "p100-short-rate-normalized-low-40",
+        "recovery_sentinel_role": null
+      }
+    },
+    {
+      "formula": "target_mu = source_mu * source_fs_target / fs_target",
+      "physical_memory_ms_preserved": true,
+      "source_archive_occurrence_count": 31,
+      "source_archive_scenes": [
+        "jianpan",
+        "kaihe",
+        "run",
+        "xiezi"
+      ],
+      "source_coordinate": {
+        "fs_target": 50,
+        "memory_ms": 40,
+        "nominal_mu": 0.008
+      },
+      "source_minimum_record_true_peak_retention": 0.8661789023132638,
+      "source_nominal_mu_updates_per_second": 0.4,
+      "source_profile_id": "p50-short-midlow-40",
+      "source_profile_receipt_sha256": "cc94a059bf572a403c0fc102a3a9535b14f580f738351120d0c1e2b82809d210",
+      "target_exact_archive_occurrence_count": 0,
+      "target_nominal_mu_updates_per_second": 0.4,
+      "target_profile": {
+        "design_role": "coverage_boundary",
+        "fs_target": 100,
+        "memory_ms": 40,
+        "nominal_mu": 0.004,
+        "profile_id": "p100-short-rate-normalized-midlow-40",
+        "recovery_sentinel_role": null
+      }
+    }
+  ],
+  "diagnosis": "equal_nominal_mu_updates_twice_per_physical_second_at_100hz_versus_50hz",
+  "evidence_sha256": "4640422f2ebe68ee728f82c2b3f5d811c269442ec35adc7e01769db6f9127199",
+  "evidence_version": "lyx_filter_rate_normalization_evidence_v1",
+  "independent_bo_authorized": false,
+  "planned_exploration_run_count": 8,
+  "produces_hr_tracking_trajectory": false,
+  "source_archive_evidence_sha256": "9e24c110adeebd9354c1c147bcb52aa0d96efade5408e6d0c4625e852949c369",
+  "source_archive_manifest_sha256": "0b695ccb31d0a945d5e1d2281bfc0c70deaa7db7bbda751c857df152ec43ed5c",
+  "source_completion_sha256": "9ccd10f5c6a0cbc590c7907f755624e01c997e8762f567f8c6848941f38a34f3",
+  "status": "proposed_not_authorized",
+  "trigger": "all_four_100hz_candidates_failed_only_the_frozen_true_peak_retention_gate"
+}

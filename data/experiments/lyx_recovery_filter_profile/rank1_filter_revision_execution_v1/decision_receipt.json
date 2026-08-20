@@ -1,0 +1,18 @@
+{
+  "automatic_stage_f_execution": false,
+  "automatic_stage_r_execution": false,
+  "complete_gate_pass_count": 12,
+  "decision": "rank1_filter_revision_validated",
+  "decision_sha256": "69b7cdc1f726ad31ec613a904c77e445da860ccd85d8517c55d9b31b230de36e",
+  "decision_version": "lyx_rank1_filter_revision_decision_v1",
+  "exact_rank1_reproduction_count": 12,
+  "independent_bo_authorized": false,
+  "may_nominate_recovery_candidate": false,
+  "next_state": "awaiting_stage_r_replan_human_review",
+  "parameter_search_authorized": false,
+  "proposal_sha256": "4b06a3f1aceee3a6459778c6878a1c1ae461077ae6a48a17f95eeed3852ba9c0",
+  "rank1_recovered_from_cascade_failure_count": 2,
+  "record_count": 12,
+  "single_reference_stage_count": 12,
+  "source_ranked_cascade_pass_count": 10
+}

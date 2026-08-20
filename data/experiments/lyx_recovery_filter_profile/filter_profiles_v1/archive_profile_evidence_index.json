@@ -1,0 +1,2175 @@
+{
+  "archive_git_commit": "7c76fcd644eb66f8443a5eded622d81ac53a54c0",
+  "archive_root": "data\\experiments\\lyx_bo_space_generalization\\formal_phase2_20260725T110252",
+  "baseline_manifest_sha256": "0b695ccb31d0a945d5e1d2281bfc0c70deaa7db7bbda751c857df152ec43ed5c",
+  "evidence_index_sha256": "9518624eb80727975690970636613d1dc69e55882bdfdd9bcb8849bba223d673",
+  "evidence_version": "lyx_filter_profile_archive_evidence_v1",
+  "profiles": [
+    {
+      "coordinate": {
+        "fs_target": 25,
+        "memory_ms": 40,
+        "nominal_mu": 0.008
+      },
+      "entries": [
+        {
+          "cache_key": "bc0a1a25dd336f838122f6dc363d90209bcc0a531b6ae903143b107bacaaffa5",
+          "candidate_id": "physical_v1:127018e71d2e76f83aedd8a04fd634045754262fe2d9300eb5cd653a7582310c",
+          "candidate_identity_sha256": "bc0a1a25dd336f838122f6dc363d90209bcc0a531b6ae903143b107bacaaffa5",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p25-short-low",
+          "record_id": "jianpan1_LYX_0708",
+          "reservation_sha256": "a5fb6101d68126f1be944a211383f5024e9149ed6afd1eb98446ef65c541f0bd",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "a930f17586c8329f6c3400162f380b14866a70bf449738a8500a4a3aeff88ea6",
+          "candidate_id": "physical_v1:8bb36990cb42691c4e26799f63408338101e11bdf5ad71a3061f245c5e5281f1",
+          "candidate_identity_sha256": "a930f17586c8329f6c3400162f380b14866a70bf449738a8500a4a3aeff88ea6",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-short-low",
+          "record_id": "jianpan1_LYX_0708",
+          "reservation_sha256": "c4d4ad07698a10dc9bf7a34588f23d770cb9167dfcc9969287bbbdde92aa3a00",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "90a815d8d131b1cf1b8fec7486222987d18c52ee68cfdc4ae77b715e7f6067b8",
+          "candidate_id": "physical_v1:127018e71d2e76f83aedd8a04fd634045754262fe2d9300eb5cd653a7582310c",
+          "candidate_identity_sha256": "90a815d8d131b1cf1b8fec7486222987d18c52ee68cfdc4ae77b715e7f6067b8",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p25-short-low",
+          "record_id": "jianpan2_LYX_0708",
+          "reservation_sha256": "39766be06d1d9a370a1c1a91cae94644cb678854fa9df21b23bcab01bd505d6b",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "48689c34a4307de72b05997c5a347c804920615589e68b78673eb608e9fbf0e9",
+          "candidate_id": "physical_v1:127018e71d2e76f83aedd8a04fd634045754262fe2d9300eb5cd653a7582310c",
+          "candidate_identity_sha256": "48689c34a4307de72b05997c5a347c804920615589e68b78673eb608e9fbf0e9",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p25-short-low",
+          "record_id": "jianpan3_LYX_0708",
+          "reservation_sha256": "8f09f3c745c67213f067e2443f93a8d073909b159bfee0639a56d090fc37823a",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "f1fa45e5497b887c8f31800e324dce18bb0a0e56178fef2c8caf6188b90d2825",
+          "candidate_id": "physical_v1:127018e71d2e76f83aedd8a04fd634045754262fe2d9300eb5cd653a7582310c",
+          "candidate_identity_sha256": "f1fa45e5497b887c8f31800e324dce18bb0a0e56178fef2c8caf6188b90d2825",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p25-short-low",
+          "record_id": "kaihe1_LYX_0613",
+          "reservation_sha256": "9b7d673ec3da23a80ca1d2b268570423aebba6d942a92efbf715ec915eccfe5b",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "bec32861a95875bdbe2d867b5dced1f54684add7ddea761d06afaee67aae4192",
+          "candidate_id": "physical_v1:8bb36990cb42691c4e26799f63408338101e11bdf5ad71a3061f245c5e5281f1",
+          "candidate_identity_sha256": "bec32861a95875bdbe2d867b5dced1f54684add7ddea761d06afaee67aae4192",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-short-low",
+          "record_id": "kaihe1_LYX_0613",
+          "reservation_sha256": "9afb502a615f20bbb2f7f99c284033355c138fdca5b2b3ec7463c8cb5aee64fb",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "3c16dea52c20b460625f7369692102235aa9b7ff97a5c5331e5f1b1fd3032133",
+          "candidate_id": "physical_v1:127018e71d2e76f83aedd8a04fd634045754262fe2d9300eb5cd653a7582310c",
+          "candidate_identity_sha256": "3c16dea52c20b460625f7369692102235aa9b7ff97a5c5331e5f1b1fd3032133",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p25-short-low",
+          "record_id": "kaihe1_LYX_0617",
+          "reservation_sha256": "1fa250e595eaeada1ddbb14fc25b61db7673fc6dc7b840068f19eec5bd7a1bef",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "a459b919bd6addb776d989cbb796bd5060761d0c86848107f69198b9ffec2e77",
+          "candidate_id": "physical_v1:8bb36990cb42691c4e26799f63408338101e11bdf5ad71a3061f245c5e5281f1",
+          "candidate_identity_sha256": "a459b919bd6addb776d989cbb796bd5060761d0c86848107f69198b9ffec2e77",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-short-low",
+          "record_id": "kaihe1_LYX_0617",
+          "reservation_sha256": "10aabddbf9f5e2695ab7016680a609225eda30e9304765ea3a4edef18a45c826",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "b0a265d17c2e589d29a076918b7c7665ee97b2e0149bb2a9e251ef3db3ddff37",
+          "candidate_id": "physical_v1:127018e71d2e76f83aedd8a04fd634045754262fe2d9300eb5cd653a7582310c",
+          "candidate_identity_sha256": "b0a265d17c2e589d29a076918b7c7665ee97b2e0149bb2a9e251ef3db3ddff37",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p25-short-low",
+          "record_id": "kaihe3_LYX_0613",
+          "reservation_sha256": "a596f8072c531a490a9639b7ace02243f23e74f8cf785e550883cd66750dc491",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "95134d9b9b2c8ea8d2b5af4401c30c1570ee28d6c9c81f61b57b650d32958045",
+          "candidate_id": "physical_v1:127018e71d2e76f83aedd8a04fd634045754262fe2d9300eb5cd653a7582310c",
+          "candidate_identity_sha256": "95134d9b9b2c8ea8d2b5af4401c30c1570ee28d6c9c81f61b57b650d32958045",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p25-short-low",
+          "record_id": "run1_LYX_0708",
+          "reservation_sha256": "698338df6efdc636dc36a2a88c861d1fbd18662679a2b9914322d5c0522b834b",
+          "scene": "run"
+        },
+        {
+          "cache_key": "e3841acdd7795e88170157d924158ce95f77c8138d0414b8b0246b30edd52fce",
+          "candidate_id": "physical_v1:127018e71d2e76f83aedd8a04fd634045754262fe2d9300eb5cd653a7582310c",
+          "candidate_identity_sha256": "e3841acdd7795e88170157d924158ce95f77c8138d0414b8b0246b30edd52fce",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p25-short-low",
+          "record_id": "run2_LYX_0708",
+          "reservation_sha256": "5e0810b02ffab41aa5477cddb125aeb7b52f9928d2f27e5fe6de1a5c59fd20cb",
+          "scene": "run"
+        },
+        {
+          "cache_key": "034cfe3d1f33150ee1e1c998075f6c83518bee0be9c779c6f20fe17de498cc13",
+          "candidate_id": "physical_v1:5d87d1e0dc1dbc173df1dedbcf44fc451fdd313687637ce17995aab65941073f",
+          "candidate_identity_sha256": "034cfe3d1f33150ee1e1c998075f6c83518bee0be9c779c6f20fe17de498cc13",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p25-short-low",
+          "record_id": "run2_LYX_0708",
+          "reservation_sha256": "90d6b38630c1ad6b0e3487a6107fbb2fb35062d4644fb22fefb4311750cac24e",
+          "scene": "run"
+        },
+        {
+          "cache_key": "81e30bb65942e73b5e081cccac6454cafec4ebeac38d848164eb8ffa24d59ba2",
+          "candidate_id": "physical_v1:8bb36990cb42691c4e26799f63408338101e11bdf5ad71a3061f245c5e5281f1",
+          "candidate_identity_sha256": "81e30bb65942e73b5e081cccac6454cafec4ebeac38d848164eb8ffa24d59ba2",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-short-low",
+          "record_id": "run2_LYX_0708",
+          "reservation_sha256": "02d664a183b2d74f81a091b43969ae4f4e8b304142357de0f4a717b94b492f00",
+          "scene": "run"
+        },
+        {
+          "cache_key": "0e2914bf856189e1894abf5f91821359632cab23d187d390bbeff6dea04b2ee8",
+          "candidate_id": "physical_v1:bd5b52f789457f0c833b41adaa8d64539e4b4f08ee0380302769b183f8dc01f8",
+          "candidate_identity_sha256": "0e2914bf856189e1894abf5f91821359632cab23d187d390bbeff6dea04b2ee8",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p25-short-low",
+          "record_id": "run2_LYX_0708",
+          "reservation_sha256": "3ab7d168f2c5720d98aad743c91a55afe9cad227f5d620aa459398ad06aadc07",
+          "scene": "run"
+        },
+        {
+          "cache_key": "0bd858157152f1e11e75592fa9d9b88c299add9d3707295014fde2572f8104e1",
+          "candidate_id": "physical_v1:127018e71d2e76f83aedd8a04fd634045754262fe2d9300eb5cd653a7582310c",
+          "candidate_identity_sha256": "0bd858157152f1e11e75592fa9d9b88c299add9d3707295014fde2572f8104e1",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p25-short-low",
+          "record_id": "run3_LYX_0708",
+          "reservation_sha256": "b9ac2d977bbd9ae78bf8af0aeea0403ee09b6bca6c1bde6e42138027c06a9c04",
+          "scene": "run"
+        },
+        {
+          "cache_key": "065750efee5793830f35ea83fc5b7f059b7b1db028d633d2492ec02df5d867a8",
+          "candidate_id": "physical_v1:bd5b52f789457f0c833b41adaa8d64539e4b4f08ee0380302769b183f8dc01f8",
+          "candidate_identity_sha256": "065750efee5793830f35ea83fc5b7f059b7b1db028d633d2492ec02df5d867a8",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p25-short-low",
+          "record_id": "run3_LYX_0708",
+          "reservation_sha256": "3f22c21b514399925bc47f50a829d048dfe72530173d55eb310151a2365ddb7e",
+          "scene": "run"
+        },
+        {
+          "cache_key": "a2e0b5583aabf8ccb6b380c3647ed114a6b6de70bcb3e0e5584a3b2691ae787b",
+          "candidate_id": "physical_v1:127018e71d2e76f83aedd8a04fd634045754262fe2d9300eb5cd653a7582310c",
+          "candidate_identity_sha256": "a2e0b5583aabf8ccb6b380c3647ed114a6b6de70bcb3e0e5584a3b2691ae787b",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p25-short-low",
+          "record_id": "xiezi2_LYX_0708",
+          "reservation_sha256": "e53586b79d31ce48b6ae05a2d6af3413dc3de6b49f5ffb63ad2bda9832fdf8d6",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "31f87e34b0f87c4f3dc64dd95262c5047762f6bef66ef239aff91397090b8cc6",
+          "candidate_id": "physical_v1:5d87d1e0dc1dbc173df1dedbcf44fc451fdd313687637ce17995aab65941073f",
+          "candidate_identity_sha256": "31f87e34b0f87c4f3dc64dd95262c5047762f6bef66ef239aff91397090b8cc6",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p25-short-low",
+          "record_id": "xiezi2_LYX_0708",
+          "reservation_sha256": "103847a506be6d0bca192defae0600b1a2d6311c494e7cfd971dda957c3b3f4b",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "e7b673e926679bf2fd8e263bbf13b6d17ca508f297d4cd7f514de76e85348f7d",
+          "candidate_id": "physical_v1:8bb36990cb42691c4e26799f63408338101e11bdf5ad71a3061f245c5e5281f1",
+          "candidate_identity_sha256": "e7b673e926679bf2fd8e263bbf13b6d17ca508f297d4cd7f514de76e85348f7d",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-short-low",
+          "record_id": "xiezi2_LYX_0708",
+          "reservation_sha256": "563abcf44df51e2012ebe3c8e5f8234baec36dce8769cef8f1ce5f7e92660d5c",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "4c736ab872ee438e7b86cad8c6f7a8ff9eea766301874e70a68d3649393c3f06",
+          "candidate_id": "physical_v1:bd5b52f789457f0c833b41adaa8d64539e4b4f08ee0380302769b183f8dc01f8",
+          "candidate_identity_sha256": "4c736ab872ee438e7b86cad8c6f7a8ff9eea766301874e70a68d3649393c3f06",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p25-short-low",
+          "record_id": "xiezi2_LYX_0708",
+          "reservation_sha256": "ed2350e70f0439db5d57a96d83a52c2df172e32971eb8feddfcdb61c5c7c2fd4",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "82133aabe31613a75d7bd5a6ee540bca240539fa0b6e15364890ae39cb4663ef",
+          "candidate_id": "physical_v1:127018e71d2e76f83aedd8a04fd634045754262fe2d9300eb5cd653a7582310c",
+          "candidate_identity_sha256": "82133aabe31613a75d7bd5a6ee540bca240539fa0b6e15364890ae39cb4663ef",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p25-short-low",
+          "record_id": "xiezi3_LYX_0708",
+          "reservation_sha256": "8f85b32a1a810ae978470ba1ed9b7696f59213cdc5c2ad4f824be930fa764619",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "15fd8628c91aef3c29ddfb8855acd9ab4115b5cc4ee7fa25a3d2ca32a1a4f5e1",
+          "candidate_id": "physical_v1:127018e71d2e76f83aedd8a04fd634045754262fe2d9300eb5cd653a7582310c",
+          "candidate_identity_sha256": "15fd8628c91aef3c29ddfb8855acd9ab4115b5cc4ee7fa25a3d2ca32a1a4f5e1",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p25-short-low",
+          "record_id": "xiezi4_LYX_0708",
+          "reservation_sha256": "ca98728efa34f077fdfaf9d75cff4678cc2c0dd5a296ac979e4d39ce0c52a5a0",
+          "scene": "xiezi"
+        }
+      ],
+      "occurrence_count": 22,
+      "profile_id": "p25-short-low",
+      "scenes": [
+        "jianpan",
+        "kaihe",
+        "run",
+        "xiezi"
+      ]
+    },
+    {
+      "coordinate": {
+        "fs_target": 25,
+        "memory_ms": 40,
+        "nominal_mu": 0.012
+      },
+      "entries": [
+        {
+          "cache_key": "316d27fc8f57631827a738d180c53b045d07ba97bc3c8cf38271a38ff79d812f",
+          "candidate_id": "physical_v1:1a59f4715a4c76987bf3e779762b4787a3551ad4916b2e28db669d9286db4f5d",
+          "candidate_identity_sha256": "316d27fc8f57631827a738d180c53b045d07ba97bc3c8cf38271a38ff79d812f",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-short-mid",
+          "record_id": "jianpan1_LYX_0708",
+          "reservation_sha256": "9ca83600f0913be9221988942fcc54295d3fd0188bd52306b6805895a3ee58b2",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "1d698a80878b7f4578267d56c1ca2b525a63822939a059386e6038baa33b4177",
+          "candidate_id": "physical_v1:1a59f4715a4c76987bf3e779762b4787a3551ad4916b2e28db669d9286db4f5d",
+          "candidate_identity_sha256": "1d698a80878b7f4578267d56c1ca2b525a63822939a059386e6038baa33b4177",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-short-mid",
+          "record_id": "jianpan2_LYX_0708",
+          "reservation_sha256": "de2d957ce07a49ccce3010b966892c5b77fd89a5ae464f12a3c188b75c9b4347",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "49daeaf744ff6d40d7bef2afbf912a073be984675346cbddc1fbb130fca5e297",
+          "candidate_id": "physical_v1:1a59f4715a4c76987bf3e779762b4787a3551ad4916b2e28db669d9286db4f5d",
+          "candidate_identity_sha256": "49daeaf744ff6d40d7bef2afbf912a073be984675346cbddc1fbb130fca5e297",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-short-mid",
+          "record_id": "jianpan3_LYX_0708",
+          "reservation_sha256": "f5fb97366aa80526f32920e59cc2d73bf4f593e72553b4124595081fbdfb9ad3",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "2a732960463af5eaab18d24b0d243b442211832dc8d91f2fc0d76c2a8f5a8ca5",
+          "candidate_id": "physical_v1:1a59f4715a4c76987bf3e779762b4787a3551ad4916b2e28db669d9286db4f5d",
+          "candidate_identity_sha256": "2a732960463af5eaab18d24b0d243b442211832dc8d91f2fc0d76c2a8f5a8ca5",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-short-mid",
+          "record_id": "kaihe1_LYX_0613",
+          "reservation_sha256": "e1c18a7b97d17dbb987ca4f7c856d51db92bd07164e4fd8e21a89cd450acf64c",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "201746d5d016d7d2f950312739acc329014eec98f66d40267bcb7983d091e334",
+          "candidate_id": "physical_v1:1a59f4715a4c76987bf3e779762b4787a3551ad4916b2e28db669d9286db4f5d",
+          "candidate_identity_sha256": "201746d5d016d7d2f950312739acc329014eec98f66d40267bcb7983d091e334",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-short-mid",
+          "record_id": "kaihe1_LYX_0617",
+          "reservation_sha256": "f2826d085b7d4663e4b044079734bf9f9dc0e310505ed838ebb2a185bfc2c32e",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "def4ffc6516f98e38c986c0d8264185eecbbea85849c0df1172b9f9a600cb0ab",
+          "candidate_id": "physical_v1:1a59f4715a4c76987bf3e779762b4787a3551ad4916b2e28db669d9286db4f5d",
+          "candidate_identity_sha256": "def4ffc6516f98e38c986c0d8264185eecbbea85849c0df1172b9f9a600cb0ab",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-short-mid",
+          "record_id": "kaihe3_LYX_0613",
+          "reservation_sha256": "4036941653ec57f304f0c1516015d56078115fac50445a141195be66995bcfce",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "4d2e6d732e2bc40cd9e57ba87f11c5b08f6cf36135670a6264f3486a0a581e11",
+          "candidate_id": "physical_v1:1a59f4715a4c76987bf3e779762b4787a3551ad4916b2e28db669d9286db4f5d",
+          "candidate_identity_sha256": "4d2e6d732e2bc40cd9e57ba87f11c5b08f6cf36135670a6264f3486a0a581e11",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-short-mid",
+          "record_id": "run1_LYX_0708",
+          "reservation_sha256": "77c36b26602191edd9b6a66ba179967ea7e789143970b6d1247111d8cc8273f7",
+          "scene": "run"
+        },
+        {
+          "cache_key": "e61ad86ded3eb590e1945ca8018243de83ff38fb42ba9f75a2c583c81194ce43",
+          "candidate_id": "physical_v1:1a59f4715a4c76987bf3e779762b4787a3551ad4916b2e28db669d9286db4f5d",
+          "candidate_identity_sha256": "e61ad86ded3eb590e1945ca8018243de83ff38fb42ba9f75a2c583c81194ce43",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-short-mid",
+          "record_id": "run2_LYX_0708",
+          "reservation_sha256": "67d4cac1922f296937d4aa81a2f33914ae6c272b30b40e7f53cc4689a592c17d",
+          "scene": "run"
+        },
+        {
+          "cache_key": "7cccabe12654a4f50c5ca8dc195d0a671836f22a2cc643195f57a2cce1fa6cc5",
+          "candidate_id": "physical_v1:4bb9022384d4ba957a73cbaeaf24b723f78f9aceb7d5806414fb710fba8bc645",
+          "candidate_identity_sha256": "7cccabe12654a4f50c5ca8dc195d0a671836f22a2cc643195f57a2cce1fa6cc5",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p25-short-mid",
+          "record_id": "run2_LYX_0708",
+          "reservation_sha256": "946884012a327b74fe8b519a503002c1c22487f0669965a31bdf853555b9d21d",
+          "scene": "run"
+        },
+        {
+          "cache_key": "17de1a90315a4e667fb4b1a4b84eaa1972a32f0c10c653780d487da25f522cdb",
+          "candidate_id": "physical_v1:cd7fd192d103b6da1f2c6ae9477e8a8e0acb297709366830c6260e86833e065c",
+          "candidate_identity_sha256": "17de1a90315a4e667fb4b1a4b84eaa1972a32f0c10c653780d487da25f522cdb",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p25-short-mid",
+          "record_id": "run2_LYX_0708",
+          "reservation_sha256": "3666366349915d58edcce0538bf7e4a55e23f3255ddfad943d45b3766be2d270",
+          "scene": "run"
+        },
+        {
+          "cache_key": "69d0c4fe8c92e8b2f13291d4d201ff389a41a1254b1bdf2502949710a5b249dc",
+          "candidate_id": "physical_v1:1a59f4715a4c76987bf3e779762b4787a3551ad4916b2e28db669d9286db4f5d",
+          "candidate_identity_sha256": "69d0c4fe8c92e8b2f13291d4d201ff389a41a1254b1bdf2502949710a5b249dc",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-short-mid",
+          "record_id": "run3_LYX_0708",
+          "reservation_sha256": "447fe705d379fc86d9eca1ac020716b04379adaa4b0ac214e4e7374ab5ac1900",
+          "scene": "run"
+        },
+        {
+          "cache_key": "bd5aa1a49bb5459e7287ea19f41d28b7437f3163b00840898c539276346b5737",
+          "candidate_id": "physical_v1:4bb9022384d4ba957a73cbaeaf24b723f78f9aceb7d5806414fb710fba8bc645",
+          "candidate_identity_sha256": "bd5aa1a49bb5459e7287ea19f41d28b7437f3163b00840898c539276346b5737",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p25-short-mid",
+          "record_id": "run3_LYX_0708",
+          "reservation_sha256": "10f2f0d41e711bf00f168f06643111af0dda1b6445d0e0366c11de6325bc1e46",
+          "scene": "run"
+        },
+        {
+          "cache_key": "83cad712da533319126305b14fa7db8417cf895153ad50b903d602d70b1fcd84",
+          "candidate_id": "physical_v1:9311f84e98f395a32dd710dc9672a4bca2967579330f6c17454bed0c0bfa5608",
+          "candidate_identity_sha256": "83cad712da533319126305b14fa7db8417cf895153ad50b903d602d70b1fcd84",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p25-short-mid",
+          "record_id": "run3_LYX_0708",
+          "reservation_sha256": "09f83bd6ad7dd1974929f6e39b4c65d64b7037a3966dc0100926393ecc4fa403",
+          "scene": "run"
+        },
+        {
+          "cache_key": "0dbd65e0625cfce5f88f8e4a71982ed253b62ff96620a0d06574cbecd4120103",
+          "candidate_id": "physical_v1:cd7fd192d103b6da1f2c6ae9477e8a8e0acb297709366830c6260e86833e065c",
+          "candidate_identity_sha256": "0dbd65e0625cfce5f88f8e4a71982ed253b62ff96620a0d06574cbecd4120103",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p25-short-mid",
+          "record_id": "run3_LYX_0708",
+          "reservation_sha256": "203c9d844cc65a62a5db643b4414188b3fa2b8cd469744035cb362accbb58ea8",
+          "scene": "run"
+        },
+        {
+          "cache_key": "65cc961ac36bcdd4c2dda3c65721cfe167fb3ef6ad452a1c5b3caf630ddc5fda",
+          "candidate_id": "physical_v1:1a59f4715a4c76987bf3e779762b4787a3551ad4916b2e28db669d9286db4f5d",
+          "candidate_identity_sha256": "65cc961ac36bcdd4c2dda3c65721cfe167fb3ef6ad452a1c5b3caf630ddc5fda",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-short-mid",
+          "record_id": "xiezi2_LYX_0708",
+          "reservation_sha256": "d6aa259d1c01fdb8cea1296a7c0e9f8d7d3151e7954a00d5e8c20d9518165bfa",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "0f74608586c87a52aa113d4d9891edf197753e0a6440190d5ecd0b37c825ef4d",
+          "candidate_id": "physical_v1:4bb9022384d4ba957a73cbaeaf24b723f78f9aceb7d5806414fb710fba8bc645",
+          "candidate_identity_sha256": "0f74608586c87a52aa113d4d9891edf197753e0a6440190d5ecd0b37c825ef4d",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p25-short-mid",
+          "record_id": "xiezi2_LYX_0708",
+          "reservation_sha256": "90ec6978bed68c98f3c9f5cdf17a12bc1e949a9c75068dbeb18ea09e040ea9a1",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "e7ea6144f1826ce8fd355b799edabbb9151de7ccb2243e2f3600be66828fdd31",
+          "candidate_id": "physical_v1:9311f84e98f395a32dd710dc9672a4bca2967579330f6c17454bed0c0bfa5608",
+          "candidate_identity_sha256": "e7ea6144f1826ce8fd355b799edabbb9151de7ccb2243e2f3600be66828fdd31",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p25-short-mid",
+          "record_id": "xiezi2_LYX_0708",
+          "reservation_sha256": "576e95be827fcfd62ba1260efbaa998f42ed40c0602cbdec24398f43d3699efe",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "add1b29220817d9519aaee7c0eb0803f4bc67cfa8e83ff59183890b7243366bd",
+          "candidate_id": "physical_v1:1a59f4715a4c76987bf3e779762b4787a3551ad4916b2e28db669d9286db4f5d",
+          "candidate_identity_sha256": "add1b29220817d9519aaee7c0eb0803f4bc67cfa8e83ff59183890b7243366bd",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-short-mid",
+          "record_id": "xiezi3_LYX_0708",
+          "reservation_sha256": "38314be98c0c589c2d187880b1ef38c4cea5f38b2b7c98ac4eb39c4f629d12ff",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "57fff55b4ef7eab9bfa3e3fa1dadd6877fa648f200d5848ed4240d323aadaa5b",
+          "candidate_id": "physical_v1:1a59f4715a4c76987bf3e779762b4787a3551ad4916b2e28db669d9286db4f5d",
+          "candidate_identity_sha256": "57fff55b4ef7eab9bfa3e3fa1dadd6877fa648f200d5848ed4240d323aadaa5b",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-short-mid",
+          "record_id": "xiezi4_LYX_0708",
+          "reservation_sha256": "85c8dc19865685247ac5cfcf33b58c7865c9a9c5328b23e6e8c379a89c59100b",
+          "scene": "xiezi"
+        }
+      ],
+      "occurrence_count": 19,
+      "profile_id": "p25-short-mid",
+      "scenes": [
+        "jianpan",
+        "kaihe",
+        "run",
+        "xiezi"
+      ]
+    },
+    {
+      "coordinate": {
+        "fs_target": 25,
+        "memory_ms": 200,
+        "nominal_mu": 0.01
+      },
+      "entries": [
+        {
+          "cache_key": "1ce19436855a59e090e872de066d93c0ff8f3c29482978d39c922675a2eeaf9c",
+          "candidate_id": "physical_v1:1eac2e3b46ca48c84c8565f913c1ebca0a620e12f891d570def1744bd9346922",
+          "candidate_identity_sha256": "1ce19436855a59e090e872de066d93c0ff8f3c29482978d39c922675a2eeaf9c",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-long-mid",
+          "record_id": "jianpan1_LYX_0708",
+          "reservation_sha256": "db7c9fa3825f1f26eb0c9e87b5716e0914e74d5ffd61914b671940b8434e7898",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "7d043b1c4ff96172f44008232b5002268d57c63db8bca1603db17b0fe8a447ad",
+          "candidate_id": "physical_v1:edc06b2c271663a17f64259366be4e68544777a19b6d90e4b388b75a1f3c5c07",
+          "candidate_identity_sha256": "7d043b1c4ff96172f44008232b5002268d57c63db8bca1603db17b0fe8a447ad",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p25-long-mid",
+          "record_id": "jianpan1_LYX_0708",
+          "reservation_sha256": "62ef3844a360e8e3c8bbf3950d228068dd251a10acba18c3981500f20a6f7f5a",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "f6badff894fa17f7729c39a5f197c4ab44a07f7e45177ac8b52811839f197f17",
+          "candidate_id": "physical_v1:1eac2e3b46ca48c84c8565f913c1ebca0a620e12f891d570def1744bd9346922",
+          "candidate_identity_sha256": "f6badff894fa17f7729c39a5f197c4ab44a07f7e45177ac8b52811839f197f17",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-long-mid",
+          "record_id": "jianpan2_LYX_0708",
+          "reservation_sha256": "12f0e6d26d48b08dd022ca9da2e073fd3b3994fe04f6d0623bf8ab2210c6f6b5",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "81fbe9e9ec91f00345c5b1e8c3c4f1828854cd373434d991132f05e5c14dded9",
+          "candidate_id": "physical_v1:9df3aa8057205e0235cee45854542ab599510f356a084c619ca9bad27107f0b2",
+          "candidate_identity_sha256": "81fbe9e9ec91f00345c5b1e8c3c4f1828854cd373434d991132f05e5c14dded9",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p25-long-mid",
+          "record_id": "jianpan2_LYX_0708",
+          "reservation_sha256": "3833051e21980bb1d4c5e3eed6c06a1ea86b3276379d7ef0ff6edde35bdf93fb",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "ae0e0b693ea953aa88b43f41a7857e7771d7e2fcc04e109413133526e6f921a8",
+          "candidate_id": "physical_v1:1eac2e3b46ca48c84c8565f913c1ebca0a620e12f891d570def1744bd9346922",
+          "candidate_identity_sha256": "ae0e0b693ea953aa88b43f41a7857e7771d7e2fcc04e109413133526e6f921a8",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-long-mid",
+          "record_id": "jianpan3_LYX_0708",
+          "reservation_sha256": "de4ba73f31f95ab742777a09c03c3aa91bdadcf2dbec4bdff866f56bcc7bd582",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "58a5a0fac1dc89d3be39ce8ca251fc59e71ed17baace28aba1089f81513df62c",
+          "candidate_id": "physical_v1:1eac2e3b46ca48c84c8565f913c1ebca0a620e12f891d570def1744bd9346922",
+          "candidate_identity_sha256": "58a5a0fac1dc89d3be39ce8ca251fc59e71ed17baace28aba1089f81513df62c",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-long-mid",
+          "record_id": "kaihe1_LYX_0613",
+          "reservation_sha256": "39caaed74a09f818cf88d2598bfd964ec810308ce2fda54e2e617a3947a5074a",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "f1b3fe3c585c0f7732c56d3454c6021b079731518313b7ba77a3a9fda54750e2",
+          "candidate_id": "physical_v1:9df3aa8057205e0235cee45854542ab599510f356a084c619ca9bad27107f0b2",
+          "candidate_identity_sha256": "f1b3fe3c585c0f7732c56d3454c6021b079731518313b7ba77a3a9fda54750e2",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p25-long-mid",
+          "record_id": "kaihe1_LYX_0613",
+          "reservation_sha256": "ad7f1a99c42f3be37f0c2a3cd912239b834125112d05a12f94393895945d599d",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "841cd442aa081c707b7a883027a3b0bad41a95bb51d3563ef75d042ff72f387b",
+          "candidate_id": "physical_v1:edc06b2c271663a17f64259366be4e68544777a19b6d90e4b388b75a1f3c5c07",
+          "candidate_identity_sha256": "841cd442aa081c707b7a883027a3b0bad41a95bb51d3563ef75d042ff72f387b",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p25-long-mid",
+          "record_id": "kaihe1_LYX_0613",
+          "reservation_sha256": "8a816e950b4b9eec79b610faf1685a13c5bfa62eaf8c858e2bc1800d637212c6",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "ef13a8050fc8b945f6e23fe2d2d4056ef4f1064e0ce24d0e022e067035e2fcfc",
+          "candidate_id": "physical_v1:f442672319ba5c3d16f5b4d34465226f8c3747554a9e55594a064ea8ff23a19d",
+          "candidate_identity_sha256": "ef13a8050fc8b945f6e23fe2d2d4056ef4f1064e0ce24d0e022e067035e2fcfc",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p25-long-mid",
+          "record_id": "kaihe1_LYX_0613",
+          "reservation_sha256": "eb1d05059ca79f78ec4ccff0d1acf835dcca45a70cd0f69471798ee1d7ae9178",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "67987dfe4934db07068660a3d24077367c7fb87d60385ed5c8872a231b62a49d",
+          "candidate_id": "physical_v1:1eac2e3b46ca48c84c8565f913c1ebca0a620e12f891d570def1744bd9346922",
+          "candidate_identity_sha256": "67987dfe4934db07068660a3d24077367c7fb87d60385ed5c8872a231b62a49d",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-long-mid",
+          "record_id": "kaihe1_LYX_0617",
+          "reservation_sha256": "082076be7e4ee54083759815e23ed5b3d38bfbda181e8e23c2605f50b63e4186",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "71b3500a7204b1fe6f1f953a871106dcb67060b34fbf3b5b5c6d60dd2e575fdb",
+          "candidate_id": "physical_v1:1eac2e3b46ca48c84c8565f913c1ebca0a620e12f891d570def1744bd9346922",
+          "candidate_identity_sha256": "71b3500a7204b1fe6f1f953a871106dcb67060b34fbf3b5b5c6d60dd2e575fdb",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-long-mid",
+          "record_id": "kaihe3_LYX_0613",
+          "reservation_sha256": "36ebc5cabb4e207d610393204cb2de03f4760c59ed19d09ef0f81d323fff978c",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "fabe19cf570da9972a9056751f53b6bd9bdb083bbef220faf8c81a3922368990",
+          "candidate_id": "physical_v1:9df3aa8057205e0235cee45854542ab599510f356a084c619ca9bad27107f0b2",
+          "candidate_identity_sha256": "fabe19cf570da9972a9056751f53b6bd9bdb083bbef220faf8c81a3922368990",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p25-long-mid",
+          "record_id": "kaihe3_LYX_0613",
+          "reservation_sha256": "c8223df16e8ae2968f9179be725494e70a7bc89aa969c0343306943278e6c401",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "fdd9e0d1831e4d83cf8bdde9097e896366ab24ddfc33a213f87959c865c4f57e",
+          "candidate_id": "physical_v1:1eac2e3b46ca48c84c8565f913c1ebca0a620e12f891d570def1744bd9346922",
+          "candidate_identity_sha256": "fdd9e0d1831e4d83cf8bdde9097e896366ab24ddfc33a213f87959c865c4f57e",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-long-mid",
+          "record_id": "run1_LYX_0708",
+          "reservation_sha256": "0e0ff764f49406e19f5c91cbeeb136b425c4e8fb9c2f5523dc96143a67b41791",
+          "scene": "run"
+        },
+        {
+          "cache_key": "6961d80954efb7fdeef49246ab94659e623579e96fa85fc7a3440eaddb025da6",
+          "candidate_id": "physical_v1:1eac2e3b46ca48c84c8565f913c1ebca0a620e12f891d570def1744bd9346922",
+          "candidate_identity_sha256": "6961d80954efb7fdeef49246ab94659e623579e96fa85fc7a3440eaddb025da6",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-long-mid",
+          "record_id": "run2_LYX_0708",
+          "reservation_sha256": "1ad50eba2e8955d39c939d6d4244ccfadf2c90d245761866f6228ad43d70a2b3",
+          "scene": "run"
+        },
+        {
+          "cache_key": "addbec53ab62f6bb4bebd2a281eeaa56b7c8b05b6df32727cfa807b44802822a",
+          "candidate_id": "physical_v1:1eac2e3b46ca48c84c8565f913c1ebca0a620e12f891d570def1744bd9346922",
+          "candidate_identity_sha256": "addbec53ab62f6bb4bebd2a281eeaa56b7c8b05b6df32727cfa807b44802822a",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-long-mid",
+          "record_id": "run3_LYX_0708",
+          "reservation_sha256": "8b310b7d55227e6a8a63d8590c9c82fe30625e69f12e1705e29600cf1b0ead34",
+          "scene": "run"
+        },
+        {
+          "cache_key": "91f2c03a99f84bc4f1b13893fd073dc2382fb05b1efa3356269fa6ac9ba3a1a6",
+          "candidate_id": "physical_v1:9df3aa8057205e0235cee45854542ab599510f356a084c619ca9bad27107f0b2",
+          "candidate_identity_sha256": "91f2c03a99f84bc4f1b13893fd073dc2382fb05b1efa3356269fa6ac9ba3a1a6",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p25-long-mid",
+          "record_id": "run3_LYX_0708",
+          "reservation_sha256": "3d470938182f89f58f1d607ab8997a2aade4b53addf3e8323d71ad8f65167579",
+          "scene": "run"
+        },
+        {
+          "cache_key": "283a6b19059be68731cb96399d111de6134244ad1459e010bfbc0a710234d7e0",
+          "candidate_id": "physical_v1:f442672319ba5c3d16f5b4d34465226f8c3747554a9e55594a064ea8ff23a19d",
+          "candidate_identity_sha256": "283a6b19059be68731cb96399d111de6134244ad1459e010bfbc0a710234d7e0",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p25-long-mid",
+          "record_id": "run3_LYX_0708",
+          "reservation_sha256": "af1e3784bd1529e58af5a851d26765f6215ceeccb48ec2e42ed5fa572560d256",
+          "scene": "run"
+        },
+        {
+          "cache_key": "fc2a7624c83ef9dcadff57feab4aa18b2cff28a2af0aa3b444e637b695c8914b",
+          "candidate_id": "physical_v1:1eac2e3b46ca48c84c8565f913c1ebca0a620e12f891d570def1744bd9346922",
+          "candidate_identity_sha256": "fc2a7624c83ef9dcadff57feab4aa18b2cff28a2af0aa3b444e637b695c8914b",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-long-mid",
+          "record_id": "xiezi2_LYX_0708",
+          "reservation_sha256": "dbfc585bcd0a5e0b06de4e20080c2e69f35a17056c0633e1e0b3eca941a02e27",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "db189fcdd1fd42cb6686a44019b56d36a98a8a1d38c18aa6b2bd1a05e75f30e8",
+          "candidate_id": "physical_v1:1eac2e3b46ca48c84c8565f913c1ebca0a620e12f891d570def1744bd9346922",
+          "candidate_identity_sha256": "db189fcdd1fd42cb6686a44019b56d36a98a8a1d38c18aa6b2bd1a05e75f30e8",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-long-mid",
+          "record_id": "xiezi3_LYX_0708",
+          "reservation_sha256": "92718f7212ed4b754724b2f31532f6da6fae5b2016e4e8745f114774669d3552",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "8f223668b6f57b43f4720db7c23a05b4072ee48693f115264a4d882525ccbbd3",
+          "candidate_id": "physical_v1:1eac2e3b46ca48c84c8565f913c1ebca0a620e12f891d570def1744bd9346922",
+          "candidate_identity_sha256": "8f223668b6f57b43f4720db7c23a05b4072ee48693f115264a4d882525ccbbd3",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p25-long-mid",
+          "record_id": "xiezi4_LYX_0708",
+          "reservation_sha256": "7eb126a0cfd3c8c199f43b2a48f4fb06928a356df56a3c4e5520586a9e5e440a",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "acf1227143e0dca7620e1026adb96735a2441332d13e556b7b95b7639c609545",
+          "candidate_id": "physical_v1:9df3aa8057205e0235cee45854542ab599510f356a084c619ca9bad27107f0b2",
+          "candidate_identity_sha256": "acf1227143e0dca7620e1026adb96735a2441332d13e556b7b95b7639c609545",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p25-long-mid",
+          "record_id": "xiezi4_LYX_0708",
+          "reservation_sha256": "0c2cb87f449d15ccab9f00db4fe6f65d3b566735547272b99ba81114efcfb84f",
+          "scene": "xiezi"
+        }
+      ],
+      "occurrence_count": 21,
+      "profile_id": "p25-long-mid",
+      "scenes": [
+        "jianpan",
+        "kaihe",
+        "run",
+        "xiezi"
+      ]
+    },
+    {
+      "coordinate": {
+        "fs_target": 50,
+        "memory_ms": 80,
+        "nominal_mu": 0.006
+      },
+      "entries": [
+        {
+          "cache_key": "1dfdc60683e823cb9870e4b2e8a447d0280309bc4a10cd040555094176ea59e2",
+          "candidate_id": "physical_v1:079b98a3d43131364fbdf38ce954fee23dcb76e2ffea08a8e6a3679ec0cad650",
+          "candidate_identity_sha256": "1dfdc60683e823cb9870e4b2e8a447d0280309bc4a10cd040555094176ea59e2",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p50-short-low",
+          "record_id": "jianpan1_LYX_0708",
+          "reservation_sha256": "c90872f5befd97631ba7448360a875d256d74047ed1dfcb4733e41e436a86c48",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "d986ccbec1814334c62cd8296d9b2578098075b274b7791f60cf3d8abbcdce57",
+          "candidate_id": "physical_v1:0c1ca624ff3cef5a277d72d99caecefd12e9943693db274c2d828a5ffc417b34",
+          "candidate_identity_sha256": "d986ccbec1814334c62cd8296d9b2578098075b274b7791f60cf3d8abbcdce57",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-short-low",
+          "record_id": "jianpan1_LYX_0708",
+          "reservation_sha256": "1736992009a5854d633960f05ff673b07650ad96e6158324024bc7451c947c68",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "d8198b5afc5e9da1fb5d7e1b2ef4a58358ff9f6f0bf50655c0c57070e3996c10",
+          "candidate_id": "physical_v1:2d39343d0ae5224cbe39565d7c23120e7a821fb760699329c7516d4159a830e6",
+          "candidate_identity_sha256": "d8198b5afc5e9da1fb5d7e1b2ef4a58358ff9f6f0bf50655c0c57070e3996c10",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p50-short-low",
+          "record_id": "jianpan1_LYX_0708",
+          "reservation_sha256": "986975fc6e9d44994dda158ac2531d364b0f7be26a42e730a0d0b17e4d21e2a7",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "2cf6c57e917b34227c60d7e6bfcf5427a7e9d1b089294b596b8371a8adfb0401",
+          "candidate_id": "physical_v1:5ecc2af4c931857696e355475fe6352180030f71460c734b78b856afb8859006",
+          "candidate_identity_sha256": "2cf6c57e917b34227c60d7e6bfcf5427a7e9d1b089294b596b8371a8adfb0401",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p50-short-low",
+          "record_id": "jianpan1_LYX_0708",
+          "reservation_sha256": "55864203b5970a3a925d5c41b99bc21ed8c802a82554b6dc91471d8c03399f4d",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "b03ebbabf3c6d9ec6a1700c45e40aacc527e43b247d52117534c5a1cf084df36",
+          "candidate_id": "physical_v1:079b98a3d43131364fbdf38ce954fee23dcb76e2ffea08a8e6a3679ec0cad650",
+          "candidate_identity_sha256": "b03ebbabf3c6d9ec6a1700c45e40aacc527e43b247d52117534c5a1cf084df36",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p50-short-low",
+          "record_id": "jianpan2_LYX_0708",
+          "reservation_sha256": "6d4bf448b9b46725944919f778ce82571c42ff35d84a430be3cff7c85a99c76d",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "585e9b962f0427a09c0c9e0e351c43917bf8a7dd3f930e80b2c26718796e2d4f",
+          "candidate_id": "physical_v1:0c1ca624ff3cef5a277d72d99caecefd12e9943693db274c2d828a5ffc417b34",
+          "candidate_identity_sha256": "585e9b962f0427a09c0c9e0e351c43917bf8a7dd3f930e80b2c26718796e2d4f",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-short-low",
+          "record_id": "jianpan2_LYX_0708",
+          "reservation_sha256": "05623ed24e8271344cf8caf432d834edbcb1afb7eb4e2245794d8dd1e7b11634",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "a6d88cfad682a2daa6b4450fc408b661b3e67cde98d33bcf46640b847bd15677",
+          "candidate_id": "physical_v1:5ecc2af4c931857696e355475fe6352180030f71460c734b78b856afb8859006",
+          "candidate_identity_sha256": "a6d88cfad682a2daa6b4450fc408b661b3e67cde98d33bcf46640b847bd15677",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p50-short-low",
+          "record_id": "jianpan2_LYX_0708",
+          "reservation_sha256": "63e1f67d34a92ab8168e37b291c13931e0943cd353552ac1f8ee5312cb93e9f0",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "a7440771d453f735c1ee654703122adced2960003b7b9e7e06cf038e444a9ca4",
+          "candidate_id": "physical_v1:079b98a3d43131364fbdf38ce954fee23dcb76e2ffea08a8e6a3679ec0cad650",
+          "candidate_identity_sha256": "a7440771d453f735c1ee654703122adced2960003b7b9e7e06cf038e444a9ca4",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p50-short-low",
+          "record_id": "jianpan3_LYX_0708",
+          "reservation_sha256": "90936286082a45365a220f17db3e3065f5b7238f0a84db6f2b0637fbf3e22f03",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "60ad3fd9430a019ff4eea2b6756e75f7e9d9a1f8d2a52dbd2c9ddbb9603eed05",
+          "candidate_id": "physical_v1:0c1ca624ff3cef5a277d72d99caecefd12e9943693db274c2d828a5ffc417b34",
+          "candidate_identity_sha256": "60ad3fd9430a019ff4eea2b6756e75f7e9d9a1f8d2a52dbd2c9ddbb9603eed05",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-short-low",
+          "record_id": "jianpan3_LYX_0708",
+          "reservation_sha256": "1711453c845b6818dfd85ac0b9173985207975a7223de77b08b515a386b80d85",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "671a9c21d6ebabd22bdec276777e03a4ff3e9ea6d903ca6d229da67f01fb3517",
+          "candidate_id": "physical_v1:2d39343d0ae5224cbe39565d7c23120e7a821fb760699329c7516d4159a830e6",
+          "candidate_identity_sha256": "671a9c21d6ebabd22bdec276777e03a4ff3e9ea6d903ca6d229da67f01fb3517",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p50-short-low",
+          "record_id": "jianpan3_LYX_0708",
+          "reservation_sha256": "7a694dfce6f89506a7e34f19544fc786935eeb087f93d61c53e559f77b9f428a",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "08ae3cc092578e1578167851a26a2c01f5956d528b617ed05a0ae7c6b5696b19",
+          "candidate_id": "physical_v1:5ecc2af4c931857696e355475fe6352180030f71460c734b78b856afb8859006",
+          "candidate_identity_sha256": "08ae3cc092578e1578167851a26a2c01f5956d528b617ed05a0ae7c6b5696b19",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p50-short-low",
+          "record_id": "jianpan3_LYX_0708",
+          "reservation_sha256": "a52f9e9e8bdad5b05692f26c9049859634998db6080c5f9dfd4d7e52c9f193fb",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "326586d5b5a104d2b832169125710332051977c080a53a312085e945fea0ab3c",
+          "candidate_id": "physical_v1:079b98a3d43131364fbdf38ce954fee23dcb76e2ffea08a8e6a3679ec0cad650",
+          "candidate_identity_sha256": "326586d5b5a104d2b832169125710332051977c080a53a312085e945fea0ab3c",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p50-short-low",
+          "record_id": "kaihe1_LYX_0613",
+          "reservation_sha256": "996d9bfc3ca5dfe18d6d2f35e28b1b360961f0b1a75539b594c73dc3bee30853",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "5140d6e33282e2a108b2ddca892176a305bad2491fa8bfdd1e7245c005d2419b",
+          "candidate_id": "physical_v1:0c1ca624ff3cef5a277d72d99caecefd12e9943693db274c2d828a5ffc417b34",
+          "candidate_identity_sha256": "5140d6e33282e2a108b2ddca892176a305bad2491fa8bfdd1e7245c005d2419b",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-short-low",
+          "record_id": "kaihe1_LYX_0613",
+          "reservation_sha256": "bd0cc6577b835966d42703a48101985ccfaf45b7b7eefed0ead1efe71707dcf3",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "c94fa837d46e329e50457a4ba387c2bfbd34062781b0c06fccae789f50a0b9e7",
+          "candidate_id": "physical_v1:5ecc2af4c931857696e355475fe6352180030f71460c734b78b856afb8859006",
+          "candidate_identity_sha256": "c94fa837d46e329e50457a4ba387c2bfbd34062781b0c06fccae789f50a0b9e7",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p50-short-low",
+          "record_id": "kaihe1_LYX_0613",
+          "reservation_sha256": "c798e5407299ebf6dc90990348539ac6aebc305a2df705f7ea54e2c9bc103a57",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "80960e6a8ff0d600fab54186be6a7231ba8a1f93f2836007a205f6c6996fa14c",
+          "candidate_id": "physical_v1:079b98a3d43131364fbdf38ce954fee23dcb76e2ffea08a8e6a3679ec0cad650",
+          "candidate_identity_sha256": "80960e6a8ff0d600fab54186be6a7231ba8a1f93f2836007a205f6c6996fa14c",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p50-short-low",
+          "record_id": "kaihe1_LYX_0617",
+          "reservation_sha256": "33bf2834b50fa2e5c1b1a331eb2ed4419c275b97473b80af46b3a1e816401b22",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "d0f1af8f3bac5e011f45e146fe7f15f8a838e1abaf764e45d6aaaecd41f4ba38",
+          "candidate_id": "physical_v1:0c1ca624ff3cef5a277d72d99caecefd12e9943693db274c2d828a5ffc417b34",
+          "candidate_identity_sha256": "d0f1af8f3bac5e011f45e146fe7f15f8a838e1abaf764e45d6aaaecd41f4ba38",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-short-low",
+          "record_id": "kaihe1_LYX_0617",
+          "reservation_sha256": "ed5bc563000b8f4b40e066cf5835b963e9d3542d10c9acaf9a3c9fdc2db76374",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "7cd6910f9dd5375b3d7f9ef04a99aead774243b406533c304554beaf2cfb5b76",
+          "candidate_id": "physical_v1:2d39343d0ae5224cbe39565d7c23120e7a821fb760699329c7516d4159a830e6",
+          "candidate_identity_sha256": "7cd6910f9dd5375b3d7f9ef04a99aead774243b406533c304554beaf2cfb5b76",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p50-short-low",
+          "record_id": "kaihe1_LYX_0617",
+          "reservation_sha256": "fbb18ab0e3e0cb9ab03d46abd541a3b64ff35a1c09c58a7c5140364f00f0a92f",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "86c870f51977ab97fb774c3ac26d194956c325596b8d6f958d16e1b487a20f57",
+          "candidate_id": "physical_v1:5ecc2af4c931857696e355475fe6352180030f71460c734b78b856afb8859006",
+          "candidate_identity_sha256": "86c870f51977ab97fb774c3ac26d194956c325596b8d6f958d16e1b487a20f57",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p50-short-low",
+          "record_id": "kaihe1_LYX_0617",
+          "reservation_sha256": "7de5bb1c75a5d9feb4c5a786a65b4fe6ffb2bf1f30945ecf0cf6dea9d52ef3ee",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "9d8b19fcdc346c129c85376d239961a959004e11f3ed938f50a9886f3ea4e492",
+          "candidate_id": "physical_v1:079b98a3d43131364fbdf38ce954fee23dcb76e2ffea08a8e6a3679ec0cad650",
+          "candidate_identity_sha256": "9d8b19fcdc346c129c85376d239961a959004e11f3ed938f50a9886f3ea4e492",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p50-short-low",
+          "record_id": "kaihe3_LYX_0613",
+          "reservation_sha256": "460d36b9bcb3f5601a58d7e43b64fbcb4bc4fac81ced57847fb49c9edb793124",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "3ac96db77aa48c0a7c887e38f2479782d12f7a64ae4073472a176d7be13b29ab",
+          "candidate_id": "physical_v1:0c1ca624ff3cef5a277d72d99caecefd12e9943693db274c2d828a5ffc417b34",
+          "candidate_identity_sha256": "3ac96db77aa48c0a7c887e38f2479782d12f7a64ae4073472a176d7be13b29ab",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-short-low",
+          "record_id": "kaihe3_LYX_0613",
+          "reservation_sha256": "a944506fe5b872bac9ab1a583e0a8427ced06725cb2757ae744a9dadb12d8c45",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "7e48f557c4a47c9d6b2f6a1dcc0a91c1da64d7a18c489797d533bca180670165",
+          "candidate_id": "physical_v1:5ecc2af4c931857696e355475fe6352180030f71460c734b78b856afb8859006",
+          "candidate_identity_sha256": "7e48f557c4a47c9d6b2f6a1dcc0a91c1da64d7a18c489797d533bca180670165",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p50-short-low",
+          "record_id": "kaihe3_LYX_0613",
+          "reservation_sha256": "e836a0371ab4f2c46feb525e6395f404f6fb75bfdf5cba5b7f6ca0b4bbafb6f9",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "be9b82579dedffc75c8951cf450784a6f5732947c13206430128802fa37f9823",
+          "candidate_id": "physical_v1:079b98a3d43131364fbdf38ce954fee23dcb76e2ffea08a8e6a3679ec0cad650",
+          "candidate_identity_sha256": "be9b82579dedffc75c8951cf450784a6f5732947c13206430128802fa37f9823",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p50-short-low",
+          "record_id": "run1_LYX_0708",
+          "reservation_sha256": "76702645ffa119052156a2337e690bc3451dc807f7af5dd5e60eb8f6625acc97",
+          "scene": "run"
+        },
+        {
+          "cache_key": "d0e815526bc7c61627d90b1c3727f061a94edb0db7859882bd75839d8491e168",
+          "candidate_id": "physical_v1:0c1ca624ff3cef5a277d72d99caecefd12e9943693db274c2d828a5ffc417b34",
+          "candidate_identity_sha256": "d0e815526bc7c61627d90b1c3727f061a94edb0db7859882bd75839d8491e168",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-short-low",
+          "record_id": "run1_LYX_0708",
+          "reservation_sha256": "82021270ac9f590db40851ed6455979c8a213ec27437b1efda58b6b6c5898b52",
+          "scene": "run"
+        },
+        {
+          "cache_key": "f283ae653cef0be226a2ed5b5fa5fece439be6ed4ddc53eede75e17a2e1fcd15",
+          "candidate_id": "physical_v1:5ecc2af4c931857696e355475fe6352180030f71460c734b78b856afb8859006",
+          "candidate_identity_sha256": "f283ae653cef0be226a2ed5b5fa5fece439be6ed4ddc53eede75e17a2e1fcd15",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p50-short-low",
+          "record_id": "run1_LYX_0708",
+          "reservation_sha256": "3afafaa7312ee12b370942c4fcef5e71b0b8c3848763004843fba62e7a6791b8",
+          "scene": "run"
+        },
+        {
+          "cache_key": "68faecba1e011c13a598618efe092d1fd5c468b29007353539c72a9c3263b6fe",
+          "candidate_id": "physical_v1:079b98a3d43131364fbdf38ce954fee23dcb76e2ffea08a8e6a3679ec0cad650",
+          "candidate_identity_sha256": "68faecba1e011c13a598618efe092d1fd5c468b29007353539c72a9c3263b6fe",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p50-short-low",
+          "record_id": "run2_LYX_0708",
+          "reservation_sha256": "21411f013f865f7617ae8e34d38e48cc4b07567ee8601f7f615f39f3e0fb609d",
+          "scene": "run"
+        },
+        {
+          "cache_key": "21865555584ceeed90762ba46ef45997473b6b38e649f15642d09f3aedbc4cc0",
+          "candidate_id": "physical_v1:0c1ca624ff3cef5a277d72d99caecefd12e9943693db274c2d828a5ffc417b34",
+          "candidate_identity_sha256": "21865555584ceeed90762ba46ef45997473b6b38e649f15642d09f3aedbc4cc0",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-short-low",
+          "record_id": "run2_LYX_0708",
+          "reservation_sha256": "c9d81e0ca97f0ee1b00d4a5dbd1ab7d41dd3ead377643e1f9b8c4905305679f7",
+          "scene": "run"
+        },
+        {
+          "cache_key": "9cdcb93e680690e7d11d7a6aecd57f2f999d057017d09bac6f85901e24267721",
+          "candidate_id": "physical_v1:2d39343d0ae5224cbe39565d7c23120e7a821fb760699329c7516d4159a830e6",
+          "candidate_identity_sha256": "9cdcb93e680690e7d11d7a6aecd57f2f999d057017d09bac6f85901e24267721",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p50-short-low",
+          "record_id": "run2_LYX_0708",
+          "reservation_sha256": "93360ff2ee43f3eaa57b5dcc1c4ce42904930a76997ff4cb679e566d2a8c4b36",
+          "scene": "run"
+        },
+        {
+          "cache_key": "b5fc47e0f7dc4ed1941664702bb51c34be18a81cd782e1b50d61686056f5f212",
+          "candidate_id": "physical_v1:5ecc2af4c931857696e355475fe6352180030f71460c734b78b856afb8859006",
+          "candidate_identity_sha256": "b5fc47e0f7dc4ed1941664702bb51c34be18a81cd782e1b50d61686056f5f212",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p50-short-low",
+          "record_id": "run2_LYX_0708",
+          "reservation_sha256": "3afb7acd72c1fdf3ada97bcf2585b1e6b4a12e047dcf02774b0e62ee0acc55c8",
+          "scene": "run"
+        },
+        {
+          "cache_key": "5e66b2601bc49fd21c80a956d9e02c89363e62eacd7e65031676c8b912240baf",
+          "candidate_id": "physical_v1:079b98a3d43131364fbdf38ce954fee23dcb76e2ffea08a8e6a3679ec0cad650",
+          "candidate_identity_sha256": "5e66b2601bc49fd21c80a956d9e02c89363e62eacd7e65031676c8b912240baf",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p50-short-low",
+          "record_id": "run3_LYX_0708",
+          "reservation_sha256": "81e3aa8da87846c0e9aa68ebe53e10dd1ae2c1d96bfae071627f0fd097451592",
+          "scene": "run"
+        },
+        {
+          "cache_key": "017d424eb022109baf55608aff16e404a7ffc2f9b3f2dbdc7ad032dc25ff8e2a",
+          "candidate_id": "physical_v1:0c1ca624ff3cef5a277d72d99caecefd12e9943693db274c2d828a5ffc417b34",
+          "candidate_identity_sha256": "017d424eb022109baf55608aff16e404a7ffc2f9b3f2dbdc7ad032dc25ff8e2a",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-short-low",
+          "record_id": "run3_LYX_0708",
+          "reservation_sha256": "ae98d02eff60b20385c8222d094492b879c209441cdcf10f79f5692af962781d",
+          "scene": "run"
+        },
+        {
+          "cache_key": "3002153fef5b6fbeb37e474a0c7fb2b87b78952dfd8ffc5936687058f5c7b868",
+          "candidate_id": "physical_v1:2d39343d0ae5224cbe39565d7c23120e7a821fb760699329c7516d4159a830e6",
+          "candidate_identity_sha256": "3002153fef5b6fbeb37e474a0c7fb2b87b78952dfd8ffc5936687058f5c7b868",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p50-short-low",
+          "record_id": "run3_LYX_0708",
+          "reservation_sha256": "ebb67a2b007ba0255425401f4e14692e0d687c2d99086e40edc2665b49d822c5",
+          "scene": "run"
+        },
+        {
+          "cache_key": "52d5c443be8cc740fda1aca0333107ca22a28ed3e1b3379638a1b77dcd674337",
+          "candidate_id": "physical_v1:5ecc2af4c931857696e355475fe6352180030f71460c734b78b856afb8859006",
+          "candidate_identity_sha256": "52d5c443be8cc740fda1aca0333107ca22a28ed3e1b3379638a1b77dcd674337",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p50-short-low",
+          "record_id": "run3_LYX_0708",
+          "reservation_sha256": "fff6e9efb4c30bb2c8a70b7f9ac314f96b2099f628c9d2613621fd00ecaf915c",
+          "scene": "run"
+        },
+        {
+          "cache_key": "2c0a3abbfc069e413033a1ab16bb9fb3093cc22eabb84906dd276ae99c965bed",
+          "candidate_id": "physical_v1:079b98a3d43131364fbdf38ce954fee23dcb76e2ffea08a8e6a3679ec0cad650",
+          "candidate_identity_sha256": "2c0a3abbfc069e413033a1ab16bb9fb3093cc22eabb84906dd276ae99c965bed",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p50-short-low",
+          "record_id": "xiezi2_LYX_0708",
+          "reservation_sha256": "9a6407effa137c472f2f9d21af9a97d880a44127610d3f605d0a17b0af8209cb",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "374d580137e9374cd573cdec16747a40a61f88a60a06ba09cf090841c03ccfce",
+          "candidate_id": "physical_v1:0c1ca624ff3cef5a277d72d99caecefd12e9943693db274c2d828a5ffc417b34",
+          "candidate_identity_sha256": "374d580137e9374cd573cdec16747a40a61f88a60a06ba09cf090841c03ccfce",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-short-low",
+          "record_id": "xiezi2_LYX_0708",
+          "reservation_sha256": "c138831133b1bbcf6ea677c608d822cba5b30cb244cda5a99c3803c6bf72374b",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "e7cd7ee105cd91d5749a5c9dbb849fc5052053cbbc7237eae55259ed638f2f61",
+          "candidate_id": "physical_v1:2d39343d0ae5224cbe39565d7c23120e7a821fb760699329c7516d4159a830e6",
+          "candidate_identity_sha256": "e7cd7ee105cd91d5749a5c9dbb849fc5052053cbbc7237eae55259ed638f2f61",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p50-short-low",
+          "record_id": "xiezi2_LYX_0708",
+          "reservation_sha256": "ee965c899c446a7b19ea21d872e5077865788a53fd7e985e25bc8e4e48742c71",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "a28ae0387d5c98c61cc628796d01344ab98fda63254a614a8b9c47934aff73a6",
+          "candidate_id": "physical_v1:5ecc2af4c931857696e355475fe6352180030f71460c734b78b856afb8859006",
+          "candidate_identity_sha256": "a28ae0387d5c98c61cc628796d01344ab98fda63254a614a8b9c47934aff73a6",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p50-short-low",
+          "record_id": "xiezi2_LYX_0708",
+          "reservation_sha256": "cba1c26d869e8e1a578b9db70edfab4904c4293e7bed2c9e0a6e0ff1e4c22783",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "d10f238ffc56ebaa1253e3ed72c7c3db182d63f63d7b9f3e879d91214649c0bc",
+          "candidate_id": "physical_v1:079b98a3d43131364fbdf38ce954fee23dcb76e2ffea08a8e6a3679ec0cad650",
+          "candidate_identity_sha256": "d10f238ffc56ebaa1253e3ed72c7c3db182d63f63d7b9f3e879d91214649c0bc",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p50-short-low",
+          "record_id": "xiezi3_LYX_0708",
+          "reservation_sha256": "269c396f76646ffccaf2cd17ccc73f035686f0b6d8440399b99784f43d9b8e78",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "560b0831fefc5dd20d3563db6e0366b4f9b6930ba9870cf4e48f287e027fdcca",
+          "candidate_id": "physical_v1:0c1ca624ff3cef5a277d72d99caecefd12e9943693db274c2d828a5ffc417b34",
+          "candidate_identity_sha256": "560b0831fefc5dd20d3563db6e0366b4f9b6930ba9870cf4e48f287e027fdcca",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-short-low",
+          "record_id": "xiezi3_LYX_0708",
+          "reservation_sha256": "cd478b17f49ed761d7a620c769876e776cfeeb8231948297e7a2d86ed243db89",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "cecc8e37959b19f83aaadb8c5efbcc5cd7bc3a486827c7430627e3872676e941",
+          "candidate_id": "physical_v1:2d39343d0ae5224cbe39565d7c23120e7a821fb760699329c7516d4159a830e6",
+          "candidate_identity_sha256": "cecc8e37959b19f83aaadb8c5efbcc5cd7bc3a486827c7430627e3872676e941",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p50-short-low",
+          "record_id": "xiezi3_LYX_0708",
+          "reservation_sha256": "fbfe0d1bddd63776431bb866c1d24056d57c0031e656fb872f8305cb05bf5c8c",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "2630337fefd3958b1ba87c10b1db3ed1a6faec7a06499eca3076a2655d7d8f55",
+          "candidate_id": "physical_v1:5ecc2af4c931857696e355475fe6352180030f71460c734b78b856afb8859006",
+          "candidate_identity_sha256": "2630337fefd3958b1ba87c10b1db3ed1a6faec7a06499eca3076a2655d7d8f55",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p50-short-low",
+          "record_id": "xiezi3_LYX_0708",
+          "reservation_sha256": "7fd73a256b4c3d5732bd33ff40742446a610e9a9570f5461dc395bac746cab66",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "1341b7966e4edb909af1f471e9f42d4bc79f751eadcb3d89b6c0433cb17928dd",
+          "candidate_id": "physical_v1:079b98a3d43131364fbdf38ce954fee23dcb76e2ffea08a8e6a3679ec0cad650",
+          "candidate_identity_sha256": "1341b7966e4edb909af1f471e9f42d4bc79f751eadcb3d89b6c0433cb17928dd",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p50-short-low",
+          "record_id": "xiezi4_LYX_0708",
+          "reservation_sha256": "353adaf43967a57ca5f22165bbd25e274df672ace877b190c727761ed6e22eb6",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "b582ea45428a47a2adff12bc7191ffbdd9dd03bd2a38b6a8b840f0f350c1ff2c",
+          "candidate_id": "physical_v1:0c1ca624ff3cef5a277d72d99caecefd12e9943693db274c2d828a5ffc417b34",
+          "candidate_identity_sha256": "b582ea45428a47a2adff12bc7191ffbdd9dd03bd2a38b6a8b840f0f350c1ff2c",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-short-low",
+          "record_id": "xiezi4_LYX_0708",
+          "reservation_sha256": "c304d5ab02aec839ae2fade249249ef6781389330f5c0187ebea1b79be0e18e7",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "e3a1b1a7a9c1683a6a8ca4dc1bd15b4b1d0d6117e1fce97169c80e857905666b",
+          "candidate_id": "physical_v1:2d39343d0ae5224cbe39565d7c23120e7a821fb760699329c7516d4159a830e6",
+          "candidate_identity_sha256": "e3a1b1a7a9c1683a6a8ca4dc1bd15b4b1d0d6117e1fce97169c80e857905666b",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p50-short-low",
+          "record_id": "xiezi4_LYX_0708",
+          "reservation_sha256": "d121ab9e42b5b16a37f384ad0cb58d725cb936d1b0c9e6bc044fbd4e26306636",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "14401da322fd2a9681931911960557391dd978a5a6d9f77d33eb3ac338092294",
+          "candidate_id": "physical_v1:5ecc2af4c931857696e355475fe6352180030f71460c734b78b856afb8859006",
+          "candidate_identity_sha256": "14401da322fd2a9681931911960557391dd978a5a6d9f77d33eb3ac338092294",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p50-short-low",
+          "record_id": "xiezi4_LYX_0708",
+          "reservation_sha256": "d5422fe8346284e9df2e1f261dd6243f79068bdc746e0649d930500bad2008cf",
+          "scene": "xiezi"
+        }
+      ],
+      "occurrence_count": 44,
+      "profile_id": "p50-short-low",
+      "scenes": [
+        "jianpan",
+        "kaihe",
+        "run",
+        "xiezi"
+      ]
+    },
+    {
+      "coordinate": {
+        "fs_target": 50,
+        "memory_ms": 200,
+        "nominal_mu": 0.012
+      },
+      "entries": [
+        {
+          "cache_key": "07913aa44386866bc86bfabcd08c9be6305ac0f7c465436960ed18c92985fb38",
+          "candidate_id": "physical_v1:127332835b252a0ae4364ecf415f8913a77276ccc42f5d20ec5c2c8667666416",
+          "candidate_identity_sha256": "07913aa44386866bc86bfabcd08c9be6305ac0f7c465436960ed18c92985fb38",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "jianpan1_LYX_0708",
+          "reservation_sha256": "42d87071952318cca4a7fea3f00df11988423e29276007d57c2cd2ef93f9f823",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "d84fa3bc5c187a3bb5743bfc86de195ad92d789305c1cbdd7f843472bd6802c2",
+          "candidate_id": "physical_v1:300f07aefd5f09e7cae71c7b658bab3cc768edddaefb92f55683b6119dfab633",
+          "candidate_identity_sha256": "d84fa3bc5c187a3bb5743bfc86de195ad92d789305c1cbdd7f843472bd6802c2",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "jianpan1_LYX_0708",
+          "reservation_sha256": "0c06e6e895a179549b22507722a0a06f2f53b59cea70573c1b3b6402022309b2",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "c70b24daad17a9cd041c2e9ab0d8b6a75635de827bac888c4cc88853db428004",
+          "candidate_id": "physical_v1:127332835b252a0ae4364ecf415f8913a77276ccc42f5d20ec5c2c8667666416",
+          "candidate_identity_sha256": "c70b24daad17a9cd041c2e9ab0d8b6a75635de827bac888c4cc88853db428004",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "jianpan2_LYX_0708",
+          "reservation_sha256": "74bbf144d8375fb3f6b0c60d0108be6286c83c31cbf3f5448a07c72727edb324",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "7fba62dee3e147630d6fcf1ee6b03aa27e1b2806cc10f28b38407f09c02e3a61",
+          "candidate_id": "physical_v1:300f07aefd5f09e7cae71c7b658bab3cc768edddaefb92f55683b6119dfab633",
+          "candidate_identity_sha256": "7fba62dee3e147630d6fcf1ee6b03aa27e1b2806cc10f28b38407f09c02e3a61",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "jianpan2_LYX_0708",
+          "reservation_sha256": "a144e0d334f1a76bc3fa5cf54bc672359be2dd412ffd4ac2dc761cf430f69c80",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "d3e5d1eaf6d83ed06665826daf25d20f393606bd92fd1356a4fb5a01a9852b83",
+          "candidate_id": "physical_v1:55f10cca0953a26a502fedf0c3e793916f868fdf6e49cf09f8caa648b5d331c5",
+          "candidate_identity_sha256": "d3e5d1eaf6d83ed06665826daf25d20f393606bd92fd1356a4fb5a01a9852b83",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "jianpan2_LYX_0708",
+          "reservation_sha256": "a82acedad11bbdbb099ebc48039814373a4173a15957a3aaa0806371bc182e66",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "2f32de7abb49430cb8508abbf83faf5a1755cff031bd3202988d1769f963a721",
+          "candidate_id": "physical_v1:e8fd7acb934c139f02245b1f50e1974f6a0db5831b1d1beba9ec315fba9c2b45",
+          "candidate_identity_sha256": "2f32de7abb49430cb8508abbf83faf5a1755cff031bd3202988d1769f963a721",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "jianpan2_LYX_0708",
+          "reservation_sha256": "0d0303714fe969767bfa75d46f539c7f3433e5a584af3fd926fcc416fd943753",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "527b142b682855c9f06b6c9fb1c07bd9a095b1ccbcab26c91f4deffe0451e7ee",
+          "candidate_id": "physical_v1:127332835b252a0ae4364ecf415f8913a77276ccc42f5d20ec5c2c8667666416",
+          "candidate_identity_sha256": "527b142b682855c9f06b6c9fb1c07bd9a095b1ccbcab26c91f4deffe0451e7ee",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "jianpan3_LYX_0708",
+          "reservation_sha256": "0776be4fba492d37c485cd1e99f3199d2fb1bdbe2cbc1454a0726d272ce052ec",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "33a5ce624d704a9527984a6f004de701df35d531fae5d31fa3ec5b6626b70fa0",
+          "candidate_id": "physical_v1:300f07aefd5f09e7cae71c7b658bab3cc768edddaefb92f55683b6119dfab633",
+          "candidate_identity_sha256": "33a5ce624d704a9527984a6f004de701df35d531fae5d31fa3ec5b6626b70fa0",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "jianpan3_LYX_0708",
+          "reservation_sha256": "2ab349ff30ce4b4cd92dbf790e05c5b88de0f816e6bbf78d650083e60d87f59e",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "b9c9a5d397febb64ca3200a51705f64080144e286dd78ef73478d1b4d4244e55",
+          "candidate_id": "physical_v1:55f10cca0953a26a502fedf0c3e793916f868fdf6e49cf09f8caa648b5d331c5",
+          "candidate_identity_sha256": "b9c9a5d397febb64ca3200a51705f64080144e286dd78ef73478d1b4d4244e55",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "jianpan3_LYX_0708",
+          "reservation_sha256": "2b601a7d4045d2b62e0106b779f59a5f093faaef97c9dbd90ea1b18b619e366e",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "48976e56eaf7e85db5a50e550b630bbb472b3f2d0c3667e5bddf01f2496b589b",
+          "candidate_id": "physical_v1:127332835b252a0ae4364ecf415f8913a77276ccc42f5d20ec5c2c8667666416",
+          "candidate_identity_sha256": "48976e56eaf7e85db5a50e550b630bbb472b3f2d0c3667e5bddf01f2496b589b",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "kaihe1_LYX_0613",
+          "reservation_sha256": "9d0deff1f21e03a376d028659d159f2bdb5af0e1d67e477fdd1e7c7943047fc4",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "0498179751ed08881f781ec455beb319eab13578121e27770b1187147d114ac0",
+          "candidate_id": "physical_v1:300f07aefd5f09e7cae71c7b658bab3cc768edddaefb92f55683b6119dfab633",
+          "candidate_identity_sha256": "0498179751ed08881f781ec455beb319eab13578121e27770b1187147d114ac0",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "kaihe1_LYX_0613",
+          "reservation_sha256": "39b91773a9b067a57c7bad0d833402453babd4eb2a3910b013e614c84bdc1b3b",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "9330accf132e0f9c3ca691cb583b69f9278306ba71ef210b99350cb332c138bf",
+          "candidate_id": "physical_v1:127332835b252a0ae4364ecf415f8913a77276ccc42f5d20ec5c2c8667666416",
+          "candidate_identity_sha256": "9330accf132e0f9c3ca691cb583b69f9278306ba71ef210b99350cb332c138bf",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "kaihe1_LYX_0617",
+          "reservation_sha256": "c574d1646a03d05abae58f6c6633e6cd824bcc2a1e7724f87498b6b8927363f6",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "92f39f969a6b51635a8c93b971f36e5e8bb6fc339db08ce4a1b4d42225042ade",
+          "candidate_id": "physical_v1:300f07aefd5f09e7cae71c7b658bab3cc768edddaefb92f55683b6119dfab633",
+          "candidate_identity_sha256": "92f39f969a6b51635a8c93b971f36e5e8bb6fc339db08ce4a1b4d42225042ade",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "kaihe1_LYX_0617",
+          "reservation_sha256": "7ef64db424d9e5c7c4604b02eae4b8f2a0b61831efdefdade3a001c0e74555fa",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "261559a73f1d6598769858c0b294479459d1e2b5fc04e7610070c898e91256a5",
+          "candidate_id": "physical_v1:127332835b252a0ae4364ecf415f8913a77276ccc42f5d20ec5c2c8667666416",
+          "candidate_identity_sha256": "261559a73f1d6598769858c0b294479459d1e2b5fc04e7610070c898e91256a5",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "kaihe3_LYX_0613",
+          "reservation_sha256": "36193a8d585915319d80608d10f880b8598b196fceff5757fc1f76b981e90c88",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "3eaf15113ccb23a6d97fe35961acad0961772b1a5c5cfdfcf3756ff7b9dd843d",
+          "candidate_id": "physical_v1:300f07aefd5f09e7cae71c7b658bab3cc768edddaefb92f55683b6119dfab633",
+          "candidate_identity_sha256": "3eaf15113ccb23a6d97fe35961acad0961772b1a5c5cfdfcf3756ff7b9dd843d",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "kaihe3_LYX_0613",
+          "reservation_sha256": "91e7261306702aa8e2280a26972700a6b08521847dc42efc33af907db27957b0",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "f26a3e93bc979b17e9a4a4f0c32de761fc90b87830bcb6c1617b944b995a1bdd",
+          "candidate_id": "physical_v1:55f10cca0953a26a502fedf0c3e793916f868fdf6e49cf09f8caa648b5d331c5",
+          "candidate_identity_sha256": "f26a3e93bc979b17e9a4a4f0c32de761fc90b87830bcb6c1617b944b995a1bdd",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "kaihe3_LYX_0613",
+          "reservation_sha256": "a926d5367750d6ca7e597ba389735035b2eac575ace2ee4de8d716baf04bd9e4",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "5502cb144298d3454f15f5ee225fd9de430660a84bcd460e90f71263b1351633",
+          "candidate_id": "physical_v1:e8fd7acb934c139f02245b1f50e1974f6a0db5831b1d1beba9ec315fba9c2b45",
+          "candidate_identity_sha256": "5502cb144298d3454f15f5ee225fd9de430660a84bcd460e90f71263b1351633",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "kaihe3_LYX_0613",
+          "reservation_sha256": "d1beb44a1b7b40dc636d26443642944565680db07daa7c60c410601220788d0e",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "f474878f6495d8da0d811fff0ecf68cd3a5cb44afffdb2e004bb8bbaf2df5d23",
+          "candidate_id": "physical_v1:127332835b252a0ae4364ecf415f8913a77276ccc42f5d20ec5c2c8667666416",
+          "candidate_identity_sha256": "f474878f6495d8da0d811fff0ecf68cd3a5cb44afffdb2e004bb8bbaf2df5d23",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "run1_LYX_0708",
+          "reservation_sha256": "89767d39bdbd3bb82afd63ff26e4aa2be655fac6862a0d4da200e6c24750c7a4",
+          "scene": "run"
+        },
+        {
+          "cache_key": "4f541c92ed5215e1cd69a3b2ee69df3181a04dd45a620a0df8f572a0191213d6",
+          "candidate_id": "physical_v1:300f07aefd5f09e7cae71c7b658bab3cc768edddaefb92f55683b6119dfab633",
+          "candidate_identity_sha256": "4f541c92ed5215e1cd69a3b2ee69df3181a04dd45a620a0df8f572a0191213d6",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "run1_LYX_0708",
+          "reservation_sha256": "671a0d66ad52f9781259d6f5853a8bba9fb05b9e83b3848532852013ac49d4fd",
+          "scene": "run"
+        },
+        {
+          "cache_key": "aa9e85627005acb34238f6bb733daeb4a677a5fa10328a992d3e387db7a9c9c0",
+          "candidate_id": "physical_v1:55f10cca0953a26a502fedf0c3e793916f868fdf6e49cf09f8caa648b5d331c5",
+          "candidate_identity_sha256": "aa9e85627005acb34238f6bb733daeb4a677a5fa10328a992d3e387db7a9c9c0",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "run1_LYX_0708",
+          "reservation_sha256": "d44e185e80fed9dd6251077bfdfdcd2310d8d24d37569cb90489056db8e830f4",
+          "scene": "run"
+        },
+        {
+          "cache_key": "6b290c8a9e005a2414ea704b2357b5b5c347d0db7d8c1eb208f9c2a9aee8c739",
+          "candidate_id": "physical_v1:127332835b252a0ae4364ecf415f8913a77276ccc42f5d20ec5c2c8667666416",
+          "candidate_identity_sha256": "6b290c8a9e005a2414ea704b2357b5b5c347d0db7d8c1eb208f9c2a9aee8c739",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "run2_LYX_0708",
+          "reservation_sha256": "847e6ff474daada606d72b1048ab3711a735410e2e153a1a80c4b5f0614fdc79",
+          "scene": "run"
+        },
+        {
+          "cache_key": "416d5c18e8796c175ce2c201df9b19e33f4c1489f18c26e2bf13bf5f693afd3c",
+          "candidate_id": "physical_v1:300f07aefd5f09e7cae71c7b658bab3cc768edddaefb92f55683b6119dfab633",
+          "candidate_identity_sha256": "416d5c18e8796c175ce2c201df9b19e33f4c1489f18c26e2bf13bf5f693afd3c",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "run2_LYX_0708",
+          "reservation_sha256": "ffbbbeb10f17fb38cb81fed8478ca7cc55ae34a9580c454f3d6fe26948cb097e",
+          "scene": "run"
+        },
+        {
+          "cache_key": "979010326968f8e59d5959f7791b825332516f4937124dd93011b318929ce870",
+          "candidate_id": "physical_v1:127332835b252a0ae4364ecf415f8913a77276ccc42f5d20ec5c2c8667666416",
+          "candidate_identity_sha256": "979010326968f8e59d5959f7791b825332516f4937124dd93011b318929ce870",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "run3_LYX_0708",
+          "reservation_sha256": "1c68529f4a07f9f24f83a596886b84c1bd5122922658e680310d56798cef76ed",
+          "scene": "run"
+        },
+        {
+          "cache_key": "8d29ddd443e61032b7dc02b179313a96c393e821468128c4db834ba2390b4d76",
+          "candidate_id": "physical_v1:300f07aefd5f09e7cae71c7b658bab3cc768edddaefb92f55683b6119dfab633",
+          "candidate_identity_sha256": "8d29ddd443e61032b7dc02b179313a96c393e821468128c4db834ba2390b4d76",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "run3_LYX_0708",
+          "reservation_sha256": "ad2c25003d8958d0d7c196107b6ecf10613bd24d98e2e9c4828b653176b60054",
+          "scene": "run"
+        },
+        {
+          "cache_key": "56a0b98cb330161afd4fcb21af972bc98940292299c6c7c02f93be3c0d0dc66e",
+          "candidate_id": "physical_v1:127332835b252a0ae4364ecf415f8913a77276ccc42f5d20ec5c2c8667666416",
+          "candidate_identity_sha256": "56a0b98cb330161afd4fcb21af972bc98940292299c6c7c02f93be3c0d0dc66e",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "xiezi2_LYX_0708",
+          "reservation_sha256": "7ca909bd02d502fe3c3e2ea3d42144ec66d7296c81e4910f0785bee91873b142",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "be88d796451943f4724ab601773e183e6c82908e126c62b7cd1d3b21a3a25a3e",
+          "candidate_id": "physical_v1:300f07aefd5f09e7cae71c7b658bab3cc768edddaefb92f55683b6119dfab633",
+          "candidate_identity_sha256": "be88d796451943f4724ab601773e183e6c82908e126c62b7cd1d3b21a3a25a3e",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "xiezi2_LYX_0708",
+          "reservation_sha256": "c9a9b9acd167ab6c9d85f4d047cf2ccc069129b281e46af7312d67847fa59040",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "c00012fb7bae376cef086ca54c6c6e94e21a4f82070e1d976b4c619431844565",
+          "candidate_id": "physical_v1:127332835b252a0ae4364ecf415f8913a77276ccc42f5d20ec5c2c8667666416",
+          "candidate_identity_sha256": "c00012fb7bae376cef086ca54c6c6e94e21a4f82070e1d976b4c619431844565",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "xiezi3_LYX_0708",
+          "reservation_sha256": "a5c0394e48ccbcb97172225f4c8816bca7d68ab28f36870c5ede4d2c20a4e154",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "a0e76df181278e2ce9600dab96ecd4d023b98d8ef1bab449b9bb8d3ff07eb2fb",
+          "candidate_id": "physical_v1:300f07aefd5f09e7cae71c7b658bab3cc768edddaefb92f55683b6119dfab633",
+          "candidate_identity_sha256": "a0e76df181278e2ce9600dab96ecd4d023b98d8ef1bab449b9bb8d3ff07eb2fb",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "xiezi3_LYX_0708",
+          "reservation_sha256": "200fda1cfdff50865016f5eb2c238546d744ac18e7eaf059f34950fb03409808",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "8f5ce59ac1786952a23b0a0827e1b4ef265765d7574707a347587afa59609624",
+          "candidate_id": "physical_v1:127332835b252a0ae4364ecf415f8913a77276ccc42f5d20ec5c2c8667666416",
+          "candidate_identity_sha256": "8f5ce59ac1786952a23b0a0827e1b4ef265765d7574707a347587afa59609624",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "xiezi4_LYX_0708",
+          "reservation_sha256": "dfdc264735ea341c6bb18e0642a264bea10862fb8262a07823445702d3d0874a",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "cf8e19254f1e04eaa49ae7f1df7411d4734d6147da86fd7900ce8c6c4ae787cb",
+          "candidate_id": "physical_v1:300f07aefd5f09e7cae71c7b658bab3cc768edddaefb92f55683b6119dfab633",
+          "candidate_identity_sha256": "cf8e19254f1e04eaa49ae7f1df7411d4734d6147da86fd7900ce8c6c4ae787cb",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "xiezi4_LYX_0708",
+          "reservation_sha256": "15550f930027978ef46fb5f6e75c3727e0c30805dbd6e138f3d964de2e41adc9",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "5d3724acabe03f7cfa2332e9f0e0f61cf76a31829a8c2abdc651b693b2cf6887",
+          "candidate_id": "physical_v1:e8fd7acb934c139f02245b1f50e1974f6a0db5831b1d1beba9ec315fba9c2b45",
+          "candidate_identity_sha256": "5d3724acabe03f7cfa2332e9f0e0f61cf76a31829a8c2abdc651b693b2cf6887",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p50-long-mid",
+          "record_id": "xiezi4_LYX_0708",
+          "reservation_sha256": "44814a191fffb2286ff7c3a6aeb58047f52c965d1a53c2454b3d23e2241b5da4",
+          "scene": "xiezi"
+        }
+      ],
+      "occurrence_count": 31,
+      "profile_id": "p50-long-mid",
+      "scenes": [
+        "jianpan",
+        "kaihe",
+        "run",
+        "xiezi"
+      ]
+    },
+    {
+      "coordinate": {
+        "fs_target": 50,
+        "memory_ms": 200,
+        "nominal_mu": 0.016
+      },
+      "entries": [
+        {
+          "cache_key": "80d7e515588086107d13b6fd449514d9d94f5758c49d38b6f846ece520a417d7",
+          "candidate_id": "physical_v1:b042cbc9d9a9e40e1e60424e31f032f24e331bbc31d8432584259a22e86acb7a",
+          "candidate_identity_sha256": "80d7e515588086107d13b6fd449514d9d94f5758c49d38b6f846ece520a417d7",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p50-long-high",
+          "record_id": "jianpan1_LYX_0708",
+          "reservation_sha256": "d7bd899931dc90d2563e5dccddba37a527837db1e2e8f7c5265cc1d8fa362d30",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "36d9be7d2d8f1b82346a3b037a67bf5ed5dcab04ce910442fef924764443ecfa",
+          "candidate_id": "physical_v1:a06f00e5eaee1034d56d4e6931ddcfb33064cfdb765d1ebbc9a7689be451c003",
+          "candidate_identity_sha256": "36d9be7d2d8f1b82346a3b037a67bf5ed5dcab04ce910442fef924764443ecfa",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-long-high",
+          "record_id": "jianpan2_LYX_0708",
+          "reservation_sha256": "33388ac13b953331b6edc38e7978b2eebbfd444b633114865edcb3e09873e47d",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "6412850d1bd6768af7f9aef922f9e684ed958bb826640e5003c4d3dd68304c21",
+          "candidate_id": "physical_v1:b042cbc9d9a9e40e1e60424e31f032f24e331bbc31d8432584259a22e86acb7a",
+          "candidate_identity_sha256": "6412850d1bd6768af7f9aef922f9e684ed958bb826640e5003c4d3dd68304c21",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p50-long-high",
+          "record_id": "jianpan2_LYX_0708",
+          "reservation_sha256": "f70f07bda2d6be64c064e380a5f603736b085055c28b0e2590377e8d77aa573a",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "f283b99e7fa77847bd9181127c4a3ea4e40884259b8bca95be8d8fff21b962a2",
+          "candidate_id": "physical_v1:a06f00e5eaee1034d56d4e6931ddcfb33064cfdb765d1ebbc9a7689be451c003",
+          "candidate_identity_sha256": "f283b99e7fa77847bd9181127c4a3ea4e40884259b8bca95be8d8fff21b962a2",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-long-high",
+          "record_id": "jianpan3_LYX_0708",
+          "reservation_sha256": "bcfd174f593d4c58f9a8608dc871ab1dd988d2ff9a80579fa489c93ebc79f70f",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "bcf978668ba4f8ffbeee93793c85e2bcd9ed620c3d199827e6d292c2752e4fb0",
+          "candidate_id": "physical_v1:a2ab40da13992cf6f3b68f1220a604756b6f1ca77a368996008b86759c90f8aa",
+          "candidate_identity_sha256": "bcf978668ba4f8ffbeee93793c85e2bcd9ed620c3d199827e6d292c2752e4fb0",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p50-long-high",
+          "record_id": "jianpan3_LYX_0708",
+          "reservation_sha256": "930c863a7dc83b5c5bf569882f3ad3ae64416bb6988af84d69c7808cd3259f3c",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "db1a5906592aafa657daaea1a4895c34b260138aa4f298a37e14ade99e946c3c",
+          "candidate_id": "physical_v1:b042cbc9d9a9e40e1e60424e31f032f24e331bbc31d8432584259a22e86acb7a",
+          "candidate_identity_sha256": "db1a5906592aafa657daaea1a4895c34b260138aa4f298a37e14ade99e946c3c",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p50-long-high",
+          "record_id": "jianpan3_LYX_0708",
+          "reservation_sha256": "7fed4033cfb45ca663fd4336e1372c3e83b37f0977e1204dc5fee6f94daa645a",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "d693a0dd0c31a183bdd547597b35cf380bc73c149c229ad9655791407510e8ce",
+          "candidate_id": "physical_v1:a2ab40da13992cf6f3b68f1220a604756b6f1ca77a368996008b86759c90f8aa",
+          "candidate_identity_sha256": "d693a0dd0c31a183bdd547597b35cf380bc73c149c229ad9655791407510e8ce",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p50-long-high",
+          "record_id": "kaihe1_LYX_0613",
+          "reservation_sha256": "9fc23e4e86367192f86a2ef6a89781b7ef6cb35910ed17157ca572c33fd02ed0",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "0e70f9b0f30de83939d89d98420bacbc2ab68140a1b0f2c6079bc2f33e0d845b",
+          "candidate_id": "physical_v1:a06f00e5eaee1034d56d4e6931ddcfb33064cfdb765d1ebbc9a7689be451c003",
+          "candidate_identity_sha256": "0e70f9b0f30de83939d89d98420bacbc2ab68140a1b0f2c6079bc2f33e0d845b",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-long-high",
+          "record_id": "kaihe3_LYX_0613",
+          "reservation_sha256": "85ef76ef86f540f6befb93c3607f664f0c5dd7c1079934a76c79ba74667cd92d",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "57842d5e9c7188fe39cc09f4721bdf5ce6252f51f23d5b3702bc82821c2b6f81",
+          "candidate_id": "physical_v1:b042cbc9d9a9e40e1e60424e31f032f24e331bbc31d8432584259a22e86acb7a",
+          "candidate_identity_sha256": "57842d5e9c7188fe39cc09f4721bdf5ce6252f51f23d5b3702bc82821c2b6f81",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p50-long-high",
+          "record_id": "kaihe3_LYX_0613",
+          "reservation_sha256": "3f385a57366e9c3de6ba077642e1c067284d666f227fb2eb099fe50468fd5276",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "82e6414d6494a6ecc4bc04593dbc4e751ba2b05160ee3392d954dfae26132a29",
+          "candidate_id": "physical_v1:cb7586bebea6dd6af316d3f578d1096f132151fd04fac8e9f0f9dd849a32521e",
+          "candidate_identity_sha256": "82e6414d6494a6ecc4bc04593dbc4e751ba2b05160ee3392d954dfae26132a29",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p50-long-high",
+          "record_id": "kaihe3_LYX_0613",
+          "reservation_sha256": "795a24659914920287545af2f44eb307654a788056b60047438a1f5fdcadcdb0",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "e6857f953254712c6710859ebcb7473636d1f1f7705692af78568da4cee6a9c6",
+          "candidate_id": "physical_v1:a06f00e5eaee1034d56d4e6931ddcfb33064cfdb765d1ebbc9a7689be451c003",
+          "candidate_identity_sha256": "e6857f953254712c6710859ebcb7473636d1f1f7705692af78568da4cee6a9c6",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-long-high",
+          "record_id": "run1_LYX_0708",
+          "reservation_sha256": "0ba69e51488b57fccaf017546f37a433784fc78d7cd4e99eb89240cdf82a7d32",
+          "scene": "run"
+        },
+        {
+          "cache_key": "3b7754fabfd96aefc9bdf01a3ea087b7fc1d073e0038b3a60c0e9db267a2dbb9",
+          "candidate_id": "physical_v1:a2ab40da13992cf6f3b68f1220a604756b6f1ca77a368996008b86759c90f8aa",
+          "candidate_identity_sha256": "3b7754fabfd96aefc9bdf01a3ea087b7fc1d073e0038b3a60c0e9db267a2dbb9",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p50-long-high",
+          "record_id": "run1_LYX_0708",
+          "reservation_sha256": "acda4b83a32dc0bd83add6a41c9655d68828551fa3a6b68ae2978c66666a6873",
+          "scene": "run"
+        },
+        {
+          "cache_key": "12e9ed127a08051a0ec34acab56a0d6e15aa4007539d3a6520e6fa7687a92378",
+          "candidate_id": "physical_v1:b042cbc9d9a9e40e1e60424e31f032f24e331bbc31d8432584259a22e86acb7a",
+          "candidate_identity_sha256": "12e9ed127a08051a0ec34acab56a0d6e15aa4007539d3a6520e6fa7687a92378",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p50-long-high",
+          "record_id": "run1_LYX_0708",
+          "reservation_sha256": "9410920537c03981ef31c9eda7a6f6599f5b0391069504615d7221f5d001911d",
+          "scene": "run"
+        },
+        {
+          "cache_key": "402610a593ecfe9b7fc39e4624fae1c83ec44e457e6d3cd150f76bc298d46efa",
+          "candidate_id": "physical_v1:cb7586bebea6dd6af316d3f578d1096f132151fd04fac8e9f0f9dd849a32521e",
+          "candidate_identity_sha256": "402610a593ecfe9b7fc39e4624fae1c83ec44e457e6d3cd150f76bc298d46efa",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p50-long-high",
+          "record_id": "run1_LYX_0708",
+          "reservation_sha256": "3f7c4a162ffa3060df112b3ab972d1ec417c51d477ec43b202e18966f6ad531e",
+          "scene": "run"
+        },
+        {
+          "cache_key": "31feaee36f4c7f6d6d04444c8dec70fc1c9b75c7577b6e80719482eea1b57ce2",
+          "candidate_id": "physical_v1:a06f00e5eaee1034d56d4e6931ddcfb33064cfdb765d1ebbc9a7689be451c003",
+          "candidate_identity_sha256": "31feaee36f4c7f6d6d04444c8dec70fc1c9b75c7577b6e80719482eea1b57ce2",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p50-long-high",
+          "record_id": "xiezi4_LYX_0708",
+          "reservation_sha256": "8b4f2eaf5d691f33865b0041502d8a199ecdffbf786865e1276493d6d1405c67",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "c7b6af05dab27e93828117a170382618f140fbba576d22f052b7cb697af9eb74",
+          "candidate_id": "physical_v1:a2ab40da13992cf6f3b68f1220a604756b6f1ca77a368996008b86759c90f8aa",
+          "candidate_identity_sha256": "c7b6af05dab27e93828117a170382618f140fbba576d22f052b7cb697af9eb74",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p50-long-high",
+          "record_id": "xiezi4_LYX_0708",
+          "reservation_sha256": "9da1c0dae96f508f55c5682174e95569f9ea2a40220b1aef3beab8e7544327f1",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "9124c0715029a8288b98abe0801bad75663c9a94eb5a08290ef42dde3f261618",
+          "candidate_id": "physical_v1:b042cbc9d9a9e40e1e60424e31f032f24e331bbc31d8432584259a22e86acb7a",
+          "candidate_identity_sha256": "9124c0715029a8288b98abe0801bad75663c9a94eb5a08290ef42dde3f261618",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p50-long-high",
+          "record_id": "xiezi4_LYX_0708",
+          "reservation_sha256": "c4df5f2846ed80ffb166ded7d060c658bd73537faacf39e5ba99fb19b41d6284",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "fba687b0b11362663f980f0a923bd9995c77ad58b10c19186cc3099e0f1dea37",
+          "candidate_id": "physical_v1:cb7586bebea6dd6af316d3f578d1096f132151fd04fac8e9f0f9dd849a32521e",
+          "candidate_identity_sha256": "fba687b0b11362663f980f0a923bd9995c77ad58b10c19186cc3099e0f1dea37",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p50-long-high",
+          "record_id": "xiezi4_LYX_0708",
+          "reservation_sha256": "2bb4f47062f7a8e0ad935d1cf4a27e6ebbec57be18be89df5a4e4328165248d4",
+          "scene": "xiezi"
+        }
+      ],
+      "occurrence_count": 18,
+      "profile_id": "p50-long-high",
+      "scenes": [
+        "jianpan",
+        "kaihe",
+        "run",
+        "xiezi"
+      ]
+    },
+    {
+      "coordinate": {
+        "fs_target": 100,
+        "memory_ms": 40,
+        "nominal_mu": 0.016
+      },
+      "entries": [
+        {
+          "cache_key": "ce535bc829793f0f53664c4f4a4813f955a8166d1b7ac557d81fcc7121f26ed5",
+          "candidate_id": "physical_v1:1710c46842a667b8475d1a22e11d71ea6a18e3675f65544bb79c59ea18153edd",
+          "candidate_identity_sha256": "ce535bc829793f0f53664c4f4a4813f955a8166d1b7ac557d81fcc7121f26ed5",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p100-short-high",
+          "record_id": "jianpan1_LYX_0708",
+          "reservation_sha256": "63e0f97008e7c54c95044aa46399a82c4399c2ca13ec194e2cfaa75c64b963a3",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "ada4967aef53a048edb223553483f883e41cfecc8a28c3e00d6cb0fb14133c3e",
+          "candidate_id": "physical_v1:1a3ac56b1ba42f52de2bea6b14d056dfe317e84b54deae4a2f4477e125faabcb",
+          "candidate_identity_sha256": "ada4967aef53a048edb223553483f883e41cfecc8a28c3e00d6cb0fb14133c3e",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p100-short-high",
+          "record_id": "jianpan1_LYX_0708",
+          "reservation_sha256": "1951a4ebb5fe01ae86cd49d845c9a4ccd51e2d45fe87cf266aa919009384ffb8",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "eed5124864614f61703ab0714b9c4261f3fa1230fde73e84c8de76bac8b95b6d",
+          "candidate_id": "physical_v1:1710c46842a667b8475d1a22e11d71ea6a18e3675f65544bb79c59ea18153edd",
+          "candidate_identity_sha256": "eed5124864614f61703ab0714b9c4261f3fa1230fde73e84c8de76bac8b95b6d",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p100-short-high",
+          "record_id": "jianpan2_LYX_0708",
+          "reservation_sha256": "ed739db954d11af11e28b8512b24dc741c531b8cd0ff0c5a610043b515171386",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "043e3ce5a0f80681e432fa6c205f4434012ed0f3dd4ee719ec164114bcb554b7",
+          "candidate_id": "physical_v1:1a3ac56b1ba42f52de2bea6b14d056dfe317e84b54deae4a2f4477e125faabcb",
+          "candidate_identity_sha256": "043e3ce5a0f80681e432fa6c205f4434012ed0f3dd4ee719ec164114bcb554b7",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p100-short-high",
+          "record_id": "jianpan2_LYX_0708",
+          "reservation_sha256": "da85f4b84b576bdea0cc7edff9796872c622827327107f724babd0d8053f04f0",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "69de350f789f7770712ccf51c00f88c5ec2bb876f0ad8fcc6923ceb0211803ba",
+          "candidate_id": "physical_v1:1710c46842a667b8475d1a22e11d71ea6a18e3675f65544bb79c59ea18153edd",
+          "candidate_identity_sha256": "69de350f789f7770712ccf51c00f88c5ec2bb876f0ad8fcc6923ceb0211803ba",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p100-short-high",
+          "record_id": "jianpan3_LYX_0708",
+          "reservation_sha256": "8a3640cdce200a40d2690cbacf36773dcee637e0b9f4582fd0294e0595e6b48c",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "237b93e01a5da4bff21574bf68b6b028fbacf1df10591762d8fc079cf76b836c",
+          "candidate_id": "physical_v1:1a3ac56b1ba42f52de2bea6b14d056dfe317e84b54deae4a2f4477e125faabcb",
+          "candidate_identity_sha256": "237b93e01a5da4bff21574bf68b6b028fbacf1df10591762d8fc079cf76b836c",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p100-short-high",
+          "record_id": "jianpan3_LYX_0708",
+          "reservation_sha256": "89abaf3132487c2faf2df70d25c8a8505cd7c251fede53eaf91302b1b647080d",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "44a318ba7d91e811671d1d20a13d80c401d84acf3527926bd4ccebb823bccba9",
+          "candidate_id": "physical_v1:1710c46842a667b8475d1a22e11d71ea6a18e3675f65544bb79c59ea18153edd",
+          "candidate_identity_sha256": "44a318ba7d91e811671d1d20a13d80c401d84acf3527926bd4ccebb823bccba9",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p100-short-high",
+          "record_id": "kaihe1_LYX_0613",
+          "reservation_sha256": "f24e0351e3ac4dd7694f700b739546c66ae7c7f40672071855046b259437e001",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "a2e7dc9e7cc1345dfed9b719382f686ad861614cf7ed30549e75dd72344e0a6d",
+          "candidate_id": "physical_v1:1a3ac56b1ba42f52de2bea6b14d056dfe317e84b54deae4a2f4477e125faabcb",
+          "candidate_identity_sha256": "a2e7dc9e7cc1345dfed9b719382f686ad861614cf7ed30549e75dd72344e0a6d",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p100-short-high",
+          "record_id": "kaihe1_LYX_0613",
+          "reservation_sha256": "371124294cbf041736c228c4ef058ee2808493b0ecbecd70f0becc4353d20bef",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "9aa5dcab9d1b310b640ef7a381d1a9cee3863687e95e842b5be8adf3c8b4e2c5",
+          "candidate_id": "physical_v1:1710c46842a667b8475d1a22e11d71ea6a18e3675f65544bb79c59ea18153edd",
+          "candidate_identity_sha256": "9aa5dcab9d1b310b640ef7a381d1a9cee3863687e95e842b5be8adf3c8b4e2c5",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p100-short-high",
+          "record_id": "kaihe1_LYX_0617",
+          "reservation_sha256": "50e4ee5c6f28566d14ad87b108d103d4b87d6fec39826b709b722f6c63a894f4",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "c28a67db8015fa5f96e35001d6cfbe90e854e0ede404e2c97b9495737e6dcf1c",
+          "candidate_id": "physical_v1:1a3ac56b1ba42f52de2bea6b14d056dfe317e84b54deae4a2f4477e125faabcb",
+          "candidate_identity_sha256": "c28a67db8015fa5f96e35001d6cfbe90e854e0ede404e2c97b9495737e6dcf1c",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p100-short-high",
+          "record_id": "kaihe1_LYX_0617",
+          "reservation_sha256": "30da5ba65be5b8d292553b855ce177b864319228c3c254b33ccd382d825741d7",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "67a28850f3a4681a5e775a0e90782101d814e86a4406a067dfad58322659f53f",
+          "candidate_id": "physical_v1:ca1bcdf2e29bcc20eea83e38fd89682b29868c007c4cba3e4cd362d3f8b4ca9e",
+          "candidate_identity_sha256": "67a28850f3a4681a5e775a0e90782101d814e86a4406a067dfad58322659f53f",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p100-short-high",
+          "record_id": "kaihe1_LYX_0617",
+          "reservation_sha256": "d85a78a724c76c732dc61e3a3cf5689e5642f6008eef6d20aa511a72051822fe",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "551d86bce28cdb08053958e45f8a64fc925b9fc09df4150ecf719849e92f2f92",
+          "candidate_id": "physical_v1:1710c46842a667b8475d1a22e11d71ea6a18e3675f65544bb79c59ea18153edd",
+          "candidate_identity_sha256": "551d86bce28cdb08053958e45f8a64fc925b9fc09df4150ecf719849e92f2f92",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p100-short-high",
+          "record_id": "kaihe3_LYX_0613",
+          "reservation_sha256": "5cd5fb3be590238e9333b54ec83bacc19456689603e57e8bdf9919ea798c8d8d",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "30f4a156114cdaf79499ae6766a3a0fd3f0815bc77a47eb10c86cd4e3d6961a4",
+          "candidate_id": "physical_v1:1a3ac56b1ba42f52de2bea6b14d056dfe317e84b54deae4a2f4477e125faabcb",
+          "candidate_identity_sha256": "30f4a156114cdaf79499ae6766a3a0fd3f0815bc77a47eb10c86cd4e3d6961a4",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p100-short-high",
+          "record_id": "kaihe3_LYX_0613",
+          "reservation_sha256": "b719ea5ba07a10e2f0b81ec553174e737ad767ad8a9e11e4ba481de77737535e",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "2bf5e833ec75982fb402157f4d07d5a81096cd9b020d395052e051bad8284365",
+          "candidate_id": "physical_v1:1710c46842a667b8475d1a22e11d71ea6a18e3675f65544bb79c59ea18153edd",
+          "candidate_identity_sha256": "2bf5e833ec75982fb402157f4d07d5a81096cd9b020d395052e051bad8284365",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p100-short-high",
+          "record_id": "run1_LYX_0708",
+          "reservation_sha256": "7020c4aba02e823c0f889ce0d168631db6671d9ed6476cad3f0c20a3c2f4dbcf",
+          "scene": "run"
+        },
+        {
+          "cache_key": "462b632314935e9734de7778d6c68ac5ea462c6e20b362daff556fdbe79e6d5d",
+          "candidate_id": "physical_v1:1a3ac56b1ba42f52de2bea6b14d056dfe317e84b54deae4a2f4477e125faabcb",
+          "candidate_identity_sha256": "462b632314935e9734de7778d6c68ac5ea462c6e20b362daff556fdbe79e6d5d",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p100-short-high",
+          "record_id": "run1_LYX_0708",
+          "reservation_sha256": "ad2501032ad4059d8ae648925d23de668312ef3927530257914de7a538fd0e3d",
+          "scene": "run"
+        },
+        {
+          "cache_key": "7c2c223755c0c9843fc5e899609e4c9b33fda4303b16377c25a333a361c99d8e",
+          "candidate_id": "physical_v1:ca1bcdf2e29bcc20eea83e38fd89682b29868c007c4cba3e4cd362d3f8b4ca9e",
+          "candidate_identity_sha256": "7c2c223755c0c9843fc5e899609e4c9b33fda4303b16377c25a333a361c99d8e",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p100-short-high",
+          "record_id": "run1_LYX_0708",
+          "reservation_sha256": "c9a92487dd43e208268a9a075cf9e74202eed7eaded7071e6dfd55a4533e9c5d",
+          "scene": "run"
+        },
+        {
+          "cache_key": "8135940d5848394b23e0d248144eed78231a51f48e24c6d5e4fadb90c35dcdcb",
+          "candidate_id": "physical_v1:1710c46842a667b8475d1a22e11d71ea6a18e3675f65544bb79c59ea18153edd",
+          "candidate_identity_sha256": "8135940d5848394b23e0d248144eed78231a51f48e24c6d5e4fadb90c35dcdcb",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p100-short-high",
+          "record_id": "run2_LYX_0708",
+          "reservation_sha256": "df38b6a388f592100074077c78e397842416c38f0ab7986e8284200c9a83378d",
+          "scene": "run"
+        },
+        {
+          "cache_key": "d7e54bf526689348ca42b5c3de05fa96f152338920b6206dd01b2d3565576424",
+          "candidate_id": "physical_v1:1a3ac56b1ba42f52de2bea6b14d056dfe317e84b54deae4a2f4477e125faabcb",
+          "candidate_identity_sha256": "d7e54bf526689348ca42b5c3de05fa96f152338920b6206dd01b2d3565576424",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p100-short-high",
+          "record_id": "run2_LYX_0708",
+          "reservation_sha256": "d0550ba92842950b3b21bb51059c1cf2ae775acf6517548b03f6563b98b2c341",
+          "scene": "run"
+        },
+        {
+          "cache_key": "8e50cccc23356eeb35d7ab97e1c54d8fd1a004ecf845b3c94b3bd0f95e3900b6",
+          "candidate_id": "physical_v1:1710c46842a667b8475d1a22e11d71ea6a18e3675f65544bb79c59ea18153edd",
+          "candidate_identity_sha256": "8e50cccc23356eeb35d7ab97e1c54d8fd1a004ecf845b3c94b3bd0f95e3900b6",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p100-short-high",
+          "record_id": "run3_LYX_0708",
+          "reservation_sha256": "4f375ae044b414105dc10fc0b22978ea68b1c526bf3f2f6e9b7d5e06c0b6c37d",
+          "scene": "run"
+        },
+        {
+          "cache_key": "91317fb9be49c72025e6f4012041cd4fb70f63a875957ae9847a1ec512e2162b",
+          "candidate_id": "physical_v1:1a3ac56b1ba42f52de2bea6b14d056dfe317e84b54deae4a2f4477e125faabcb",
+          "candidate_identity_sha256": "91317fb9be49c72025e6f4012041cd4fb70f63a875957ae9847a1ec512e2162b",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p100-short-high",
+          "record_id": "run3_LYX_0708",
+          "reservation_sha256": "630b48dc59acc1dbaa03e1dfb6b13e941afd011e72b1087a290052fa87e293dc",
+          "scene": "run"
+        },
+        {
+          "cache_key": "42bd32b079de337dc76b9ca9c198668778dc78e6f2c6e7a3eb31ee700de89359",
+          "candidate_id": "physical_v1:1710c46842a667b8475d1a22e11d71ea6a18e3675f65544bb79c59ea18153edd",
+          "candidate_identity_sha256": "42bd32b079de337dc76b9ca9c198668778dc78e6f2c6e7a3eb31ee700de89359",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p100-short-high",
+          "record_id": "xiezi2_LYX_0708",
+          "reservation_sha256": "fdc1d7db204b53a1949c0efdd8fff1cbdf1249a80f18da5f30453628eed2adbc",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "aec6ff604f8fff64b6a64e8fbafd85ff5d8948ce8699eaac562de0f7a0d1bd9f",
+          "candidate_id": "physical_v1:1a3ac56b1ba42f52de2bea6b14d056dfe317e84b54deae4a2f4477e125faabcb",
+          "candidate_identity_sha256": "aec6ff604f8fff64b6a64e8fbafd85ff5d8948ce8699eaac562de0f7a0d1bd9f",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p100-short-high",
+          "record_id": "xiezi2_LYX_0708",
+          "reservation_sha256": "05f50895189e162bfdf3af8edd316a34fadb72c6edb02654959acf9b8fe10d40",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "0b0b4a5ba90f0b123303956a8db612fae7754590eb17902ae58e3cefb940219a",
+          "candidate_id": "physical_v1:1710c46842a667b8475d1a22e11d71ea6a18e3675f65544bb79c59ea18153edd",
+          "candidate_identity_sha256": "0b0b4a5ba90f0b123303956a8db612fae7754590eb17902ae58e3cefb940219a",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p100-short-high",
+          "record_id": "xiezi3_LYX_0708",
+          "reservation_sha256": "f54546a1c31e2336de820e19360187bc55be3344f3771d5ce962c4b002e3f75e",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "984c4f8887b21f6f2bb5831226851a4dd0db81b8960c54e15fc82b9b364f126b",
+          "candidate_id": "physical_v1:1a3ac56b1ba42f52de2bea6b14d056dfe317e84b54deae4a2f4477e125faabcb",
+          "candidate_identity_sha256": "984c4f8887b21f6f2bb5831226851a4dd0db81b8960c54e15fc82b9b364f126b",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p100-short-high",
+          "record_id": "xiezi3_LYX_0708",
+          "reservation_sha256": "4253c839f9f13050b8a4d3ca2afe16a06cc6b8b5eaf643a35c65c454a6c50219",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "89f1ead3c71bf802faa81d30d3e68ecf95a29eacc8e1cfc66e13a41e78b9a85f",
+          "candidate_id": "physical_v1:1710c46842a667b8475d1a22e11d71ea6a18e3675f65544bb79c59ea18153edd",
+          "candidate_identity_sha256": "89f1ead3c71bf802faa81d30d3e68ecf95a29eacc8e1cfc66e13a41e78b9a85f",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p100-short-high",
+          "record_id": "xiezi4_LYX_0708",
+          "reservation_sha256": "1128f6fe218c016716bca97d809932cd58e3e0a5c96bc509e8599aa63799758e",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "07ca313e48f822555e848dde69f852151d20d0ca87f1a7917f0fed920658c87e",
+          "candidate_id": "physical_v1:1a3ac56b1ba42f52de2bea6b14d056dfe317e84b54deae4a2f4477e125faabcb",
+          "candidate_identity_sha256": "07ca313e48f822555e848dde69f852151d20d0ca87f1a7917f0fed920658c87e",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p100-short-high",
+          "record_id": "xiezi4_LYX_0708",
+          "reservation_sha256": "e79a4dbf4ab8c1bf65f114a444921c16755797da4b978092433dd3e8eac4e97a",
+          "scene": "xiezi"
+        }
+      ],
+      "occurrence_count": 26,
+      "profile_id": "p100-short-high",
+      "scenes": [
+        "jianpan",
+        "kaihe",
+        "run",
+        "xiezi"
+      ]
+    },
+    {
+      "coordinate": {
+        "fs_target": 100,
+        "memory_ms": 200,
+        "nominal_mu": 0.006
+      },
+      "entries": [
+        {
+          "cache_key": "f82ffc3d09b75f95702f3ac77e2ed84c116f8993c31c7876cc71b687e8417dc7",
+          "candidate_id": "physical_v1:1e72b417b614d18dd61ed279d4a55ee6b302eacf20e2593e7f76a43f1d0b9678",
+          "candidate_identity_sha256": "f82ffc3d09b75f95702f3ac77e2ed84c116f8993c31c7876cc71b687e8417dc7",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p100-long-low",
+          "record_id": "jianpan1_LYX_0708",
+          "reservation_sha256": "38e16e4178149aa9d5585d5b5db8063b3a0dde939174b8d3c60b97795cb71b22",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "82479e88f5f4f5855666881de40d8e9fe3ec631d0a6e07655137412d7f309df2",
+          "candidate_id": "physical_v1:1e72b417b614d18dd61ed279d4a55ee6b302eacf20e2593e7f76a43f1d0b9678",
+          "candidate_identity_sha256": "82479e88f5f4f5855666881de40d8e9fe3ec631d0a6e07655137412d7f309df2",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p100-long-low",
+          "record_id": "jianpan2_LYX_0708",
+          "reservation_sha256": "45ddfff3b01ae6d6561118a410464bb775464346be986efb0728ac95cb0b3a40",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "11699b61952ecbd4901c4ab25094fe897b13e26d94876f5ed5d48796a5a0f56e",
+          "candidate_id": "physical_v1:3a00374c3a21a41259baf8e7c393e8e61d6774362740e2cfe5dda9313597483c",
+          "candidate_identity_sha256": "11699b61952ecbd4901c4ab25094fe897b13e26d94876f5ed5d48796a5a0f56e",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p100-long-low",
+          "record_id": "jianpan2_LYX_0708",
+          "reservation_sha256": "a6d88d73e863f036733642239b60275f7dc7fdd3665bba319d48fa815cc78c16",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "2e2de62dfe3af3c5b641df3ca7e701285287604555c49478c1aece80d4f959bb",
+          "candidate_id": "physical_v1:6fce212dd485c4ac61228405c3b8e5af1494e0c924f0984516d7764fd8e92a10",
+          "candidate_identity_sha256": "2e2de62dfe3af3c5b641df3ca7e701285287604555c49478c1aece80d4f959bb",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p100-long-low",
+          "record_id": "jianpan2_LYX_0708",
+          "reservation_sha256": "3580bdb08cf2948d08b9faecccb85e69b3285c31336681722e9ada2c212db92b",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "a6e33d2cf4f4be184aca8720edb27da8a77b1676ef2c60b081749590fc32a641",
+          "candidate_id": "physical_v1:ab9378cc89f7ed55c3aceb4d74f7f2f83583283649e43a83a7a0093918228475",
+          "candidate_identity_sha256": "a6e33d2cf4f4be184aca8720edb27da8a77b1676ef2c60b081749590fc32a641",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p100-long-low",
+          "record_id": "jianpan2_LYX_0708",
+          "reservation_sha256": "d70518bf78165dd303b8b986300e7a336f3cbadf5f30595e94ab907d36627939",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "d8e7720b9748f9a96b55a25123a0bbca90434eba17bf669c7f2032b5f71175cc",
+          "candidate_id": "physical_v1:1e72b417b614d18dd61ed279d4a55ee6b302eacf20e2593e7f76a43f1d0b9678",
+          "candidate_identity_sha256": "d8e7720b9748f9a96b55a25123a0bbca90434eba17bf669c7f2032b5f71175cc",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p100-long-low",
+          "record_id": "jianpan3_LYX_0708",
+          "reservation_sha256": "5f1e589c30368143bd09444f87aa50a27f5c863afb638865d264755d7e50cae7",
+          "scene": "jianpan"
+        },
+        {
+          "cache_key": "a61d43efd6ffa843cf78254eb914feaf5fd7f3cc39a0fc133a0edea09abc7fba",
+          "candidate_id": "physical_v1:1e72b417b614d18dd61ed279d4a55ee6b302eacf20e2593e7f76a43f1d0b9678",
+          "candidate_identity_sha256": "a61d43efd6ffa843cf78254eb914feaf5fd7f3cc39a0fc133a0edea09abc7fba",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p100-long-low",
+          "record_id": "kaihe1_LYX_0613",
+          "reservation_sha256": "b8c1070c32d435abea0ed6720c378a69e5e4675bf3614847d3a0a1b4e0e0c435",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "8cb087f367ff6235775439da1192f3579611bb66ff5cd1328fdd7dd7e3bce2e5",
+          "candidate_id": "physical_v1:1e72b417b614d18dd61ed279d4a55ee6b302eacf20e2593e7f76a43f1d0b9678",
+          "candidate_identity_sha256": "8cb087f367ff6235775439da1192f3579611bb66ff5cd1328fdd7dd7e3bce2e5",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p100-long-low",
+          "record_id": "kaihe1_LYX_0617",
+          "reservation_sha256": "6bf4a7b4fa9e7a032173aae9e7dcab37d089c411023f4585d0cae59bbcb703df",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "3fea556a424ffc355a998a2d8f018c9f47c795aaf522e4ead9c282519af6df88",
+          "candidate_id": "physical_v1:1e72b417b614d18dd61ed279d4a55ee6b302eacf20e2593e7f76a43f1d0b9678",
+          "candidate_identity_sha256": "3fea556a424ffc355a998a2d8f018c9f47c795aaf522e4ead9c282519af6df88",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p100-long-low",
+          "record_id": "kaihe3_LYX_0613",
+          "reservation_sha256": "b386e5a78a80591a100fa885d38fdbaa40f957e2dc267934c95b3ef6e599b11f",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "69c22bbb864e1a6e31a17326d3260710a956a76fda756e0299755c8dba8863c1",
+          "candidate_id": "physical_v1:3a00374c3a21a41259baf8e7c393e8e61d6774362740e2cfe5dda9313597483c",
+          "candidate_identity_sha256": "69c22bbb864e1a6e31a17326d3260710a956a76fda756e0299755c8dba8863c1",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p100-long-low",
+          "record_id": "kaihe3_LYX_0613",
+          "reservation_sha256": "f0cd45a5565aa01d4cb3dc376c26e26e8729ef4c2397fd4501520fc5804bb5b0",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "0d0424c18eed3302b7e882dacba8395b466680530bc700d8451250530ea8ebcd",
+          "candidate_id": "physical_v1:ab9378cc89f7ed55c3aceb4d74f7f2f83583283649e43a83a7a0093918228475",
+          "candidate_identity_sha256": "0d0424c18eed3302b7e882dacba8395b466680530bc700d8451250530ea8ebcd",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p100-long-low",
+          "record_id": "kaihe3_LYX_0613",
+          "reservation_sha256": "ed56e5cd07697efb0d765634dbcbfaac2aca9878dc39aba43c8e59c1efe171ce",
+          "scene": "kaihe"
+        },
+        {
+          "cache_key": "1b738f29d97754b5aaf106864f2e92cd94c5ab7de0b3932b094a37671f4f49a2",
+          "candidate_id": "physical_v1:1e72b417b614d18dd61ed279d4a55ee6b302eacf20e2593e7f76a43f1d0b9678",
+          "candidate_identity_sha256": "1b738f29d97754b5aaf106864f2e92cd94c5ab7de0b3932b094a37671f4f49a2",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p100-long-low",
+          "record_id": "run1_LYX_0708",
+          "reservation_sha256": "f045fe2133eeea5718b2ef9d7a56f8cc82158e9c581abeb476def808cea399d9",
+          "scene": "run"
+        },
+        {
+          "cache_key": "1f170696ba7aa91b1da6e0421c4cfeb960177c984f57d6299b976d825232c7f4",
+          "candidate_id": "physical_v1:3a00374c3a21a41259baf8e7c393e8e61d6774362740e2cfe5dda9313597483c",
+          "candidate_identity_sha256": "1f170696ba7aa91b1da6e0421c4cfeb960177c984f57d6299b976d825232c7f4",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p100-long-low",
+          "record_id": "run1_LYX_0708",
+          "reservation_sha256": "9320cf7738950c77d964306455924c54004ea66a870e82b36406acc6a95ca200",
+          "scene": "run"
+        },
+        {
+          "cache_key": "11a9cd35ee6646dc13c89eb4c31e0326234f034858315a16434f77e27d4c73cf",
+          "candidate_id": "physical_v1:6fce212dd485c4ac61228405c3b8e5af1494e0c924f0984516d7764fd8e92a10",
+          "candidate_identity_sha256": "11a9cd35ee6646dc13c89eb4c31e0326234f034858315a16434f77e27d4c73cf",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p100-long-low",
+          "record_id": "run1_LYX_0708",
+          "reservation_sha256": "35c158619f48e36583750a77c8098da62d6446aede428802c9d20f180e6a354d",
+          "scene": "run"
+        },
+        {
+          "cache_key": "57a4dfdaa9b2a3d7b1b039dd1f5fbb60ea1d4bb329da430a1f38374a5791641a",
+          "candidate_id": "physical_v1:ab9378cc89f7ed55c3aceb4d74f7f2f83583283649e43a83a7a0093918228475",
+          "candidate_identity_sha256": "57a4dfdaa9b2a3d7b1b039dd1f5fbb60ea1d4bb329da430a1f38374a5791641a",
+          "exclusion_half_width_bpm": 12.0,
+          "profile_id": "p100-long-low",
+          "record_id": "run1_LYX_0708",
+          "reservation_sha256": "b0d91448328a08b235617b2d58d458cb4d2df518ed434148038a59cdfb73d4b8",
+          "scene": "run"
+        },
+        {
+          "cache_key": "becc1731ea701a5a77447c2ea7de82a6f12da6c1d3d3e35180f5733b9fdfffd2",
+          "candidate_id": "physical_v1:1e72b417b614d18dd61ed279d4a55ee6b302eacf20e2593e7f76a43f1d0b9678",
+          "candidate_identity_sha256": "becc1731ea701a5a77447c2ea7de82a6f12da6c1d3d3e35180f5733b9fdfffd2",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p100-long-low",
+          "record_id": "run2_LYX_0708",
+          "reservation_sha256": "73edbac44f927729ccea8a8dffcc207c2669b3170bab4959f5fea1b662205fea",
+          "scene": "run"
+        },
+        {
+          "cache_key": "8a59d21f07fa71f18446d54a3bb5c194eb9b42b529a59457d349cefe87fb5edb",
+          "candidate_id": "physical_v1:3a00374c3a21a41259baf8e7c393e8e61d6774362740e2cfe5dda9313597483c",
+          "candidate_identity_sha256": "8a59d21f07fa71f18446d54a3bb5c194eb9b42b529a59457d349cefe87fb5edb",
+          "exclusion_half_width_bpm": 18.0,
+          "profile_id": "p100-long-low",
+          "record_id": "run2_LYX_0708",
+          "reservation_sha256": "52d13908b7eda06176e8405f4d3ae8f281cd0fbb103e5d14cc691d00a673fb59",
+          "scene": "run"
+        },
+        {
+          "cache_key": "a5769f90e89c5afefa9e3ccfe1c775687aa6a46d122811ea442d852b516360ca",
+          "candidate_id": "physical_v1:1e72b417b614d18dd61ed279d4a55ee6b302eacf20e2593e7f76a43f1d0b9678",
+          "candidate_identity_sha256": "a5769f90e89c5afefa9e3ccfe1c775687aa6a46d122811ea442d852b516360ca",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p100-long-low",
+          "record_id": "run3_LYX_0708",
+          "reservation_sha256": "8a650bc1546e3c0ec97dceb8d9303701bd24e407cf4c1cc10ff9078f6544c203",
+          "scene": "run"
+        },
+        {
+          "cache_key": "62df8057c1b18a7b24453fa959523f2206c353ee915547413eca2317a0a72664",
+          "candidate_id": "physical_v1:1e72b417b614d18dd61ed279d4a55ee6b302eacf20e2593e7f76a43f1d0b9678",
+          "candidate_identity_sha256": "62df8057c1b18a7b24453fa959523f2206c353ee915547413eca2317a0a72664",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p100-long-low",
+          "record_id": "xiezi2_LYX_0708",
+          "reservation_sha256": "d85494c0b0ced8f1fb836ffd3303d42f945ac5c094b21840692f3c9699fa84c4",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "d8670b7c7e7f1b048d12da28bcb7e608a4c94e0872e24800990e29aff73bda76",
+          "candidate_id": "physical_v1:1e72b417b614d18dd61ed279d4a55ee6b302eacf20e2593e7f76a43f1d0b9678",
+          "candidate_identity_sha256": "d8670b7c7e7f1b048d12da28bcb7e608a4c94e0872e24800990e29aff73bda76",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p100-long-low",
+          "record_id": "xiezi3_LYX_0708",
+          "reservation_sha256": "fe84cd6c48f5c36a37ee4abb8e76b99bb7058aaee1e321637db1ffb07c2fe34e",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "6b9a202fc7684f24a7075ccf71b72933129946d61dc562f7d0edd40bb3561cac",
+          "candidate_id": "physical_v1:1e72b417b614d18dd61ed279d4a55ee6b302eacf20e2593e7f76a43f1d0b9678",
+          "candidate_identity_sha256": "6b9a202fc7684f24a7075ccf71b72933129946d61dc562f7d0edd40bb3561cac",
+          "exclusion_half_width_bpm": 6.0,
+          "profile_id": "p100-long-low",
+          "record_id": "xiezi4_LYX_0708",
+          "reservation_sha256": "0e052df92ef4a475cb5d1041c2441bf7681acf2cd71ab376d2e50ccc2e8123bf",
+          "scene": "xiezi"
+        },
+        {
+          "cache_key": "c63433cf4f047f2b3cf9710826eb5d5b6eecb3feb8cf0c7a17ef05da0c3a0f18",
+          "candidate_id": "physical_v1:6fce212dd485c4ac61228405c3b8e5af1494e0c924f0984516d7764fd8e92a10",
+          "candidate_identity_sha256": "c63433cf4f047f2b3cf9710826eb5d5b6eecb3feb8cf0c7a17ef05da0c3a0f18",
+          "exclusion_half_width_bpm": 3.0,
+          "profile_id": "p100-long-low",
+          "record_id": "xiezi4_LYX_0708",
+          "reservation_sha256": "46704dc51f38088f9d7678eab88acf2e39039694a9f650e28f9afce6e36a39c0",
+          "scene": "xiezi"
+        }
+      ],
+      "occurrence_count": 22,
+      "profile_id": "p100-long-low",
+      "scenes": [
+        "jianpan",
+        "kaihe",
+        "run",
+        "xiezi"
+      ]
+    }
+  ]
+}

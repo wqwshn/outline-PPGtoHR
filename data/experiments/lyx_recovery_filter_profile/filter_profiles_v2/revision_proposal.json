@@ -1,0 +1,14 @@
+{
+  "budget_request_sha256": "40dcfd55d1d11a298eb0cc489de0a3b1d3af3e485e15c24951c9bbd6e515d32f",
+  "corrected_metric_contract_sha256": "383f346c088ded7fa94fa14148997678c53adc4c5659b1969f66350ac8e235f2",
+  "design_rule_sha256": "6de9b647f2fe9f948604c1a906c8cbf6679e71833299ce540805af903141840c",
+  "independent_bo_authorized": false,
+  "library_sha256": "c049d8f88775fb5cb212f70cfa90cac716b60cf0afcdb72b7781453b3ad22a28",
+  "may_execute": false,
+  "new_unique_identity_count": 8,
+  "proposal_sha256": "b30fb765e651fa943c9a035f04f74e4a72184e918d7db1da231a1380fa30ca5f",
+  "proposal_version": "lyx_filter_audit_revision_proposal_v1",
+  "record_manifest_sha256": "c5e7291cf2da3a6ef25a03a96d763373b9cacdaee521c0378413cee6dc9666f1",
+  "reused_numeric_result_count": 24,
+  "status": "awaiting_human_budget_decision"
+}

@@ -1,0 +1,204 @@
+{
+  "candidates": [
+    {
+      "boundaries": [
+        "configured width must be finite and positive",
+        "corridor is motion-only and requires a finite previous track",
+        "active recovery reacquire disables the corridor"
+      ],
+      "candidate_sha256": "b510d847334966c2e02ffa3cf10db472d75bfcea46faa6db84e649c9154a14e0",
+      "causal_online_ready": false,
+      "constants": {
+        "candidate_exclusion_edge_guard_bpm": 1.0,
+        "corridor_mode": "single_previous_track",
+        "retain_challenger_suppression": true,
+        "retain_conditional_harmonic": true,
+        "retain_existing_confidence_scaling": true,
+        "width_mode": "configured"
+      },
+      "design_role": "control",
+      "fallback_rules": [
+        "invalid configured width disables the penalty band",
+        "missing previous track disables the corridor"
+      ],
+      "formula": "penalty_half_width=configured spec_penalty_width; when motion history exists, corridor_half_width=min(tracking_range, slew_step_bpm/60); when weight_half_width>0, candidate_exclusion_half_width=weight_half_width+1 BPM",
+      "mechanism_complexity": 0,
+      "penalty_id": "current_soft_penalty_control_v1",
+      "runtime_evidence_fields": [
+        "window_kind",
+        "configured_penalty_half_width_hz",
+        "fs_hz",
+        "window_samples",
+        "previous_track_bpm",
+        "recent_track_bpm",
+        "unpenalized_candidate_bpm",
+        "unpenalized_candidate_amp_ratio",
+        "motion_reference_confidence",
+        "recovery_reacquire_active"
+      ],
+      "runtime_information_boundary": "candidate decision uses only the current/past solver state, but window_kind is supplied by the existing offline v2 motion segmentation; this experiment is not end-to-end causal online",
+      "trace_fields": [
+        "penalty_policy_id",
+        "penalty_width_source",
+        "penalty_effective_half_width_bpm",
+        "penalty_candidate_exclusion_half_width_bpm",
+        "penalty_resolution_hz",
+        "history_protection_confidence",
+        "history_protection_status",
+        "unpenalized_previous_support_visible",
+        "penalty_removed_candidate_peaks_bpm",
+        "tracking_nonadoption_reason"
+      ],
+      "uses_reference_hr_runtime": false
+    },
+    {
+      "boundaries": [
+        "adaptive half-width is clipped to [0.10,0.30] Hz",
+        "resolution uses the observed window sample count, not zero padding",
+        "corridor is motion-only and recovery reacquire disables it"
+      ],
+      "candidate_sha256": "d0dffd27db0e1a7bd2d6b0dcd651f3f1731d6006c15cf97776a1dc6fc75ff8ad",
+      "causal_online_ready": false,
+      "constants": {
+        "candidate_exclusion_edge_guard_bpm": 1.0,
+        "corridor_mode": "single_previous_track",
+        "max_half_width_hz": 0.3,
+        "min_half_width_hz": 0.1,
+        "resolution_multiplier": 1.5,
+        "retain_challenger_suppression": true,
+        "retain_conditional_harmonic": true,
+        "retain_existing_confidence_scaling": true,
+        "width_mode": "resolution_adaptive"
+      },
+      "design_role": "new_candidate",
+      "fallback_rules": [
+        "invalid fs or window length falls back to configured width",
+        "invalid configured fallback width disables the penalty band"
+      ],
+      "formula": "resolution_hz=fs_hz/window_samples; penalty_half_width=clip(1.5*resolution_hz,0.10,0.30) Hz; candidate_exclusion_half_width=penalty_half_width+1 BPM; corridor remains the current single-track corridor",
+      "mechanism_complexity": 1,
+      "penalty_id": "resolution_adaptive_width_v1",
+      "runtime_evidence_fields": [
+        "window_kind",
+        "configured_penalty_half_width_hz",
+        "fs_hz",
+        "window_samples",
+        "previous_track_bpm",
+        "recent_track_bpm",
+        "unpenalized_candidate_bpm",
+        "unpenalized_candidate_amp_ratio",
+        "motion_reference_confidence",
+        "recovery_reacquire_active"
+      ],
+      "runtime_information_boundary": "candidate decision uses only the current/past solver state, but window_kind is supplied by the existing offline v2 motion segmentation; this experiment is not end-to-end causal online",
+      "trace_fields": [
+        "penalty_policy_id",
+        "penalty_width_source",
+        "penalty_effective_half_width_bpm",
+        "penalty_candidate_exclusion_half_width_bpm",
+        "penalty_resolution_hz",
+        "history_protection_confidence",
+        "history_protection_status",
+        "unpenalized_previous_support_visible",
+        "penalty_removed_candidate_peaks_bpm",
+        "tracking_nonadoption_reason"
+      ],
+      "uses_reference_hr_runtime": false
+    },
+    {
+      "boundaries": [
+        "exactly the most recent 3 causal tracks determine trust",
+        "corridor never exceeds the current derived corridor width",
+        "corridor is motion-only and recovery reacquire disables it"
+      ],
+      "candidate_sha256": "5cda21bb15961ef32480edb18632abb9e6ea63462defd60ad6844626e6634880",
+      "causal_online_ready": false,
+      "constants": {
+        "candidate_exclusion_edge_guard_bpm": 1.0,
+        "corridor_mode": "trusted_multiwindow",
+        "history_confidence_min": 0.6,
+        "history_max_step_bpm": 10.0,
+        "history_windows": 3,
+        "motion_confidence_min": 0.25,
+        "retain_challenger_suppression": true,
+        "retain_conditional_harmonic": true,
+        "retain_existing_confidence_scaling": true,
+        "support_min_amp_ratio": 0.45,
+        "support_resolution_multiplier": 1.0,
+        "width_mode": "configured"
+      },
+      "design_role": "new_candidate",
+      "fallback_rules": [
+        "insufficient or nonfinite history disables the corridor",
+        "unstable history, weak support, or weak motion evidence disables the corridor while retaining the configured penalty",
+        "invalid configured width disables the penalty band"
+      ],
+      "formula": "penalty_half_width=configured spec_penalty_width; for the last 3 tracks, history_confidence=clip(1-max_step_bpm/10,0,1); apply corridor only if confidence>=0.60, current unpenalized support amp_ratio>=0.45, and motion confidence>=0.25; support means within base corridor plus one spectral resolution; candidate exclusion adds a 1 BPM edge guard",
+      "mechanism_complexity": 2,
+      "penalty_id": "trusted_history_corridor_v1",
+      "runtime_evidence_fields": [
+        "window_kind",
+        "configured_penalty_half_width_hz",
+        "fs_hz",
+        "window_samples",
+        "previous_track_bpm",
+        "recent_track_bpm",
+        "unpenalized_candidate_bpm",
+        "unpenalized_candidate_amp_ratio",
+        "motion_reference_confidence",
+        "recovery_reacquire_active"
+      ],
+      "runtime_information_boundary": "candidate decision uses only the current/past solver state, but window_kind is supplied by the existing offline v2 motion segmentation; this experiment is not end-to-end causal online",
+      "trace_fields": [
+        "penalty_policy_id",
+        "penalty_width_source",
+        "penalty_effective_half_width_bpm",
+        "penalty_candidate_exclusion_half_width_bpm",
+        "penalty_resolution_hz",
+        "history_protection_confidence",
+        "history_protection_status",
+        "unpenalized_previous_support_visible",
+        "penalty_removed_candidate_peaks_bpm",
+        "tracking_nonadoption_reason"
+      ],
+      "uses_reference_hr_runtime": false
+    }
+  ],
+  "causal_online_ready": false,
+  "config_schema_hash": "35645d7e2e625b74d59ab524e7100400a59c663fe60ed2604e85bfbf5cb41352",
+  "control_penalty_id": "current_soft_penalty_control_v1",
+  "existing_capabilities_not_claimed_as_new": [
+    "confidence_scaled_penalty_weight",
+    "conditional_harmonic_penalty",
+    "single_previous_track_protection",
+    "motion_core_challenger_protection_suppression"
+  ],
+  "formal_solver_run_count": 0,
+  "new_penalty_count": 2,
+  "no_fourth_strategy_after_freeze": true,
+  "penalty_count": 3,
+  "registry_sha256": "914d8d047b33fb92ae9eaff3bb0d37e4ea8b6a59ec21a72cfbcfe599a4931388",
+  "registry_version": "lyx_penalty_registry_v1",
+  "runtime_information_boundary": "offline_v2_motion_segmentation_with_causal_local_penalty_state",
+  "selection_hard_gate_order": [
+    "spectral_gate_contract_v1",
+    "l10_l20_gates",
+    "mae_gate",
+    "right_censored_recovery_gate",
+    "true_rise_protection_gate"
+  ],
+  "selection_ranking_key": [
+    "hard_gate_failure_count",
+    "right_censored_recovery_count",
+    "worst_l10",
+    "worst_mae",
+    "mean_mae",
+    "mechanism_complexity",
+    "penalty_id"
+  ],
+  "selection_sort_direction": "ascending_all_fields",
+  "solver_hash": "7af2c5f396c6cd7eb7463703d8640af792f4e8a30763bb078e55ffe3b436c9a8",
+  "status": "frozen_zero_formal_runs",
+  "tie_rule": "penalty_id_ascending",
+  "uses_reference_hr_runtime": false
+}

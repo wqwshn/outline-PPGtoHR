@@ -1,0 +1,27 @@
+{
+  "anchor_reproduction_pass_count": 12,
+  "automatic_stage_f_execution": false,
+  "automatic_stage_r_execution": false,
+  "control_valid_count": 12,
+  "decision": "rank1_single_stage_mechanism_candidate",
+  "decision_sha256": "b01ff36a82596b11de10290f8225f7bc979e7886ecda8f84ec138e4301ff3304",
+  "decision_version": "lyx_filter_mechanism_decomposition_decision_v1",
+  "independent_bo_authorized": false,
+  "lane_complete_pass_counts": {
+    "rank1_only_adaptive": 12,
+    "rank2_only_adaptive": 12,
+    "ranked_cascade_adaptive": 10,
+    "raw_bypass": 12,
+    "reverse_cascade_adaptive": 10,
+    "two_stage_zero_update": 12
+  },
+  "may_nominate_recovery_candidate": false,
+  "next_state": "awaiting_rank1_filter_revision_proposal",
+  "parameter_search_authorized": false,
+  "proposal_sha256": "94c9264dbbdd8cdd299cf502c1ef1ba0e859000c9c72a1c35fc490eb46eccfab",
+  "record_count": 12,
+  "strictly_dominant_candidate_lanes": [
+    "rank1_only_adaptive",
+    "rank2_only_adaptive"
+  ]
+}

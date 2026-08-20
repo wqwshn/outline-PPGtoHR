@@ -27,7 +27,14 @@ build/
 dist/
 .pytest_cache/
 .pytest_tmp/
+.pytest_tmp_*/
+pytest_tmp_*/
 pytest_run_*/
+.codex-tmp/
+/.t/
+/.t_*/
+docs/reports/assets/**/_preview.png
+docs/reports/assets/**/_grayscale.png
 .mypy_cache/
 .ruff_cache/
 .coverage

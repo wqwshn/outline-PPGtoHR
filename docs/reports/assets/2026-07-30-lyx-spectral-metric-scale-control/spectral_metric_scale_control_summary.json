@@ -1,0 +1,75 @@
+{
+  "algorithm_level_holdout": false,
+  "evidence_class": "development_reuse_pilot",
+  "lane_retention": {
+    "direct_raw_bypass": {
+      "maximum": 1.0,
+      "median": 1.0,
+      "minimum": 1.0
+    },
+    "legacy_raw_vs_zero_update_lms": {
+      "maximum": 0.0024592394550348607,
+      "median": 0.0007450985658608367,
+      "minimum": 0.0002939799228783267
+    },
+    "same_scale_zero_update_lms": {
+      "maximum": 1.0,
+      "median": 1.0,
+      "minimum": 1.0
+    }
+  },
+  "legacy_to_same_scale_retention_ratio": {
+    "maximum": 0.0024592394550348607,
+    "median": 0.0007450985658608367,
+    "minimum": 0.0002939799228783267
+  },
+  "pass_counts": {
+    "direct_bypass": 12,
+    "legacy_scale_mismatch_reproduced": 12,
+    "same_scale_zero_update": 12
+  },
+  "proposal_sha256": "429233ecadf92cc2d669b59c8f2cc4516b3d767547d98919655a18918e1a60bd",
+  "record_count": 12,
+  "scene_counts": {
+    "jianpan": 3,
+    "kaihe": 3,
+    "run": 3,
+    "xiezi": 3
+  },
+  "scene_summaries": {
+    "jianpan": {
+      "legacy_to_same_scale_retention_ratio": {
+        "maximum": 0.001594843118684542,
+        "median": 0.0011094533767632103,
+        "minimum": 0.00043237223187186685
+      },
+      "record_count": 3
+    },
+    "kaihe": {
+      "legacy_to_same_scale_retention_ratio": {
+        "maximum": 0.0015660641084855966,
+        "median": 0.0008846372720963364,
+        "minimum": 0.0004677385863051357
+      },
+      "record_count": 3
+    },
+    "run": {
+      "legacy_to_same_scale_retention_ratio": {
+        "maximum": 0.0024592394550348607,
+        "median": 0.0010501543938857597,
+        "minimum": 0.0006055598596253371
+      },
+      "record_count": 3
+    },
+    "xiezi": {
+      "legacy_to_same_scale_retention_ratio": {
+        "maximum": 0.0005018221353451219,
+        "median": 0.00041399515467208163,
+        "minimum": 0.0002939799228783267
+      },
+      "record_count": 3
+    }
+  },
+  "summary_sha256": "4e964dd5665225c42f017b1cd4fadab7bc5c765982b3012c8aa2831e851e036f",
+  "summary_version": "lyx_spectral_metric_scale_control_figure_summary_v1"
+}

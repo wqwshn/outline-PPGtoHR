@@ -1,0 +1,146 @@
+{
+  "audit_contract": {
+    "contract_version": "lyx_filter_stability_audit_v2",
+    "max_residual_artifact_abs_corr_median": 0.95,
+    "max_residual_rms_ratio_p95": 2.0,
+    "max_residual_tail_head_ratio": 2.0,
+    "max_stability_load": 1.0,
+    "max_weight_norm": 25.0,
+    "min_motion_artifact_suppression_db_median": -1.0,
+    "min_true_peak_retention_ratio_median": 0.8,
+    "tail_head_gate": "descriptive_only"
+  },
+  "audit_contract_sha256": "8e46582997dc08db81a7430d4443c0b84bdbc2558c4f638afce1fbd67a667ac4",
+  "candidate_profiles": [
+    {
+      "design_role": "coverage_boundary",
+      "fs_target": 100,
+      "memory_ms": 40,
+      "nominal_mu": 0.003,
+      "profile_id": "p100-short-rate-normalized-low-40",
+      "recovery_sentinel_role": null
+    },
+    {
+      "design_role": "coverage_boundary",
+      "fs_target": 100,
+      "memory_ms": 40,
+      "nominal_mu": 0.004,
+      "profile_id": "p100-short-rate-normalized-midlow-40",
+      "recovery_sentinel_role": null
+    }
+  ],
+  "code_hash": "02c7bad557d28bfca238ffcb1e83fda234ed27904aae0a707577d4405cb4977e",
+  "design_rule_sha256": "711942f542bda86fefdebcbc82564a1eaa3b3ce5ab6289b7cf1e59496e251f26",
+  "evaluation_hash": "ec71d2ee3197517110857bf970c1cca5857e8cc7eb6c1540e85550dd8fb3ce95",
+  "exploration_identity_sha256": [
+    "52f60dee87e77f385a766f3f3dbde55e3c77fcea111ea766480990ea237d8e99",
+    "d24b35b5fc1e0d5271014cd03174150f2a705eaf7fd3237148685a501a640a39",
+    "e39bf423ad4a33ba2eaaa7035ba8e90a2d4981a8eba89b1350990a50da2a9089",
+    "0792ffbad90e5a19cfabeecf11fab4131e00a763a9bd628abbd152ea48fc358b",
+    "fbedcc9997748eacb580787eb09c24cb5b1581749ed291104edad6b0748c9993",
+    "ef68cf46f05c1293cdbd60349c1aee062c7d1ff14b4c9e78d1421f86f11f289c",
+    "cc6c11587b3fb42f800b74be1e801fe40230a1782e6b63104aa71c6f7c2cd898",
+    "bc4a5cebbeb4db60ce88dc19722a8e2eb5ff3564591e0b57b44f40013ba17853"
+  ],
+  "frozen_artifact_sha256": {
+    "frozen_p50_profile_receipts": {
+      "p50-short-low-40": "6aa4b6562d766e4a7cfa943240915dd7af1341f901551bd18b97b5782c1c367f",
+      "p50-short-midlow-40": "d73f5d5e43db695c6f2130a94b1c4b99b55b9a8113b70a20ae11ecef899e94a3"
+    },
+    "frozen_p50_record_audits": {
+      "p50-short-low-40": {
+        "jianpan2_LYX_0708": "3e9a3c208f1a5f625b30c8fbb0f7dcc5acc106c6bc93ccde68199902d3ee3153",
+        "kaihe3_LYX_0613": "353133eddf45cd4564c8ca9792bd2da7d8bb54f2357c4567dfb26c329c684f54",
+        "run1_LYX_0708": "8afd3d49d5a52ea7fb17e745ec13e63eeb52b9ff7fa665943f0bdfab4841fa55",
+        "xiezi4_LYX_0708": "56aa9f67b46d0f29906b0ac64cdce7a151f9bb09c061d1970e8bdeaee0d9904b"
+      },
+      "p50-short-midlow-40": {
+        "jianpan2_LYX_0708": "1b9f6681c5ffcd9a811f140a917f0cdec95f830cce9c94fe2291b4f2767ef755",
+        "kaihe3_LYX_0613": "7148d7593633a66b89b2bed5cfc862e90f190c960851cd016c829026a90e9ded",
+        "run1_LYX_0708": "edf62f4be21dbb3524dd8c2a53561deea2c081e2a84d128d2967dd48bb089c1c",
+        "xiezi4_LYX_0708": "3e884cbfb24ccff77a40dbc19343b2520268e46953705a0f38c95d75413522b4"
+      }
+    },
+    "frozen_v2_archive_evidence.json": "431e1424e8ad5f586e02447aa885b7835bf848890f2c4fbcc02a5788d9931cfe",
+    "frozen_v2_completion.json": "a5b00a9cbd65f986e0ce85696e278173c6f2668afb223c90053f3d68da1dae42",
+    "frozen_v2_reclassification.json": "72502e137c9825c9e9ff3ce08bd7da262cf43ce29e210b648f537d8a7d3e5a5c",
+    "frozen_v2_revision_plan.json": "3596e0829d2ae3d778060300ec83af529e7e38cfa5d523ad82fd5485ce6b406c",
+    "frozen_v3_archive_evidence.json": "c3623d094dbcd58c9f374ce710ee4f412c9f2792e39d8399ca86d73ead9f781a",
+    "frozen_v3_completion.json": "f1de068cf60d88cdb6662386e74cf7af8348aaa3c38ae5f32d5dc971dd639a7c",
+    "frozen_v3_design_rule.json": "33048a7543739cdc07f1d0dcee5ba2334d7dd58087f5ef51170e01172a2f27c1",
+    "frozen_v3_plan.json": "3d0f29e796fc6106f25e69956bb03cf30af2c4186f14389e78b2fca2a4986f59",
+    "frozen_v3_proposal.json": "c9eb0827cb70e6a9ee869f98d9c6dacaad2fb0d4946eb8debe4c3953a7b730de",
+    "frozen_v3_selection.json": "b9d57aedac09b1f79f03f4793243c29e94c257ef651a94b57d3f3f033ecb57af",
+    "stability_audit_record_manifest.json": "42d055f9ac2a7676382c304287a5c090594d03c2c1482c98095c3660af677a79"
+  },
+  "independent_bo_authorized": false,
+  "mechanistic_evidence_sha256": "4640422f2ebe68ee728f82c2b3f5d811c269442ec35adc7e01769db6f9127199",
+  "new_identity_count": 8,
+  "new_identity_sha256": [
+    "52f60dee87e77f385a766f3f3dbde55e3c77fcea111ea766480990ea237d8e99",
+    "d24b35b5fc1e0d5271014cd03174150f2a705eaf7fd3237148685a501a640a39",
+    "e39bf423ad4a33ba2eaaa7035ba8e90a2d4981a8eba89b1350990a50da2a9089",
+    "0792ffbad90e5a19cfabeecf11fab4131e00a763a9bd628abbd152ea48fc358b",
+    "fbedcc9997748eacb580787eb09c24cb5b1581749ed291104edad6b0748c9993",
+    "ef68cf46f05c1293cdbd60349c1aee062c7d1ff14b4c9e78d1421f86f11f289c",
+    "cc6c11587b3fb42f800b74be1e801fe40230a1782e6b63104aa71c6f7c2cd898",
+    "bc4a5cebbeb4db60ce88dc19722a8e2eb5ff3564591e0b57b44f40013ba17853"
+  ],
+  "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+  "plan_sha256": "915d862ed0246e57d4904f4e9ab1b2943af7425a2bcc61fbba99cea1fc332d4d",
+  "plan_version": "lyx_filter_rate_normalized_supplement_plan_v1",
+  "produces_hr_tracking_trajectory": false,
+  "proposal_sha256": "3600155f2967bfa9a5c12bddad1cb7cab4d8be0fe1bfcb23f41657c2e23ea168",
+  "record_manifest_sha256": "c5e7291cf2da3a6ef25a03a96d763373b9cacdaee521c0378413cee6dc9666f1",
+  "records": [
+    {
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708.csv",
+      "data_sha256": "b4aaafa531d731c81d7e8da0e5dac4f8c6e360bda6c7520c34ae78e023dd8bb7",
+      "record_id": "jianpan2_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "c7a98e54da83d6310430276b33b88bf2306ade91ac81d5b9dd3f5d18ecf5a270",
+      "scene": "jianpan"
+    },
+    {
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613.csv",
+      "data_sha256": "778f75d02d47a134a5999a5641de201dfc613da915b43876398792c6833c6e84",
+      "record_id": "kaihe3_LYX_0613",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613_HR_ref.csv",
+      "reference_sha256": "5cb40473d1793f8ff91eeed993f4a1b9a59c44b7fefcfd57a0314ad34c626050",
+      "scene": "kaihe"
+    },
+    {
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708.csv",
+      "data_sha256": "4e53e93fb94a8ecd17d319af41d6d010c1424baf9c0151099cb417fb0a2d6af0",
+      "record_id": "run1_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708_HR_ref.csv",
+      "reference_sha256": "c8677ec1f0e22b25100c20ab83b8faf22ddea730a973b41b1b43673acf1443a0",
+      "scene": "run"
+    },
+    {
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708.csv",
+      "data_sha256": "1d18872f230a8ed75fdf9653196193557da946dcdb6b6375afe220ad9c71bdf4",
+      "record_id": "xiezi4_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708_HR_ref.csv",
+      "reference_sha256": "9db5f78f018e87128771f45cc3af8004e51ef7530ae1358dcf873b8f547cb0f7",
+      "scene": "xiezi"
+    }
+  ],
+  "reused_eligible_p50_profile_ids": [
+    "p50-short-low-40",
+    "p50-short-midlow-40"
+  ],
+  "selection_rule": {
+    "eligibility": "both_new_p100_profiles_pass_all_four_stability_and_frozen_spectral_gates",
+    "insufficient_role_policy": "fail_closed_without_automatic_expansion",
+    "p100_policy": "select_both_rate_normalized_profiles",
+    "p50_policy": "reuse_two_previously_eligible_p50_profiles"
+  },
+  "sentinel_rule": {
+    "aggressive": "highest_ranked_eligible_p100_replacement",
+    "conservative": "retain_p50-short-low",
+    "intermediate": "highest_ranked_eligible_p50_replacement"
+  },
+  "solver_hash": "c5f6f44313b77468a944bb267da4a260bf178732931afd31bca448090b0f61bf",
+  "status": "prepared_zero_new_runs"
+}

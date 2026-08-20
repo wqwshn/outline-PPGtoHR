@@ -27,6 +27,7 @@ from .algorithm_presets import (
     v2_tracking_policy_for_preset,
 )
 from .output_paths import prepare_output_dir, safe_output_path
+from .raw_fft_candidates import find_candidate_peak_indices
 from .reference_groups import (
     color_for_reference_order,
     method_label,
@@ -36,7 +37,6 @@ from .reference_groups import (
 from .report import load_v2_report
 from .signal_preparation import prepare_v2_signals
 from .solver import (
-    _candidate_peak_indices,
     _classify_window_kind,
     _continuity_protection_half_width_hz,
     _effective_penalty_weight,
@@ -1336,11 +1336,7 @@ def _compute_spectrum(
         if ref_freq.size:
             ref_amp = np.asarray(ref_amp, dtype=float)
             motion_freq = float(ref_freq[int(np.argmax(ref_amp))])
-            peak_indices = _candidate_peak_indices(
-                freq,
-                filtered_amp,
-                threshold_ratio=0.15,
-            )
+            peak_indices = find_candidate_peak_indices(freq, filtered_amp)
             penalty_centers_hz = _motion_penalty_centers(
                 motion_freq,
                 freq,

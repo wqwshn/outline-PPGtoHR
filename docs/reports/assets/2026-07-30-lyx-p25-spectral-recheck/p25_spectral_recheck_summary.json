@@ -1,0 +1,138 @@
+{
+  "algorithm_level_holdout": false,
+  "automatic_stage_f_execution": false,
+  "automatic_stage_r_execution": false,
+  "complete_pass_profile_ids": [],
+  "completion_sha256": "f66ac4bde326ce3b2cc25738176ea5613cec9c9b9ee91862557ddf44d9009076",
+  "decision": "p25_failure_review_required",
+  "decision_sha256": "fd05114792fd04b276a114a6ac9e9292089da544883d1b98a6f7e91832fd5684",
+  "evidence_class": "development_reuse_pilot",
+  "hr_band_share_delta_threshold": -0.02,
+  "independent_bo_run_count": 0,
+  "next_state": "awaiting_human_filter_mechanism_or_independent_bo_review",
+  "overall_gate_pass_counts": {
+    "complete_window_evidence_pass": 36,
+    "hr_band_share_delta_pass": 18,
+    "prominence_db_delta_pass": 32,
+    "pulse_power_retention_pass": 36,
+    "residual_artifact_corr_delta_pass": 36,
+    "visible_top3_rate_delta_pass": 36
+  },
+  "overall_hr_band_share_delta": {
+    "max": 0.046057266939467684,
+    "median": -0.019731623349743377,
+    "min": -0.09956190532809872
+  },
+  "overall_pulse_power_retention": {
+    "max": 1.2988079909367527,
+    "median": 0.973929384236478,
+    "min": 0.8596864331403451
+  },
+  "parameter_search_run_count": 0,
+  "profiles": {
+    "p25-long-mid": {
+      "complete_pass_count": 3,
+      "failed_hr_band_share_record_ids": [
+        "jianpan1_LYX_0708",
+        "jianpan2_LYX_0708",
+        "jianpan3_LYX_0708",
+        "kaihe1_LYX_0617",
+        "kaihe3_LYX_0613",
+        "run3_LYX_0708",
+        "xiezi2_LYX_0708",
+        "xiezi3_LYX_0708",
+        "xiezi4_LYX_0708"
+      ],
+      "failed_prominence_record_ids": [
+        "jianpan1_LYX_0708",
+        "xiezi2_LYX_0708",
+        "xiezi3_LYX_0708"
+      ],
+      "gate_pass_counts": {
+        "complete_window_evidence_pass": 12,
+        "hr_band_share_delta_pass": 3,
+        "prominence_db_delta_pass": 9,
+        "pulse_power_retention_pass": 12,
+        "residual_artifact_corr_delta_pass": 12,
+        "visible_top3_rate_delta_pass": 12
+      },
+      "hr_band_share_delta": {
+        "max": 0.046057266939467684,
+        "median": -0.0342033120284717,
+        "min": -0.09956190532809872
+      },
+      "pulse_power_retention": {
+        "max": 1.2988079909367527,
+        "median": 0.9491902512545698,
+        "min": 0.8596864331403451
+      },
+      "record_count": 12
+    },
+    "p25-short-low": {
+      "complete_pass_count": 10,
+      "failed_hr_band_share_record_ids": [
+        "jianpan1_LYX_0708",
+        "xiezi2_LYX_0708"
+      ],
+      "failed_prominence_record_ids": [],
+      "gate_pass_counts": {
+        "complete_window_evidence_pass": 12,
+        "hr_band_share_delta_pass": 10,
+        "prominence_db_delta_pass": 12,
+        "pulse_power_retention_pass": 12,
+        "residual_artifact_corr_delta_pass": 12,
+        "visible_top3_rate_delta_pass": 12
+      },
+      "hr_band_share_delta": {
+        "max": 0.008558884204525424,
+        "median": -0.010966289970394227,
+        "min": -0.02420185865899971
+      },
+      "pulse_power_retention": {
+        "max": 1.0299387967520661,
+        "median": 0.9855147110884113,
+        "min": 0.9596464729648138
+      },
+      "record_count": 12
+    },
+    "p25-short-mid": {
+      "complete_pass_count": 5,
+      "failed_hr_band_share_record_ids": [
+        "jianpan1_LYX_0708",
+        "jianpan2_LYX_0708",
+        "jianpan3_LYX_0708",
+        "kaihe1_LYX_0617",
+        "xiezi2_LYX_0708",
+        "xiezi3_LYX_0708",
+        "xiezi4_LYX_0708"
+      ],
+      "failed_prominence_record_ids": [
+        "jianpan1_LYX_0708"
+      ],
+      "gate_pass_counts": {
+        "complete_window_evidence_pass": 12,
+        "hr_band_share_delta_pass": 5,
+        "prominence_db_delta_pass": 11,
+        "pulse_power_retention_pass": 12,
+        "residual_artifact_corr_delta_pass": 12,
+        "visible_top3_rate_delta_pass": 12
+      },
+      "hr_band_share_delta": {
+        "max": 0.0074136106238112676,
+        "median": -0.023488981366093724,
+        "min": -0.046455758914577094
+      },
+      "pulse_power_retention": {
+        "max": 1.0203767865993645,
+        "median": 0.9626583022542523,
+        "min": 0.9289437363232388
+      },
+      "record_count": 12
+    }
+  },
+  "proposal_sha256": "83081d8081def70b356b2737864b552c3fc2376817bbc595db32f4f650616c26",
+  "pulse_power_retention_threshold": 0.8,
+  "record_result_count": 36,
+  "summary_sha256": "fee5cca532291bbf74d61436df822aaca2c7aea3e8efc8c031f3b92aadb95a42",
+  "summary_version": "lyx_p25_spectral_recheck_figure_summary_v2"
+}

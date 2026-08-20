@@ -1,0 +1,23 @@
+{
+  "automatic_independent_bo_execution": false,
+  "automatic_stage_f_execution": false,
+  "automatic_stage_r_execution": false,
+  "branches": {
+    "p25_failure_review_required": "no profile passes the corrected complete gate on all 12 records; a human must choose mechanism diagnostics or whether to prepare an independent-BO review package",
+    "stage_r_sentinel_revision_candidate": "at least one profile passes stability and the complete corrected spectral gate on all 12 records"
+  },
+  "contract_sha256": "04f3a67854432a1d03fb393eb348747bc639dd7a5f41f16ae552936bda5acad0",
+  "contract_version": "lyx_p25_spectral_recheck_decision_contract_v2",
+  "forbidden_decision_inputs": [
+    "metrics",
+    "mae",
+    "l10",
+    "l20",
+    "recovery"
+  ],
+  "may_nominate_recovery_candidate": false,
+  "reads_only": [
+    "spectral_audit.stability_pass",
+    "spectral_audit.stage_r_spectral_gate"
+  ]
+}

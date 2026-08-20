@@ -1,0 +1,7 @@
+{
+  "authorization_sha256": "3e5b795f91b87f22af49bfa7445c45eab206e77c2581242d9c257113a08bf91a",
+  "binding_sha256": "cb75e46feb9d06a0fe60a71f1b1404e3ff2918c8758a1ec4c7ee35e170e86384",
+  "binding_version": "lyx_p25_spectral_execution_binding_v1",
+  "identity_matrix_sha256": "f07884ad8999ff9cea00d99f5aa3f14503b32ca04dd2e2f759d64272b42cbf48",
+  "proposal_sha256": "db1f5d2278458592c08d7e6217d52090a8ab1f94b96262de99e84a466e2c6128"
+}

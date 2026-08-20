@@ -5,6 +5,10 @@
 > **推荐**：Python 移植版已完整覆盖本文档中的全部功能，并额外提供自适应滤波策略
 > 切换（LMS / QKLMS / Volterra）、分级时延搜索、Nature 单栏论文图输出、批量可视化
 > 等 MATLAB 版未包含的能力。详见 [python/README.md](../python/README.md)。
+>
+> LYX 数据的 BO 参数空间 Phase2（正式 preflight、24 条双空间独立 BO、
+> 无退化硬门槛、可恢复回执和后续场景内 K 折）只在 Python v2 实现；MATLAB
+> 本目录继续作为算法金标，不提供该实验总控，也不与 Python 的正式候选预算混跑。
 
 ## 算法概述
 

@@ -1,0 +1,2996 @@
+{
+  "adaptive_reference_stage_limit": 1,
+  "algorithm_level_holdout": false,
+  "attempt_kind": "formal",
+  "authorization_state": "awaiting_human_budget_decision",
+  "automatic_stage_f_execution": false,
+  "base_filter_profile_id": "p25-short-low",
+  "baseline_identity_panel": [
+    {
+      "data_sha256": "7c23fa243cf4c7f0a0f92d2f8a84ca3c12ee5af18df38dd4437e92ad0bb83265",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metrics_sha256": "a78f8a3b473c2682998b1c02b3057a3a806218f1c505e507e69317751ce99b84",
+      "record_id": "jianpan1_LYX_0708",
+      "reference_sha256": "076fec4a8767fdf6edfee35dfac72e898659b95e5cd6d9924724145976622b2c",
+      "scene": "jianpan",
+      "solver_identity_sha256": "c90872f5befd97631ba7448360a875d256d74047ed1dfcb4733e41e436a86c48",
+      "solver_result_sha256": "31477a44e36e180e484f1237227a302f9a37f4c9ffe5cfa7f1ae0141703bdd19",
+      "true_rise_applicable": false
+    },
+    {
+      "data_sha256": "b4aaafa531d731c81d7e8da0e5dac4f8c6e360bda6c7520c34ae78e023dd8bb7",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metrics_sha256": "870623e47f6886472d9f56bc05b2fff36a4556123d8bd77c24c4e529353b1960",
+      "record_id": "jianpan2_LYX_0708",
+      "reference_sha256": "c7a98e54da83d6310430276b33b88bf2306ade91ac81d5b9dd3f5d18ecf5a270",
+      "scene": "jianpan",
+      "solver_identity_sha256": "a144e0d334f1a76bc3fa5cf54bc672359be2dd412ffd4ac2dc761cf430f69c80",
+      "solver_result_sha256": "fbdb32da22c6fe3314ece21de18817ca533ac5f8d61b96a3140ddb5a0d40a8ce",
+      "true_rise_applicable": false
+    },
+    {
+      "data_sha256": "19b5d1c42c326cd2f868c1498bd282e7dba94141b8b51f70332fd82409c2e4b7",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metrics_sha256": "0fe46cc24bc920fa6cb5a35ca4714c373912ca1c1515447171796c1bb9669304",
+      "record_id": "jianpan3_LYX_0708",
+      "reference_sha256": "ecf02c256cde6af1557910ee9ff769de523ffb54e8124c2f0528fad82df968e6",
+      "scene": "jianpan",
+      "solver_identity_sha256": "c112215fdb9b4339b46d9906cacdc3f0bdb70dab50729d4c51249ad00b7b9b60",
+      "solver_result_sha256": "044dd599efbb8e8707f9e75db7e9fa2743ad9b7647f96d5685ed22a750e3a27a",
+      "true_rise_applicable": false
+    },
+    {
+      "data_sha256": "1dd489af27c30e2f52b911ec1e11312a7498463cdb1e737ca66ffba26bbf4bcb",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metrics_sha256": "29c7f269ce2388786fc7b5bb2f1c018dc3cb07852443f2d737497a1f8ce28e60",
+      "record_id": "kaihe1_LYX_0613",
+      "reference_sha256": "38a5b714ee897bbeaaafa0be7017b3bf9d941826a0e534334131b1301c53e0e0",
+      "scene": "kaihe",
+      "solver_identity_sha256": "8a816e950b4b9eec79b610faf1685a13c5bfa62eaf8c858e2bc1800d637212c6",
+      "solver_result_sha256": "06a580e7714f39361342a80854abec71c9c2d1fe673795bb5c6ec97a331bb0fc",
+      "true_rise_applicable": true
+    },
+    {
+      "data_sha256": "73f626f972afccccb5a0ef261e3bfe1afd60b02b24a18e5b8a2ddfb5964e7528",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metrics_sha256": "457606de904902b94761f6d7c5db3d34e9ffd6582c353daf3c21397816afbf20",
+      "record_id": "kaihe1_LYX_0617",
+      "reference_sha256": "a3b779e55561da76a3d69293e73175c624e947d57de38a3f5184d324731c0739",
+      "scene": "kaihe",
+      "solver_identity_sha256": "30da5ba65be5b8d292553b855ce177b864319228c3c254b33ccd382d825741d7",
+      "solver_result_sha256": "51c6d20abf5ecbcc07876fab96aabac19a98d1f09c6f2b3ad2cf7ea7df2033ad",
+      "true_rise_applicable": true
+    },
+    {
+      "data_sha256": "778f75d02d47a134a5999a5641de201dfc613da915b43876398792c6833c6e84",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metrics_sha256": "d4ae97668938688acf0631dc669681965b98355f965703ac7e455c9152deb10c",
+      "record_id": "kaihe3_LYX_0613",
+      "reference_sha256": "5cb40473d1793f8ff91eeed993f4a1b9a59c44b7fefcfd57a0314ad34c626050",
+      "scene": "kaihe",
+      "solver_identity_sha256": "91e7261306702aa8e2280a26972700a6b08521847dc42efc33af907db27957b0",
+      "solver_result_sha256": "c8c746601288dbe5e84dd9565c57ba965af4b481dff3253004e40bc3b045ee9f",
+      "true_rise_applicable": true
+    },
+    {
+      "data_sha256": "4e53e93fb94a8ecd17d319af41d6d010c1424baf9c0151099cb417fb0a2d6af0",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metrics_sha256": "4f5e723c6d06a911b8ca1388351466aa8dddf4780c72fcc7f0741e0aa0ce1173",
+      "record_id": "run1_LYX_0708",
+      "reference_sha256": "c8677ec1f0e22b25100c20ab83b8faf22ddea730a973b41b1b43673acf1443a0",
+      "scene": "run",
+      "solver_identity_sha256": "acda4b83a32dc0bd83add6a41c9655d68828551fa3a6b68ae2978c66666a6873",
+      "solver_result_sha256": "947a17223ba1c0f6c1cd54a7261bde38cdd6b2bb505dac7799b6324ab7572b9e",
+      "true_rise_applicable": true
+    },
+    {
+      "data_sha256": "6e06fcb2efffb234c1d7b2dc93bc8ea7b432f000fdfdc5f32639850d1e6e7d18",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metrics_sha256": "32036c4a85cf5bd618f4e38026e99e7f05e1be49a842edb9816b91d75f0efe64",
+      "record_id": "run2_LYX_0708",
+      "reference_sha256": "8d04fc22e8e98c5b4380a05ded28e8aa542ab5fa66d800cf602289ccf0062382",
+      "scene": "run",
+      "solver_identity_sha256": "5e0810b02ffab41aa5477cddb125aeb7b52f9928d2f27e5fe6de1a5c59fd20cb",
+      "solver_result_sha256": "6fb5a9c69db05c4940384d090e68a1f8d86a0972d730e2bf09aba0a46181f4f9",
+      "true_rise_applicable": true
+    },
+    {
+      "data_sha256": "72d487748fa84ca857a1b50b09998d485359b9af63bdf9240a6e6b3415b632a8",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metrics_sha256": "d0e4022c61a29c2770d0320c84029ec437a01d3a0c974d3cbe0f2ff5d7cd1b57",
+      "record_id": "run3_LYX_0708",
+      "reference_sha256": "323813b4b44f54e604bf751164616bdd3ed5859d5faee2f302b11301b612e1e3",
+      "scene": "run",
+      "solver_identity_sha256": "10f2f0d41e711bf00f168f06643111af0dda1b6445d0e0366c11de6325bc1e46",
+      "solver_result_sha256": "43ddd78f052bce336a407ab75602721689b67b07a82c63fc5cc92e7154b8d5e1",
+      "true_rise_applicable": true
+    },
+    {
+      "data_sha256": "eaba17c0d527c7a8b099dfa3f9587496bce5095ab91528c2b371d5d795e852b1",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metrics_sha256": "e91a4c5171413f405af9cb56a8751983d7ed0c201515b597e84c79ff5b43d530",
+      "record_id": "xiezi2_LYX_0708",
+      "reference_sha256": "fc1a913849322295413e3ecf1ca48cefa477420ac4c34ea3cc2a5b74070d2877",
+      "scene": "xiezi",
+      "solver_identity_sha256": "ed2350e70f0439db5d57a96d83a52c2df172e32971eb8feddfcdb61c5c7c2fd4",
+      "solver_result_sha256": "cc89cf025ec9410184a25636ab97b8c62fe0e74c54960b14f00602333565c143",
+      "true_rise_applicable": false
+    },
+    {
+      "data_sha256": "111b11e3120c793eae426f7361f73ac8c0b5b6418057b2531f9fd62cf1a1be79",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metrics_sha256": "70b401641d6ee02a783ca70689f7cff37c42ccaaee1a9298d0957ed7464bcf79",
+      "record_id": "xiezi3_LYX_0708",
+      "reference_sha256": "34c0a25bf5953ba8968108170ddcf3b6664fb15c7cecd8f1dfc1728c5cca0916",
+      "scene": "xiezi",
+      "solver_identity_sha256": "7694af6ae9804c4dc56ce16383cb982df4ef473a0ffcd2023cf8a6893e5a6cdd",
+      "solver_result_sha256": "839abee065c16a45340f9480bb41e4c3f0aaaf9a5d3efcc6f077655a6c3b33a6",
+      "true_rise_applicable": false
+    },
+    {
+      "data_sha256": "1d18872f230a8ed75fdf9653196193557da946dcdb6b6375afe220ad9c71bdf4",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metrics_sha256": "0c75045a40b2ae473d17c375d3a0b6c5642e5605a30eabcfff887b91bd936171",
+      "record_id": "xiezi4_LYX_0708",
+      "reference_sha256": "9db5f78f018e87128771f45cc3af8004e51ef7530ae1358dcf873b8f547cb0f7",
+      "scene": "xiezi",
+      "solver_identity_sha256": "efbe2c2f9a44d15e35a835ed14feb7ca2b810e5ec49586b82ed99c71e6c31945",
+      "solver_result_sha256": "68f9ddd366e6ca7b173639f6bd912806409f2ebba992e05e04b78733115d620d",
+      "true_rise_applicable": false
+    }
+  ],
+  "baseline_identity_panel_sha256": "9f6ae83087afcaffe3da687400a31d828bb4c6b31d0ce1443cd4f972d3a35c1a",
+  "diagnostic_run_count": 0,
+  "evidence_class": "development_reuse_pilot",
+  "filter_revision_id": "p25-short-low-rank1-v1",
+  "formal_run_count": 0,
+  "formal_unique_budget": 36,
+  "frozen_contracts": {
+    "budget_contract_hash": "2ebffe759ba753612c6f1ba3a3c5c356d638a9a8faa61cb8ce17cb976dd0eeaa",
+    "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+    "filter_revision_contract_hash": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+    "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+    "penalty_registry_hash": "914d8d047b33fb92ae9eaff3bb0d37e4ea8b6a59ec21a72cfbcfe599a4931388",
+    "recovery_candidate_registry_hash": "afab385978abb1439c58cce5d46ede40dfc3e90039becfa55114ac21201796fb",
+    "selection_contract_hash": "f2530c8ebda4af0ff5189a68f2a57ccdbda8cdbfa90f444ba182c9d9a400b76f",
+    "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+    "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28"
+  },
+  "historical_stage_r": {
+    "governance_receipt_sha256": "f4a2a8751e74cf2a62bfe2ab4883683e5ec19c4c1048b2beb6f68288b8d2e7fe",
+    "historical_formal_identity_count": 108,
+    "historical_results_reusable_for_selection": false,
+    "historical_threshold_diagnostic_count": 60,
+    "non_reuse_reason": "solver_source_and_filter_structure_changed_to_rank1",
+    "proposal_sha256": "a661915b93b884cfaddc09ad00c43fb812bc64ea8878ed933e030e8f97947d1b",
+    "status": "no_safe_recovery_candidate"
+  },
+  "historical_stage_r_formal_identity_count": 108,
+  "historical_threshold_diagnostic_count": 60,
+  "identities": [
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "780793271dd363a1dffad5c729011e731d8ae0b24be8b0e856491ca48abedbf6",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "current_fixed_floor_control_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.05,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "64e468b4a2df86f547b77e12633c74277ec51d8364d0cdc73da6968af753a16c",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708.csv",
+      "data_sha256": "b5f81d40027419f8545a399a3a8b66f4737c75d78f60d20c7de7e378fd824d8a",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "780793271dd363a1dffad5c729011e731d8ae0b24be8b0e856491ca48abedbf6",
+      "mechanism_complexity": 0,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "7c23fa243cf4c7f0a0f92d2f8a84ca3c12ee5af18df38dd4437e92ad0bb83265",
+      "record_id": "jianpan1_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "recovery_candidate_sha256": "012b651e9905153f7afd3624d540cf7235d764ccdc651726e34c14b14e2918c1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708_HR_ref.csv",
+      "reference_sha256": "076fec4a8767fdf6edfee35dfac72e898659b95e5cd6d9924724145976622b2c",
+      "scene": "jianpan",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "f30a7e9a4f6ed5002617f69fa0e3244448b96a30050c506ccb70d0e8f4f65c02",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "70ba58480019b348f17c78995cf1bce1506e0b80f6770b9375d5550568c1a2b8",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "current_fixed_floor_control_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.2,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "092246e1b2d2747d7b6e0a1cd9f5624525670a82e46a06115a90fe9066339736",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708.csv",
+      "data_sha256": "a7421b4146701f462dd4b033ad80a60e1fdc3f72fae3e97a9c5a7b89360ac1d2",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "70ba58480019b348f17c78995cf1bce1506e0b80f6770b9375d5550568c1a2b8",
+      "mechanism_complexity": 0,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "b4aaafa531d731c81d7e8da0e5dac4f8c6e360bda6c7520c34ae78e023dd8bb7",
+      "record_id": "jianpan2_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "recovery_candidate_sha256": "012b651e9905153f7afd3624d540cf7235d764ccdc651726e34c14b14e2918c1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "c7a98e54da83d6310430276b33b88bf2306ade91ac81d5b9dd3f5d18ecf5a270",
+      "scene": "jianpan",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "7b778202140bde7425215e3ead582d7c7538ce48f173a160fcefaf47094497fd",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "ed0088b3e9033c8ab4414ec6ab0abea2795746784cd08cf2bd9ddfae178b1c4d",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "current_fixed_floor_control_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.2,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "33dde71c77e75ede66c357d1d6a5dc468f4e420372f0bf6407c17afdcc706778",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708.csv",
+      "data_sha256": "d6ea629174441276720cb28ba416f68fba6018952bfa66105ba734bdbfdb8da5",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "ed0088b3e9033c8ab4414ec6ab0abea2795746784cd08cf2bd9ddfae178b1c4d",
+      "mechanism_complexity": 0,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "19b5d1c42c326cd2f868c1498bd282e7dba94141b8b51f70332fd82409c2e4b7",
+      "record_id": "jianpan3_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "recovery_candidate_sha256": "012b651e9905153f7afd3624d540cf7235d764ccdc651726e34c14b14e2918c1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708_HR_ref.csv",
+      "reference_sha256": "ecf02c256cde6af1557910ee9ff769de523ffb54e8124c2f0528fad82df968e6",
+      "scene": "jianpan",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "d1f444214770d2794c873168bf166abfc1e6bd8dc9f6fd417977ca574a4d9a08",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "72d63fc6a90b32559b5c53a0ce0fe68c46937a7b43de5b25ed78e2c062ad4fb1",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "current_fixed_floor_control_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.05,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613_HR_ref.csv"
+      },
+      "config_hash": "f3f99b419de903e86b0386a3e4408f8b3cf51e2364003891b5dc72a1544cbd5f",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613.csv",
+      "data_sha256": "22927001aa2c6d6c378d5ab7897897e59f3c72dfad697fd77a165e599ca5443d",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "72d63fc6a90b32559b5c53a0ce0fe68c46937a7b43de5b25ed78e2c062ad4fb1",
+      "mechanism_complexity": 0,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "1dd489af27c30e2f52b911ec1e11312a7498463cdb1e737ca66ffba26bbf4bcb",
+      "record_id": "kaihe1_LYX_0613",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "recovery_candidate_sha256": "012b651e9905153f7afd3624d540cf7235d764ccdc651726e34c14b14e2918c1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613_HR_ref.csv",
+      "reference_sha256": "38a5b714ee897bbeaaafa0be7017b3bf9d941826a0e534334131b1301c53e0e0",
+      "scene": "kaihe",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "4bc1a572dbd5e508b2f7e17ebd138f6518e0581bed3576b4de31cd28e98e6e2a",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "ef4d6def47455a6f3f695344e2c8143c36a860aca68c5af55754c8b49086ff83",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "current_fixed_floor_control_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.1,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617_HR_ref.csv"
+      },
+      "config_hash": "25a45f3bc1255b728c8ba6ac8263e606bff6e99f56c082f1b106b0583e934f75",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617.csv",
+      "data_sha256": "ba3d9938e8d9e04d25ce32fa6e698b21ef512f68bc89d3adfb0a5e77fc900d6d",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "ef4d6def47455a6f3f695344e2c8143c36a860aca68c5af55754c8b49086ff83",
+      "mechanism_complexity": 0,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "73f626f972afccccb5a0ef261e3bfe1afd60b02b24a18e5b8a2ddfb5964e7528",
+      "record_id": "kaihe1_LYX_0617",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "recovery_candidate_sha256": "012b651e9905153f7afd3624d540cf7235d764ccdc651726e34c14b14e2918c1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617_HR_ref.csv",
+      "reference_sha256": "a3b779e55561da76a3d69293e73175c624e947d57de38a3f5184d324731c0739",
+      "scene": "kaihe",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "abeb43d7aeb0657a7ab69648906816ed18876ad837c94c3876363d7a5d2d9173",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "0e6c9f9520b8724c09bc379bce0ece193a6b6a3e287595ebec1c56001fd29194",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "current_fixed_floor_control_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.2,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613_HR_ref.csv"
+      },
+      "config_hash": "58785af1cfa93e4822cc6e5bff933b24fd954448192946c62a205ba8b0d80984",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613.csv",
+      "data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "0e6c9f9520b8724c09bc379bce0ece193a6b6a3e287595ebec1c56001fd29194",
+      "mechanism_complexity": 0,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "778f75d02d47a134a5999a5641de201dfc613da915b43876398792c6833c6e84",
+      "record_id": "kaihe3_LYX_0613",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "recovery_candidate_sha256": "012b651e9905153f7afd3624d540cf7235d764ccdc651726e34c14b14e2918c1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613_HR_ref.csv",
+      "reference_sha256": "5cb40473d1793f8ff91eeed993f4a1b9a59c44b7fefcfd57a0314ad34c626050",
+      "scene": "kaihe",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "d373af3357095e36f596f119ae8f879426055043849c95f64b027c37bd055d9c",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "5cd1362483ea3d7c30f4684fb1c2f066da149a0540159e9531d7445cdb315e3e",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "current_fixed_floor_control_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.1,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "dfa92f9f0f98d34aedb94bed4c1588013e1f0ee9ce82adba7ccea136233bd964",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708.csv",
+      "data_sha256": "971a87c06295b73d4cca7936437de8c832c7d2eed65f286a8742805543f5f87b",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "5cd1362483ea3d7c30f4684fb1c2f066da149a0540159e9531d7445cdb315e3e",
+      "mechanism_complexity": 0,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "4e53e93fb94a8ecd17d319af41d6d010c1424baf9c0151099cb417fb0a2d6af0",
+      "record_id": "run1_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "recovery_candidate_sha256": "012b651e9905153f7afd3624d540cf7235d764ccdc651726e34c14b14e2918c1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708_HR_ref.csv",
+      "reference_sha256": "c8677ec1f0e22b25100c20ab83b8faf22ddea730a973b41b1b43673acf1443a0",
+      "scene": "run",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "ff4c9fad193859725a3841c63539932a239d6be562a52e8676a830f524d8b45a",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "170f95e8d194c8c2701147cb068417e9e1961f71fb636ae4e4006cedf006a9e9",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "current_fixed_floor_control_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.05,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "a9890fd3e1a08c45858e1620aa4eef06e1ba62df36a8ed23925699420b7dcc57",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708.csv",
+      "data_sha256": "a32ab804060f866add72e093d6bdced3d756faf967c1ac1b233fec07c5733cb7",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "170f95e8d194c8c2701147cb068417e9e1961f71fb636ae4e4006cedf006a9e9",
+      "mechanism_complexity": 0,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "6e06fcb2efffb234c1d7b2dc93bc8ea7b432f000fdfdc5f32639850d1e6e7d18",
+      "record_id": "run2_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "recovery_candidate_sha256": "012b651e9905153f7afd3624d540cf7235d764ccdc651726e34c14b14e2918c1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "8d04fc22e8e98c5b4380a05ded28e8aa542ab5fa66d800cf602289ccf0062382",
+      "scene": "run",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "7b88b4155b8227ffd25d987082d62b954081bb67d56b89be4f1f4e9d96c9b09c",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "736986d90b9e7d5e3f9fe518d2dd6bd283329ea3bbd2b9b85da44597cc9ec31f",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "current_fixed_floor_control_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.2,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "3e30756cbd0d21edb39e70e676f6aa859eff518434d6cf7a9af9358c04edd0e7",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708.csv",
+      "data_sha256": "1f1ea855fba32db79c1a5d654736170f1e08d1bbc72409191b227814db685742",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "736986d90b9e7d5e3f9fe518d2dd6bd283329ea3bbd2b9b85da44597cc9ec31f",
+      "mechanism_complexity": 0,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "72d487748fa84ca857a1b50b09998d485359b9af63bdf9240a6e6b3415b632a8",
+      "record_id": "run3_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "recovery_candidate_sha256": "012b651e9905153f7afd3624d540cf7235d764ccdc651726e34c14b14e2918c1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708_HR_ref.csv",
+      "reference_sha256": "323813b4b44f54e604bf751164616bdd3ed5859d5faee2f302b11301b612e1e3",
+      "scene": "run",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "5dcd8d1401cae702f7fa61972ae279a41bf1ca20d32d97fcbb04487d09e6c2d9",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "15fbde05dcbafc40280099107eb73d401a68d42ba512b3137cc3b21332e5a522",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "current_fixed_floor_control_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.2,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "b0bd194c78969ce995b692cdf9caa6dda2224b137de48122de34e71a77a53e84",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708.csv",
+      "data_sha256": "cf5e2d02bd1f874b3b55883e351cb6cf5107b6f0eb4d7acf142d6f5e6d93e7ee",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "15fbde05dcbafc40280099107eb73d401a68d42ba512b3137cc3b21332e5a522",
+      "mechanism_complexity": 0,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "eaba17c0d527c7a8b099dfa3f9587496bce5095ab91528c2b371d5d795e852b1",
+      "record_id": "xiezi2_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "recovery_candidate_sha256": "012b651e9905153f7afd3624d540cf7235d764ccdc651726e34c14b14e2918c1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "fc1a913849322295413e3ecf1ca48cefa477420ac4c34ea3cc2a5b74070d2877",
+      "scene": "xiezi",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "c1e00c7d4ef41e3fc65c9a00bd8c2442ec8ba182ca46b40d84de0b2723d80a53",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "9232ba75b6bf3886a207bdbae26015795e5ddc4d56c3b4e859b6216e2dc4c344",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "current_fixed_floor_control_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.1,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "e30ea07d8baa391a90ac8b540119d196a6999d2575a084c6d6cbc494210e69a7",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708.csv",
+      "data_sha256": "7b32139c8969ebcd6a8c1bedf8bb9191c916187a7716f43db6ad03d60f165619",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "9232ba75b6bf3886a207bdbae26015795e5ddc4d56c3b4e859b6216e2dc4c344",
+      "mechanism_complexity": 0,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "111b11e3120c793eae426f7361f73ac8c0b5b6418057b2531f9fd62cf1a1be79",
+      "record_id": "xiezi3_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "recovery_candidate_sha256": "012b651e9905153f7afd3624d540cf7235d764ccdc651726e34c14b14e2918c1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708_HR_ref.csv",
+      "reference_sha256": "34c0a25bf5953ba8968108170ddcf3b6664fb15c7cecd8f1dfc1728c5cca0916",
+      "scene": "xiezi",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "79e8ea8a6a2da0c7f44e722afb642e44847c23d60b734b3ca9c6306306669f53",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "a4aa0af0f731082bbf6ae663d9d62e01d82ab8883fc2d67cd06aa106fe3825d6",
+      "candidate_min_bpm": 85.0,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "current_fixed_floor_control_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.3,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "b0d5bf6827a0cc53df7e45d7191c4241df916ee3a6b50f9939812df0471b0d99",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708.csv",
+      "data_sha256": "8044c3d7fb32f520f6ba5940508814f69cef5e3ec0b8f3ca8b9fb750961f897f",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "a4aa0af0f731082bbf6ae663d9d62e01d82ab8883fc2d67cd06aa106fe3825d6",
+      "mechanism_complexity": 0,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "1d18872f230a8ed75fdf9653196193557da946dcdb6b6375afe220ad9c71bdf4",
+      "record_id": "xiezi4_LYX_0708",
+      "recovery_candidate_id": "current_fixed_floor_control_v1",
+      "recovery_candidate_sha256": "012b651e9905153f7afd3624d540cf7235d764ccdc651726e34c14b14e2918c1",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708_HR_ref.csv",
+      "reference_sha256": "9db5f78f018e87128771f45cc3af8004e51ef7530ae1358dcf873b8f547cb0f7",
+      "scene": "xiezi",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "85e3fb74835e878663ab23f42cddf187828e896e063300cc793a5971ab07c91e",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "2733dd281e00155e7c68efa69fb2d30d363e3151a363e0ca1bee3a13431fc85d",
+      "candidate_min_bpm": null,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "relative_gap_timeout_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.05,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "1f629cc94170e72ff6105ad200401129f5acae8a9d3d29f9e56a472a8a610405",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708.csv",
+      "data_sha256": "b5f81d40027419f8545a399a3a8b66f4737c75d78f60d20c7de7e378fd824d8a",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "2733dd281e00155e7c68efa69fb2d30d363e3151a363e0ca1bee3a13431fc85d",
+      "mechanism_complexity": 1,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "7c23fa243cf4c7f0a0f92d2f8a84ca3c12ee5af18df38dd4437e92ad0bb83265",
+      "record_id": "jianpan1_LYX_0708",
+      "recovery_candidate_id": "relative_gap_timeout_v1",
+      "recovery_candidate_sha256": "63d98dde2d76b189f718afee1908c6934870f5d0a4e1ee825b652e42e7e385c8",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708_HR_ref.csv",
+      "reference_sha256": "076fec4a8767fdf6edfee35dfac72e898659b95e5cd6d9924724145976622b2c",
+      "scene": "jianpan",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "f30a7e9a4f6ed5002617f69fa0e3244448b96a30050c506ccb70d0e8f4f65c02",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "93978fa964efce8c27667a61917e67a72557bf340c3c0d7015b576ea03a6a522",
+      "candidate_min_bpm": null,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "relative_gap_timeout_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.2,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "6c881dd5bc480460ad740e97d9f564ed30a9cced8124f7efacd7a2d52f982c9d",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708.csv",
+      "data_sha256": "a7421b4146701f462dd4b033ad80a60e1fdc3f72fae3e97a9c5a7b89360ac1d2",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "93978fa964efce8c27667a61917e67a72557bf340c3c0d7015b576ea03a6a522",
+      "mechanism_complexity": 1,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "b4aaafa531d731c81d7e8da0e5dac4f8c6e360bda6c7520c34ae78e023dd8bb7",
+      "record_id": "jianpan2_LYX_0708",
+      "recovery_candidate_id": "relative_gap_timeout_v1",
+      "recovery_candidate_sha256": "63d98dde2d76b189f718afee1908c6934870f5d0a4e1ee825b652e42e7e385c8",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "c7a98e54da83d6310430276b33b88bf2306ade91ac81d5b9dd3f5d18ecf5a270",
+      "scene": "jianpan",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "7b778202140bde7425215e3ead582d7c7538ce48f173a160fcefaf47094497fd",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "ab70317438e7f943ae6a890a2bd43e12c212182bdc1cde33a338c939854a1a99",
+      "candidate_min_bpm": null,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "relative_gap_timeout_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.2,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "65d3d8cd80e1611091b194f327da76ffa2d18e35d8056d43ada79bdf197ca188",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708.csv",
+      "data_sha256": "d6ea629174441276720cb28ba416f68fba6018952bfa66105ba734bdbfdb8da5",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "ab70317438e7f943ae6a890a2bd43e12c212182bdc1cde33a338c939854a1a99",
+      "mechanism_complexity": 1,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "19b5d1c42c326cd2f868c1498bd282e7dba94141b8b51f70332fd82409c2e4b7",
+      "record_id": "jianpan3_LYX_0708",
+      "recovery_candidate_id": "relative_gap_timeout_v1",
+      "recovery_candidate_sha256": "63d98dde2d76b189f718afee1908c6934870f5d0a4e1ee825b652e42e7e385c8",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708_HR_ref.csv",
+      "reference_sha256": "ecf02c256cde6af1557910ee9ff769de523ffb54e8124c2f0528fad82df968e6",
+      "scene": "jianpan",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "d1f444214770d2794c873168bf166abfc1e6bd8dc9f6fd417977ca574a4d9a08",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "55c4e3b371398e06d135d1c545d43e20ed7e2f62e3809ccf03cf65acdd78f984",
+      "candidate_min_bpm": null,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "relative_gap_timeout_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.05,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613_HR_ref.csv"
+      },
+      "config_hash": "95dc2c2e0d5a06bea043597d6f8cf2c2d8b227c60ca5bcdb27a284435f112fb5",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613.csv",
+      "data_sha256": "22927001aa2c6d6c378d5ab7897897e59f3c72dfad697fd77a165e599ca5443d",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "55c4e3b371398e06d135d1c545d43e20ed7e2f62e3809ccf03cf65acdd78f984",
+      "mechanism_complexity": 1,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "1dd489af27c30e2f52b911ec1e11312a7498463cdb1e737ca66ffba26bbf4bcb",
+      "record_id": "kaihe1_LYX_0613",
+      "recovery_candidate_id": "relative_gap_timeout_v1",
+      "recovery_candidate_sha256": "63d98dde2d76b189f718afee1908c6934870f5d0a4e1ee825b652e42e7e385c8",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613_HR_ref.csv",
+      "reference_sha256": "38a5b714ee897bbeaaafa0be7017b3bf9d941826a0e534334131b1301c53e0e0",
+      "scene": "kaihe",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "4bc1a572dbd5e508b2f7e17ebd138f6518e0581bed3576b4de31cd28e98e6e2a",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "b80dba534aa18e9ef4b72e221480bc26506776047dc11bdf6619c76bf69f58ce",
+      "candidate_min_bpm": null,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "relative_gap_timeout_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.1,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617_HR_ref.csv"
+      },
+      "config_hash": "1b5177e0b59eba9270fdd513011310745dd5801e81cd0c617147856f842b29c8",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617.csv",
+      "data_sha256": "ba3d9938e8d9e04d25ce32fa6e698b21ef512f68bc89d3adfb0a5e77fc900d6d",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "b80dba534aa18e9ef4b72e221480bc26506776047dc11bdf6619c76bf69f58ce",
+      "mechanism_complexity": 1,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "73f626f972afccccb5a0ef261e3bfe1afd60b02b24a18e5b8a2ddfb5964e7528",
+      "record_id": "kaihe1_LYX_0617",
+      "recovery_candidate_id": "relative_gap_timeout_v1",
+      "recovery_candidate_sha256": "63d98dde2d76b189f718afee1908c6934870f5d0a4e1ee825b652e42e7e385c8",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617_HR_ref.csv",
+      "reference_sha256": "a3b779e55561da76a3d69293e73175c624e947d57de38a3f5184d324731c0739",
+      "scene": "kaihe",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "abeb43d7aeb0657a7ab69648906816ed18876ad837c94c3876363d7a5d2d9173",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "ddf510657e7cfb65389c1d03108825eb4efe06e4536376a6576b4a9196b887e3",
+      "candidate_min_bpm": null,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "relative_gap_timeout_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.2,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613_HR_ref.csv"
+      },
+      "config_hash": "5ea281afd0e0f9e7e6ee5d6972c593693ae984b36406cec031a1149af2484cfc",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613.csv",
+      "data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "ddf510657e7cfb65389c1d03108825eb4efe06e4536376a6576b4a9196b887e3",
+      "mechanism_complexity": 1,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "778f75d02d47a134a5999a5641de201dfc613da915b43876398792c6833c6e84",
+      "record_id": "kaihe3_LYX_0613",
+      "recovery_candidate_id": "relative_gap_timeout_v1",
+      "recovery_candidate_sha256": "63d98dde2d76b189f718afee1908c6934870f5d0a4e1ee825b652e42e7e385c8",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613_HR_ref.csv",
+      "reference_sha256": "5cb40473d1793f8ff91eeed993f4a1b9a59c44b7fefcfd57a0314ad34c626050",
+      "scene": "kaihe",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "d373af3357095e36f596f119ae8f879426055043849c95f64b027c37bd055d9c",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "3d630714275ad396c15fa0957a9b8b4594a12d0508c7b008b4c3efdde759fea1",
+      "candidate_min_bpm": null,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "relative_gap_timeout_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.1,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "2551d49012c8911e126f8e92c0026291bd78d2bd6cc75d1ea2bcd382140413e1",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708.csv",
+      "data_sha256": "971a87c06295b73d4cca7936437de8c832c7d2eed65f286a8742805543f5f87b",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "3d630714275ad396c15fa0957a9b8b4594a12d0508c7b008b4c3efdde759fea1",
+      "mechanism_complexity": 1,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "4e53e93fb94a8ecd17d319af41d6d010c1424baf9c0151099cb417fb0a2d6af0",
+      "record_id": "run1_LYX_0708",
+      "recovery_candidate_id": "relative_gap_timeout_v1",
+      "recovery_candidate_sha256": "63d98dde2d76b189f718afee1908c6934870f5d0a4e1ee825b652e42e7e385c8",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708_HR_ref.csv",
+      "reference_sha256": "c8677ec1f0e22b25100c20ab83b8faf22ddea730a973b41b1b43673acf1443a0",
+      "scene": "run",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "ff4c9fad193859725a3841c63539932a239d6be562a52e8676a830f524d8b45a",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "dc46b34f69620e69728d09abc747dc642e73917bdf9204b4b35689e88a8078b1",
+      "candidate_min_bpm": null,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "relative_gap_timeout_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.05,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "4464c86f16c718679c4b6814d5e15fbd346358d6dbe1cd9f824b155f6d38d40a",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708.csv",
+      "data_sha256": "a32ab804060f866add72e093d6bdced3d756faf967c1ac1b233fec07c5733cb7",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "dc46b34f69620e69728d09abc747dc642e73917bdf9204b4b35689e88a8078b1",
+      "mechanism_complexity": 1,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "6e06fcb2efffb234c1d7b2dc93bc8ea7b432f000fdfdc5f32639850d1e6e7d18",
+      "record_id": "run2_LYX_0708",
+      "recovery_candidate_id": "relative_gap_timeout_v1",
+      "recovery_candidate_sha256": "63d98dde2d76b189f718afee1908c6934870f5d0a4e1ee825b652e42e7e385c8",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "8d04fc22e8e98c5b4380a05ded28e8aa542ab5fa66d800cf602289ccf0062382",
+      "scene": "run",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "7b88b4155b8227ffd25d987082d62b954081bb67d56b89be4f1f4e9d96c9b09c",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "28c478874a3019b175537ea04c0001ea101fb3c33b0dcf716f3209bd3b1a4b40",
+      "candidate_min_bpm": null,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "relative_gap_timeout_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.2,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "fab702fcdc0d2c697461109a8dfca96ef0a3dceb14a6ef80d87bd29ef81b3ced",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708.csv",
+      "data_sha256": "1f1ea855fba32db79c1a5d654736170f1e08d1bbc72409191b227814db685742",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "28c478874a3019b175537ea04c0001ea101fb3c33b0dcf716f3209bd3b1a4b40",
+      "mechanism_complexity": 1,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "72d487748fa84ca857a1b50b09998d485359b9af63bdf9240a6e6b3415b632a8",
+      "record_id": "run3_LYX_0708",
+      "recovery_candidate_id": "relative_gap_timeout_v1",
+      "recovery_candidate_sha256": "63d98dde2d76b189f718afee1908c6934870f5d0a4e1ee825b652e42e7e385c8",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708_HR_ref.csv",
+      "reference_sha256": "323813b4b44f54e604bf751164616bdd3ed5859d5faee2f302b11301b612e1e3",
+      "scene": "run",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "5dcd8d1401cae702f7fa61972ae279a41bf1ca20d32d97fcbb04487d09e6c2d9",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "7359bdf4302a49de99f10bca5a1537c3c3636bdde8deb1460f672614cbd566a2",
+      "candidate_min_bpm": null,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "relative_gap_timeout_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.2,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "cdd1ed691332e25c0b67fbbd197d742b4e3c6a6af04465ed632147cea45ee03b",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708.csv",
+      "data_sha256": "cf5e2d02bd1f874b3b55883e351cb6cf5107b6f0eb4d7acf142d6f5e6d93e7ee",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "7359bdf4302a49de99f10bca5a1537c3c3636bdde8deb1460f672614cbd566a2",
+      "mechanism_complexity": 1,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "eaba17c0d527c7a8b099dfa3f9587496bce5095ab91528c2b371d5d795e852b1",
+      "record_id": "xiezi2_LYX_0708",
+      "recovery_candidate_id": "relative_gap_timeout_v1",
+      "recovery_candidate_sha256": "63d98dde2d76b189f718afee1908c6934870f5d0a4e1ee825b652e42e7e385c8",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "fc1a913849322295413e3ecf1ca48cefa477420ac4c34ea3cc2a5b74070d2877",
+      "scene": "xiezi",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "c1e00c7d4ef41e3fc65c9a00bd8c2442ec8ba182ca46b40d84de0b2723d80a53",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "3c36deb616787b6463e1a3ce58c498099d546c14e43dedd689fc75237bea5c1e",
+      "candidate_min_bpm": null,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "relative_gap_timeout_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.1,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "31121f2c37941dc5b30e25370d13529febaa2b20895e33ba26b63375e5b3674a",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708.csv",
+      "data_sha256": "7b32139c8969ebcd6a8c1bedf8bb9191c916187a7716f43db6ad03d60f165619",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "3c36deb616787b6463e1a3ce58c498099d546c14e43dedd689fc75237bea5c1e",
+      "mechanism_complexity": 1,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "111b11e3120c793eae426f7361f73ac8c0b5b6418057b2531f9fd62cf1a1be79",
+      "record_id": "xiezi3_LYX_0708",
+      "recovery_candidate_id": "relative_gap_timeout_v1",
+      "recovery_candidate_sha256": "63d98dde2d76b189f718afee1908c6934870f5d0a4e1ee825b652e42e7e385c8",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708_HR_ref.csv",
+      "reference_sha256": "34c0a25bf5953ba8968108170ddcf3b6664fb15c7cecd8f1dfc1728c5cca0916",
+      "scene": "xiezi",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "79e8ea8a6a2da0c7f44e722afb642e44847c23d60b734b3ca9c6306306669f53",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "d85e18ed447f8a858370548bf3d0c86eada559d4ccffc71502e3d092cb87f9d9",
+      "candidate_min_bpm": null,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "relative_gap_timeout_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.3,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "f605c60431cba4b66057a29057b6d582d8c98d9879734c38a4c93927ba384a8d",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708.csv",
+      "data_sha256": "8044c3d7fb32f520f6ba5940508814f69cef5e3ec0b8f3ca8b9fb750961f897f",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "d85e18ed447f8a858370548bf3d0c86eada559d4ccffc71502e3d092cb87f9d9",
+      "mechanism_complexity": 1,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "1d18872f230a8ed75fdf9653196193557da946dcdb6b6375afe220ad9c71bdf4",
+      "record_id": "xiezi4_LYX_0708",
+      "recovery_candidate_id": "relative_gap_timeout_v1",
+      "recovery_candidate_sha256": "63d98dde2d76b189f718afee1908c6934870f5d0a4e1ee825b652e42e7e385c8",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708_HR_ref.csv",
+      "reference_sha256": "9db5f78f018e87128771f45cc3af8004e51ef7530ae1358dcf873b8f547cb0f7",
+      "scene": "xiezi",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "85e3fb74835e878663ab23f42cddf187828e896e063300cc793a5971ab07c91e",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "a9367e2f27d1591f01c14c4602760a0c3020e78de0098855cb64d608d1cac6d4",
+      "candidate_min_bpm": null,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "relative_gap_rise_guard_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.05,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "339adc99ebcb58c8506177665684428d86426aa6721232d23634117e983e17ae",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708.csv",
+      "data_sha256": "b5f81d40027419f8545a399a3a8b66f4737c75d78f60d20c7de7e378fd824d8a",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "a9367e2f27d1591f01c14c4602760a0c3020e78de0098855cb64d608d1cac6d4",
+      "mechanism_complexity": 2,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "7c23fa243cf4c7f0a0f92d2f8a84ca3c12ee5af18df38dd4437e92ad0bb83265",
+      "record_id": "jianpan1_LYX_0708",
+      "recovery_candidate_id": "relative_gap_rise_guard_v1",
+      "recovery_candidate_sha256": "d9f02a9780040d754bab6b1ba6db4d13ee7638cdfe111466297ec0f48c12239c",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan1_LYX_0708_HR_ref.csv",
+      "reference_sha256": "076fec4a8767fdf6edfee35dfac72e898659b95e5cd6d9924724145976622b2c",
+      "scene": "jianpan",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "f30a7e9a4f6ed5002617f69fa0e3244448b96a30050c506ccb70d0e8f4f65c02",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "063c80e0b74a7e3f352fc311d7ec401525305edb060e421e57b02002d8a9b61f",
+      "candidate_min_bpm": null,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "relative_gap_rise_guard_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.2,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "1dc4d0c746a68f746368a7903469652392830958819940961e30c83483be342b",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708.csv",
+      "data_sha256": "a7421b4146701f462dd4b033ad80a60e1fdc3f72fae3e97a9c5a7b89360ac1d2",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "063c80e0b74a7e3f352fc311d7ec401525305edb060e421e57b02002d8a9b61f",
+      "mechanism_complexity": 2,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "b4aaafa531d731c81d7e8da0e5dac4f8c6e360bda6c7520c34ae78e023dd8bb7",
+      "record_id": "jianpan2_LYX_0708",
+      "recovery_candidate_id": "relative_gap_rise_guard_v1",
+      "recovery_candidate_sha256": "d9f02a9780040d754bab6b1ba6db4d13ee7638cdfe111466297ec0f48c12239c",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "c7a98e54da83d6310430276b33b88bf2306ade91ac81d5b9dd3f5d18ecf5a270",
+      "scene": "jianpan",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "7b778202140bde7425215e3ead582d7c7538ce48f173a160fcefaf47094497fd",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "4f2aa51644481f4b66eea0ab41ae9b85a11d4cd55d3f1f12e0c514af4587f2a5",
+      "candidate_min_bpm": null,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "relative_gap_rise_guard_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.2,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "c9883c6a5460050a99337daf3fbd51caaa1970a1659d7d76efb19678f22ce213",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708.csv",
+      "data_sha256": "d6ea629174441276720cb28ba416f68fba6018952bfa66105ba734bdbfdb8da5",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "4f2aa51644481f4b66eea0ab41ae9b85a11d4cd55d3f1f12e0c514af4587f2a5",
+      "mechanism_complexity": 2,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "19b5d1c42c326cd2f868c1498bd282e7dba94141b8b51f70332fd82409c2e4b7",
+      "record_id": "jianpan3_LYX_0708",
+      "recovery_candidate_id": "relative_gap_rise_guard_v1",
+      "recovery_candidate_sha256": "d9f02a9780040d754bab6b1ba6db4d13ee7638cdfe111466297ec0f48c12239c",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan3_LYX_0708_HR_ref.csv",
+      "reference_sha256": "ecf02c256cde6af1557910ee9ff769de523ffb54e8124c2f0528fad82df968e6",
+      "scene": "jianpan",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "d1f444214770d2794c873168bf166abfc1e6bd8dc9f6fd417977ca574a4d9a08",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "90c8f8c582a3c667c1c508d5aceabf2014d2f8a29a537170ada2e7ed9c850e61",
+      "candidate_min_bpm": null,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "relative_gap_rise_guard_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.05,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613_HR_ref.csv"
+      },
+      "config_hash": "70059842b391f81f8a79c06f709584a32560015c4e08ff0f6c65265f88e8874a",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613.csv",
+      "data_sha256": "22927001aa2c6d6c378d5ab7897897e59f3c72dfad697fd77a165e599ca5443d",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "90c8f8c582a3c667c1c508d5aceabf2014d2f8a29a537170ada2e7ed9c850e61",
+      "mechanism_complexity": 2,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "1dd489af27c30e2f52b911ec1e11312a7498463cdb1e737ca66ffba26bbf4bcb",
+      "record_id": "kaihe1_LYX_0613",
+      "recovery_candidate_id": "relative_gap_rise_guard_v1",
+      "recovery_candidate_sha256": "d9f02a9780040d754bab6b1ba6db4d13ee7638cdfe111466297ec0f48c12239c",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0613_HR_ref.csv",
+      "reference_sha256": "38a5b714ee897bbeaaafa0be7017b3bf9d941826a0e534334131b1301c53e0e0",
+      "scene": "kaihe",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "4bc1a572dbd5e508b2f7e17ebd138f6518e0581bed3576b4de31cd28e98e6e2a",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "854ad404cf35a52d29164d9c682a78fc275191dea19623254a7838e8e2b21e9a",
+      "candidate_min_bpm": null,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "relative_gap_rise_guard_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.1,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617_HR_ref.csv"
+      },
+      "config_hash": "1afbdebf44cb37f778a7cac8bd3229d40fb26a7c7962a1077788055ad306c791",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617.csv",
+      "data_sha256": "ba3d9938e8d9e04d25ce32fa6e698b21ef512f68bc89d3adfb0a5e77fc900d6d",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "854ad404cf35a52d29164d9c682a78fc275191dea19623254a7838e8e2b21e9a",
+      "mechanism_complexity": 2,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "73f626f972afccccb5a0ef261e3bfe1afd60b02b24a18e5b8a2ddfb5964e7528",
+      "record_id": "kaihe1_LYX_0617",
+      "recovery_candidate_id": "relative_gap_rise_guard_v1",
+      "recovery_candidate_sha256": "d9f02a9780040d754bab6b1ba6db4d13ee7638cdfe111466297ec0f48c12239c",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe1_LYX_0617_HR_ref.csv",
+      "reference_sha256": "a3b779e55561da76a3d69293e73175c624e947d57de38a3f5184d324731c0739",
+      "scene": "kaihe",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "abeb43d7aeb0657a7ab69648906816ed18876ad837c94c3876363d7a5d2d9173",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "60da7cc7aa7c79ea498551173f381f48e639bac65622871849cbea8e516a7056",
+      "candidate_min_bpm": null,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "relative_gap_rise_guard_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.2,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613_HR_ref.csv"
+      },
+      "config_hash": "c6618c1b25d6741e852b11d96695f01ab6b9c5affbe1f7db5ccce3528f53223c",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613.csv",
+      "data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "60da7cc7aa7c79ea498551173f381f48e639bac65622871849cbea8e516a7056",
+      "mechanism_complexity": 2,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "778f75d02d47a134a5999a5641de201dfc613da915b43876398792c6833c6e84",
+      "record_id": "kaihe3_LYX_0613",
+      "recovery_candidate_id": "relative_gap_rise_guard_v1",
+      "recovery_candidate_sha256": "d9f02a9780040d754bab6b1ba6db4d13ee7638cdfe111466297ec0f48c12239c",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613_HR_ref.csv",
+      "reference_sha256": "5cb40473d1793f8ff91eeed993f4a1b9a59c44b7fefcfd57a0314ad34c626050",
+      "scene": "kaihe",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "d373af3357095e36f596f119ae8f879426055043849c95f64b027c37bd055d9c",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "dcae95c06c52e87e42ed3c2111664f5fe7401bff2cace3cb0dbbdea35f0787b7",
+      "candidate_min_bpm": null,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "relative_gap_rise_guard_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.1,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "e1691b8a61dc9e455329c9b3241bcc495a3528b0beced7239d8c24505926d92f",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708.csv",
+      "data_sha256": "971a87c06295b73d4cca7936437de8c832c7d2eed65f286a8742805543f5f87b",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "dcae95c06c52e87e42ed3c2111664f5fe7401bff2cace3cb0dbbdea35f0787b7",
+      "mechanism_complexity": 2,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "4e53e93fb94a8ecd17d319af41d6d010c1424baf9c0151099cb417fb0a2d6af0",
+      "record_id": "run1_LYX_0708",
+      "recovery_candidate_id": "relative_gap_rise_guard_v1",
+      "recovery_candidate_sha256": "d9f02a9780040d754bab6b1ba6db4d13ee7638cdfe111466297ec0f48c12239c",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708_HR_ref.csv",
+      "reference_sha256": "c8677ec1f0e22b25100c20ab83b8faf22ddea730a973b41b1b43673acf1443a0",
+      "scene": "run",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "ff4c9fad193859725a3841c63539932a239d6be562a52e8676a830f524d8b45a",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "3b4f5ca37906c34295a59c4080645293082727ff9b12864d71f9b0067b9b8784",
+      "candidate_min_bpm": null,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "relative_gap_rise_guard_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.05,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "027ad10b34397b02bda7054f1963450a7642b1db8e201e604c5d6b589dd4179b",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708.csv",
+      "data_sha256": "a32ab804060f866add72e093d6bdced3d756faf967c1ac1b233fec07c5733cb7",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "3b4f5ca37906c34295a59c4080645293082727ff9b12864d71f9b0067b9b8784",
+      "mechanism_complexity": 2,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "6e06fcb2efffb234c1d7b2dc93bc8ea7b432f000fdfdc5f32639850d1e6e7d18",
+      "record_id": "run2_LYX_0708",
+      "recovery_candidate_id": "relative_gap_rise_guard_v1",
+      "recovery_candidate_sha256": "d9f02a9780040d754bab6b1ba6db4d13ee7638cdfe111466297ec0f48c12239c",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "8d04fc22e8e98c5b4380a05ded28e8aa542ab5fa66d800cf602289ccf0062382",
+      "scene": "run",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "7b88b4155b8227ffd25d987082d62b954081bb67d56b89be4f1f4e9d96c9b09c",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "63e74273cc171a69de2f159996704ae3d06c5c8537ce98cd89110f301a8bd70c",
+      "candidate_min_bpm": null,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "relative_gap_rise_guard_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.2,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "cb6854f58ca60cdff0ee655bd9e975eda14d8fc7c80cb456237e64baebaffecf",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708.csv",
+      "data_sha256": "1f1ea855fba32db79c1a5d654736170f1e08d1bbc72409191b227814db685742",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "63e74273cc171a69de2f159996704ae3d06c5c8537ce98cd89110f301a8bd70c",
+      "mechanism_complexity": 2,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "72d487748fa84ca857a1b50b09998d485359b9af63bdf9240a6e6b3415b632a8",
+      "record_id": "run3_LYX_0708",
+      "recovery_candidate_id": "relative_gap_rise_guard_v1",
+      "recovery_candidate_sha256": "d9f02a9780040d754bab6b1ba6db4d13ee7638cdfe111466297ec0f48c12239c",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run3_LYX_0708_HR_ref.csv",
+      "reference_sha256": "323813b4b44f54e604bf751164616bdd3ed5859d5faee2f302b11301b612e1e3",
+      "scene": "run",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "5dcd8d1401cae702f7fa61972ae279a41bf1ca20d32d97fcbb04487d09e6c2d9",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": true
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "c854474a2da470aecd039813d8d9f0d0d6cd526ea6d72fdb1fdb2edb5454b551",
+      "candidate_min_bpm": null,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "relative_gap_rise_guard_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.2,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "78d1e6923db5cf87f038265aced10da7dc87c65072f4910e940523bd8e1c7b0c",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708.csv",
+      "data_sha256": "cf5e2d02bd1f874b3b55883e351cb6cf5107b6f0eb4d7acf142d6f5e6d93e7ee",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "c854474a2da470aecd039813d8d9f0d0d6cd526ea6d72fdb1fdb2edb5454b551",
+      "mechanism_complexity": 2,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "eaba17c0d527c7a8b099dfa3f9587496bce5095ab91528c2b371d5d795e852b1",
+      "record_id": "xiezi2_LYX_0708",
+      "recovery_candidate_id": "relative_gap_rise_guard_v1",
+      "recovery_candidate_sha256": "d9f02a9780040d754bab6b1ba6db4d13ee7638cdfe111466297ec0f48c12239c",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "fc1a913849322295413e3ecf1ca48cefa477420ac4c34ea3cc2a5b74070d2877",
+      "scene": "xiezi",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "c1e00c7d4ef41e3fc65c9a00bd8c2442ec8ba182ca46b40d84de0b2723d80a53",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "de2abe8abf94d8cc5afe07e66641346151504530de2d385a0d23715b51108253",
+      "candidate_min_bpm": null,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "relative_gap_rise_guard_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.1,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "8c9c62f73c65eb67685625087fd77744ed24f286936bae045baf862634233b41",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708.csv",
+      "data_sha256": "7b32139c8969ebcd6a8c1bedf8bb9191c916187a7716f43db6ad03d60f165619",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "de2abe8abf94d8cc5afe07e66641346151504530de2d385a0d23715b51108253",
+      "mechanism_complexity": 2,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "111b11e3120c793eae426f7361f73ac8c0b5b6418057b2531f9fd62cf1a1be79",
+      "record_id": "xiezi3_LYX_0708",
+      "recovery_candidate_id": "relative_gap_rise_guard_v1",
+      "recovery_candidate_sha256": "d9f02a9780040d754bab6b1ba6db4d13ee7638cdfe111466297ec0f48c12239c",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi3_LYX_0708_HR_ref.csv",
+      "reference_sha256": "34c0a25bf5953ba8968108170ddcf3b6664fb15c7cecd8f1dfc1728c5cca0916",
+      "scene": "xiezi",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "79e8ea8a6a2da0c7f44e722afb642e44847c23d60b734b3ca9c6306306669f53",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": false
+    },
+    {
+      "actual_taps": 1,
+      "adaptive_reference_stage_limit": 1,
+      "attempt_kind": "formal",
+      "base_filter_profile_id": "p25-short-low",
+      "cache_identity_sha256": "ed724fef37681a07e3cd35acad3769bbabf2f0e4a30babf2c9b14f37cc1d18c6",
+      "candidate_min_bpm": null,
+      "config": {
+        "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708.csv",
+        "method_names": [
+          "reset FFT",
+          "LMS+H"
+        ],
+        "parameters": {
+          "adaptive_filter": "lms",
+          "adaptive_reference_stage_limit": 1,
+          "algorithm_preset": "lite",
+          "analysis_scope": "full",
+          "fs_target": 25,
+          "lms_mu_base": 0.008,
+          "lms_mu_min": 1e-06,
+          "max_order": 1,
+          "penalty_candidate_id": "current_soft_penalty_control_v1",
+          "recovery_candidate_id": "relative_gap_rise_guard_v1",
+          "reference_groups_order": [
+            "HF"
+          ],
+          "smooth_win_len": 5,
+          "spec_penalty_width": 0.3,
+          "time_bias": 5.0
+        },
+        "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708_HR_ref.csv"
+      },
+      "config_hash": "c99e1bfcdac669296af446e195542ece17463f183143e1d20aca5a7e77207471",
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708.csv",
+      "data_sha256": "8044c3d7fb32f520f6ba5940508814f69cef5e3ec0b8f3ca8b9fb750961f897f",
+      "evaluation_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "filter_profile_id": "p25-short-low-rank1-v1",
+      "filter_profile_sha256": "589bd24320c5d066c3d40d08f5f65024fb722e3cf351bf3594a06bf3f38a9f5e",
+      "identity_sha256": "ed724fef37681a07e3cd35acad3769bbabf2f0e4a30babf2c9b14f37cc1d18c6",
+      "mechanism_complexity": 2,
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "metric_contract_hash": "590bbec865de62ca060a63e3f7d4cb7dbca2be878f7f28e283e7511283429268",
+      "nominal_mu": 0.008,
+      "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+      "penalty_candidate_id": "current_soft_penalty_control_v1",
+      "physical_memory_ms": 40,
+      "raw_data_sha256": "1d18872f230a8ed75fdf9653196193557da946dcdb6b6375afe220ad9c71bdf4",
+      "record_id": "xiezi4_LYX_0708",
+      "recovery_candidate_id": "relative_gap_rise_guard_v1",
+      "recovery_candidate_sha256": "d9f02a9780040d754bab6b1ba6db4d13ee7638cdfe111466297ec0f48c12239c",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708_HR_ref.csv",
+      "reference_sha256": "9db5f78f018e87128771f45cc3af8004e51ef7530ae1358dcf873b8f547cb0f7",
+      "scene": "xiezi",
+      "sentinel_role": "fixed_rank1",
+      "solver_hash": "61ba7e452f1fd94b83d593926f68e9f486d7c8f3983bad96d42850291da706bf",
+      "source_rank1_identity_sha256": "85e3fb74835e878663ab23f42cddf187828e896e063300cc793a5971ab07c91e",
+      "spectral_audit_required": true,
+      "spectral_gate_contract_sha256": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+      "stage": "recovery_sentinel_rank1_replan",
+      "true_rise_applicable": false
+    }
+  ],
+  "identity_panel_sha256": "b5d00efa76ec430a74df9b8166b917a65705f400ac707f82e269ad7870d19262",
+  "identity_sha256": [
+    "780793271dd363a1dffad5c729011e731d8ae0b24be8b0e856491ca48abedbf6",
+    "70ba58480019b348f17c78995cf1bce1506e0b80f6770b9375d5550568c1a2b8",
+    "ed0088b3e9033c8ab4414ec6ab0abea2795746784cd08cf2bd9ddfae178b1c4d",
+    "72d63fc6a90b32559b5c53a0ce0fe68c46937a7b43de5b25ed78e2c062ad4fb1",
+    "ef4d6def47455a6f3f695344e2c8143c36a860aca68c5af55754c8b49086ff83",
+    "0e6c9f9520b8724c09bc379bce0ece193a6b6a3e287595ebec1c56001fd29194",
+    "5cd1362483ea3d7c30f4684fb1c2f066da149a0540159e9531d7445cdb315e3e",
+    "170f95e8d194c8c2701147cb068417e9e1961f71fb636ae4e4006cedf006a9e9",
+    "736986d90b9e7d5e3f9fe518d2dd6bd283329ea3bbd2b9b85da44597cc9ec31f",
+    "15fbde05dcbafc40280099107eb73d401a68d42ba512b3137cc3b21332e5a522",
+    "9232ba75b6bf3886a207bdbae26015795e5ddc4d56c3b4e859b6216e2dc4c344",
+    "a4aa0af0f731082bbf6ae663d9d62e01d82ab8883fc2d67cd06aa106fe3825d6",
+    "2733dd281e00155e7c68efa69fb2d30d363e3151a363e0ca1bee3a13431fc85d",
+    "93978fa964efce8c27667a61917e67a72557bf340c3c0d7015b576ea03a6a522",
+    "ab70317438e7f943ae6a890a2bd43e12c212182bdc1cde33a338c939854a1a99",
+    "55c4e3b371398e06d135d1c545d43e20ed7e2f62e3809ccf03cf65acdd78f984",
+    "b80dba534aa18e9ef4b72e221480bc26506776047dc11bdf6619c76bf69f58ce",
+    "ddf510657e7cfb65389c1d03108825eb4efe06e4536376a6576b4a9196b887e3",
+    "3d630714275ad396c15fa0957a9b8b4594a12d0508c7b008b4c3efdde759fea1",
+    "dc46b34f69620e69728d09abc747dc642e73917bdf9204b4b35689e88a8078b1",
+    "28c478874a3019b175537ea04c0001ea101fb3c33b0dcf716f3209bd3b1a4b40",
+    "7359bdf4302a49de99f10bca5a1537c3c3636bdde8deb1460f672614cbd566a2",
+    "3c36deb616787b6463e1a3ce58c498099d546c14e43dedd689fc75237bea5c1e",
+    "d85e18ed447f8a858370548bf3d0c86eada559d4ccffc71502e3d092cb87f9d9",
+    "a9367e2f27d1591f01c14c4602760a0c3020e78de0098855cb64d608d1cac6d4",
+    "063c80e0b74a7e3f352fc311d7ec401525305edb060e421e57b02002d8a9b61f",
+    "4f2aa51644481f4b66eea0ab41ae9b85a11d4cd55d3f1f12e0c514af4587f2a5",
+    "90c8f8c582a3c667c1c508d5aceabf2014d2f8a29a537170ada2e7ed9c850e61",
+    "854ad404cf35a52d29164d9c682a78fc275191dea19623254a7838e8e2b21e9a",
+    "60da7cc7aa7c79ea498551173f381f48e639bac65622871849cbea8e516a7056",
+    "dcae95c06c52e87e42ed3c2111664f5fe7401bff2cace3cb0dbbdea35f0787b7",
+    "3b4f5ca37906c34295a59c4080645293082727ff9b12864d71f9b0067b9b8784",
+    "63e74273cc171a69de2f159996704ae3d06c5c8537ce98cd89110f301a8bd70c",
+    "c854474a2da470aecd039813d8d9f0d0d6cd526ea6d72fdb1fdb2edb5454b551",
+    "de2abe8abf94d8cc5afe07e66641346151504530de2d385a0d23715b51108253",
+    "ed724fef37681a07e3cd35acad3769bbabf2f0e4a30babf2c9b14f37cc1d18c6"
+  ],
+  "independent_bo_authorized": false,
+  "may_nominate_recovery_candidate": true,
+  "new_threshold_diagnostic_unique_budget": 0,
+  "parameter_search_authorized": false,
+  "parent_experiment_id": "lyx-recovery-filter-profile-v1",
+  "proposal_sha256": "15379d25798b2c8f6929dbe95d780959f265343b258ef81958b2a75aa4b48350",
+  "proposal_version": "lyx_stage_r_rank1_replan_proposal_v2",
+  "record_panel": [
+    {
+      "combined_data_sha256": "b5f81d40027419f8545a399a3a8b66f4737c75d78f60d20c7de7e378fd824d8a",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "raw_data_sha256": "7c23fa243cf4c7f0a0f92d2f8a84ca3c12ee5af18df38dd4437e92ad0bb83265",
+      "record_id": "jianpan1_LYX_0708",
+      "reference_sha256": "076fec4a8767fdf6edfee35dfac72e898659b95e5cd6d9924724145976622b2c",
+      "scene": "jianpan",
+      "true_rise_applicable": false
+    },
+    {
+      "combined_data_sha256": "a7421b4146701f462dd4b033ad80a60e1fdc3f72fae3e97a9c5a7b89360ac1d2",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "raw_data_sha256": "b4aaafa531d731c81d7e8da0e5dac4f8c6e360bda6c7520c34ae78e023dd8bb7",
+      "record_id": "jianpan2_LYX_0708",
+      "reference_sha256": "c7a98e54da83d6310430276b33b88bf2306ade91ac81d5b9dd3f5d18ecf5a270",
+      "scene": "jianpan",
+      "true_rise_applicable": false
+    },
+    {
+      "combined_data_sha256": "d6ea629174441276720cb28ba416f68fba6018952bfa66105ba734bdbfdb8da5",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "raw_data_sha256": "19b5d1c42c326cd2f868c1498bd282e7dba94141b8b51f70332fd82409c2e4b7",
+      "record_id": "jianpan3_LYX_0708",
+      "reference_sha256": "ecf02c256cde6af1557910ee9ff769de523ffb54e8124c2f0528fad82df968e6",
+      "scene": "jianpan",
+      "true_rise_applicable": false
+    },
+    {
+      "combined_data_sha256": "22927001aa2c6d6c378d5ab7897897e59f3c72dfad697fd77a165e599ca5443d",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "raw_data_sha256": "1dd489af27c30e2f52b911ec1e11312a7498463cdb1e737ca66ffba26bbf4bcb",
+      "record_id": "kaihe1_LYX_0613",
+      "reference_sha256": "38a5b714ee897bbeaaafa0be7017b3bf9d941826a0e534334131b1301c53e0e0",
+      "scene": "kaihe",
+      "true_rise_applicable": true
+    },
+    {
+      "combined_data_sha256": "ba3d9938e8d9e04d25ce32fa6e698b21ef512f68bc89d3adfb0a5e77fc900d6d",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "raw_data_sha256": "73f626f972afccccb5a0ef261e3bfe1afd60b02b24a18e5b8a2ddfb5964e7528",
+      "record_id": "kaihe1_LYX_0617",
+      "reference_sha256": "a3b779e55561da76a3d69293e73175c624e947d57de38a3f5184d324731c0739",
+      "scene": "kaihe",
+      "true_rise_applicable": true
+    },
+    {
+      "combined_data_sha256": "b8bfc4449d8f048077b4a76203e0fe8300668749ac4ce29b1cbba2fb7bf4d26e",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "raw_data_sha256": "778f75d02d47a134a5999a5641de201dfc613da915b43876398792c6833c6e84",
+      "record_id": "kaihe3_LYX_0613",
+      "reference_sha256": "5cb40473d1793f8ff91eeed993f4a1b9a59c44b7fefcfd57a0314ad34c626050",
+      "scene": "kaihe",
+      "true_rise_applicable": true
+    },
+    {
+      "combined_data_sha256": "971a87c06295b73d4cca7936437de8c832c7d2eed65f286a8742805543f5f87b",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "raw_data_sha256": "4e53e93fb94a8ecd17d319af41d6d010c1424baf9c0151099cb417fb0a2d6af0",
+      "record_id": "run1_LYX_0708",
+      "reference_sha256": "c8677ec1f0e22b25100c20ab83b8faf22ddea730a973b41b1b43673acf1443a0",
+      "scene": "run",
+      "true_rise_applicable": true
+    },
+    {
+      "combined_data_sha256": "a32ab804060f866add72e093d6bdced3d756faf967c1ac1b233fec07c5733cb7",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "raw_data_sha256": "6e06fcb2efffb234c1d7b2dc93bc8ea7b432f000fdfdc5f32639850d1e6e7d18",
+      "record_id": "run2_LYX_0708",
+      "reference_sha256": "8d04fc22e8e98c5b4380a05ded28e8aa542ab5fa66d800cf602289ccf0062382",
+      "scene": "run",
+      "true_rise_applicable": true
+    },
+    {
+      "combined_data_sha256": "1f1ea855fba32db79c1a5d654736170f1e08d1bbc72409191b227814db685742",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "raw_data_sha256": "72d487748fa84ca857a1b50b09998d485359b9af63bdf9240a6e6b3415b632a8",
+      "record_id": "run3_LYX_0708",
+      "reference_sha256": "323813b4b44f54e604bf751164616bdd3ed5859d5faee2f302b11301b612e1e3",
+      "scene": "run",
+      "true_rise_applicable": true
+    },
+    {
+      "combined_data_sha256": "cf5e2d02bd1f874b3b55883e351cb6cf5107b6f0eb4d7acf142d6f5e6d93e7ee",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "raw_data_sha256": "eaba17c0d527c7a8b099dfa3f9587496bce5095ab91528c2b371d5d795e852b1",
+      "record_id": "xiezi2_LYX_0708",
+      "reference_sha256": "fc1a913849322295413e3ecf1ca48cefa477420ac4c34ea3cc2a5b74070d2877",
+      "scene": "xiezi",
+      "true_rise_applicable": false
+    },
+    {
+      "combined_data_sha256": "7b32139c8969ebcd6a8c1bedf8bb9191c916187a7716f43db6ad03d60f165619",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "raw_data_sha256": "111b11e3120c793eae426f7361f73ac8c0b5b6418057b2531f9fd62cf1a1be79",
+      "record_id": "xiezi3_LYX_0708",
+      "reference_sha256": "34c0a25bf5953ba8968108170ddcf3b6664fb15c7cecd8f1dfc1728c5cca0916",
+      "scene": "xiezi",
+      "true_rise_applicable": false
+    },
+    {
+      "combined_data_sha256": "8044c3d7fb32f520f6ba5940508814f69cef5e3ec0b8f3ca8b9fb750961f897f",
+      "method_names": [
+        "reset FFT",
+        "LMS+H"
+      ],
+      "raw_data_sha256": "1d18872f230a8ed75fdf9653196193557da946dcdb6b6375afe220ad9c71bdf4",
+      "record_id": "xiezi4_LYX_0708",
+      "reference_sha256": "9db5f78f018e87128771f45cc3af8004e51ef7530ae1358dcf873b8f547cb0f7",
+      "scene": "xiezi",
+      "true_rise_applicable": false
+    }
+  ],
+  "record_panel_sha256": "59bcc3e59eb635170971cca139fd6d204112d7a508fa235350abd898c386bce2",
+  "recovery_candidates": [
+    {
+      "candidate_id": "current_fixed_floor_control_v1",
+      "candidate_sha256": "012b651e9905153f7afd3624d540cf7235d764ccdc651726e34c14b14e2918c1",
+      "constants": {
+        "candidate_min_bpm": 85.0,
+        "candidate_stable_bpm": 10.0,
+        "challenge_timeout_windows": 0,
+        "confirm_windows": 3,
+        "cooldown_windows": 4,
+        "down_step_bpm": 20.0,
+        "min_amp_ratio": 0.45,
+        "min_gap_bpm": 20.0,
+        "penalty_exclusion_bpm": 10.0,
+        "reacquire_timeout_windows": 0,
+        "relative_gap_ratio": 0.0,
+        "retain_target_on_evidence_loss": true,
+        "rise_guard_bpm_per_window": null,
+        "up_step_bpm": 3.0
+      },
+      "mechanism_complexity": 0
+    },
+    {
+      "candidate_id": "relative_gap_timeout_v1",
+      "candidate_sha256": "63d98dde2d76b189f718afee1908c6934870f5d0a4e1ee825b652e42e7e385c8",
+      "constants": {
+        "candidate_min_bpm": null,
+        "candidate_stable_bpm": 10.0,
+        "challenge_timeout_windows": 5,
+        "confirm_windows": 3,
+        "cooldown_windows": 4,
+        "down_step_bpm": 20.0,
+        "min_amp_ratio": 0.45,
+        "min_gap_bpm": 20.0,
+        "penalty_exclusion_bpm": 10.0,
+        "reacquire_timeout_windows": 8,
+        "relative_gap_ratio": 0.15,
+        "retain_target_on_evidence_loss": false,
+        "rise_guard_bpm_per_window": null,
+        "up_step_bpm": 3.0
+      },
+      "mechanism_complexity": 1
+    },
+    {
+      "candidate_id": "relative_gap_rise_guard_v1",
+      "candidate_sha256": "d9f02a9780040d754bab6b1ba6db4d13ee7638cdfe111466297ec0f48c12239c",
+      "constants": {
+        "candidate_min_bpm": null,
+        "candidate_stable_bpm": 10.0,
+        "challenge_timeout_windows": 6,
+        "confirm_windows": 3,
+        "cooldown_windows": 4,
+        "down_step_bpm": 20.0,
+        "min_amp_ratio": 0.45,
+        "min_gap_bpm": 20.0,
+        "penalty_exclusion_bpm": 10.0,
+        "reacquire_timeout_windows": 8,
+        "relative_gap_ratio": 0.15,
+        "retain_target_on_evidence_loss": false,
+        "rise_guard_bpm_per_window": 1.5,
+        "up_step_bpm": 3.0
+      },
+      "mechanism_complexity": 2
+    }
+  ],
+  "retry_limit": 1,
+  "runtime_failure_replacement": {
+    "context_sha256": "58119dbd391c4a0f41f6b038b219b28c1464062934eb80376eb2e13d5ab0d0e6",
+    "context_version": "lyx_stage_r_rank1_runtime_failure_context_v1",
+    "failed_attempt_count": 1,
+    "failed_execution_binding_sha256": "9ce8d8428f8009c0959f34a5afdd16dcb4d488471c9c3ebaf3554a4f9637a9d8",
+    "failed_identity_sha256": "3bc86bde42bc1ba5416a78218ddbc587b9303356a0fbad369c94c7fe03b17f1e",
+    "failed_record_id": "jianpan1_LYX_0708",
+    "failed_recovery_candidate_id": "current_fixed_floor_control_v1",
+    "failure_class": "post_solver_spectral_audit",
+    "failure_reason": "ValueError:invalid_recovery_sentinel_role",
+    "original_identity_panel_sha256": "0b5d8e65f8bf53a46264a3adc43ec0bcf46a598f7e13048e42a16c41626ce4d6",
+    "original_identity_reuse_authorized": false,
+    "original_retry_authorized": false,
+    "persisted_numerical_result_count": 0,
+    "replacement_identity_count": 36,
+    "solver_invocation_count": 1,
+    "solver_output_reusable": false,
+    "source_attempt_registry_file_sha256": "0f9892b4e3269f10a7664b16661bcfb08dba6f149ee0b48e1b1dbed74f76b9a6",
+    "source_exploration_registry_file_sha256": "7f414ebb2deb29e659cc2cb5a777d9a5146f1d362586a3e6f48531ee767b2cbd",
+    "source_governance_receipt_sha256": "cec479effc926908dc64f51b2731dd742b1a9a05588d0a26b336b4cef0068169",
+    "succeeded_identity_count": 0,
+    "superseded_authorization_sha256": "3023a3119181102af5ea933787efbdb4f4216c51d1bac26f8661a0a4bf1596ec",
+    "superseded_proposal_sha256": "d2d6007740da7dfe3f273e9071fd8254d731f3abdda1387e910178ce11284efd",
+    "unattempted_identity_count": 35
+  },
+  "source_artifacts": {
+    "baseline_manifest": {
+      "file_sha256": "0b695ccb31d0a945d5e1d2281bfc0c70deaa7db7bbda751c857df152ec43ed5c",
+      "path": "data/experiments/lyx_recovery_filter_profile/lyx_independent_bo_baseline_manifest_v1.json",
+      "path_base": "repository_root"
+    },
+    "baseline_metrics": {
+      "file_sha256": "981ad4edcc557798e02b6b6807951022050532a28d22aec54412848d5302159f",
+      "path": "data/experiments/lyx_recovery_filter_profile/independent_bo_baseline_v1/record_metrics.json",
+      "path_base": "repository_root"
+    },
+    "experiment_spec": {
+      "file_sha256": "10bbce142617177b345bf5f611ff561c43b69d59f7e0d85d5c72c7e4760b325b",
+      "path": "docs/experiments/2026-07-30-lyx-stage-r-rank1-runtime-fix-spec.md",
+      "path_base": "repository_root"
+    },
+    "failed_execution_binding": {
+      "file_sha256": "419b9e1c99bdd47344142170127cb23434e8e9ae1e46ee5a8baeebad2b200e7b",
+      "path": "data/experiments/lyx_recovery_filter_profile/stage_r_rank1_replan_execution_v1/execution_binding.json",
+      "path_base": "repository_root"
+    },
+    "penalty_registry": {
+      "file_sha256": "1dfa87e47e68f6b4084ea7bfb042e44208cc8610e62e2bc46b8342a7b5c5e9e8",
+      "path": "data/experiments/lyx_recovery_filter_profile/penalty_candidates_v1/penalty_registry.json",
+      "path_base": "repository_root"
+    },
+    "prior_stage_r_governance_receipt": {
+      "file_sha256": "1c1eecf869c98018d4392bdbfd048f11b588b96918b536bcc0263e565427fb86",
+      "path": "data/experiments/lyx_recovery_filter_profile/governance_v5/stage_r_governance_receipt.json",
+      "path_base": "repository_root"
+    },
+    "prior_stage_r_proposal": {
+      "file_sha256": "0a89b4195a4bf613342a8f0bbcbd8e9bbb7ed6a69c4c7d3c605afd2fbf849224",
+      "path": "data/experiments/lyx_recovery_filter_profile/stage_r_v3/stage_r_execution_proposal.json",
+      "path_base": "repository_root"
+    },
+    "rank1_completion": {
+      "file_sha256": "2b3f4ebfb43dc4fb9ae147f6ceb1e2806190cf896615cad3a1dad263297d2c44",
+      "path": "data/experiments/lyx_recovery_filter_profile/rank1_filter_revision_execution_v1/completion.json",
+      "path_base": "repository_root"
+    },
+    "rank1_decision": {
+      "file_sha256": "485ce1c23ecabb3595b2fbc7c562d9604ce15d68d2ab5c51f1081efe917f3f17",
+      "path": "data/experiments/lyx_recovery_filter_profile/rank1_filter_revision_execution_v1/decision_receipt.json",
+      "path_base": "repository_root"
+    },
+    "rank1_manifest": {
+      "file_sha256": "04a15234cd09fd18bda572523497199e59ca65759e699c11d739868eda9734b8",
+      "path": "data/experiments/lyx_recovery_filter_profile/rank1_filter_revision_execution_v1/result_manifest.json",
+      "path_base": "repository_root"
+    },
+    "rank1_proposal": {
+      "file_sha256": "eabf10a98cfc993221c03fe4dbaec7fca8a25808d0f96ddc83623aa1a1283324",
+      "path": "data/experiments/lyx_recovery_filter_profile/rank1_filter_revision_v1/rank1_filter_revision_proposal.json",
+      "path_base": "repository_root"
+    },
+    "rank1_result:jianpan1_LYX_0708": {
+      "file_sha256": "7b04077815c270a0bbb1789b0c5d352dd914107640ece0d4e6acbb42cb1aafd4",
+      "path": "data/experiments/lyx_recovery_filter_profile/rank1_filter_revision_execution_v1/record_rank1_revision_audits/jianpan1_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "rank1_result:jianpan2_LYX_0708": {
+      "file_sha256": "213772b714abf9a6f561fa6569a549e9f1fa18eb310428116a9a946f79da06d5",
+      "path": "data/experiments/lyx_recovery_filter_profile/rank1_filter_revision_execution_v1/record_rank1_revision_audits/jianpan2_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "rank1_result:jianpan3_LYX_0708": {
+      "file_sha256": "e79ee973bff79ebe5a6d3720763a42876e1d145f3a33d10c37cc32df69a1195f",
+      "path": "data/experiments/lyx_recovery_filter_profile/rank1_filter_revision_execution_v1/record_rank1_revision_audits/jianpan3_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "rank1_result:kaihe1_LYX_0613": {
+      "file_sha256": "7d6134d795aa97119997d48680314314179907c2f70b721692775deeff7baae2",
+      "path": "data/experiments/lyx_recovery_filter_profile/rank1_filter_revision_execution_v1/record_rank1_revision_audits/kaihe1_LYX_0613.json",
+      "path_base": "repository_root"
+    },
+    "rank1_result:kaihe1_LYX_0617": {
+      "file_sha256": "bee87f4dc400e39f7a90787f99acc106c15e0dd67d4a4f51c9905309637bd222",
+      "path": "data/experiments/lyx_recovery_filter_profile/rank1_filter_revision_execution_v1/record_rank1_revision_audits/kaihe1_LYX_0617.json",
+      "path_base": "repository_root"
+    },
+    "rank1_result:kaihe3_LYX_0613": {
+      "file_sha256": "905269d1b764a099eb4ad60376c27756e4e3fed0763ee8b90b18aded6ea1d2fa",
+      "path": "data/experiments/lyx_recovery_filter_profile/rank1_filter_revision_execution_v1/record_rank1_revision_audits/kaihe3_LYX_0613.json",
+      "path_base": "repository_root"
+    },
+    "rank1_result:run1_LYX_0708": {
+      "file_sha256": "034014460ba24324beaa2cd3919463f027aac0ae009ee211e3ce9720cb6457e7",
+      "path": "data/experiments/lyx_recovery_filter_profile/rank1_filter_revision_execution_v1/record_rank1_revision_audits/run1_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "rank1_result:run2_LYX_0708": {
+      "file_sha256": "ad5a23b1e294d46a83c34d9bf7903b08a37af5c674e20b899a03e83b9dbdaa1c",
+      "path": "data/experiments/lyx_recovery_filter_profile/rank1_filter_revision_execution_v1/record_rank1_revision_audits/run2_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "rank1_result:run3_LYX_0708": {
+      "file_sha256": "3052d32046a742bd6951f03fa8663ab9324984523a8ee0c297f55989c37a9bff",
+      "path": "data/experiments/lyx_recovery_filter_profile/rank1_filter_revision_execution_v1/record_rank1_revision_audits/run3_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "rank1_result:xiezi2_LYX_0708": {
+      "file_sha256": "fff50d026d8d1bd84f92dee5772b0d9de462e8f37da0c18f401a25caacaaceb5",
+      "path": "data/experiments/lyx_recovery_filter_profile/rank1_filter_revision_execution_v1/record_rank1_revision_audits/xiezi2_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "rank1_result:xiezi3_LYX_0708": {
+      "file_sha256": "41c6edb64154b780b6067bbcba8650f78ac0962b5f339875e3b0ef3d8a301c32",
+      "path": "data/experiments/lyx_recovery_filter_profile/rank1_filter_revision_execution_v1/record_rank1_revision_audits/xiezi3_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "rank1_result:xiezi4_LYX_0708": {
+      "file_sha256": "0ed71be49e625126ae318fe05abe8a6af8ae73d7d54e64407bf0d152b91226b3",
+      "path": "data/experiments/lyx_recovery_filter_profile/rank1_filter_revision_execution_v1/record_rank1_revision_audits/xiezi4_LYX_0708.json",
+      "path_base": "repository_root"
+    },
+    "recovery_registry": {
+      "file_sha256": "09233a5781866dcd24cf198069b6010b818b326d47e4894cdb1c28f127ec9b3d",
+      "path": "data/experiments/lyx_recovery_filter_profile/recovery_candidates_v1/recovery_candidate_registry.json",
+      "path_base": "repository_root"
+    },
+    "runtime_failure_receipt": {
+      "file_sha256": "4e4a227d36c04fc9a8444e81d3c81d48e3d587ba3f5c836be38f2d0b08871c17",
+      "path": "data/experiments/lyx_recovery_filter_profile/stage_r_rank1_replan_execution_v1/failure_receipt.json",
+      "path_base": "repository_root"
+    },
+    "source_budget_contract": {
+      "file_sha256": "39bbeab0576be8fa7a9c1b8d8f111571f7207095c83263c149b5a05574565028",
+      "path": "data/experiments/lyx_recovery_filter_profile/governance_v11/budget_contract.json",
+      "path_base": "repository_root"
+    },
+    "source_exploration_registry": {
+      "file_sha256": "7f414ebb2deb29e659cc2cb5a777d9a5146f1d362586a3e6f48531ee767b2cbd",
+      "path": "data/experiments/lyx_recovery_filter_profile/governance_v11/exploration_registry.json",
+      "path_base": "repository_root"
+    },
+    "source_governance_receipt": {
+      "file_sha256": "eba4db3e3e24ae59552921636087d5ca121eda834820e191e08b2968c8b31430",
+      "path": "data/experiments/lyx_recovery_filter_profile/governance_v11/governance_receipt.json",
+      "path_base": "repository_root"
+    },
+    "superseded_authorization": {
+      "file_sha256": "ee27f6aaddf3ae4b9f56d2f3aa8014ee3ae58bb7806cd44dacaf32167e42fef0",
+      "path": "data/experiments/lyx_recovery_filter_profile/stage_r_rank1_replan_v1/execution_authorization.json",
+      "path_base": "repository_root"
+    },
+    "superseded_proposal": {
+      "file_sha256": "269f41d27def413ec573d5c9ed99022392259b7fe29a85e2a478c2777aa919a4",
+      "path": "data/experiments/lyx_recovery_filter_profile/stage_r_rank1_replan_v1/stage_r_rank1_replan_proposal.json",
+      "path_base": "repository_root"
+    }
+  },
+  "stage": "recovery_sentinel_rank1_replan",
+  "status": "awaiting_human_execution_authorization",
+  "unique_budget": 36,
+  "upstream_rank1_revision": {
+    "completion_sha256": "b83558ac1e5495e346801d5bda7eac70e95e659cec7cb8a85e685273d934c44d",
+    "decision_sha256": "69b7cdc1f726ad31ec613a904c77e445da860ccd85d8517c55d9b31b230de36e",
+    "manifest_sha256": "89bcffb7de44be9b3bc2e8bac8101db26281e2f94f4693dccb059d40d59d0413",
+    "proposal_sha256": "4b06a3f1aceee3a6459778c6878a1c1ae461077ae6a48a17f95eeed3852ba9c0",
+    "record_count": 12,
+    "status": "rank1_filter_revision_validated"
+  },
+  "worst_case_attempt_budget": 72
+}

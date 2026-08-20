@@ -36,6 +36,8 @@ class V2BatchRecord:
     figure_png: Path | None = None
     error_csv: Path | None = None
     hr_csv: Path | None = None
+    window_trace_csv: Path | None = None
+    history_csv: Path | None = None
     status: str = "ok"
     error: str = ""
 
@@ -53,6 +55,7 @@ def run_v2_batch_pipeline(
     algorithm_preset: str = V2_ALGORITHM_PRESET_DEFAULT,
     search_space: V2SearchSpace | None = None,
     comparison_groups: tuple[tuple[str, ...], ...] = (),
+    sample_stems: tuple[str, ...] | None = None,
     run_config_overrides: dict[str, object] | None = None,
     on_log: Callable[[str], None] | None = None,
     on_progress: Callable[[dict], None] | None = None,
@@ -88,6 +91,21 @@ def run_v2_batch_pipeline(
         p for p in sorted(input_dir.glob("*.csv"))
         if not (p.name.endswith("_ref.csv") or p.name.endswith("_HR_ref.csv"))
     ]
+    if sample_stems is not None:
+        requested = {str(stem).strip().lower() for stem in sample_stems}
+        samples = [
+            path for path in samples
+            if path.stem.lower() in requested
+            or path.stem.lower().split("_hb_")[0] in requested
+        ]
+        found = {
+            path.stem.lower() for path in samples
+        } | {
+            path.stem.lower().split("_hb_")[0] for path in samples
+        }
+        missing = sorted(requested - found)
+        if missing:
+            raise ValueError(f"requested batch samples not found: {missing}")
     total_runs = len(samples) * max(1, len(ppg_modes))
     run_idx = 0
 
@@ -234,6 +252,8 @@ def run_v2_batch_pipeline(
                     figure_png=arte.figure_png,
                     error_csv=arte.error_csv,
                     hr_csv=arte.hr_csv,
+                    window_trace_csv=getattr(arte, "window_trace_csv", None),
+                    history_csv=getattr(arte, "history_csv", None),
                 )
             )
             _log(
@@ -305,6 +325,8 @@ def _write_summary(output_dir: Path, records: list[V2BatchRecord]) -> Path:
                 "figure_png",
                 "error_csv",
                 "hr_csv",
+                "window_trace_csv",
+                "history_csv",
                 "error",
             ]
         )
@@ -324,6 +346,8 @@ def _write_summary(output_dir: Path, records: list[V2BatchRecord]) -> Path:
                     str(r.figure_png or ""),
                     str(r.error_csv or ""),
                     str(r.hr_csv or ""),
+                    str(r.window_trace_csv or ""),
+                    str(r.history_csv or ""),
                     r.error,
                 ]
             )

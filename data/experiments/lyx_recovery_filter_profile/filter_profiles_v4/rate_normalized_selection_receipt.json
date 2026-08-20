@@ -1,0 +1,17 @@
+{
+  "selected_p100_profile_ids": [
+    "p100-short-rate-normalized-low-40",
+    "p100-short-rate-normalized-midlow-40"
+  ],
+  "selected_p50_profile_ids": [
+    "p50-short-low-40",
+    "p50-short-midlow-40"
+  ],
+  "selected_profile_ids": [
+    "p50-short-low-40",
+    "p50-short-midlow-40",
+    "p100-short-rate-normalized-low-40",
+    "p100-short-rate-normalized-midlow-40"
+  ],
+  "status": "complete"
+}

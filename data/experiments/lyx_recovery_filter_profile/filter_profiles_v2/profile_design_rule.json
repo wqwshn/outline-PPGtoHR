@@ -1,0 +1,128 @@
+{
+  "archive_evidence_index_sha256": "cc6d9bcca7a03e97b98844a173cd2ad02b9f3427ea33609485878ee3cd049607",
+  "corrected_metric_contract": {
+    "contract_version": "lyx_filter_stability_audit_v2",
+    "max_residual_artifact_abs_corr_median": 0.95,
+    "max_residual_rms_ratio_p95": 2.0,
+    "max_residual_tail_head_ratio": 2.0,
+    "max_stability_load": 1.0,
+    "max_weight_norm": 25.0,
+    "min_motion_artifact_suppression_db_median": -1.0,
+    "min_true_peak_retention_ratio_median": 0.25,
+    "tail_head_gate": "descriptive_only"
+  },
+  "corrected_metric_contract_sha256": "383f346c088ded7fa94fa14148997678c53adc4c5659b1969f66350ac8e235f2",
+  "design_rule_sha256": "6de9b647f2fe9f948604c1a906c8cbf6679e71833299ce540805af903141840c",
+  "design_rule_version": "lyx_filter_profile_design_rule_v2",
+  "independent_bo_authorized": false,
+  "instrument_defect": {
+    "correction": "retain tail/head maximum and p95 as descriptive evidence; use stability load, weight norm, residual RMS p95 and nonfinite count as independent stability hard gates",
+    "id": "cold_start_tail_head_max_denominator_instability",
+    "reproduction": "one near-zero cold-start head among otherwise stable stages forces the record maximum above the hard gate"
+  },
+  "new_diagnostic_identity_count": 8,
+  "profile_coordinates": [
+    {
+      "design_role": "core",
+      "fs_target": 25,
+      "memory_ms": 40,
+      "nominal_mu": 0.008,
+      "profile_id": "p25-short-low",
+      "recovery_sentinel_role": null
+    },
+    {
+      "design_role": "core",
+      "fs_target": 25,
+      "memory_ms": 40,
+      "nominal_mu": 0.012,
+      "profile_id": "p25-short-mid",
+      "recovery_sentinel_role": null
+    },
+    {
+      "design_role": "core",
+      "fs_target": 25,
+      "memory_ms": 200,
+      "nominal_mu": 0.01,
+      "profile_id": "p25-long-mid",
+      "recovery_sentinel_role": null
+    },
+    {
+      "design_role": "core",
+      "fs_target": 50,
+      "memory_ms": 80,
+      "nominal_mu": 0.006,
+      "profile_id": "p50-short-low",
+      "recovery_sentinel_role": "conservative"
+    },
+    {
+      "design_role": "core",
+      "fs_target": 50,
+      "memory_ms": 200,
+      "nominal_mu": 0.012,
+      "profile_id": "p50-long-mid",
+      "recovery_sentinel_role": "intermediate"
+    },
+    {
+      "design_role": "coverage_boundary",
+      "fs_target": 50,
+      "memory_ms": 120,
+      "nominal_mu": 0.016,
+      "profile_id": "p50-boundary-high",
+      "recovery_sentinel_role": null
+    },
+    {
+      "design_role": "core",
+      "fs_target": 100,
+      "memory_ms": 40,
+      "nominal_mu": 0.016,
+      "profile_id": "p100-short-high",
+      "recovery_sentinel_role": "aggressive"
+    },
+    {
+      "design_role": "coverage_boundary",
+      "fs_target": 100,
+      "memory_ms": 120,
+      "nominal_mu": 0.006,
+      "profile_id": "p100-boundary-low",
+      "recovery_sentinel_role": null
+    }
+  ],
+  "reclassification_policy": "reuse_immutable_v1_numeric_summaries_for_six_unchanged_profiles",
+  "record_manifest_sha256": "c5e7291cf2da3a6ef25a03a96d763373b9cacdaee521c0378413cee6dc9666f1",
+  "replacement_policy": "replace_only_profiles_that_fail_non_pathological_weight_or_residual_gates",
+  "replacements": [
+    {
+      "reason": "reduce_mu_times_tap_span_while_retaining_high_mu_boundary",
+      "rejected_coordinate": [
+        50,
+        200,
+        0.016
+      ],
+      "rejected_profile_id": "p50-long-high",
+      "replacement_coordinate": [
+        50,
+        120,
+        0.016
+      ],
+      "replacement_profile_id": "p50-boundary-high"
+    },
+    {
+      "reason": "reduce_high_rate_tap_span_while_retaining_low_mu_boundary",
+      "rejected_coordinate": [
+        100,
+        200,
+        0.006
+      ],
+      "rejected_profile_id": "p100-long-low",
+      "replacement_coordinate": [
+        100,
+        120,
+        0.006
+      ],
+      "replacement_profile_id": "p100-boundary-low"
+    }
+  ],
+  "source_v1_completion_sha256": "aa7c938689bbf5788db7481a15f39bde4738142905aba909bd38828f02041746",
+  "source_v1_metric_contract_sha256": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+  "status": "proposed_awaiting_human_budget_decision"
+}

@@ -1,0 +1,38 @@
+{
+  "contract_version": "lyx_recovery_filter_budget_v9",
+  "max_attempts": 1704,
+  "max_unique_identities": 852,
+  "normal_unique_identity_limit": 840,
+  "retry_limit": 1,
+  "stage_attempt_kinds": {
+    "current_role_matrix": "formal",
+    "filter_mechanism_decomposition_diagnostic": "diagnostic",
+    "filter_profile_p25_spectral_diagnostic": "diagnostic",
+    "filter_profile_p25_spectral_recheck_v2": "diagnostic",
+    "filter_profile_rate_normalization_exploration": "exploration",
+    "filter_profile_stability_audit": "diagnostic",
+    "fixed_lower_bound_diagnostic": "diagnostic",
+    "fold_replay": "formal",
+    "historical_recovery_ab": "formal",
+    "penalty_interaction": "formal",
+    "recovery_sentinel": "formal",
+    "rollback_backup_matrix": "formal",
+    "spectral_metric_scale_control_diagnostic": "diagnostic"
+  },
+  "stage_unique_limits": {
+    "current_role_matrix": 96,
+    "filter_mechanism_decomposition_diagnostic": 12,
+    "filter_profile_p25_spectral_diagnostic": 36,
+    "filter_profile_p25_spectral_recheck_v2": 36,
+    "filter_profile_rate_normalization_exploration": 8,
+    "filter_profile_stability_audit": 64,
+    "fixed_lower_bound_diagnostic": 60,
+    "fold_replay": 12,
+    "historical_recovery_ab": 24,
+    "penalty_interaction": 288,
+    "recovery_sentinel": 108,
+    "rollback_backup_matrix": 96,
+    "spectral_metric_scale_control_diagnostic": 12
+  },
+  "supplemental_stage": "fold_replay"
+}

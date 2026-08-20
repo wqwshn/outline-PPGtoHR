@@ -1,0 +1,117 @@
+{
+  "actual_taps": 4,
+  "audit_contract_sha256": "1ed9cdf52e00e861bffcaebac9c5052b90a88a2f5b7e426b93cada1f63a2c601",
+  "code_hash": "8705bd4885ffc3d89ae0cb54d8fe3440ce01ea8aa7ecddba19a4aea3d9d6c23e",
+  "design_role": "core",
+  "diagnostic_identity_sha256": [
+    "1bf3f90fcc3f7d36267f3162ce76ad3deacba575cfd0206038620a02ea0a195c",
+    "629a7498c9b139e77a8ffd4973fc6ea3cba57d2f240dbe630bba048285539a16",
+    "87c48d3e808acf177e315cfc527524773a632f6aafe698195ab687769135a5b9",
+    "c1299ac60aa303d9f393c7ef76b7569c4ebb2e41d3c84bda17154d94eaac2a73"
+  ],
+  "diagnostic_result_sha256": [
+    "08d087ef925ce90c5e94c3dd259fd3c1643f39b314606f78b259d51a648f0e5f",
+    "8436739d782f1727e56ca72f84118a696fe4f719f298214828a2ed2548af5607",
+    "9925d2033730e36f2f6e1c52ad7d0fbfa6e0a97bd70d300216f3b70c1babe851",
+    "e851f43c5534d36eacfa460f4a38b37eb89fdf6dd663d99189f2c1f348c2c737"
+  ],
+  "effective_mu_formula": "max(lms_mu_min, nominal_mu - abs_corr / 100)",
+  "fs_target": 50,
+  "library_sha256": "5ffd65f9bc554b95b1263bcc042a778c43a63381ed6fd594b705eadcb17c3579",
+  "may_enter_formal_matrix": false,
+  "nominal_mu": 0.006,
+  "physical_memory_ms": 80,
+  "profile_id": "p50-short-low",
+  "profile_sha256": "37b6fe1eaea916e9d4011be7c37e044a59630ca0ee4ed995eb305c802479ea54",
+  "receipt_sha256": "9d958e3e2c71777eea52064fee3cd66186e3f653ca2a337c8c1d8d16f4d31042",
+  "receipt_version": "lyx_filter_profile_receipt_v1",
+  "recovery_sentinel_role": "conservative",
+  "solver_hash": "fcee671a958f512bdbea6adb719c170882da1df37a2b4091c6045e1dc6b975f1",
+  "spectral_evidence": {
+    "all_records_pass": true,
+    "record_results": [
+      {
+        "motion_artifact_suppression_db_median": 0.17739792075170424,
+        "passed": true,
+        "record_id": "jianpan2_LYX_0708",
+        "residual_artifact_abs_corr_median": 0.03498860478287037,
+        "scene": "jianpan",
+        "true_peak_retention_ratio_median": 0.8505168646514139
+      },
+      {
+        "motion_artifact_suppression_db_median": 0.010434265068977678,
+        "passed": true,
+        "record_id": "kaihe3_LYX_0613",
+        "residual_artifact_abs_corr_median": 0.06567829076645294,
+        "scene": "kaihe",
+        "true_peak_retention_ratio_median": 0.9092158120959984
+      },
+      {
+        "motion_artifact_suppression_db_median": 1.4750587165158238,
+        "passed": true,
+        "record_id": "run1_LYX_0708",
+        "residual_artifact_abs_corr_median": 0.060758418911267584,
+        "scene": "run",
+        "true_peak_retention_ratio_median": 0.8837395901231564
+      },
+      {
+        "motion_artifact_suppression_db_median": 0.020263661486273607,
+        "passed": true,
+        "record_id": "xiezi4_LYX_0708",
+        "residual_artifact_abs_corr_median": 0.03331393137458109,
+        "scene": "xiezi",
+        "true_peak_retention_ratio_median": 0.8667947960473217
+      }
+    ]
+  },
+  "stability": {
+    "all_records_pass": false,
+    "record_results": [
+      {
+        "input_energy_median": 156.55429493986813,
+        "max_tap_hit_count": 218,
+        "passed": false,
+        "record_id": "jianpan2_LYX_0708",
+        "reference_energy_median": 0.022604434442403645,
+        "residual_rms_ratio_p95": 0.9852041621671097,
+        "runtime_seconds": 0.9000988000043435,
+        "scene": "jianpan",
+        "weight_norm_max": 0.7942651366869095
+      },
+      {
+        "input_energy_median": 122.48668785234241,
+        "max_tap_hit_count": 230,
+        "passed": false,
+        "record_id": "kaihe3_LYX_0613",
+        "reference_energy_median": 0.03194918577467155,
+        "residual_rms_ratio_p95": 0.9996349629514624,
+        "runtime_seconds": 1.0866097999969497,
+        "scene": "kaihe",
+        "weight_norm_max": 0.5467330950495001
+      },
+      {
+        "input_energy_median": 17.4780859787929,
+        "max_tap_hit_count": 398,
+        "passed": false,
+        "record_id": "run1_LYX_0708",
+        "reference_energy_median": 0.19211677993539997,
+        "residual_rms_ratio_p95": 0.9843288498601263,
+        "runtime_seconds": 1.2087756000037189,
+        "scene": "run",
+        "weight_norm_max": 0.8355452182630742
+      },
+      {
+        "input_energy_median": 1002.8095677056625,
+        "max_tap_hit_count": 244,
+        "passed": false,
+        "record_id": "xiezi4_LYX_0708",
+        "reference_energy_median": 0.028145879134420668,
+        "residual_rms_ratio_p95": 0.9941144456858756,
+        "runtime_seconds": 0.8385512000022572,
+        "scene": "xiezi",
+        "weight_norm_max": 0.5863157764655001
+      }
+    ]
+  },
+  "status": "rejected"
+}

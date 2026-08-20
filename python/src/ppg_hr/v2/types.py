@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -23,6 +23,7 @@ class V2RunConfig:
     adaptive_filter: str = "noncausal_lms"
     algorithm_preset: str = "dynamic_rest_bo"
     reference_groups_order: tuple[str, ...] = ("HF", "CF", "ACC")
+    adaptive_reference_stage_limit: int | None = None
     fs_origin: int = 100
     fs_target: int = 25
     window_seconds: float = 8.0
@@ -54,6 +55,29 @@ class V2RunConfig:
     post_motion_dynamic_guard_gap_rescue_min_hits: int = 3
     post_motion_dynamic_guard_gap_rescue_fft_stable_windows: int = 3
     post_motion_dynamic_guard_gap_rescue_fft_stable_bpm: float = 6.0
+    # PM-CHR production defaults. The legacy dynamic guard remains enabled above
+    # for compatibility diagnostics, but the single-writer handoff revokes its
+    # authority over Final whenever this policy is active.
+    post_motion_dual_reset_enable: bool = True
+    post_motion_dual_reset_experiment_mode: Literal["a0", "a1", "a2"] = "a0"
+    post_motion_dual_reset_handoff_only_switch: bool = False
+    post_motion_minimal_handoff_enable: bool = True
+    post_motion_minimal_provisional_enable: bool = True
+    post_motion_minimal_relocation_mode: Literal[
+        "none", "a2", "controlled_reanchor", "a2_reanchor"
+    ] = "controlled_reanchor"
+    post_motion_dual_reset_post_switch_hold_actual_final: bool = False
+    post_motion_dual_reset_gap_rescue_gap_bpm: float = 18.0
+    post_motion_dual_reset_observability_periodicity_min: float = 0.5
+    post_motion_dual_reset_observability_peak_competition_min: float = 1.3
+    post_motion_dual_reset_observability_recovery_hits: int = 2
+    # Legacy research/replay knobs. PM-CHR ignores them even if an archived
+    # config explicitly sets them, so they cannot re-enter production control.
+    post_motion_dual_reset_prior_invalidation_enable: bool = False
+    post_motion_dual_reset_prior_invalidation_hits: int = 3
+    post_motion_dual_reset_prior_invalidation_gap_bpm: float = 40.0
+    post_motion_dual_reset_prior_invalidation_raw_decline_bpm: float = 0.5
+    post_motion_dual_reset_prior_invalidation_prior_decline_bpm_per_window: float = 0.5
     max_recovery_seconds: float = 30.0
     recovery_trigger_bpm: float = 20.0
     pre_motion_context_seconds: float = 30.0
@@ -81,6 +105,10 @@ class V2RunConfig:
     spec_penalty_width: float = 0.2
     motion_gate_filter_allowlist: tuple[str, ...] = ("lms", "noncausal_lms")
     reacquire_enable: bool = True
+    rise_candidate_lineage_enable: bool = False
+    rise_confirmation_policy_id: str = "legacy_v1"
+    recovery_candidate_id: str | None = None
+    penalty_candidate_id: str | None = None
     high_lock_escape_enable: bool = True
     high_lock_escape_confirm_windows: int = 3
     high_lock_escape_cooldown_windows: int = 4

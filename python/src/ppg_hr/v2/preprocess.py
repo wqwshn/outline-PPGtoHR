@@ -64,7 +64,7 @@ def load_v2_dataset(
 
     fs = int(fs_origin)
     clean = _clean_frame(raw, fs)
-    ref = _parse_reference_csv(ref_path)
+    ref = load_v2_reference(ref_path)
     valid_mask = _extract_valid_mask(raw)
     return V2Dataset(
         sample_stem=sensor_path.stem,
@@ -73,6 +73,15 @@ def load_v2_dataset(
         ref_data=ref,
         valid_mask=valid_mask,
     )
+
+
+def load_v2_reference(ref_csv: str | Path) -> np.ndarray:
+    """按 v2 正式解析规则读取原始参考心率时间线。"""
+
+    ref_path = Path(ref_csv)
+    if not ref_path.is_file():
+        raise FileNotFoundError(f"Reference CSV not found: {ref_path}")
+    return _parse_reference_csv(ref_path)
 
 
 def safe_cf_ratio(uc: np.ndarray, ut: np.ndarray) -> np.ndarray:

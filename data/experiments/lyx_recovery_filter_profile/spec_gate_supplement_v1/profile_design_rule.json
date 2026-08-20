@@ -1,0 +1,41 @@
+{
+  "design_rule_version": "lyx_filter_spec_gate_supplement_design_v1",
+  "design_rule_sha256": "93a320eb48ca2cf7407c7c74824d5308518e1d537452627eb6ceb0603be9a5f5",
+  "status": "proposed_not_authorized",
+  "trigger": "four_of_eight_profiles_rejected_after_restoring_frozen_0_80_pulse_power_retention_gate",
+  "source_completion_sha256": "0ce2802bf09dfc7caf4082710df683fef90bccb45d47fbac1992fff42a84fecf",
+  "source_audit_contract_sha256": "8e46582997dc08db81a7430d4443c0b84bdbc2558c4f638afce1fbd67a667ac4",
+  "record_manifest_sha256": "c5e7291cf2da3a6ef25a03a96d763373b9cacdaee521c0378413cee6dc9666f1",
+  "archive_candidate_evidence_sha256": "9e24c110adeebd9354c1c147bcb52aa0d96efade5408e6d0c4625e852949c369",
+  "candidate_profile_count": 6,
+  "candidate_record_count": 4,
+  "new_unique_identity_count": 24,
+  "independent_bo_authorized": false,
+  "exploration_run_count": 0,
+  "produces_hr_tracking_trajectory": false,
+  "candidate_profiles": [
+    {"profile_id": "p50-short-low-40", "design_role": "core", "fs_target": 50, "memory_ms": 40, "nominal_mu": 0.006},
+    {"profile_id": "p50-short-midlow-40", "design_role": "core", "fs_target": 50, "memory_ms": 40, "nominal_mu": 0.008},
+    {"profile_id": "p100-short-low-40", "design_role": "coverage_boundary", "fs_target": 100, "memory_ms": 40, "nominal_mu": 0.006},
+    {"profile_id": "p100-short-midlow-40", "design_role": "coverage_boundary", "fs_target": 100, "memory_ms": 40, "nominal_mu": 0.008},
+    {"profile_id": "p100-medium-low-80", "design_role": "coverage_boundary", "fs_target": 100, "memory_ms": 80, "nominal_mu": 0.006},
+    {"profile_id": "p100-medium-midlow-80", "design_role": "coverage_boundary", "fs_target": 100, "memory_ms": 80, "nominal_mu": 0.008}
+  ],
+  "selection_rule": {
+    "eligibility": "all_four_records_pass_stability_and_frozen_spectral_gates",
+    "p50_slots": 2,
+    "p100_slots": 2,
+    "ranking": [
+      "minimum_record_pulse_power_retention_desc",
+      "maximum_record_weight_norm_asc",
+      "median_runtime_seconds_asc",
+      "profile_id_asc"
+    ],
+    "insufficient_role_policy": "fail_closed_without_automatic_expansion"
+  },
+  "sentinel_rule": {
+    "conservative": "retain_p50-short-low",
+    "intermediate": "highest_ranked_eligible_p50_replacement",
+    "aggressive": "highest_ranked_eligible_p100_replacement"
+  }
+}

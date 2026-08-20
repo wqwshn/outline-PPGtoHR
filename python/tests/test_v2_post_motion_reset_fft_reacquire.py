@@ -9,8 +9,8 @@ import numpy as np
 import pytest
 
 from ppg_hr.v2.post_motion_reset_fft_reacquire import (
-    PostMotionResetConfig,
     REPRESENTATIVE_LYX_SAMPLE_IDS,
+    PostMotionResetConfig,
     aggregate_candidate_rows,
     build_representative_candidate_configs,
     build_stage1_guard_configs,

@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from ppg_hr.v2.batch_pipeline import (
     default_v2_batch_output_dir,
@@ -91,6 +92,8 @@ def test_run_v2_batch_pipeline_writes_json_png_csv_layout(tmp_path: Path) -> Non
     assert (out / "png" / f"{prefix}-v2-hr.png").is_file()
     assert (out / "csv" / f"{prefix}-v2-hr.csv").is_file()
     assert (out / "csv" / f"{prefix}-v2-error.csv").is_file()
+    assert (out / "csv" / f"{prefix}-v2-window-trace.csv").is_file()
+    assert (out / "csv" / f"{prefix}-v2-history.csv").is_file()
     assert payload["summary_csv"] == out / "csv" / "v2_batch_summary.csv"
     assert payload["summary_csv"].is_file()
     record = payload["records"][0]
@@ -252,7 +255,43 @@ def test_run_v2_batch_pipeline_accepts_custom_search_space(tmp_path: Path) -> No
     assert '"fs_target": 25' in report_text
 
 
-def test_run_v2_batch_pipeline_uses_default_dynamic_guard(
+def test_run_v2_batch_pipeline_filters_requested_sample_stems(tmp_path: Path) -> None:
+    _write_pair(tmp_path, "bobi1_HB_0711")
+    _write_pair(tmp_path, "bobi2_HB_0711")
+
+    payload = run_v2_batch_pipeline(
+        input_dir=tmp_path,
+        output_dir=tmp_path / "out",
+        ppg_modes=["green"],
+        adaptive_filter="lms",
+        analysis_scope="full",
+        reference_groups_order=("HF",),
+        algorithm_preset="lite",
+        sample_stems=("bobi2",),
+        bayes_cfg=V2BayesConfig(max_iterations=1, num_seed_points=1, num_repeats=1),
+    )
+
+    assert [record.sample for record in payload["records"]] == ["bobi2_HB_0711.csv"]
+
+
+def test_run_v2_batch_pipeline_rejects_missing_requested_sample(tmp_path: Path) -> None:
+    _write_pair(tmp_path, "bobi1_HB_0711")
+
+    with pytest.raises(ValueError, match="requested batch samples not found"):
+        run_v2_batch_pipeline(
+            input_dir=tmp_path,
+            output_dir=tmp_path / "out",
+            ppg_modes=["green"],
+            adaptive_filter="lms",
+            analysis_scope="full",
+            reference_groups_order=("HF",),
+            algorithm_preset="lite",
+            sample_stems=("bobi2",),
+            bayes_cfg=V2BayesConfig(max_iterations=1),
+        )
+
+
+def test_run_v2_batch_pipeline_uses_default_post_motion_causal_handoff_recovery(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -302,9 +341,18 @@ def test_run_v2_batch_pipeline_uses_default_dynamic_guard(
         bayes_cfg=V2BayesConfig(max_iterations=1, num_repeats=1),
     )
 
-    assert seen[0].post_motion_dynamic_guard_enable is True
-    assert seen[0].post_motion_dynamic_guard_crossover_gap_bpm == 2.0
-    assert seen[0].post_motion_dynamic_guard_rescue_gap_bpm == 20.0
+    config = seen[0]
+    assert config.post_motion_dual_reset_enable is True
+    assert config.post_motion_dual_reset_experiment_mode == "a0"
+    assert config.post_motion_dual_reset_handoff_only_switch is False
+    assert config.post_motion_minimal_handoff_enable is True
+    assert config.post_motion_minimal_provisional_enable is True
+    assert config.post_motion_minimal_relocation_mode == "controlled_reanchor"
+    assert config.post_motion_dual_reset_prior_invalidation_enable is False
+    assert config.post_motion_dual_reset_post_switch_hold_actual_final is False
+    assert config.post_motion_dual_reset_gap_rescue_gap_bpm == 18.0
+    # 旧 dynamic guard 仍生成兼容诊断，但 PM-CHR 会撤销其 Final 写权限。
+    assert config.post_motion_dynamic_guard_enable is True
 
 
 def test_run_v2_batch_pipeline_applies_run_config_overrides(

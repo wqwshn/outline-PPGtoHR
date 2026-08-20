@@ -1,0 +1,22 @@
+{
+  "approved": true,
+  "decision_state": "awaiting_human_p25_spectral_recheck_v2_decision",
+  "proposal_sha256": "83081d8081def70b356b2737864b552c3fc2376817bbc595db32f4f650616c26",
+  "budget_contract_hash": "bcc55f467c19e6e1c0975c776d3d4356d4034ce5cf8e0ec343c99877f8a84109",
+  "unique_budget": 36,
+  "stage": "filter_profile_p25_spectral_recheck_v2",
+  "identity_panel_sha256": "9d14deba850ecf05da70dc79cc46ad12fbbfdfd36f5c59af77a5c0867273e645",
+  "profile_panel_sha256": "983ef1489f05e14398db0372bef1df6175c7dee7172e76873c8ee1bb5aacf328",
+  "record_panel_sha256": "dc636a649a978f22f0f0c2dc6c71fd326a9af8ed5d71ba721511b0463ee9a257",
+  "solver_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+  "evaluation_hash": "51730e34ddb2e598cffd6363c9dbc75f5422dae2de2c91a527935965ec79c41d",
+  "metric_contract_hash": "bec728a24eaaca30d206b18c23fc89515fd2a3a824a4bf2237ddf53463da4b4b",
+  "spectral_gate_contract_hash": "8df3e7f1d6c2b933a2b6996c9966ea0ceb0b10a1f7ac8ce23b0c337aa3b97d28",
+  "decision_contract_hash": "04f3a67854432a1d03fb393eb348747bc639dd7a5f41f16ae552936bda5acad0",
+  "parameter_search_authorized": false,
+  "independent_bo_authorized": false,
+  "automatic_stage_r_execution": false,
+  "automatic_stage_f_execution": false,
+  "approved_at": "2026-07-30T14:39:36+08:00",
+  "approved_by": "user"
+}

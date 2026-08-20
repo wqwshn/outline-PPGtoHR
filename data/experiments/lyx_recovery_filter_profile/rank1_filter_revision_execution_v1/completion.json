@@ -1,0 +1,28 @@
+{
+  "artifacts": {
+    "decision_receipt.json": "485ce1c23ecabb3595b2fbc7c562d9604ce15d68d2ab5c51f1081efe917f3f17",
+    "result_manifest.json": "04a15234cd09fd18bda572523497199e59ca65759e699c11d739868eda9734b8"
+  },
+  "authorization_sha256": "64b2459422b43db90f0c31f16ef9d5667d98ad36229065d7bbda8d6cb555830c",
+  "automatic_stage_f_execution": false,
+  "automatic_stage_r_execution": false,
+  "completion_sha256": "b83558ac1e5495e346801d5bda7eac70e95e659cec7cb8a85e685273d934c44d",
+  "completion_version": "lyx_rank1_filter_revision_completion_v1",
+  "decision_sha256": "69b7cdc1f726ad31ec613a904c77e445da860ccd85d8517c55d9b31b230de36e",
+  "diagnostic_result_count": 12,
+  "diagnostic_run_count": 12,
+  "independent_bo_run_count": 0,
+  "matrix_execution_summary": {
+    "cache_only_identity_count": 0,
+    "failed_attempt_count": 0,
+    "identity_with_solver_attempt_count": 12,
+    "planned_identity_count": 12,
+    "retry_count": 0,
+    "total_attempt_count": 12
+  },
+  "may_nominate_recovery_candidate": false,
+  "next_state": "awaiting_stage_r_replan_human_review",
+  "parameter_search_run_count": 0,
+  "proposal_sha256": "4b06a3f1aceee3a6459778c6878a1c1ae461077ae6a48a17f95eeed3852ba9c0",
+  "status": "rank1_filter_revision_validated"
+}

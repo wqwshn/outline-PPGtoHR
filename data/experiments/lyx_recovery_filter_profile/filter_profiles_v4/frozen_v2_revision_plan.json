@@ -1,0 +1,159 @@
+{
+  "audit_contract": {
+    "contract_version": "lyx_filter_stability_audit_v2",
+    "max_residual_artifact_abs_corr_median": 0.95,
+    "max_residual_rms_ratio_p95": 2.0,
+    "max_residual_tail_head_ratio": 2.0,
+    "max_stability_load": 1.0,
+    "max_weight_norm": 25.0,
+    "min_motion_artifact_suppression_db_median": -1.0,
+    "min_true_peak_retention_ratio_median": 0.25,
+    "tail_head_gate": "descriptive_only"
+  },
+  "audit_contract_sha256": "383f346c088ded7fa94fa14148997678c53adc4c5659b1969f66350ac8e235f2",
+  "code_hash": "cb792357b8848108550fdae116cf0fcf0192fbe08c78c4a0d207d33b4a78b6ac",
+  "design_rule_sha256": "6de9b647f2fe9f948604c1a906c8cbf6679e71833299ce540805af903141840c",
+  "evaluation_hash": "7b7f5a4bc12f465f2cd4f30b9d865c0acfe1a1feb2cc64046f17ba0afd626638",
+  "independent_bo_authorized": false,
+  "new_identity_count": 8,
+  "new_identity_sha256": [
+    "e95f202436fc84f6efe500fecca8f1a034121a8340b8234901ee5010d875d19e",
+    "fd406b75255d20f152b6fccd14bbb83a0c2d7da116d923e96a2c5a481a6ae54e",
+    "bc64a9c5362ac28c248ac51b07d942b9ecfca57889df913a3d64eeb2ccb7a2fe",
+    "888bb38b8558893905da7ef484e126e66d8640972898ff8ab9d59510a2cb27e1",
+    "615687adea3cad0cd5708f2a34a4f16538ba3bb2a9fe27cb23d9ba5f2420db19",
+    "a1daac88002812e0bbe04478b1e5f4962f04879c281d890864106edb920ad0dd",
+    "13c546e5077f87d88340148ce195c33639755cc4297b1daa49ed801a99711b0e",
+    "a6f541dcd931914e5c6b39eae052a898873736deae63b747eb2351ef39543f82"
+  ],
+  "parent_experiment_id": "lyx_recovery_filter_profile_v1",
+  "plan_sha256": "ae7dc7041459c3248ac6be96b5ac1286ae242c1f56fdcd0be6acb7610d2c782a",
+  "plan_version": "lyx_filter_stability_audit_revision_plan_v1",
+  "produces_hr_tracking_trajectory": false,
+  "profile_library_sha256": "c049d8f88775fb5cb212f70cfa90cac716b60cf0afcdb72b7781453b3ad22a28",
+  "profiles": [
+    {
+      "design_role": "core",
+      "fs_target": 25,
+      "memory_ms": 40,
+      "nominal_mu": 0.008,
+      "profile_id": "p25-short-low",
+      "recovery_sentinel_role": null
+    },
+    {
+      "design_role": "core",
+      "fs_target": 25,
+      "memory_ms": 40,
+      "nominal_mu": 0.012,
+      "profile_id": "p25-short-mid",
+      "recovery_sentinel_role": null
+    },
+    {
+      "design_role": "core",
+      "fs_target": 25,
+      "memory_ms": 200,
+      "nominal_mu": 0.01,
+      "profile_id": "p25-long-mid",
+      "recovery_sentinel_role": null
+    },
+    {
+      "design_role": "core",
+      "fs_target": 50,
+      "memory_ms": 80,
+      "nominal_mu": 0.006,
+      "profile_id": "p50-short-low",
+      "recovery_sentinel_role": "conservative"
+    },
+    {
+      "design_role": "core",
+      "fs_target": 50,
+      "memory_ms": 200,
+      "nominal_mu": 0.012,
+      "profile_id": "p50-long-mid",
+      "recovery_sentinel_role": "intermediate"
+    },
+    {
+      "design_role": "coverage_boundary",
+      "fs_target": 50,
+      "memory_ms": 120,
+      "nominal_mu": 0.016,
+      "profile_id": "p50-boundary-high",
+      "recovery_sentinel_role": null
+    },
+    {
+      "design_role": "core",
+      "fs_target": 100,
+      "memory_ms": 40,
+      "nominal_mu": 0.016,
+      "profile_id": "p100-short-high",
+      "recovery_sentinel_role": "aggressive"
+    },
+    {
+      "design_role": "coverage_boundary",
+      "fs_target": 100,
+      "memory_ms": 120,
+      "nominal_mu": 0.006,
+      "profile_id": "p100-boundary-low",
+      "recovery_sentinel_role": null
+    }
+  ],
+  "proposal_sha256": "b30fb765e651fa943c9a035f04f74e4a72184e918d7db1da231a1380fa30ca5f",
+  "record_manifest_sha256": "c5e7291cf2da3a6ef25a03a96d763373b9cacdaee521c0378413cee6dc9666f1",
+  "records": [
+    {
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708.csv",
+      "data_sha256": "b4aaafa531d731c81d7e8da0e5dac4f8c6e360bda6c7520c34ae78e023dd8bb7",
+      "record_id": "jianpan2_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/jianpan2_LYX_0708_HR_ref.csv",
+      "reference_sha256": "c7a98e54da83d6310430276b33b88bf2306ade91ac81d5b9dd3f5d18ecf5a270",
+      "scene": "jianpan"
+    },
+    {
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613.csv",
+      "data_sha256": "778f75d02d47a134a5999a5641de201dfc613da915b43876398792c6833c6e84",
+      "record_id": "kaihe3_LYX_0613",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/kaihe3_LYX_0613_HR_ref.csv",
+      "reference_sha256": "5cb40473d1793f8ff91eeed993f4a1b9a59c44b7fefcfd57a0314ad34c626050",
+      "scene": "kaihe"
+    },
+    {
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708.csv",
+      "data_sha256": "4e53e93fb94a8ecd17d319af41d6d010c1424baf9c0151099cb417fb0a2d6af0",
+      "record_id": "run1_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/run1_LYX_0708_HR_ref.csv",
+      "reference_sha256": "c8677ec1f0e22b25100c20ab83b8faf22ddea730a973b41b1b43673acf1443a0",
+      "scene": "run"
+    },
+    {
+      "data_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708.csv",
+      "data_sha256": "1d18872f230a8ed75fdf9653196193557da946dcdb6b6375afe220ad9c71bdf4",
+      "record_id": "xiezi4_LYX_0708",
+      "reference_path": "D:/data/PPG_HeartRate/Algorithm/Algorithm/outline-PPGtoHR/data/202607-multiperson/0708-LYX/xiezi4_LYX_0708_HR_ref.csv",
+      "reference_sha256": "9db5f78f018e87128771f45cc3af8004e51ef7530ae1358dcf873b8f547cb0f7",
+      "scene": "xiezi"
+    }
+  ],
+  "replacement_profiles": [
+    {
+      "design_role": "coverage_boundary",
+      "fs_target": 50,
+      "memory_ms": 120,
+      "nominal_mu": 0.016,
+      "profile_id": "p50-boundary-high",
+      "recovery_sentinel_role": null
+    },
+    {
+      "design_role": "coverage_boundary",
+      "fs_target": 100,
+      "memory_ms": 120,
+      "nominal_mu": 0.006,
+      "profile_id": "p100-boundary-low",
+      "recovery_sentinel_role": null
+    }
+  ],
+  "reused_numeric_result_count": 24,
+  "solver_hash": "9d8b217456b912ea4de5baa30d76a2db04d003f20467c9c2b669688a0f4a269f",
+  "source_v1_attempt_registry_sha256": "9db31a3c7cf6e84fd7bad91658a0dd139f53c6ee2da9acf643ffc80101efec88",
+  "source_v1_plan_sha256": "0632cefc90057a33e2d4856b9a5c8ace398d382d1a9db9af26108bc7827a4b9c",
+  "status": "prepared_zero_new_runs"
+}

@@ -1,0 +1,296 @@
+{
+  "manifest_sha256": "4a11dde3a3cc70804cc0f40cec747cd6ff0cc40bd20a5217050e12e5be232850",
+  "manifest_version": "lyx_p25_spectral_recheck_manifest_v2",
+  "proposal_sha256": "83081d8081def70b356b2737864b552c3fc2376817bbc595db32f4f650616c26",
+  "result_count": 36,
+  "results": [
+    {
+      "file_sha256": "621e5b70d71360121309f5dd5a74bc5fc70a4ee2eeb3fa33990ce7cef4726639",
+      "filter_profile_id": "p25-short-low",
+      "identity_sha256": "1ec11b827ccbc4647ee3e88845412144c3c225a17483e2719e571c92c0ddfeaa",
+      "path": "profile_record_audits/p25-short-low/jianpan1_LYX_0708.json",
+      "record_id": "jianpan1_LYX_0708",
+      "result_sha256": "adaf8332bc5c1fa72a9bb4d0400f8f05afb46c63e9c6f021ce320b309bdde44d"
+    },
+    {
+      "file_sha256": "43a87e7ad5a8d1370323e3ba797c218ada9f714b2170a9cc079873fda6a0c343",
+      "filter_profile_id": "p25-short-low",
+      "identity_sha256": "b1b7e325a41fcf35b2ca24318e9dd4d9f3e6a77887bcaf62c8a74984f0cfbe88",
+      "path": "profile_record_audits/p25-short-low/jianpan2_LYX_0708.json",
+      "record_id": "jianpan2_LYX_0708",
+      "result_sha256": "5a11b647fa90bf7bca7b385bad581380b447b014c64da6cc9cff0c8967b32a96"
+    },
+    {
+      "file_sha256": "7e44ffa0e21530061a2adcf1e8c6e612c951ac7f80531fbf13d24755f8fa4ba9",
+      "filter_profile_id": "p25-short-low",
+      "identity_sha256": "ff611d06136bfcf0b24fcf72d35420869fc8c427758013307915005333dd8340",
+      "path": "profile_record_audits/p25-short-low/jianpan3_LYX_0708.json",
+      "record_id": "jianpan3_LYX_0708",
+      "result_sha256": "39ec5c4d5b0d6c0650306c380480a3a2ea44de087e2d5dd2453b2aaf5be71ebb"
+    },
+    {
+      "file_sha256": "af62fdc5089447ee9f2c45e5df55700f5064a1237e69677b759be5044977495d",
+      "filter_profile_id": "p25-short-low",
+      "identity_sha256": "a5ab9a25f9c2d031dde671f4fb97a416e9aa6351cc5bfe49f54177268bd6730b",
+      "path": "profile_record_audits/p25-short-low/kaihe1_LYX_0613.json",
+      "record_id": "kaihe1_LYX_0613",
+      "result_sha256": "4fda4b181ac68f7f34efc7bdf58438c4c66f279508b38fe5551bfa8ac1eeeca9"
+    },
+    {
+      "file_sha256": "aaa9a3df6c8e58afc918985f20b397b22fee2e21cd4786c4e2241a26b5e1b38d",
+      "filter_profile_id": "p25-short-low",
+      "identity_sha256": "bbb0b8017cf719ed356bc7d1377f33564db1d3eef9131b4911d82b4503d53320",
+      "path": "profile_record_audits/p25-short-low/kaihe1_LYX_0617.json",
+      "record_id": "kaihe1_LYX_0617",
+      "result_sha256": "1644b4334c20478d40dc4282c4b9b05c3e7e3bdbfbbc71de2de0d96ec07b50bd"
+    },
+    {
+      "file_sha256": "2c04db5471742f52dd86006e5cb03b800f6d9f0cec73733b7af06ce322cb0133",
+      "filter_profile_id": "p25-short-low",
+      "identity_sha256": "4e7d592405b1c9791e49510ff8f9db0fc85d4e1b4138c06f5058dc5f6c36431b",
+      "path": "profile_record_audits/p25-short-low/kaihe3_LYX_0613.json",
+      "record_id": "kaihe3_LYX_0613",
+      "result_sha256": "7d4a857721776bdf45b0a6992bd1d829e99ef0600e4bd345716c7af3ffb8bc21"
+    },
+    {
+      "file_sha256": "4c0955f0830c11a121f01ee5e426c2f42158a16bca0166c2e21bacd9bd93f5fe",
+      "filter_profile_id": "p25-short-low",
+      "identity_sha256": "7069a469df33236085ad6f1ff61b9302eee1bad635975bf956e7efa5e918c66a",
+      "path": "profile_record_audits/p25-short-low/run1_LYX_0708.json",
+      "record_id": "run1_LYX_0708",
+      "result_sha256": "e5dec21fcf6fbd88274c8e24516a406439da5745d1dd2bbaae07ef1d7603b17d"
+    },
+    {
+      "file_sha256": "720032f4ff2a434b1503d34a0576189533486f331a497933863eea1039bc0e25",
+      "filter_profile_id": "p25-short-low",
+      "identity_sha256": "4b22afc0113e457c7ec1915a1b977f73e914d3a1796ff4ba318b1eca70432f40",
+      "path": "profile_record_audits/p25-short-low/run2_LYX_0708.json",
+      "record_id": "run2_LYX_0708",
+      "result_sha256": "9cc0095686421c2075c2099cd4c7bbb575c641803482141206c900f260c8252a"
+    },
+    {
+      "file_sha256": "a1a76bc65cc1ebaceec80a42443d3c2716d3bc52fb105c05fccf3a8d9bdcac0c",
+      "filter_profile_id": "p25-short-low",
+      "identity_sha256": "337eeaf47c1b8a5fc96e27e51ed56a383d6d17825b8e5e1df4ce07a8b47ebade",
+      "path": "profile_record_audits/p25-short-low/run3_LYX_0708.json",
+      "record_id": "run3_LYX_0708",
+      "result_sha256": "d57c3f533d785ec43405990ca7fefbca896e8ccf10793bf3caab9d002f530d33"
+    },
+    {
+      "file_sha256": "72a4c99fa1303c9f74947aaca51888ca9dccb8d34c5161ccdcf36958ddd57637",
+      "filter_profile_id": "p25-short-low",
+      "identity_sha256": "f5c4153ac99ab50aba33b28ff077c11c95ff25b58ca51ae8b2d7d2f1e973fa5d",
+      "path": "profile_record_audits/p25-short-low/xiezi2_LYX_0708.json",
+      "record_id": "xiezi2_LYX_0708",
+      "result_sha256": "e5605c430dd01304875d1cbe651322feb87162e0f9391a35fd411ae5b2209b05"
+    },
+    {
+      "file_sha256": "ea29e5e0580589c506533dd03cf980c78a87838a9f30a95a72fbf8f68febb48d",
+      "filter_profile_id": "p25-short-low",
+      "identity_sha256": "fe55858d232b9b22f5c5c42c73bb896cb0615d806e64282267b7b9b954882b50",
+      "path": "profile_record_audits/p25-short-low/xiezi3_LYX_0708.json",
+      "record_id": "xiezi3_LYX_0708",
+      "result_sha256": "e8272dd145868f830f84083e6aefed885a2c72891714b68e02104e0f2fd0f1a6"
+    },
+    {
+      "file_sha256": "83edeff275cbee43921ec73c8b934ad5c2320c83ffac6075e03252af1ba0b89e",
+      "filter_profile_id": "p25-short-low",
+      "identity_sha256": "9ec0232366e8e20f59f3a47e042f8e2386089f71982cdc2e9c842530792fc9f3",
+      "path": "profile_record_audits/p25-short-low/xiezi4_LYX_0708.json",
+      "record_id": "xiezi4_LYX_0708",
+      "result_sha256": "35e0179adbf23d1452a9340c91a9e91b06c497d184dffe399e0314cbb013647b"
+    },
+    {
+      "file_sha256": "a33bd23ae5b3434cde3fd6bd66fc0ccc763b3f2c7d91f283fa26d139da514a49",
+      "filter_profile_id": "p25-short-mid",
+      "identity_sha256": "00f839b4ffbdbb983f26e21b6d06f1ab230493f3791486a232a94ad426931554",
+      "path": "profile_record_audits/p25-short-mid/jianpan1_LYX_0708.json",
+      "record_id": "jianpan1_LYX_0708",
+      "result_sha256": "0324d7c0bd669d697595441885c364b4d9763187b0cdbaec4c1a70e0e4f943b8"
+    },
+    {
+      "file_sha256": "ceeae8363291e65c4af41e9e11d64d66742e064123d13ef94a33294bbb022d20",
+      "filter_profile_id": "p25-short-mid",
+      "identity_sha256": "f415fdfeabc61ebf6d6f55c12a4f04bc86b7e8917736e83af5d586371e3cf788",
+      "path": "profile_record_audits/p25-short-mid/jianpan2_LYX_0708.json",
+      "record_id": "jianpan2_LYX_0708",
+      "result_sha256": "d2c13eaec17df7f72b4b48af9b5eb8b802d46f23ffc21acb9509ae71120de9ef"
+    },
+    {
+      "file_sha256": "4c88859ab25c1e77c877bfdb6bf6db8a75f2b414a4a7df068fdc207fb52750ec",
+      "filter_profile_id": "p25-short-mid",
+      "identity_sha256": "cd86e5c82fedfdd654b893101fe79f0c772eca72258ec0ede2edb9a70b11ebe4",
+      "path": "profile_record_audits/p25-short-mid/jianpan3_LYX_0708.json",
+      "record_id": "jianpan3_LYX_0708",
+      "result_sha256": "e45ddd8bdbb7d66df99f17a869d483fe963c48bf2e167dd6a14f61004f8490e9"
+    },
+    {
+      "file_sha256": "0636e74c18d1514db308471581979ae65c873bb0998e306f6b0ac083fd9aac77",
+      "filter_profile_id": "p25-short-mid",
+      "identity_sha256": "4938be61fbaaeb908ac09177738ec117506aa6f6b37fb6b4d80d93de5c723ad7",
+      "path": "profile_record_audits/p25-short-mid/kaihe1_LYX_0613.json",
+      "record_id": "kaihe1_LYX_0613",
+      "result_sha256": "fb3b853af3d202d3808e91155aef5338565625f6b4d559cab0008b9c44dcd126"
+    },
+    {
+      "file_sha256": "5434efc056a7c2b9d824477c24b5fa51b1acb3d87f59910dad0207f4e05a7f1e",
+      "filter_profile_id": "p25-short-mid",
+      "identity_sha256": "e4bab62eea87cbb38e8bc6ecd2b1a43546edd46b0dd1f50cb7b0d1d9283df5c3",
+      "path": "profile_record_audits/p25-short-mid/kaihe1_LYX_0617.json",
+      "record_id": "kaihe1_LYX_0617",
+      "result_sha256": "51a4123d31a0192ec4894f4831d6863eefa685f6614be03d1cfff9c23ac5d4a8"
+    },
+    {
+      "file_sha256": "a00706050ad1685650770df0686a20f767a525cfb42ff5eefa42ff1ea129d4e3",
+      "filter_profile_id": "p25-short-mid",
+      "identity_sha256": "81ec21690d56651c0291884f343d29c8dd6ccf03ef647795b8d4eb416349901b",
+      "path": "profile_record_audits/p25-short-mid/kaihe3_LYX_0613.json",
+      "record_id": "kaihe3_LYX_0613",
+      "result_sha256": "7decc18a5e2be5dcf0910f8b2c9cbfef0493f24a81aeb2faa3f6212309e21f64"
+    },
+    {
+      "file_sha256": "2f1bc0a453ec5da0b819fe36af449eddc19cf7b5d9ae219ba666a0061720a51c",
+      "filter_profile_id": "p25-short-mid",
+      "identity_sha256": "2fa69f82bf9e257f123028ae4e16d6cefe2ccaf20b6f3b4e2ae326f106f8e4ad",
+      "path": "profile_record_audits/p25-short-mid/run1_LYX_0708.json",
+      "record_id": "run1_LYX_0708",
+      "result_sha256": "cdd4d28bd183c05ebf27c9716b5ab2d2fa5d6fb02fcef60f97e9cb8ff119ad25"
+    },
+    {
+      "file_sha256": "3a83bb6ba2e6dce0d2a491de9778f4730c5516685c9e8472dca13eff8d58e1f1",
+      "filter_profile_id": "p25-short-mid",
+      "identity_sha256": "548837fcff619c927e098193c743a45a014e7700c320ff3f0b176e145691e9d5",
+      "path": "profile_record_audits/p25-short-mid/run2_LYX_0708.json",
+      "record_id": "run2_LYX_0708",
+      "result_sha256": "7937c6f1ce86348ec65b264752b317e1028c363f4392d5dd9b6a6436bd3433a6"
+    },
+    {
+      "file_sha256": "c854d23df466d2e3bb665473032e901144f67d1ba9098eb3c2ada88337587ef0",
+      "filter_profile_id": "p25-short-mid",
+      "identity_sha256": "deca4aa492edd8c526ac3b0aa4c5b3dfc87c1eea3d129215794766f2ca81c77c",
+      "path": "profile_record_audits/p25-short-mid/run3_LYX_0708.json",
+      "record_id": "run3_LYX_0708",
+      "result_sha256": "5b62c482a63b4841d98555c8391b5a5062c8e9c31a7366e04a9435be1d29be3b"
+    },
+    {
+      "file_sha256": "3dea2a7eb4f87e6ab80482c5cc6875804d4bcece3dd2da8dac6d685bfbb80fc7",
+      "filter_profile_id": "p25-short-mid",
+      "identity_sha256": "2f31b44e603283bdeda406892c373a7edbd5b82457eed967a0806ba9e4845ac9",
+      "path": "profile_record_audits/p25-short-mid/xiezi2_LYX_0708.json",
+      "record_id": "xiezi2_LYX_0708",
+      "result_sha256": "006fdd89e6e599f2b1f3078d83130212543139039404fc57c36c6b839c9767b0"
+    },
+    {
+      "file_sha256": "5b78becf283e147e3e18c4cc6b9767a9836d5d3cede7df7fa44d0fcbd936e43e",
+      "filter_profile_id": "p25-short-mid",
+      "identity_sha256": "8d76a529955df0a2a182e299fc7db4a658267797ba9aba81b3920c3744dc969e",
+      "path": "profile_record_audits/p25-short-mid/xiezi3_LYX_0708.json",
+      "record_id": "xiezi3_LYX_0708",
+      "result_sha256": "852a190428f2917ec61356bc3dd6d5fb8662794b242f49e864e8e112c3f85eaa"
+    },
+    {
+      "file_sha256": "9cc1d93c929586dd266712a3362e54bbd73c912155ac56c4dd3a69929d5a2139",
+      "filter_profile_id": "p25-short-mid",
+      "identity_sha256": "f186842f6a5d3edd0600f4501884b886e22f5d6c9223987dd2fb9af0dfc4706b",
+      "path": "profile_record_audits/p25-short-mid/xiezi4_LYX_0708.json",
+      "record_id": "xiezi4_LYX_0708",
+      "result_sha256": "b73428e1bbaf3c89e8d7e85513edf640c373b75feecdd1f0898703b6d880a610"
+    },
+    {
+      "file_sha256": "3352b992173d3202e69e7f01a9712ac2678c96e11f131c8af56235915ec52b35",
+      "filter_profile_id": "p25-long-mid",
+      "identity_sha256": "26a5b85fe3a3217a6d699bd08ea21a9b50d98eff2ba9f173108e77c1a27ba8df",
+      "path": "profile_record_audits/p25-long-mid/jianpan1_LYX_0708.json",
+      "record_id": "jianpan1_LYX_0708",
+      "result_sha256": "731f464103433d37e1317a06c00ffb45a9cacea631c28420d3c013265d2c1563"
+    },
+    {
+      "file_sha256": "2ab54436234c7a26610cc5a41b7e3a22e6e585776db88f88d82f3202225e68a4",
+      "filter_profile_id": "p25-long-mid",
+      "identity_sha256": "fc5a1af9be3ae1d6520ef0079efb75000ba7db4d1949cb2069c965d9173288bd",
+      "path": "profile_record_audits/p25-long-mid/jianpan2_LYX_0708.json",
+      "record_id": "jianpan2_LYX_0708",
+      "result_sha256": "95a72ef9cfae986b77e8793166234a9a2891fad658f9717d36a4c60203bba59f"
+    },
+    {
+      "file_sha256": "6db30f255b22271f1aad3ff7c3297a1f2661ff8953a126b8ec46480439f57384",
+      "filter_profile_id": "p25-long-mid",
+      "identity_sha256": "eccc760278ceca4019921e0c748943d5928241c6244dd12b1e0c333d1248dd0b",
+      "path": "profile_record_audits/p25-long-mid/jianpan3_LYX_0708.json",
+      "record_id": "jianpan3_LYX_0708",
+      "result_sha256": "4f1580ebfb7036f71de4d0ec891d2b9f4ba218c9c428f09b232584989a3adb8d"
+    },
+    {
+      "file_sha256": "7310ab5a46f93778ec4b866bbabb30604deb9a0b48d92bde0cd9a169ce83e04d",
+      "filter_profile_id": "p25-long-mid",
+      "identity_sha256": "ab35c4daa32f5b0078c089f3455e4b2e33689a9935a37b697291da2bc6c39691",
+      "path": "profile_record_audits/p25-long-mid/kaihe1_LYX_0613.json",
+      "record_id": "kaihe1_LYX_0613",
+      "result_sha256": "b367fe2b1623e2adbb27b1b474429bf57372def29d99329ed4efc6a7f0658b5f"
+    },
+    {
+      "file_sha256": "01aeff205f205a8c8f0149a09e8783e1ac896bc45869811c9724d3bbe4443bb5",
+      "filter_profile_id": "p25-long-mid",
+      "identity_sha256": "3bf15f6068dcc35f46efbdfafcab303abe7c644571dac3a93468efc4ed278ae1",
+      "path": "profile_record_audits/p25-long-mid/kaihe1_LYX_0617.json",
+      "record_id": "kaihe1_LYX_0617",
+      "result_sha256": "4095c3409375c56d4b7561ab36ff303ad87c96e4adb463a095c0a79a8d622330"
+    },
+    {
+      "file_sha256": "c09f601c94040953dae90e0615500f713a0fff1b6493f316ebc4c5241c3534d7",
+      "filter_profile_id": "p25-long-mid",
+      "identity_sha256": "510b6b1b978bf768fa7092a369e6010117e2c82ac22363ef2580f9dfe0c665b3",
+      "path": "profile_record_audits/p25-long-mid/kaihe3_LYX_0613.json",
+      "record_id": "kaihe3_LYX_0613",
+      "result_sha256": "8c0d463753399195fb020f7b6ca7c3f6110e5f84d02f5274069d10002a9600d0"
+    },
+    {
+      "file_sha256": "d8b7e44817c2b730d827f6b583a720df740ba2c257844c9f2fa06054bd083982",
+      "filter_profile_id": "p25-long-mid",
+      "identity_sha256": "54da76ac498a1766d7dc72b97d8a9a32a6a8c6f88324e320196ee13bbeb016e2",
+      "path": "profile_record_audits/p25-long-mid/run1_LYX_0708.json",
+      "record_id": "run1_LYX_0708",
+      "result_sha256": "08115cdb443c65b1d389483b8381e3311a5862c8e47944fb9b4f50e3d0588cce"
+    },
+    {
+      "file_sha256": "e729effcdd6b0dbb2e80ebf7befa593179d650efccfe038dabb8afcd5df29c6d",
+      "filter_profile_id": "p25-long-mid",
+      "identity_sha256": "e4e631a687d0f740985b847074bef040fefcf9adde70d31e896ffadd3689f6e0",
+      "path": "profile_record_audits/p25-long-mid/run2_LYX_0708.json",
+      "record_id": "run2_LYX_0708",
+      "result_sha256": "1ac63d98364e73b531a31daeb1b3757265c1471cace1d2953b052ed0184b5540"
+    },
+    {
+      "file_sha256": "b4ce84e4af280c6a361d428a03332724cf3b86f9d694716f5f43700fae505703",
+      "filter_profile_id": "p25-long-mid",
+      "identity_sha256": "df545dafb478b7fc09019ff303385e19c68f429014f07a545d28cd7975d339a7",
+      "path": "profile_record_audits/p25-long-mid/run3_LYX_0708.json",
+      "record_id": "run3_LYX_0708",
+      "result_sha256": "65e6bea2ee9c26b3a9a49b710c4a174b342f223a984f7f924ec8d395dfd3ea60"
+    },
+    {
+      "file_sha256": "5afb4b54ae6207b0cdc73e33ca561586f3b7c3dbc48abbd2573801420eb24db4",
+      "filter_profile_id": "p25-long-mid",
+      "identity_sha256": "c72362c1b58e25fcce1540e5872298d53898ed621f17bd98f56cf31c964bd5bf",
+      "path": "profile_record_audits/p25-long-mid/xiezi2_LYX_0708.json",
+      "record_id": "xiezi2_LYX_0708",
+      "result_sha256": "e4b680bed753087221ee45ba2b1fef73e8ac0559f8a2374d3cead6a5520bdb65"
+    },
+    {
+      "file_sha256": "e8f77bb7936ee4408f7bc344b7e81eb140ace0e346233ad90784ebff6ec488f5",
+      "filter_profile_id": "p25-long-mid",
+      "identity_sha256": "a9e1fcc0f4dd082192b732deacb27b42131fd3caf655d42ef11b4793e01ce568",
+      "path": "profile_record_audits/p25-long-mid/xiezi3_LYX_0708.json",
+      "record_id": "xiezi3_LYX_0708",
+      "result_sha256": "502c119a5d8e403b86d90a9839651a9e3d9f1ff67a4c1b6db0305f5bf057369e"
+    },
+    {
+      "file_sha256": "b56fb0195b1b4b4e0833b0afa9979e9e48617070914080542a55121fddb8e81e",
+      "filter_profile_id": "p25-long-mid",
+      "identity_sha256": "e133955a608924fcdda587b02b993e237da330921aafcb7f1a01b10d0364704a",
+      "path": "profile_record_audits/p25-long-mid/xiezi4_LYX_0708.json",
+      "record_id": "xiezi4_LYX_0708",
+      "result_sha256": "04c71fa9a753400c6252b8aaacbc48ee4203ea09fa610e3c0a1c2a3acc47d7b5"
+    }
+  ]
+}
