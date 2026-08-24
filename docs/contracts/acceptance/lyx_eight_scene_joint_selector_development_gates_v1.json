@@ -1,0 +1,151 @@
+{
+  "registry_schema_version": "acceptance_contract_registry_v1",
+  "contract_id": "lyx_eight_scene_joint_selector_development_gates_v1",
+  "contract_status": "invalid_draft_evaluator_binding",
+  "derived_from": "physical4d_corrected_development_gates_v2",
+  "evidence_level": "development_acceptance",
+  "claim_boundaries": {
+    "development_backtest_and_read_isolation_only": true,
+    "independent_generalization_confirmation": false,
+    "production_default_authorized": false,
+    "final_threshold_standard": false,
+    "dynamic_response_evaluated": false
+  },
+  "applicability": {
+    "subject": "LYX",
+    "scenes": [
+      "jianpan",
+      "kaihe",
+      "quanji",
+      "run",
+      "bobi",
+      "tiaosheng",
+      "woli",
+      "xiezi"
+    ],
+    "records_per_scene": 3,
+    "record_count": 24,
+    "candidate_space": "physical4d_native_rectangle_v1",
+    "coordinate_count": 300,
+    "report_schema_version": "v2",
+    "analysis_scope": "full",
+    "data_role": "revealed_development_reuse"
+  },
+  "algorithm_identity": {
+    "algorithm_preset": "lite",
+    "adaptive_filter": "lms",
+    "adaptive_reference_stage_limit": null,
+    "reference_groups_order": [
+      "HF"
+    ],
+    "dual_cascade_identity": "dual_cascade_two_hf_v1",
+    "ppg_mode": "green",
+    "ppg_input_transform": "raw_bandpass",
+    "smooth_win_len": 5,
+    "time_bias": 5.0,
+    "rise_candidate_lineage_enable": true,
+    "rise_confirmation_policy_id": "legacy_v1",
+    "penalty_candidate_id": "suppressed_protected_continuous_visibility_v1",
+    "production_default_status": "both_experimental_mechanisms_remain_off_by_default"
+  },
+  "metric_contract": {
+    "metric_schema_version": "lyx_eight_scene_joint_selector_output_v1",
+    "metric_schema_path": "data/experiments/lyx_eight_scene_joint_selector_threefold_20260819/output_schema.json",
+    "metric_schema_sha256": "dced0d7d07a0675884aa014d2b17a256c51616dde3243710cfe84e7367505f89",
+    "evaluator_path": "data/experiments/lyx_eight_scene_joint_selector_threefold_20260819/evaluator.py",
+    "evaluator_sha256": "2c38be917e4317493e295aed73d04d7f69d8a1facff90bea42e8eecd5130b6fd",
+    "evaluation_time_bias_s": 5.0,
+    "window_step_s": 1.0,
+    "error_boundaries_inclusive": true,
+    "timeline_policy": "full_contiguous_window_timeline_fail_closed"
+  },
+  "baseline": {
+    "baseline_id": "historical_independent_bo_final_common_bias5",
+    "role": "hard_gate_and_mae_anchor",
+    "record_count": 24,
+    "inventory_semantic_sha256": "b43060dc40bb4f6f8e71af5a3dd0a56fa6ba36853e8e8b632f9f34aeb1cef1c4",
+    "final_trajectory_preserved": true,
+    "candidate_and_baseline_use_same_reference_and_time_bias": true
+  },
+  "hard_gates": {
+    "G1-I": {
+      "role": "hard_structural_identity",
+      "formula": "candidate and baseline identity, full timeline, finite values, indices, center times, dual-HF cascade and stability checks pass"
+    },
+    "G2": {
+      "role": "hard_continuous_e10_duration",
+      "formula": "candidate_L10_s <= max(10 s, independent_L10_s + 2 s)",
+      "unit": "s"
+    },
+    "G3": {
+      "role": "hard_continuous_e20_duration",
+      "formula": "candidate_L20_s <= max(2 s, independent_L20_s)",
+      "unit": "s"
+    },
+    "G4": {
+      "role": "hard_engineering_mae",
+      "formula": "candidate_full_timeline_MAE - independent_full_timeline_MAE <= 2 BPM",
+      "unit": "BPM"
+    },
+    "G5": {
+      "role": "hard_absolute_right_censor_safety",
+      "formula": "right_censored_E10_episode_count == 0",
+      "episode_definition": "first error >=10 BPM opens; first three consecutive error <10 BPM windows recover; open at record tail is right-censored"
+    },
+    "G7": {
+      "role": "hard_absolute_catastrophic_l10",
+      "formula": "candidate_L10_s <= 20 s",
+      "unit": "s"
+    }
+  },
+  "removed_from_hard_qualification": {
+    "G6": {
+      "reason": "event-dependent rise coverage is not a uniform accuracy criterion across eight scenes",
+      "historical_contract_unchanged": true,
+      "future_role": "event-triggered_dynamic_response_diagnostic"
+    }
+  },
+  "qualification": {
+    "record_formula": "all G1-I, G2, G3, G4, G5 and G7 pass",
+    "scene_mean_cannot_compensate_record_failure": true,
+    "strong_record_diagnostic": "delta_MAE <= 0.5 BPM and relative_MAE_regression <= 20 percent"
+  },
+  "selector_evaluation": {
+    "fold_definition": "within each scene leave one of three records out; train on the other two",
+    "fold_count": 24,
+    "conceptual_candidate_pool_per_fold": 300,
+    "ranking_candidate_pool": "coordinates qualified on both training records only",
+    "three_record_common_set_role": "oracle reachability and post-freeze diagnosis only",
+    "primary_selector": "historical_platform_control",
+    "diagnostic_selectors": [
+      "minimax_mae",
+      "maximin_gate_margin",
+      "agreement_then_minimax"
+    ],
+    "strict_success": "each scene 3/3 and full panel 24/24",
+    "empty_common_set_policy": "record SPACE_UNREACHABLE, keep scene in denominator, finish all folds and near-miss review",
+    "empty_training_set_policy": "record TRAINING_SET_UNREACHABLE, do not choose a least-bad coordinate, finish remaining folds"
+  },
+  "deferred_diagnostics": {
+    "rise_episode": "recorded for future algorithm development",
+    "motion_fall_episode": "recorded for future algorithm development",
+    "post_motion_fall_episode": "recorded for future algorithm development",
+    "full_7200_parameter_response_surface_analysis": "out_of_scope_for_this_stage"
+  },
+  "versioning_policy": {
+    "immutable_after_first_experiment_binding": true,
+    "retroactive_relabeling_prohibited": true,
+    "changes_require_new_contract_id": [
+      "formula",
+      "threshold",
+      "applicability",
+      "hard_or_diagnostic_role",
+      "metric_schema",
+      "evaluator",
+      "baseline_identity",
+      "algorithm_identity",
+      "selector_rule",
+      "evidence_level"
+    ]
+  }
+}

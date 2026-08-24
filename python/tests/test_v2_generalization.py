@@ -269,6 +269,87 @@ def test_generalization_analysis_tables_replay_acc_with_best_params(
     with table.open("r", encoding="utf-8-sig", newline="") as fh:
         rows = list(csv.DictReader(fh))
     assert rows[0]["klms_acc"] == "1.5"
+    assert rows[0]["hf_source_method"] == "K-LMS+H"
+    assert rows[0]["fft_source_method"] == "FFT"
+
+
+@pytest.mark.parametrize(
+    "method_lines",
+    [
+        (
+            "reset FFT,1,2,0.9,0.8\n"
+            "LMS+H,3,4,0.7,0.6\n"
+            "LMS+A,5,6,0.5,0.4\n"
+        ),
+        (
+            "LMS+A,5,6,0.5,0.4\n"
+            "LMS+H,3,4,0.7,0.6\n"
+            "reset FFT,1,2,0.9,0.8\n"
+        ),
+    ],
+)
+def test_generalization_stats_maps_reset_fft_and_exact_hf_method(
+    tmp_path: Path,
+    method_lines: str,
+) -> None:
+    from types import SimpleNamespace
+
+    from ppg_hr.v2.generalization_stats import _metrics_from_error_csv
+
+    error_csv = tmp_path / "sample-error.csv"
+    error_csv.write_text(
+        "method,total_aae,motion_aae,total_hit_rate_5bpm,motion_hit_rate_5bpm\n"
+        + method_lines,
+        encoding="utf-8",
+    )
+    record = SimpleNamespace(
+        adaptive_filter="lms",
+        reference_order_key="HF",
+        final_aae_bpm=30.0,
+        fft_aae_bpm=10.0,
+        error_csv=error_csv,
+        report_path=tmp_path / "missing-report.json",
+    )
+
+    final, fft = _metrics_from_error_csv(record)
+
+    assert final["total_aae"] == 3.0
+    assert final["motion_aae"] == 4.0
+    assert final["source_method"] == "LMS+H"
+    assert fft["total_aae"] == 1.0
+    assert fft["motion_aae"] == 2.0
+    assert fft["source_method"] == "reset FFT"
+
+
+def test_generalization_stats_does_not_guess_final_from_another_method(
+    tmp_path: Path,
+) -> None:
+    from types import SimpleNamespace
+
+    from ppg_hr.v2.generalization_stats import _metrics_from_error_csv
+
+    error_csv = tmp_path / "sample-error.csv"
+    error_csv.write_text(
+        "method,total_aae,motion_aae\n"
+        "reset FFT,1,2\n"
+        "LMS+A,5,6\n",
+        encoding="utf-8",
+    )
+    record = SimpleNamespace(
+        adaptive_filter="lms",
+        reference_order_key="HF",
+        final_aae_bpm=30.0,
+        fft_aae_bpm=10.0,
+        error_csv=error_csv,
+        report_path=tmp_path / "missing-report.json",
+    )
+
+    final, fft = _metrics_from_error_csv(record)
+
+    assert final["total_aae"] == 30.0
+    assert final["source_method"] == "summary:final_aae_bpm"
+    assert fft["total_aae"] == 1.0
+    assert fft["source_method"] == "reset FFT"
 
 def test_run_v2_generalization_builds_all_train_and_logo_folds(
     tmp_path: Path,

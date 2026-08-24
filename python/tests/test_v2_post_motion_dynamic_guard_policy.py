@@ -195,6 +195,94 @@ def test_gap_rescue_rejects_unstable_reset_fft() -> None:
     assert events == []
 
 
+def test_ready_gate_blocks_gap_rescue_until_target_is_consumable() -> None:
+    source = _source(
+        times=[100, 101, 102, 103, 104, 105, 106],
+        adaptive=[130, 128, 126, 124, 122, 120, 118],
+        fft=[90, 89, 88, 87, 86, 85, 84],
+    )
+    cfg = DynamicGuardConfig(
+        name="ready_gated_gap",
+        min_elapsed_s=0.0,
+        rescue_gap_bpm=20.0,
+        gap_rescue_windows=3,
+        gap_rescue_min_hits=2,
+        gap_rescue_fft_stable_windows=2,
+        gap_rescue_fft_stable_bpm=6.0,
+    )
+
+    blocked_mask, blocked_events = switch_mask_and_events(
+        source,
+        motion_segment={"start_s": 80.0, "end_s": 100.0},
+        config=cfg,
+        switch_target_ready=np.zeros(source.shape[0], dtype=bool),
+    )
+    ready = np.asarray([False, False, False, False, True, True, True])
+    gated_mask, gated_events = switch_mask_and_events(
+        source,
+        motion_segment={"start_s": 80.0, "end_s": 100.0},
+        config=cfg,
+        switch_target_ready=ready,
+    )
+
+    assert blocked_mask.all()
+    assert blocked_events == []
+    assert gated_events
+    assert gated_events[0].window_idx == 6
+    assert gated_mask[gated_events[0].window_idx] is np.False_
+
+
+def test_ready_gate_also_blocks_stable_crossover() -> None:
+    source = _source(
+        times=[100, 101, 102, 103, 104],
+        adaptive=[105, 104, 103, 102, 101],
+        fft=[104, 103, 102, 101, 100],
+    )
+    cfg = DynamicGuardConfig(
+        name="ready_gated_stable",
+        min_elapsed_s=0.0,
+        stable_windows=2,
+        crossover_gap_bpm=3.0,
+    )
+
+    _, events = switch_mask_and_events(
+        source,
+        motion_segment={"start_s": 80.0, "end_s": 100.0},
+        config=cfg,
+        switch_target_ready=np.zeros(source.shape[0], dtype=bool),
+    )
+
+    assert events == []
+
+
+def test_ready_gated_symmetric_gap_rescues_low_locked_final() -> None:
+    source = _source(
+        times=[100, 101, 102, 103, 104, 105],
+        adaptive=[65, 64, 63, 62, 61, 60],
+        fft=[150, 149, 148, 147, 146, 145],
+    )
+    cfg = DynamicGuardConfig(
+        name="symmetric_gap",
+        min_elapsed_s=0.0,
+        rescue_gap_bpm=20.0,
+        gap_rescue_windows=4,
+        gap_rescue_min_hits=3,
+        gap_rescue_fft_stable_windows=3,
+        gap_rescue_fft_stable_bpm=6.0,
+    )
+
+    _, events = switch_mask_and_events(
+        source,
+        motion_segment={"start_s": 80.0, "end_s": 100.0},
+        config=cfg,
+        switch_target_ready=np.ones(source.shape[0], dtype=bool),
+        symmetric_gap_rescue=True,
+    )
+
+    assert events[0].switch_reason == "gap_rescue"
+    assert events[0].hard_switch is True
+
+
 def test_low_fft_blocks_switch_even_when_gap_matches() -> None:
     source = _source(
         times=[100, 101, 102, 103, 104, 105],

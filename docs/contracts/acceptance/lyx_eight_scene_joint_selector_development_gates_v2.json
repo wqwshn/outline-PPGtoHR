@@ -1,0 +1,167 @@
+{
+  "registry_schema_version": "acceptance_contract_registry_v1",
+  "contract_id": "lyx_eight_scene_joint_selector_development_gates_v2",
+  "contract_status": "frozen_pre_execution",
+  "derived_from": "physical4d_corrected_development_gates_v2",
+  "supersedes_for_future_use": "lyx_eight_scene_joint_selector_development_gates_v1",
+  "evidence_level": "development_acceptance",
+  "claim_boundaries": {
+    "development_backtest_and_read_isolation_only": true,
+    "independent_generalization_confirmation": false,
+    "production_default_authorized": false,
+    "final_threshold_standard": false,
+    "dynamic_response_evaluated": false
+  },
+  "applicability": {
+    "subject": "LYX",
+    "scenes": [
+      "jianpan",
+      "kaihe",
+      "quanji",
+      "run",
+      "bobi",
+      "tiaosheng",
+      "woli",
+      "xiezi"
+    ],
+    "records_per_scene": 3,
+    "record_count": 24,
+    "candidate_space": "physical4d_native_rectangle_v1",
+    "coordinate_count": 300,
+    "report_schema_version": "v2",
+    "analysis_scope": "full",
+    "data_role": "revealed_development_reuse"
+  },
+  "algorithm_identity": {
+    "algorithm_preset": "lite",
+    "adaptive_filter": "lms",
+    "adaptive_reference_stage_limit": null,
+    "reference_groups_order": [
+      "HF"
+    ],
+    "dual_cascade_identity": "dual_cascade_two_hf_v1",
+    "ppg_mode": "green",
+    "ppg_input_transform": "raw_bandpass",
+    "smooth_win_len": 5,
+    "source_time_bias": 5.0,
+    "rise_candidate_lineage_enable": true,
+    "rise_confirmation_policy_id": "legacy_v1",
+    "penalty_candidate_id": "suppressed_protected_continuous_visibility_v1",
+    "production_default_status": "both_experimental_mechanisms_remain_off_by_default"
+  },
+  "metric_contract": {
+    "metric_schema_version": "lyx_eight_scene_joint_selector_output_v2",
+    "metric_schema_path": "data/experiments/lyx_eight_scene_joint_selector_threefold_20260819/output_schema_v2.json",
+    "metric_schema_sha256": "1c2656e8aea60792fbd58a81e17e36245d74ab8ce0b352b5fa793dc2fc1e7037",
+    "evaluator_path": "data/experiments/lyx_eight_scene_joint_selector_threefold_20260819/evaluator.py",
+    "evaluator_sha256": "0e944acdfacb448e421f2a109fecd9cb686f1c5f9cc4802dde8eaa69ff1947c4",
+    "evaluation_time_bias_s": 5.0,
+    "window_step_s": 1.0,
+    "error_boundaries_inclusive": true,
+    "structural_timeline_policy": "all_full_scope_output_windows_are_structurally_checked",
+    "effective_timeline_policy": "maximal_common_contiguous_candidate_baseline_raw_reference_overlap",
+    "reference_extrapolation": false,
+    "out_of_reference_output_window_role": "structural_only_not_metric_and_not_identity_failure"
+  },
+  "baseline": {
+    "baseline_id": "historical_independent_bo_final_common_bias5",
+    "role": "hard_gate_and_mae_anchor",
+    "record_count": 24,
+    "inventory_semantic_sha256": "b43060dc40bb4f6f8e71af5a3dd0a56fa6ba36853e8e8b632f9f34aeb1cef1c4",
+    "final_trajectory_preserved": true,
+    "metrics_recomputed_from_raw_reference": true,
+    "candidate_and_baseline_use_same_reference_and_time_bias": true
+  },
+  "hard_gates": {
+    "G1-I": {
+      "role": "hard_structural_identity",
+      "formula": "candidate and baseline algorithm identity, full output timeline structure, finite Final values and common effective timeline invariants pass"
+    },
+    "G2": {
+      "role": "hard_continuous_e10_duration",
+      "formula": "candidate_L10_s <= max(10 s, independent_L10_s + 2 s)",
+      "unit": "s"
+    },
+    "G3": {
+      "role": "hard_continuous_e20_duration",
+      "formula": "candidate_L20_s <= max(2 s, independent_L20_s)",
+      "unit": "s"
+    },
+    "G4": {
+      "role": "hard_engineering_mae",
+      "formula": "candidate_effective_timeline_MAE - independent_effective_timeline_MAE <= 2 BPM",
+      "unit": "BPM"
+    },
+    "G5": {
+      "role": "hard_absolute_right_censor_safety",
+      "formula": "right_censored_E10_episode_count == 0 at the final effective evaluation window",
+      "episode_definition": "first error >=10 BPM opens; first three consecutive error <10 BPM windows recover; open at effective timeline tail is right-censored"
+    },
+    "G7": {
+      "role": "hard_absolute_catastrophic_l10",
+      "formula": "candidate_L10_s <= 20 s",
+      "unit": "s"
+    }
+  },
+  "not_used_for_primary_qualification_or_decision": {
+    "old_G6": "historical_only_not_recomputed_for_7200_cells",
+    "v3_conditional_true_rise_gate": "post_freeze_top1_sensitivity_only",
+    "strong_match": "secondary_diagnostic_only",
+    "frozen_dynamic_episodes": "deferred",
+    "diagnostic_selectors": "cannot_replace_primary"
+  },
+  "qualification": {
+    "record_formula": "all G1-I, G2, G3, G4, G5 and G7 pass",
+    "scene_mean_cannot_compensate_record_failure": true,
+    "strong_record_diagnostic": "delta_MAE <= 0.5 BPM and relative_MAE_regression <= 20 percent"
+  },
+  "selector_evaluation": {
+    "fold_definition": "within each scene leave one of three records out; train on the other two",
+    "fold_count": 24,
+    "conceptual_candidate_pool_per_fold": 300,
+    "ranking_candidate_pool": "coordinates qualified on both training records only",
+    "three_record_common_set_role": "oracle reachability and post-freeze diagnosis only",
+    "primary_selector": "historical_platform_control",
+    "diagnostic_selectors": [
+      "minimax_mae",
+      "maximin_gate_margin",
+      "agreement_then_minimax"
+    ],
+    "strict_success": "each scene 3/3 and full panel 24/24",
+    "empty_common_set_policy": "record SPACE_UNREACHABLE, keep scene in denominator and finish all folds",
+    "empty_training_set_policy": "record TRAINING_SET_UNREACHABLE, do not choose a least-bad coordinate"
+  },
+  "post_freeze_top1_sensitivity": {
+    "contract": "gate_aware_full_mae_time_bias_v3",
+    "gate_contract": "multiperson_joint_screening_gate_v1",
+    "bias_candidates_s": [
+      4.0,
+      4.5,
+      5.0,
+      5.5,
+      6.0
+    ],
+    "runs_after_top1_freeze_and_holdout_reveal": true,
+    "no_top1_policy": "NOT_APPLICABLE_NO_TOP1",
+    "may_change_primary_qualification_ranking_or_decision": false,
+    "per_cell_bias_selection_prohibited": true,
+    "candidate_and_baseline_use_same_bias": true,
+    "no_gate_passing_policy": "select global common-window MAE minimum and record no_gate_passing_time_bias_candidate"
+  },
+  "versioning_policy": {
+    "immutable_after_first_experiment_binding": true,
+    "retroactive_relabeling_prohibited": true,
+    "changes_require_new_contract_id": [
+      "formula",
+      "threshold",
+      "applicability",
+      "hard_or_diagnostic_role",
+      "metric_schema",
+      "evaluator",
+      "baseline_identity",
+      "algorithm_identity",
+      "selector_rule",
+      "evidence_level"
+    ]
+  }
+}

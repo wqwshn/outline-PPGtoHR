@@ -6,7 +6,8 @@ function once per cascade stage; the strategy name (from
 
 Strategies
 ----------
-``"lms"``       normalised linear LMS, uses ``mu_base - corr/100`` as step size.
+``"lms"``       normalised linear LMS, uses
+                ``max(params.lms_mu_min, mu_base - corr/100)`` as step size.
 ``"as_lms"``    adaptive step-size LMS; starts from ``mu_base`` and updates
                 ``mu(n)`` with ``params.as_lms_rho`` under clipping.
 ``"klms"``      Gaussian-kernel LMS (QKLMS); uses ``params.klms_step_size``
@@ -57,7 +58,8 @@ def apply_adaptive_cascade(
 ) -> np.ndarray:
     """Run one cascade stage and return the new filtered signal ``e``."""
     if strategy == "lms":
-        e, _, _ = lms_filter(mu_base - corr / 100.0, order, K, u, d)
+        mu = max(params.lms_mu_min, mu_base - corr / 100.0)
+        e, _, _ = lms_filter(mu, order, K, u, d)
         return e
     if strategy == "as_lms":
         e, _, _ = as_lms_filter(

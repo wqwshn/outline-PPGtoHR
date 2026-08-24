@@ -10,51 +10,147 @@ from .algorithm_presets import (
     normalise_v2_algorithm_preset,
     v2_tracking_policy_for_preset,
 )
+from .low_reacquire_candidates import (
+    LowReacquireCandidate,
+    low_reacquire_candidate_by_id,
+)
+from .penalty_candidates import penalty_candidate_by_id
 from .post_motion_dynamic_guard_policy import (
     DynamicGuardConfig,
     dynamic_guard_config_from_run_config,
 )
+from .recovery_candidates import recovery_candidate_by_id
 from .types import V2RunConfig
 
 
 @dataclass(frozen=True)
 class V2HighLockEscapePolicy:
     enabled: bool
+    candidate_id: str
+    gate_mode: str
     confirm_windows: int
     cooldown_windows: int
+    challenge_timeout_windows: int
+    reacquire_timeout_windows: int
     min_gap_bpm: float
+    relative_gap_ratio: float
     min_amp_ratio: float
-    candidate_min_bpm: float
+    candidate_min_bpm: float | None
     candidate_stable_bpm: float
     penalty_exclusion_bpm: float
     down_step_bpm: float
     up_step_bpm: float
+    rise_guard_bpm_per_window: float | None
+    retain_target_on_evidence_loss: bool
+    allow_owned_penalty_support: bool
+    prefer_outside_penalty: bool
+    allow_penalty_acquire: bool
+    allow_penalty_reacquire: bool
+    require_high_lock_risk: bool
 
-    def as_solver_params(self) -> dict[str, float | int]:
+    def as_solver_params(self) -> dict[str, float | int | str]:
         return {
+            "candidate_id": self.candidate_id,
+            "gate_mode": self.gate_mode,
             "confirm_windows": int(self.confirm_windows),
             "cooldown_windows": int(self.cooldown_windows),
+            "challenge_timeout_windows": int(self.challenge_timeout_windows),
+            "reacquire_timeout_windows": int(self.reacquire_timeout_windows),
             "min_gap_hz": float(self.min_gap_bpm) / 60.0,
+            "relative_gap_ratio": float(self.relative_gap_ratio),
             "min_amp_ratio": float(self.min_amp_ratio),
-            "candidate_min_hz": float(self.candidate_min_bpm) / 60.0,
+            "candidate_min_hz": (
+                0.0
+                if self.candidate_min_bpm is None
+                else float(self.candidate_min_bpm) / 60.0
+            ),
             "candidate_stable_hz": float(self.candidate_stable_bpm) / 60.0,
             "penalty_exclusion_hz": float(self.penalty_exclusion_bpm) / 60.0,
             "down_step_hz": float(self.down_step_bpm) / 60.0,
             "up_step_hz": float(self.up_step_bpm) / 60.0,
+            "rise_guard_hz_per_window": (
+                -1.0
+                if self.rise_guard_bpm_per_window is None
+                else float(self.rise_guard_bpm_per_window) / 60.0
+            ),
+            "retain_target_on_evidence_loss": bool(
+                self.retain_target_on_evidence_loss
+            ),
+            "allow_owned_penalty_support": bool(
+                self.allow_owned_penalty_support
+            ),
+            "prefer_outside_penalty": bool(self.prefer_outside_penalty),
+            "allow_penalty_acquire": bool(self.allow_penalty_acquire),
+            "allow_penalty_reacquire": bool(self.allow_penalty_reacquire),
+            "require_high_lock_risk": bool(self.require_high_lock_risk),
         }
 
     def metadata(self, *, trigger_count: int) -> dict[str, Any]:
         return {
             "enabled": bool(self.enabled),
+            "candidate_id": self.candidate_id,
+            "gate_mode": self.gate_mode,
             "confirm_windows": int(self.confirm_windows),
             "cooldown_windows": int(self.cooldown_windows),
+            "challenge_timeout_windows": int(self.challenge_timeout_windows),
+            "reacquire_timeout_windows": int(self.reacquire_timeout_windows),
             "min_gap_bpm": float(self.min_gap_bpm),
+            "relative_gap_ratio": float(self.relative_gap_ratio),
             "min_amp_ratio": float(self.min_amp_ratio),
-            "candidate_min_bpm": float(self.candidate_min_bpm),
+            "candidate_min_bpm": self.candidate_min_bpm,
             "candidate_stable_bpm": float(self.candidate_stable_bpm),
             "penalty_exclusion_bpm": float(self.penalty_exclusion_bpm),
             "down_step_bpm": float(self.down_step_bpm),
             "up_step_bpm": float(self.up_step_bpm),
+            "rise_guard_bpm_per_window": self.rise_guard_bpm_per_window,
+            "retain_target_on_evidence_loss": bool(
+                self.retain_target_on_evidence_loss
+            ),
+            "allow_owned_penalty_support": bool(
+                self.allow_owned_penalty_support
+            ),
+            "prefer_outside_penalty": bool(self.prefer_outside_penalty),
+            "allow_penalty_acquire": bool(self.allow_penalty_acquire),
+            "allow_penalty_reacquire": bool(self.allow_penalty_reacquire),
+            "require_high_lock_risk": bool(self.require_high_lock_risk),
+            "trigger_count": int(trigger_count),
+        }
+
+
+@dataclass(frozen=True)
+class V2MotionPenaltyPolicy:
+    enabled: bool
+    penalty_id: str
+    width_mode: str
+    corridor_mode: str
+    candidate_visibility_mode: str = "hard_exclusion"
+
+    def metadata(self) -> dict[str, Any]:
+        payload = {
+            "enabled": bool(self.enabled),
+            "penalty_id": self.penalty_id,
+            "width_mode": self.width_mode,
+            "corridor_mode": self.corridor_mode,
+        }
+        if self.candidate_visibility_mode != "hard_exclusion":
+            payload["candidate_visibility_mode"] = self.candidate_visibility_mode
+        return payload
+
+
+@dataclass(frozen=True)
+class V2LowReacquirePolicy:
+    candidate: LowReacquireCandidate
+
+    @property
+    def candidate_id(self) -> str:
+        return self.candidate.candidate_id
+
+    def as_solver_params(self) -> dict[str, str | bool]:
+        return self.candidate.as_solver_params()
+
+    def metadata(self, *, trigger_count: int) -> dict[str, Any]:
+        return {
+            **self.as_solver_params(),
             "trigger_count": int(trigger_count),
         }
 
@@ -157,6 +253,8 @@ class V2PostprocessDynamicsPolicy:
 class V2RuntimePolicy:
     algorithm_preset: str
     tracking: V2TrackingPolicy
+    motion_penalty: V2MotionPenaltyPolicy
+    low_reacquire: V2LowReacquirePolicy
     high_lock_escape: V2HighLockEscapePolicy
     post_motion_reacquire: V2PostMotionReacquirePolicy
     post_motion_dynamic_guard: V2PostMotionDynamicGuardPolicy
@@ -165,20 +263,140 @@ class V2RuntimePolicy:
 
 def runtime_policy_from_config(cfg: V2RunConfig) -> V2RuntimePolicy:
     algorithm_preset = normalise_v2_algorithm_preset(cfg.algorithm_preset)
+    low_reacquire_candidate = low_reacquire_candidate_by_id(
+        cfg.low_reacquire_candidate_id
+    )
+    recovery_candidate = (
+        None
+        if cfg.recovery_candidate_id is None
+        else recovery_candidate_by_id(cfg.recovery_candidate_id)
+    )
+    penalty_candidate = (
+        None
+        if cfg.penalty_candidate_id is None
+        else penalty_candidate_by_id(cfg.penalty_candidate_id)
+    )
+    constants = (
+        {}
+        if recovery_candidate is None
+        else dict(recovery_candidate.constants)
+    )
     return V2RuntimePolicy(
         algorithm_preset=algorithm_preset,
         tracking=v2_tracking_policy_for_preset(algorithm_preset),
+        motion_penalty=V2MotionPenaltyPolicy(
+            enabled=bool(cfg.spec_penalty_enable),
+            penalty_id=(
+                "legacy_config"
+                if penalty_candidate is None
+                else penalty_candidate.penalty_id
+            ),
+            width_mode=(
+                "configured"
+                if penalty_candidate is None
+                else str(penalty_candidate.constants["width_mode"])
+            ),
+            corridor_mode=(
+                "single_previous_track"
+                if penalty_candidate is None
+                else str(penalty_candidate.constants["corridor_mode"])
+            ),
+            candidate_visibility_mode=(
+                "hard_exclusion"
+                if penalty_candidate is None
+                else penalty_candidate.candidate_visibility_mode.value
+            ),
+        ),
+        low_reacquire=V2LowReacquirePolicy(
+            candidate=low_reacquire_candidate,
+        ),
         high_lock_escape=V2HighLockEscapePolicy(
             enabled=bool(cfg.high_lock_escape_enable),
-            confirm_windows=int(cfg.high_lock_escape_confirm_windows),
-            cooldown_windows=int(cfg.high_lock_escape_cooldown_windows),
-            min_gap_bpm=float(cfg.high_lock_escape_min_gap_bpm),
-            min_amp_ratio=float(cfg.high_lock_escape_min_amp_ratio),
-            candidate_min_bpm=float(cfg.high_lock_escape_candidate_min_bpm),
-            candidate_stable_bpm=float(cfg.high_lock_escape_candidate_stable_bpm),
-            penalty_exclusion_bpm=float(cfg.high_lock_escape_penalty_exclusion_bpm),
-            down_step_bpm=float(cfg.high_lock_escape_down_step_bpm),
-            up_step_bpm=float(cfg.high_lock_escape_up_step_bpm),
+            candidate_id=(
+                "legacy_config"
+                if recovery_candidate is None
+                else recovery_candidate.candidate_id
+            ),
+            gate_mode=(
+                "fixed_floor"
+                if recovery_candidate is None
+                else recovery_candidate.high_lock_gate_mode
+            ),
+            confirm_windows=int(
+                constants.get("confirm_windows", cfg.high_lock_escape_confirm_windows)
+            ),
+            cooldown_windows=int(
+                constants.get("cooldown_windows", cfg.high_lock_escape_cooldown_windows)
+            ),
+            challenge_timeout_windows=int(
+                constants.get(
+                    "challenge_timeout_windows",
+                    0,
+                )
+            ),
+            reacquire_timeout_windows=int(
+                constants.get("reacquire_timeout_windows", 7)
+            ),
+            min_gap_bpm=float(
+                constants.get("min_gap_bpm", cfg.high_lock_escape_min_gap_bpm)
+            ),
+            relative_gap_ratio=float(constants.get("relative_gap_ratio", 0.0)),
+            min_amp_ratio=float(
+                constants.get("min_amp_ratio", cfg.high_lock_escape_min_amp_ratio)
+            ),
+            candidate_min_bpm=(
+                float(cfg.high_lock_escape_candidate_min_bpm)
+                if recovery_candidate is None
+                else (
+                    None
+                    if constants.get("candidate_min_bpm") is None
+                    else float(constants["candidate_min_bpm"])
+                )
+            ),
+            candidate_stable_bpm=float(
+                constants.get(
+                    "candidate_stable_bpm",
+                    cfg.high_lock_escape_candidate_stable_bpm,
+                )
+            ),
+            penalty_exclusion_bpm=float(
+                constants.get(
+                    "penalty_exclusion_bpm",
+                    cfg.high_lock_escape_penalty_exclusion_bpm,
+                )
+            ),
+            down_step_bpm=float(
+                constants.get("down_step_bpm", cfg.high_lock_escape_down_step_bpm)
+            ),
+            up_step_bpm=float(
+                constants.get("up_step_bpm", cfg.high_lock_escape_up_step_bpm)
+            ),
+            rise_guard_bpm_per_window=(
+                None
+                if constants.get("rise_guard_bpm_per_window") is None
+                else float(constants["rise_guard_bpm_per_window"])
+            ),
+            retain_target_on_evidence_loss=bool(
+                constants.get(
+                    "retain_target_on_evidence_loss",
+                    recovery_candidate is None,
+                )
+            ),
+            allow_owned_penalty_support=bool(
+                constants.get("allow_owned_penalty_support", False)
+            ),
+            prefer_outside_penalty=bool(
+                constants.get("prefer_outside_penalty", True)
+            ),
+            allow_penalty_acquire=bool(
+                constants.get("allow_penalty_acquire", False)
+            ),
+            allow_penalty_reacquire=bool(
+                constants.get("allow_penalty_reacquire", False)
+            ),
+            require_high_lock_risk=bool(
+                constants.get("require_high_lock_risk", True)
+            ),
         ),
         post_motion_reacquire=V2PostMotionReacquirePolicy(
             enabled=bool(cfg.post_motion_reacquire_enable),

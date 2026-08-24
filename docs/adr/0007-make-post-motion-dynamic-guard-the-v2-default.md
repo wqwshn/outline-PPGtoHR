@@ -1,6 +1,6 @@
 # 将运动后动态保护窗设为 v2 默认机制
 
-状态：Accepted。
+Status: superseded by ADR-0030
 
 v2 Python 心率算法在整段分析且检测到运动段时，默认采用带 gap rescue 的运动后动态保护窗作为运动后链路切换语义。默认策略使用此前已验证的 `gap20_c3` 候选：稳定交汇是常规回切路径，持续高差 rescue 是 adaptive 链路高锁失败时的例外回切路径。
 

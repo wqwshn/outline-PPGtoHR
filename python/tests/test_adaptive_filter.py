@@ -19,7 +19,7 @@ def _signals(n: int = 200, seed: int = 0) -> tuple[np.ndarray, np.ndarray]:
 
 
 def test_lms_dispatch_bit_for_bit() -> None:
-    """apply_adaptive_cascade('lms', ...) must match lms_filter(mu_base - corr/100, ...)."""
+    """Positive corrected LMS steps remain bit-for-bit compatible."""
     u, d = _signals()
     params = SolverParams(adaptive_filter="lms", lms_mu_base=0.01)
     corr = 0.3
@@ -28,6 +28,29 @@ def test_lms_dispatch_bit_for_bit() -> None:
         order=5, K=1, u=u, d=d, params=params,
     )
     expected, _, _ = lms_filter(0.01 - corr / 100.0, 5, 1, u, d)
+    np.testing.assert_array_equal(out, expected)
+
+
+def test_lms_dispatch_clamps_non_positive_step_to_configured_floor() -> None:
+    u, d = _signals()
+    params = SolverParams(
+        adaptive_filter="lms",
+        lms_mu_base=0.006,
+        lms_mu_min=0.002,
+    )
+
+    out = apply_adaptive_cascade(
+        strategy="lms",
+        mu_base=0.006,
+        corr=0.8,
+        order=5,
+        K=1,
+        u=u,
+        d=d,
+        params=params,
+    )
+
+    expected, _, _ = lms_filter(0.002, 5, 1, u, d)
     np.testing.assert_array_equal(out, expected)
 
 

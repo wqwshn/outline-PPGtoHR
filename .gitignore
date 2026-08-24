@@ -1,5 +1,23 @@
-# 原始数据目录
-data*/
+# 原始数据、实验数据与派生结果只保存在本地，禁止进入远端历史
+/data/
+/data*/
+/docs/reports/
+/figures/
+*.csv
+*.tsv
+*.parquet
+*.feather
+*.arrow
+*.npy
+*.npz
+*.mat
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.joblib
+*.xlsx
+*.xls
 
 # MATLAB 临时文件
 *.asv
@@ -10,6 +28,7 @@ html/
 # 编辑器/IDE 与 Claude/Cursor 工作区缓存
 .claude/
 .codex-home/
+.codex-tmp/
 .cursor/
 .superpowers/
 .vscode/
@@ -27,7 +46,14 @@ build/
 dist/
 .pytest_cache/
 .pytest_tmp/
+.pytest_tmp_*/
+pytest_tmp_*/
 pytest_run_*/
+.codex-tmp/
+/.t/
+/.t_*/
+docs/reports/assets/**/_preview.png
+docs/reports/assets/**/_grayscale.png
 .mypy_cache/
 .ruff_cache/
 .coverage
