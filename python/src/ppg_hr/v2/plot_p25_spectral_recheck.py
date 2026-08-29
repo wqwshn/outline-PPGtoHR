@@ -12,6 +12,7 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 
+from ..scene_nomenclature import scene_display_name
 from .phase2_experiment_io import file_sha256
 from .recovery_contracts import canonical_sha256
 
@@ -35,12 +36,7 @@ _RECORDS = (
     "xiezi4_LYX_0708",
 )
 _SCENES = ("jianpan", "xiezi", "run", "kaihe")
-_SCENE_LABELS = {
-    "jianpan": "Typing",
-    "xiezi": "Writing",
-    "run": "Running",
-    "kaihe": "Jumping jacks",
-}
+_SCENE_LABELS = {scene: scene_display_name(scene) for scene in _SCENES}
 _SCENE_COLORS = {
     "jianpan": "#4C78A8",
     "xiezi": "#72B7B2",

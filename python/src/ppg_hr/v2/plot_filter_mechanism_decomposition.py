@@ -15,6 +15,7 @@ from matplotlib.colors import BoundaryNorm, ListedColormap
 from matplotlib.lines import Line2D
 from PIL import Image
 
+from ..scene_nomenclature import scene_display_name
 from .phase2_experiment_io import file_sha256
 from .recovery_contracts import canonical_sha256
 
@@ -33,12 +34,7 @@ _RECORDS = (
     "xiezi4_LYX_0708",
 )
 _SCENES = ("jianpan", "xiezi", "run", "kaihe")
-_SCENE_LABELS = {
-    "jianpan": "Typing",
-    "xiezi": "Writing",
-    "run": "Running",
-    "kaihe": "Jumping jacks",
-}
+_SCENE_LABELS = {scene: scene_display_name(scene) for scene in _SCENES}
 _SCENE_MARKERS = {
     "jianpan": "o",
     "xiezi": "s",

@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.lines import Line2D
 
+from ..scene_nomenclature import scene_display_name
 from .phase2_experiment_io import atomic_write_json, read_json
 from .recovery_contracts import canonical_sha256
 
@@ -41,12 +42,7 @@ _LANE_COLORS = {
     "legacy_raw_vs_zero_update_lms": "#56B4E9",
     "same_scale_zero_update_lms": "#E69F00",
 }
-_SCENE_LABELS = {
-    "xiezi": "写字",
-    "jianpan": "敲键盘",
-    "run": "跑步",
-    "kaihe": "开合跳",
-}
+_SCENE_LABELS = {scene: scene_display_name(scene) for scene in _EXPECTED_SCENE_COUNTS}
 _SCENE_MARKERS = {
     "xiezi": "o",
     "jianpan": "s",

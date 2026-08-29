@@ -232,6 +232,10 @@ _Avoid_: 合并平均通过, 诊断规则事后替换主规则, 二十四个独�
 在 LYX 同一个体的既有与后验筛选记录上，冻结当前算法、选择器、Physical4D 空间、固定五秒六门、获选开发面板和证据链，并停止继续针对同一候选池调优的阶段结论。它同时保留原始固定面板与后验开发面板的结果谱系；未来未见记录、跨个体或前瞻采集研究必须另建实验身份，不能把本阶段收尾解释为独立泛化或生产放行。
 _Avoid_: 泛化研究全部完成, 独立验证通过, 24/24 覆盖原始固定面板结果, 在同一实验身份继续调参, 生产算法定稿
 
+**八场景规范名**:
+历史 token `xiezi/tiaosheng/woli/jianpan/run/kaihe/bobi/quanji` 只保留为原始实验身份；面向算法接口与读者的规范名称依次为 Handwriting (HW)、Rope Skipping (RS)、Handgrip (HG)、Typing (TYP)、Running (RUN)、Jumping Jacks (JJ)、Burpees (BUR) 和 Punching (PCH)。
+_Avoid_: Xiezi, Tiaosheng, Woli, Jianpan, Kaihe, Bobi, Quanji, Writing, Keyboard, Grip strength, Boxing, 追溯重命名原始记录
+
 **三折后全三条开发拟合**:
 达到三折留出预测通过后，才允许使用冻结的选择规则读取三条开发记录并选出一个最终场景档位。该步骤只服务未来固定应用，不因三折坐标是否一致而改变通过结论，也不增加三折或泛化证据。
 _Avoid_: 全三条拟合冒充留出验证, 根据三折结果改选择规则, 要求三折同坐标才产出档位, 无审计场景参数晋级

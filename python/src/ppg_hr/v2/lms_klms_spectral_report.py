@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from ..scene_nomenclature import scene_display_name
 from .lms_klms_gate_factorial import CONDITIONS
 from .output_paths import prepare_output_dir
 
@@ -32,10 +33,7 @@ CONDITION_LABELS = {
     "klms_gate_full": "KLMS full",
 }
 SCENARIO_LABELS = {
-    "xiezi": "Writing",
-    "jianpan": "Keyboard",
-    "woli": "Grip",
-    "quanji": "Boxing",
+    scene: scene_display_name(scene) for scene in ("xiezi", "jianpan", "woli", "quanji")
 }
 
 
