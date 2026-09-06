@@ -1,0 +1,36 @@
+{
+  "schema_id": "cross_subject_multirecord_hf_loso_contract_v1",
+  "experiment_id": "cross_subject_multirecord_hf_loso_v1",
+  "claim_boundary": "retrospective_multirecord_development_not_independent_external_validation",
+  "time_bias_s": 5.0,
+  "expected_record_count": 143,
+  "expected_physical_subject_count": 7,
+  "expected_scene_count": 8,
+  "expected_fold_count": 48,
+  "expected_coordinate_count": 300,
+  "expected_hf_call_count": 42900,
+  "standard_scene_roster": ["CGX", "LYX", "LZJ", "PJY", "QYC", "TS"],
+  "run_scene_roster": ["CGX", "HB", "LYX", "LZJ", "PJY", "TS"],
+  "subject_record_counts": {
+    "CGX": 24,
+    "HB": 3,
+    "LYX": 24,
+    "LZJ": 24,
+    "PJY": 24,
+    "QYC": 20,
+    "TS": 24
+  },
+  "pjy_bobi_labels": ["bobi1", "bobi3", "bobi4"],
+  "baseline_selection_rule": "newest_lexicographic_compatible_batch",
+  "baseline_fixed_time_policy": "recompute_metrics_from_frozen_hr_and_raw_reference_without_solver_rerun",
+  "p1_coordinate_index": 0,
+  "p1_sentinel_record_ids": [
+    "xiezi3_CGX_0710",
+    "run1_HB_0711",
+    "bobi2_LYX_0519",
+    "run3_LZJ_0711",
+    "bobi1_PJY_0714",
+    "bobi1_QYC_0615",
+    "xiezi3_TS_0709"
+  ]
+}

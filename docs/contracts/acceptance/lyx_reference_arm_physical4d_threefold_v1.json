@@ -1,0 +1,28 @@
+{
+  "schema_id": "lyx_reference_arm_physical4d_threefold_contract_v1",
+  "experiment_id": "lyx_reference_arm_physical4d_threefold_20260828",
+  "claim_boundary": "posthoc_curated_LYX_reference_arm_comparison_not_independent_validation",
+  "source_commit": "38393d9b193517860db6e8b4cc741e4bacdee174",
+  "source_final_rows_sha256": "503c9d7d6eea8af2c57c7bc377393dfe7b3588024ffd68e5e488d1caa182960b",
+  "routes": {
+    "HF": ["HF"],
+    "ACC": ["ACC"],
+    "HF_ACC": ["HF", "ACC"]
+  },
+  "time_bias_s": 5.0,
+  "coordinate_axes": {
+    "fs_target_hz": [25, 50, 100],
+    "memory_ms": [40, 80, 120, 160, 200],
+    "mu_base": [0.006, 0.008, 0.01, 0.012, 0.016],
+    "exclusion_half_width_bpm": [3, 6, 12, 18]
+  },
+  "expected_record_count": 24,
+  "expected_scene_count": 8,
+  "expected_hf_cell_count": 7200,
+  "expected_new_cell_count": 14400,
+  "selector_key": [
+    "worst_train_mae_bpm",
+    "mean_train_mae_bpm",
+    "coordinate_index"
+  ]
+}

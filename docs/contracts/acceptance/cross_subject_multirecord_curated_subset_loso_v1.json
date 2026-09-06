@@ -1,0 +1,92 @@
+{
+  "schema_id": "cross_subject_multirecord_curated_subset_loso_contract_v1",
+  "experiment_id": "cross_subject_multirecord_curated_subset_loso_v1",
+  "claim_boundary": "posthoc_revealed_balanced_subset_sensitivity_not_independent_external_validation",
+  "hf_parent_experiment_id": "cross_subject_multirecord_hf_loso_v1",
+  "acc_parent_experiment_id": "cross_subject_multirecord_acc_independent_physical4d_v1",
+  "optional_matched_parent_experiment_id": "cross_subject_multirecord_hf_acc_matched_minimax_v1",
+  "expected_record_count": 143,
+  "expected_fold_count": 48,
+  "expected_coordinate_count": 300,
+  "expected_parent_cell_count": 42900,
+  "expected_scene_count": 8,
+  "hf_selection_rule_id": "subject_balanced_lexicographic_physical4d_v1",
+  "acc_selection_rule_id": "subject_balanced_acc_mae_minimax_v1",
+  "screening_information_state": "posthoc_revealed",
+  "record_candidate_rule": {
+    "eligible_cell_record_count": 3,
+    "max_candidates_per_subject_scene_cell": 1,
+    "difficulty_order": [
+      "qualified_coordinate_count_ascending",
+      "median_mae_bpm_descending",
+      "minimum_mae_bpm_descending",
+      "record_id_ascending"
+    ]
+  },
+  "subject_candidate_rule": {
+    "difficulty_order": [
+      "minimum_qualified_coordinate_count_ascending",
+      "mean_qualified_coordinate_count_ascending",
+      "maximum_median_mae_bpm_descending",
+      "mean_median_mae_bpm_descending",
+      "maximum_minimum_mae_bpm_descending",
+      "mean_minimum_mae_bpm_descending",
+      "physical_subject_id_ascending"
+    ]
+  },
+  "record_panel_levels": [
+    {
+      "panel_id": "reachability_record_r135",
+      "deletions_per_scene": 1,
+      "expected_retained_record_count": 135,
+      "expected_fold_count": 48,
+      "subject_quotas": {"CGX": 2, "LYX": 2, "LZJ": 1, "PJY": 1, "TS": 1, "QYC": 1, "HB": 0}
+    },
+    {
+      "panel_id": "reachability_record_r127",
+      "deletions_per_scene": 2,
+      "expected_retained_record_count": 127,
+      "expected_fold_count": 48,
+      "subject_quotas": {"CGX": 3, "LYX": 3, "LZJ": 3, "PJY": 3, "TS": 2, "QYC": 2, "HB": 0}
+    },
+    {
+      "panel_id": "reachability_record_r119",
+      "deletions_per_scene": 3,
+      "expected_retained_record_count": 119,
+      "expected_fold_count": 48,
+      "subject_quotas": {"CGX": 4, "LYX": 4, "LZJ": 4, "PJY": 4, "TS": 4, "QYC": 3, "HB": 1}
+    },
+    {
+      "panel_id": "reachability_record_r111",
+      "deletions_per_scene": 4,
+      "expected_retained_record_count": 111,
+      "expected_fold_count": 48,
+      "subject_quotas": {"CGX": 6, "LYX": 6, "LZJ": 5, "PJY": 5, "TS": 5, "QYC": 4, "HB": 1}
+    }
+  ],
+  "subject_panel_constraints": {
+    "panel_id": "reachability_subject_s5",
+    "expected_subjects_per_scene": 5,
+    "expected_fold_count": 40,
+    "expected_retained_record_counts": [119, 120],
+    "subject_minimums": {"CGX": 1, "LYX": 1, "LZJ": 1, "PJY": 1, "TS": 1, "QYC": 1, "HB": 0},
+    "subject_maximums": {"CGX": 2, "LYX": 2, "LZJ": 2, "PJY": 2, "TS": 2, "QYC": 1, "HB": 0},
+    "common_subjects_with_two_excluded_scenes": 2
+  },
+  "optimistic_panels": [
+    {
+      "panel_id": "holdout_upper_record_r119",
+      "construction": "same_constraints_as_reachability_record_r119_ranked_by_parent_holdout_gap"
+    },
+    {
+      "panel_id": "holdout_upper_subject_s5",
+      "construction": "same_constraints_as_reachability_subject_s5_ranked_by_parent_fold_holdout_gap"
+    }
+  ],
+  "hard_stops": [
+    "all_selections_frozen_before_curated_holdout_reveal",
+    "no_parent_response_surface_recomputation",
+    "no_inference_or_significance_tests",
+    "experiment_observation_data_remain_local"
+  ]
+}

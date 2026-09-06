@@ -1,0 +1,33 @@
+{
+  "schema_id": "cross_subject_multirecord_acc_independent_contract_v1",
+  "experiment_id": "cross_subject_multirecord_acc_independent_physical4d_v1",
+  "parent_experiment_id": "cross_subject_multirecord_hf_loso_v1",
+  "claim_boundary": "retrospective_multirecord_development_comparison_not_independent_external_validation",
+  "route_id": "ACC",
+  "reference_groups_order": ["ACC"],
+  "time_bias_s": 5.0,
+  "selection_rule_id": "subject_balanced_acc_mae_minimax_v1",
+  "expected_record_count": 143,
+  "expected_physical_subject_count": 7,
+  "expected_scene_count": 8,
+  "expected_fold_count": 48,
+  "expected_coordinate_count": 300,
+  "expected_acc_call_count": 42900,
+  "p1_coordinate_index": 0,
+  "p1_sentinel_record_ids": [
+    "xiezi3_CGX_0710",
+    "run1_HB_0711",
+    "bobi2_LYX_0519",
+    "run3_LZJ_0711",
+    "bobi1_PJY_0714",
+    "bobi1_QYC_0615",
+    "xiezi3_TS_0709"
+  ],
+  "forbidden_extensions": [
+    "HF_ACC",
+    "acc_time_bias_selection",
+    "acc_six_gate_selection",
+    "performance_conditioned_record_exclusion",
+    "physical4d_expansion"
+  ]
+}

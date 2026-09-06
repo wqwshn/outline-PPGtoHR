@@ -1,0 +1,211 @@
+{
+  "schema_id": "cross_subject_multirecord_d24_handgrip_blind_composition_contract_v1",
+  "experiment_id": "cross_subject_multirecord_d24_handgrip_blind_composition_v1",
+  "status": "approved_for_implementation",
+  "evidence_level": "retrospective_development_not_independent_validation",
+  "scene": {
+    "canonical_name": "Handgrip",
+    "canonical_code": "HG",
+    "historical_token": "woli"
+  },
+  "parent_experiments": {
+    "hf": "cross_subject_multirecord_hf_loso_optimization_20260831_v4",
+    "hf_acc": "cross_subject_multirecord_d24_hf_acc_analysis_20260831_v1"
+  },
+  "candidate_stages": [
+    {
+      "stage_id": "d24_15_primary",
+      "training_candidate_count": 15,
+      "evaluation_record_count": 15,
+      "role": "primary"
+    },
+    {
+      "stage_id": "d24_18_fallback",
+      "training_candidate_count": 18,
+      "evaluation_record_count": 15,
+      "role": "run_only_if_primary_fails",
+      "added_training_candidate_ids": [
+        "woli3_CGX_0710",
+        "woli3_PJY_0714",
+        "woli3_TS_0709"
+      ]
+    }
+  ],
+  "locked_challenge_record_ids": [
+    "woli2_LYX_0708",
+    "woli2_LZJ_0711"
+  ],
+  "fold_contract": {
+    "fold_count": 6,
+    "grouping_unit": "physical_subject_id",
+    "training_subject_count": 5,
+    "holdout_subject_count": 1,
+    "holdout_evaluation": "all_d24_handgrip_records_for_subject",
+    "feature_fit_scope": "training_subjects_only",
+    "all_fold_cores_and_coordinates_frozen_before_mae_reveal": true
+  },
+  "frozen_algorithm_contract": {
+    "coordinate_count": 300,
+    "evaluation_time_bias_s": 5.0,
+    "hf_selection_rule_id": "subject_balanced_lexicographic_physical4d_v1",
+    "acc_selection_rule_id": "subject_balanced_acc_mae_minimax_v1",
+    "shared_training_core_between_routes": true,
+    "solver_changes_allowed": false,
+    "coordinate_space_changes_allowed": false
+  },
+  "signal_fingerprint": {
+    "feature_contract_id": "handgrip_no_hr_signal_fingerprint_v1",
+    "sampling_rate_hz": 100,
+    "filter_order": 4,
+    "filter_phase": "zero_phase",
+    "bands_hz": {
+      "hf_ppg_algorithm": [0.5, 5.0],
+      "hf_ppg_interface_slow": [0.05, 0.5],
+      "acc_tremor": [4.0, 12.0],
+      "acc_dynamic_denominator": [0.5, 12.0]
+    },
+    "feature_classes": [
+      {
+        "class_id": "hf_interface_baseline",
+        "components": [
+          "hf1_slow_p95_minus_p5_over_raw_iqr",
+          "hf2_slow_p95_minus_p5_over_raw_iqr"
+        ]
+      },
+      {
+        "class_id": "acc_tremor",
+        "components": [
+          "acc_xyz_4_12hz_rms_over_0_5_12hz_rms"
+        ]
+      },
+      {
+        "class_id": "hf_relative_acc_ppg_artifact_response",
+        "components": [
+          "algorithm_band_windowed_max_abs_corr_hf_minus_acc",
+          "slow_band_max_abs_corr_hf_minus_acc"
+        ]
+      },
+      {
+        "class_id": "post_motion_hf_recovery",
+        "components": [
+          "median_capped_recovery_s_over_30",
+          "right_censored_event_fraction"
+        ],
+        "pre_motion_baseline_s": 10,
+        "recovery_confirmation_s": 3,
+        "recovery_band_mad_multiplier": 1.5,
+        "observation_cap_s": 30
+      },
+      {
+        "class_id": "artifact_persistence_bandwidth",
+        "components": [
+          "hf_slow_envelope_lag1_autocorrelation",
+          "hf_slow_90pct_power_bandwidth_over_0_45hz"
+        ]
+      },
+      {
+        "class_id": "dual_hf_consistency",
+        "components": [
+          "hf1_hf2_slow_max_abs_corr_within_1s",
+          "hf_slow_rms_min_over_max"
+        ]
+      }
+    ],
+    "absolute_mv_or_g_used_for_grouping": false,
+    "pca_or_automatic_feature_selection_allowed": false,
+    "feature_class_weights": "equal",
+    "within_class_distance": "root_mean_square_of_component_differences",
+    "between_class_distance": "root_mean_square_of_six_class_distances"
+  },
+  "validity_and_time_stability": {
+    "invalid_sample_policy": "local_interpolation_for_filtering_then_exclude_from_aggregation_and_audit_count",
+    "primary_blocks": "four_equal_contiguous_time_blocks",
+    "primary_resamples": "full_plus_four_leave_one_block_out",
+    "sensitivity_blocks": "six_nonoverlapping_30_second_blocks",
+    "sensitivity_can_replace_primary": false,
+    "recovery_feature_scope": "full_record_events_fixed_across_primary_resamples",
+    "sixty_second_blocks_allowed_for_primary_decision": false
+  },
+  "fold_local_scaling": {
+    "fit_scope": "training_records_only_per_fold_and_resample",
+    "continuous_center": "median",
+    "continuous_scale": "iqr",
+    "zero_iqr_fallback": "1.4826_times_mad",
+    "zero_fallback_scale_policy": "component_contributes_zero",
+    "bounded_recovery_components": "retain_zero_to_one_scale"
+  },
+  "grouping": {
+    "rule_id": "fold_local_stable_agglomerative_representative_v1",
+    "record_order": "record_id_ascending",
+    "algorithm": "agglomerative_average_linkage",
+    "metric": "precomputed_equal_feature_class_distance",
+    "candidate_cluster_counts": [2, 3],
+    "fallback_cluster_count": 1,
+    "candidate_acceptance": {
+      "all_five_silhouettes_strictly_greater_than": 0.0,
+      "median_silhouette_at_least": 0.25,
+      "median_pairwise_ari_at_least": 0.8,
+      "minimum_pairwise_ari_at_least": 0.5
+    },
+    "both_candidates_pass_tiebreak": [
+      "higher_median_silhouette",
+      "lower_cluster_count"
+    ],
+    "fallback_policy": "retain_all_training_records",
+    "common_pattern_minimum_distinct_subjects": 2,
+    "single_subject_cluster_role": "valid_rare_pattern_retain_all_records",
+    "cluster_center": "medoid_minimum_total_distance_then_record_id",
+    "within_subject_common_pattern_representative": "nearest_to_medoid_then_record_id",
+    "maximum_records_per_subject": null,
+    "minimum_records_per_training_subject": 1
+  },
+  "baseline_binding": {
+    "local_experiment_id": "cross_subject_multirecord_d24_handgrip_diagnosis_20260831_v1",
+    "local_source_path": "data/experiments/cross_subject_multirecord_d24_handgrip_diagnosis_20260831_v1/source_data/numerical_probe.json",
+    "freeze_at_phase": "P0",
+    "freeze_source_sha256": true,
+    "values_embedded_in_tracked_contract": false,
+    "required_values": [
+      "d24_original_six_gate_hf_mean_mae_bpm",
+      "d24_independent_acc_mean_mae_bpm",
+      "d24_original_six_gate_hf_sample_sd_bpm",
+      "locked_challenge_hf_mae_bpm_by_record_id"
+    ],
+    "locked_challenge_record_ids": [
+      "woli2_LYX_0708",
+      "woli2_LZJ_0711"
+    ],
+    "snapshot_storage": "local_formal_experiment_directory_only"
+  },
+  "acceptance": {
+    "primary_pass": [
+      "hf_mean_mae_bpm_strictly_below_baseline_hf_mean",
+      "hf_mean_mae_bpm_not_above_same_core_independently_tuned_acc_mean"
+    ],
+    "acc_non_degradation_required": false,
+    "stability_improvement_claim_additional_requirements": [
+      "hf_sample_sd_bpm_not_above_baseline",
+      "both_locked_challenge_hf_mae_values_not_above_baseline"
+    ]
+  },
+  "stage_gates": [
+    "run_d24_15_primary_once",
+    "do_not_promote_30_second_sensitivity",
+    "run_d24_18_fallback_only_if_primary_fails",
+    "stop_composition_route_if_fallback_fails",
+    "run_lyx_handgrip_consistency_without_rule_changes"
+  ],
+  "lyx_consistency": {
+    "scene_scope": "Handgrip_only",
+    "rule_changes_after_results_allowed": false,
+    "evidence_role": "development_consistency_not_independent_validation"
+  },
+  "hard_stops": [
+    "no_holdout_subject_features_in_fold_grouping",
+    "no_hr_ref_or_mae_in_composition",
+    "no_route_specific_training_cores",
+    "no_feature_or_threshold_changes_after_mae_reveal",
+    "no_solver_or_coordinate_space_changes",
+    "no_experiment_observation_data_in_git_or_remote"
+  ]
+}

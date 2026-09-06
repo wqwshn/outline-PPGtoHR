@@ -1,0 +1,37 @@
+{
+  "schema_id": "cross_subject_multirecord_hf_acc_matched_minimax_contract_v1",
+  "experiment_id": "cross_subject_multirecord_hf_acc_matched_minimax_v1",
+  "parent_hf_experiment_id": "cross_subject_multirecord_hf_loso_v1",
+  "parent_acc_experiment_id": "cross_subject_multirecord_acc_independent_physical4d_v1",
+  "claim_boundary": "retrospective_selector_matched_followup_not_independent_external_validation",
+  "selection_rule_id": "subject_balanced_route_native_mae_minimax_v1",
+  "time_bias_s": 5.0,
+  "expected_record_count": 143,
+  "expected_physical_subject_count": 7,
+  "expected_scene_count": 8,
+  "expected_fold_count": 48,
+  "expected_coordinate_count": 300,
+  "expected_hf_response_cell_count": 42900,
+  "expected_acc_response_cell_count": 42900,
+  "common_support_cell_labels": [
+    "hf_theta_hf_gate",
+    "hf_theta_acc_minimax",
+    "hf_theta_hf_minimax",
+    "acc_theta_acc_minimax",
+    "acc_theta_hf_minimax"
+  ],
+  "required_figures": [
+    "independent_minimax_hf_vs_acc",
+    "hf_minimax_coordinate_hf_vs_acc"
+  ],
+  "figure_format": "PNG",
+  "figure_dpi": 600,
+  "forbidden_extensions": [
+    "HF_ACC",
+    "time_bias_selection",
+    "acc_six_gate_selection",
+    "performance_conditioned_record_exclusion",
+    "physical4d_expansion",
+    "overwrite_parent_selection"
+  ]
+}
