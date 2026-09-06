@@ -2,6 +2,8 @@
 
 面向穿戴式 PPG 信号的心率估计算法工程，包含 v1/v2 两套心率求解器、运动后恢复机制、批量泛化评估和血氧实验工具。
 
+论文撰写入口：[算法版本、两项研究结果与本地实验材料](docs/paper/README.md)。LYX24 跨佩戴 HF 平均 MAE 为 **2.076 bpm**；119 条跨个体 HF MAE 为 **3.608 ± 3.528 bpm**。
+
 - **v1**：MATLAB `HeartRateSolver_cas_chengfa.m` 的 100% 功能等价移植，双路径 HF/ACC LMS + FFT 融合
 - **v2**：统一多参考信号（HF/CF/ACC）级联路径，默认使用动态追踪运行策略，并提供 Lite 与 TraceRescue 两个泛化评估预设
 

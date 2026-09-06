@@ -2,6 +2,8 @@
 
 This context defines the domain language used when discussing PPG heart-rate estimation across rest, motion, and post-motion periods.
 
+论文阶段的算法身份、结果节点和计算材料以 [论文研究入口](docs/paper/README.md) 为导航；既有研究术语和过程决策保留在下文与对应 ADR 中。
+
 ## Language
 
 **动态追踪算法预设**:
