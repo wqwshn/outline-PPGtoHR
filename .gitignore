@@ -86,3 +86,8 @@ figures/
 # 本地分析/调试产物，仅本地可见，不推送远端
 bug/20260622频谱惩罚优化2.0/
 skills/publication-plotting/
+
+# LoopX local runtime state
+.loopx/
+.codex/goals/
+.local/
