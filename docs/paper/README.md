@@ -7,15 +7,16 @@
 
 算法身份为 `identity_blind_unified_rescue_v1`，采用绿色 PPG、Raw bandpass、双级 HF-LMS、Lite 追踪与统一救援机制。两项实验采用同一心率求解核心，各自保留训练参数选择和评价时间对齐协议。完整定义见 [算法与计算方法](algorithm-and-evaluation.md)。
 
-2026-09-07 已补齐两个节点的 **HF–FFT–ACC** 三路线结果、共同窗口支持与复算工具，见 [FFT 补充比较](fft-comparison.md)。新比较材料位于本地 `data/experiments/paper_fft_comparison_20260907/final/`；该说明同时记录旧 LYX24 固定 5 s 字段与最终轨迹之间的三条差异。
+2026-09-07 已复核更正 **HF–FFT–ACC** 三路线结果，见 [FFT 与 ACC 复核](fft-comparison.md)。当前权威材料为本地 `data/experiments/paper_fft_acc_audit_20260907/`，包括整体、八场景、逐记录和逐窗口结果。LYX24 正式 ACC 是独立选参的 **6.008 ± 7.761 bpm**，不是 HF 参数迁移对照的 10.907；跨个体原生支持 ACC 为 **7.063 ± 7.971 bpm**。
 
 ## 本地材料入口
 
-全部实验数据只保存在本地 `data/experiments/paper_release_20260906/`。将这个目录交给论文写作项目，即可读取结果与追溯计算，不需要保留研究分支名。
+冻结输入保存在本地 `data/experiments/paper_release_20260906/`，三路线复核材料另存上述新目录；两者共同提供论文结果与计算追溯，不需要保留研究分支名。
 
 - `README.md`：论文材料导航与复算命令。
 - `lyx24/results.csv`：24 条记录的结果、所选物理坐标、评价偏置和原始报告来源。
-- `lyx24/traces/`、`lyx24/partitions/`：最终 HF/ACC 轨迹和参数选择使用的紧凑响应表。
+- `lyx24/traces/`、`lyx24/partitions/`：最终 HF 轨迹、HF 参数下的旧 ACC 迁移对照，以及参数选择使用的紧凑响应表；此处 ACC 不是正式独立选参主结果。
+- `lyx24/reference_comparison/selections.csv` 与 `time_tuned_diagonal_rows.csv`：跨佩戴独立 ACC 的冻结坐标和最终对角线指标；其轨迹在本次复核目录中恢复。
 - `cross_subject119/results.csv`：119 条记录的 HF/ACC 结果。
 - `cross_subject119/handgrip/`：握力场景的双坐标选择、六折规则与逐记录结果。
 - `cross_subject119/parent_hf/`、`cross_subject119/response/`：可回放选参的紧凑账本。
