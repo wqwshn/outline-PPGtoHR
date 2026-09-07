@@ -7,6 +7,8 @@
 
 算法身份为 `identity_blind_unified_rescue_v1`，采用绿色 PPG、Raw bandpass、双级 HF-LMS、Lite 追踪与统一救援机制。两项实验采用同一心率求解核心，各自保留训练参数选择和评价时间对齐协议。完整定义见 [算法与计算方法](algorithm-and-evaluation.md)。
 
+2026-09-07 已补齐两个节点的 **HF–FFT–ACC** 三路线结果、共同窗口支持与复算工具，见 [FFT 补充比较](fft-comparison.md)。新比较材料位于本地 `data/experiments/paper_fft_comparison_20260907/final/`；该说明同时记录旧 LYX24 固定 5 s 字段与最终轨迹之间的三条差异。
+
 ## 本地材料入口
 
 全部实验数据只保存在本地 `data/experiments/paper_release_20260906/`。将这个目录交给论文写作项目，即可读取结果与追溯计算，不需要保留研究分支名。

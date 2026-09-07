@@ -6,6 +6,8 @@
 
 HF 指自适应滤波使用的双侧热式界面参考信号；误差计算的参考心率读取各记录对应的 `HR_ref.csv`。二者在源码和材料索引中分别记录。
 
+两个节点均已补齐纯 FFT 与 ACC 对照，完整三路线结果及评价支持见 [FFT 补充比较](fft-comparison.md)。纯 FFT 采用现有独立 reset FFT 输出，不改变以上 HF 主结果。
+
 ## 心率算法
 
 冻结行为身份为 `identity_blind_unified_rescue_v1`。运行配置入口为 `python/src/ppg_hr/v2/cross_subject_loso_runner.py::build_hf_run_config`，主要求解入口为 `python/src/ppg_hr/v2/solver.py::solve_v2`。
