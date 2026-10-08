@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -23,9 +23,9 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
 )
 
+from ppg_hr.v2.algorithm_presets import v2_search_space_for_preset
 from ppg_hr.v2.generalization import build_v2_generalization_plan, plan_summary
 from ppg_hr.v2.optimizer import V2BayesConfig
-from ppg_hr.v2.algorithm_presets import v2_search_space_for_preset
 from ppg_hr.v2.spo2 import V2SpO2Config
 from ppg_hr.v2.window_diagnostics import (
     DiagnosticPlotOptions,
@@ -795,7 +795,7 @@ class V2WindowDiagnosticsPage(_PageBase):
     def __init__(self):
         super().__init__(
             "v2 窗口诊断",
-            "按对齐时间重放单个窗口，观察自适应滤波与频谱惩罚",
+            "浏览论文119原始信号与冻结频谱，或加载当前算法报告",
             two_column=True,
         )
         self._session = None
@@ -806,6 +806,27 @@ class V2WindowDiagnosticsPage(_PageBase):
         self._build_ui()
         self.body().addStretch(1)
         self.body_right().addStretch(1)
+        from .paper_replay_panel import PaperReplayPanel
+
+        self._legacy_panel = self.layout().itemAt(2).widget()
+        self._paper_panel = PaperReplayPanel(self)
+        self._mode = QComboBox()
+        self._mode.addItems(["论文119冻结结果与原始信号", "当前算法报告诊断（非论文冻结重放）"])
+        self.layout().insertWidget(2, self._mode)
+        self.layout().insertWidget(3, self._paper_panel, 1)
+        self._legacy_panel.hide()
+        self._mode.currentIndexChanged.connect(self._change_replay_mode)
+
+    def event(self, event):
+        if event.type() == QEvent.DeferredDelete and hasattr(self, "_paper_panel"):
+            self._paper_panel.shutdown()
+        return super().event(event)
+
+    def _change_replay_mode(self, index):
+        self._paper_panel.setVisible(index == 0)
+        self._legacy_panel.setVisible(index == 1)
+        if index != 0:
+            self._paper_panel.cancel()
 
     def _build_ui(self) -> None:
         io_card = SectionCard("报告输入", "选择训练后生成的 v2 JSON 报告")

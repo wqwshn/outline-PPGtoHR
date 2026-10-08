@@ -74,7 +74,7 @@ __all__ = [
 class WorkerThread:
     """Lightweight helper: own a QThread + worker, wire start/stop cleanly."""
 
-    def __init__(self, worker: QObject):
+    def __init__(self, worker: QObject, *, delete_thread_on_finish: bool = True):
         self.thread = QThread()
         self.worker = worker
         worker.moveToThread(self.thread)
@@ -82,7 +82,8 @@ class WorkerThread:
         worker.finished.connect(self.thread.quit)
         worker.failed.connect(self.thread.quit)
         self.thread.finished.connect(worker.deleteLater)
-        self.thread.finished.connect(self.thread.deleteLater)
+        if delete_thread_on_finish:
+            self.thread.finished.connect(self.thread.deleteLater)
 
     def start(self) -> None:
         self.thread.start()
@@ -882,6 +883,32 @@ class V2SpO2Worker(QObject):
         except Exception as exc:  # pragma: no cover
             self.failed.emit(f"v2血氧计算失败：{exc}\n\n{traceback.format_exc()}")
 
+
+class PaperReplayWorker(QObject):
+    """Cancellable paper loading/replay; IDs fence stale GUI completions."""
+
+    finished = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, request_id, operation):
+        super().__init__()
+        from threading import Event
+
+        self.request_id = request_id
+        self.operation = operation
+        self.cancelled = Event()
+
+    def cancel(self):
+        self.cancelled.set()
+
+    def run(self):
+        try:
+            value = self.operation(self.cancelled)
+            self.finished.emit((self.request_id, value, self.cancelled.is_set()))
+        except InterruptedError:
+            self.finished.emit((self.request_id, None, True))
+        except Exception as exc:
+            self.failed.emit(f"{self.request_id}\n{exc}")
 
 class V2WindowDiagnosticsLoadWorker(QObject):
     finished = Signal(object)
