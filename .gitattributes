@@ -2,3 +2,7 @@ docs/contracts/acceptance/*.json text eol=lf
 data/experiments/lyx_physical4d_corrected_development_gates_v2_20260811/evaluator.py text eol=lf
 data/experiments/lyx_physical4d_corrected_development_gates_v2_20260811/output_schema.json text eol=lf
 data/experiments/lyx_physical4d_corrected_development_gates_v2_20260811/v2_threshold_registry.json text eol=lf
+
+# 冻结实验源码按原始字节保存，避免换行转换改变历史 SHA-256。
+/python/tools/*hf_scene_classification*.py -text
+/python/tools/hf_scene_classification_archive/**/*.py -text
