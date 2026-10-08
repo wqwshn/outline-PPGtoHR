@@ -10,4 +10,4 @@
 
 逐记录/逐窗口指标、模型、预测、图表、机器回执、完整报告与含观测结果的报告生成脚本继续保存在本地实验目录，不进入 Git。三个大型窗口缓存已作本地无损压缩归档，运行依赖它们的历史核验前须按阶段收尾文档恢复。
 
-阶段结论、目录导航和恢复命令见 [阶段收尾](../../../../docs/experiments/2026-10-08-hf-scene-classification-closeout.md)。
+阶段结论、目录导航和恢复命令见 [阶段收尾](../../../docs/experiments/2026-10-08-hf-scene-classification-closeout.md)。
